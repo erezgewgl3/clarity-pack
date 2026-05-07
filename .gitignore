@@ -1,0 +1,12 @@
+# Snapshots produced by `pnpm clarity-safety snapshot`. They contain the
+# encrypted-secrets master.key and a Postgres / PGlite dump — must never be
+# committed. See runbook/README.md "Where to store snapshots safely" (Plan 03).
+.planning/snapshots/
+
+# Node
+node_modules/
+
+# Build / IDE / OS
+dist/
+.DS_Store
+Thumbs.db

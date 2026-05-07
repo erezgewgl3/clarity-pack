@@ -1,0 +1,16 @@
+{
+  "name": "@clarity-pack/safety",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "bin": { "clarity-safety": "./cli.mjs" },
+  "scripts": {
+    "test": "node --test --test-reporter=spec \"test/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "tar": "^7.5.15",
+    "@electric-sql/pglite": "^0.4.5",
+    "cross-spawn": "^7.0.6"
+  }
+}
