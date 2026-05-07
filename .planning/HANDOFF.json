@@ -1,21 +1,49 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-07T18:20:13.646Z",
+  "timestamp": "2026-05-07T19:15:07.535Z",
   "source": "auto-postool",
   "partial": false,
   "phase": "1",
   "phase_name": "Pre-Install Safety",
-  "phase_dir": null,
+  "phase_dir": ".planning/phases/01-pre-install-safety",
   "plan": null,
   "task": null,
-  "total_tasks": null,
+  "total_tasks": 3,
   "status": "auto-checkpoint",
   "completed_tasks": [],
-  "remaining_tasks": [],
+  "remaining_tasks": [
+    {
+      "id": "01",
+      "name": "Task 1: Initialize scripts/safety/ pnpm package + manifest, paths, mode-detect, list, prune primitives + their tests",
+      "status": "not_started"
+    },
+    {
+      "id": "02",
+      "name": "Task 1: paperclip-api.mjs REST client + stub-paperclip-server fixture + their tests",
+      "status": "not_started"
+    },
+    {
+      "id": "03",
+      "name": "Task 1: gate.mjs (refuse-or-run wrapper) + tests",
+      "status": "not_started"
+    }
+  ],
   "blockers": [],
   "human_actions_pending": [],
   "decisions": [],
   "uncommitted_files": [
+    {
+      "status": "M",
+      "path": ".planning/HANDOFF.json"
+    },
+    {
+      "status": "M",
+      "path": ".planning/ROADMAP.md"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/"
+    },
     {
       "status": "??",
       "path": "CLAUDE.md"
@@ -26,5 +54,5 @@
     }
   ],
   "next_action": "Roadmap created; planning pending",
-  "context_notes": "Status: Roadmap created; planning pending\n\nRecent commits:\nf35c071 docs: create 5-phase roadmap (Phase 1 = pre-install safety) .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md\n258032a docs: define v1 requirements (67 reqs across 11 categories, SAFE first) .planning/REQUIREMENTS.md\n12c46ed docs: add backup/rollback requirement; fold research into PROJECT.md (master branch, stack pins, snapshot bookending) .planning/PROJECT.md\n8c83653 docs: add research synthesis .planning/research/SUMMARY.md\n378987c docs: add research synthesis .planning/research/STACK.md .planning/research/FEATURES.md .planning/research/ARCHITECTURE.md .planning/research/PITFALLS.md"
+  "context_notes": "Status: Roadmap created; planning pending\n\nRecent commits:\ne9446a4 docs: generate CLAUDE.md with project context CLAUDE.md\nf35c071 docs: create 5-phase roadmap (Phase 1 = pre-install safety) .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md\n258032a docs: define v1 requirements (67 reqs across 11 categories, SAFE first) .planning/REQUIREMENTS.md\n12c46ed docs: add backup/rollback requirement; fold research into PROJECT.md (master branch, stack pins, snapshot bookending) .planning/PROJECT.md\n8c83653 docs: add research synthesis .planning/research/SUMMARY.md"
 }

@@ -24,7 +24,12 @@
   2. The pre-flight gate refuses to run any clarity-pack install / upgrade / migration / agent-registration step when the most recent snapshot is older than 15 minutes or its restore-and-smoke-test has not passed.
   3. The runbook walks Eric end-to-end from `pre-install snapshot` -> `install` -> `post-install verification` -> `rollback if needed` in a single document under `runbook/`, and works even when clarity-pack itself is broken or uninstalled.
   4. One-command snapshot captures Postgres dump + filesystem archive of Paperclip's data directory + current Paperclip version + installed-plugin list into one timestamped archive; one-command restore reverses it byte-for-byte.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Safety CLI core: package + manifest + paths + mode-detect + snapshot + restore + list + prune (SAFE-01, SAFE-02). Wave 1, autonomous.
+- [ ] 01-02-PLAN.md — Smoke + verify: paperclip-api REST client + 5-check smoke + verify (SAFE-03). Wave 1, autonomous.
+- [ ] 01-03-PLAN.md — Pre-flight gate + runbook + rehearsal drill (SAFE-04, SAFE-05). Wave 2, mixed (gate autonomous; rehearsal non-autonomous).
 
 ### Phase 2: Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In
 **Goal**: An installable clarity-pack plugin where Eric can opt himself in via a profile toggle, see Reader view as an additional tab on issue pages with TL;DRs and inline reference resolution, see the Situation Room route with live agent state and transitively-flattened blocker chains, and watch the Editor-Agent compile under standard Paperclip governance - all hardened against the same-origin trust model from day 1.
@@ -83,7 +88,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Pre-Install Safety | 0/0 | Not started | - |
+| 1. Pre-Install Safety | 0/3 | Planned | - |
 | 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 0/0 | Not started | - |
 | 3. Daily Bulletin | 0/0 | Not started | - |
 | 4. Employee Chat | 0/0 | Not started | - |
