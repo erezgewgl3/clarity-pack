@@ -22,6 +22,7 @@ import { detectMode } from './lib/mode-detect.mjs';
 import * as paperclipCli from './lib/paperclip-cli.mjs';
 import { smoke } from './lib/smoke.mjs';
 import { verify } from './lib/verify.mjs';
+import { gate } from './lib/gate.mjs';
 
 const SUBCOMMANDS = ['snapshot', 'restore', 'smoke', 'verify', 'gate', 'list', 'prune'];
 
@@ -179,13 +180,6 @@ async function runPrune(flags) {
   return 0;
 }
 
-function runStub(name, planRef) {
-  process.stderr.write(
-    `${name} subcommand lands in ${planRef}; not yet implemented in plan 01-01\n`
-  );
-  return 2;
-}
-
 function printSmokeHelp() {
   process.stdout.write(
     [
@@ -310,6 +304,77 @@ async function runVerify(flags) {
   return 0;
 }
 
+function printGateHelp() {
+  process.stdout.write(
+    [
+      'Usage: clarity-safety gate [options] -- <inner-command> [args...]',
+      '',
+      'Refuse-or-run wrapper. Forwards <inner-command> only when the',
+      'latest snapshot under .planning/snapshots/ is verified AND its',
+      'verifiedAt is within --max-age minutes (default 15). On refusal,',
+      'prints the exact remediation commands and exits non-zero.',
+      '',
+      'Options:',
+      '  --max-age <min>           freshness window for verifiedAt (default 15)',
+      '  --help, -h                show this help',
+      '',
+      'Bypass (for emergencies only — every bypass is logged to runbook/REHEARSAL.md):',
+      '  Add --gate-bypass to the inner command argv AND set',
+      '  CLARITY_SAFETY_BYPASS=I_KNOW=$(node -e "console.log(Date.now())")',
+      '  in the same shell invocation. The env timestamp must be within 60',
+      '  seconds of now. Both factors are required; the flag alone is not',
+      '  enough.',
+      '',
+      'Examples:',
+      '  clarity-safety gate -- pnpm paperclipai plugin install clarity-pack',
+      '  clarity-safety gate --max-age=30 -- pnpm paperclipai plugin upgrade clarity-pack',
+      ''
+    ].join('\n')
+  );
+}
+
+async function runGate(flags) {
+  if (flags.help === true || flags.h === true) {
+    printGateHelp();
+    return 0;
+  }
+  // Inner command lives after the `--` separator; parseFlags collects it
+  // into flags._. If empty, the user forgot the inner command.
+  const innerCommand = flags._;
+  if (!innerCommand || innerCommand.length === 0) {
+    process.stderr.write(
+      'gate: inner command required. Pass it after `--`. Example:\n' +
+        '  clarity-safety gate -- pnpm paperclipai plugin install clarity-pack\n'
+    );
+    return 1;
+  }
+  const repoRoot = repoRootFromCli();
+  const snapshotsDir = resolveSnapshotsDir(repoRoot);
+  const maxAgeMinutes =
+    flags['max-age'] !== undefined ? Number(flags['max-age']) : undefined;
+  if (maxAgeMinutes !== undefined && !Number.isFinite(maxAgeMinutes)) {
+    process.stderr.write(`gate: --max-age must be a number; got ${flags['max-age']}\n`);
+    return 1;
+  }
+  const result = await gate({
+    snapshotsDir,
+    innerCommand,
+    maxAgeMinutes,
+    rehearsalLogPath: path.join(repoRoot, 'runbook', 'REHEARSAL.md')
+  });
+  if (!result.forwarded) {
+    process.stderr.write(
+      `gate REFUSED (${result.refusalReason}):\n${result.remediation}\n`
+    );
+    return 1;
+  }
+  if (result.bypassed) {
+    process.stderr.write('gate: bypass honored; entry appended to runbook/REHEARSAL.md\n');
+  }
+  // Propagate the inner command's exit code verbatim.
+  return typeof result.exitCode === 'number' ? result.exitCode : 0;
+}
+
 async function runSmoke(flags) {
   if (flags.help === true || flags.h === true) {
     printSmokeHelp();
@@ -371,7 +436,7 @@ async function main(argv) {
   const flags = parseFlags(rest);
   // Subcommands with their own --help handler get first crack; otherwise
   // fall back to the root help.
-  const SUBCOMMAND_HELP_OWNERS = new Set(['smoke', 'verify']);
+  const SUBCOMMAND_HELP_OWNERS = new Set(['smoke', 'verify', 'gate']);
   if ((flags.help === true || flags.h === true) && !SUBCOMMAND_HELP_OWNERS.has(sub)) {
     printRootHelp();
     return 0;
@@ -390,7 +455,7 @@ async function main(argv) {
     case 'verify':
       return runVerify(flags);
     case 'gate':
-      return runStub('gate', 'plan 03');
+      return runGate(flags);
   }
   return 1;
 }

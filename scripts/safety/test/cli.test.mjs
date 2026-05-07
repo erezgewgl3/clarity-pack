@@ -81,10 +81,19 @@ test('R10.e.help — verify --help prints usage and exits 0', async () => {
   assert.match(stdout, /Usage: clarity-safety verify/);
 });
 
-test('R10.f — gate stub exits 2 with plan-03 deferred message', async () => {
+test('R10.f — gate (Plan 03 implementation) without inner command exits 1 with required-arg error', async () => {
+  // Plan 01 stub returned exit 2 with "lands in plan 03"; Plan 03 replaces
+  // the stub with the real implementation, so calling gate without an
+  // inner command (after `--`) now exits 1 with a usage error.
   const { code, stderr } = await runCli(['gate']);
-  assert.equal(code, 2);
-  assert.match(stderr, /gate subcommand lands in plan 03/);
+  assert.equal(code, 1);
+  assert.match(stderr, /inner command required/);
+});
+
+test('R10.f.help — gate --help prints usage and exits 0', async () => {
+  const { code, stdout } = await runCli(['gate', '--help']);
+  assert.equal(code, 0);
+  assert.match(stdout, /Usage: clarity-safety gate/);
 });
 
 test('R10.g — restore with bad snapshot id exits 1 with "invalid snapshotId"', async () => {
