@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The Bulletin — Operations · CounterMoves</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Newsreader:opsz,wght,ital@6..72,200..800,0;6..72,200..800,1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F4EFE3;
+    --paper-2:#EDE6D4;
+    --ink:#15120D;
+    --ink-2:#3A332A;
+    --muted:#7E7363;
+    --rule:#C7BCA3;
+    --rule-soft:#D9CFB7;
+    --terracotta:#A33D2A;
+    --terracotta-soft:#E9CFC2;
+    --moss:#3F5A3A;
+    --gold:#9B7B2D;
+    --max-w:1320px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--paper);color:var(--ink);font-family:"Newsreader",Georgia,serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:"liga","kern","onum"}
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:1;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08  0 0 0 0 0.07  0 0 0 0 0.05  0 0 0 0.045 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    mix-blend-mode:multiply;opacity:.55;
+  }
+  .wrap{max-width:var(--max-w);margin:0 auto;padding:36px 56px 80px;position:relative;z-index:2}
+  /* ---------- Masthead ---------- */
+  .masthead{
+    border-top:3px solid var(--ink);
+    border-bottom:1px solid var(--ink);
+    padding:14px 0 18px;margin-bottom:0;
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:24px;
+  }
+  .masthead .left,.masthead .right{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-2)}
+  .masthead .right{text-align:right}
+  .masthead h1{
+    font-family:"Fraunces",serif;font-weight:600;font-size:78px;letter-spacing:-.02em;line-height:.92;
+    font-variation-settings:"opsz" 144,"SOFT" 30;text-align:center;
+  }
+  .masthead h1 span{font-style:italic;font-weight:400;font-variation-settings:"opsz" 144,"SOFT" 100}
+  .sub-mast{
+    border-bottom:3px double var(--ink);padding:8px 0 10px;margin-bottom:24px;
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2)
+  }
+  .sub-mast .editor{font-style:normal}
+  .sub-mast .editor em{font-family:"Newsreader",serif;font-style:italic;text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink)}
+
+  /* ---------- Section labels ---------- */
+  .label{
+    font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);
+    display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  }
+  .label::before,.label::after{content:"";flex:0 0 auto;height:1px;background:var(--rule)}
+  .label::before{width:0}
+  .label::after{flex:1 1 auto}
+
+  /* ---------- Action Inbox ---------- */
+  .action-inbox{
+    margin:6px 0 30px;
+    border:1px solid var(--ink);
+    background:linear-gradient(180deg,#F8F2E0 0%, #F4EFE3 100%);
+    box-shadow:0 1px 0 var(--ink), 4px 4px 0 var(--ink);
+  }
+  .action-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    padding:12px 22px;border-bottom:1px solid var(--ink);
+    background:var(--ink);color:var(--paper);
+  }
+  .action-head h2{
+    font-family:"Fraunces",serif;font-weight:500;font-size:13px;letter-spacing:.32em;text-transform:uppercase;
+    font-variation-settings:"opsz" 14,"SOFT" 0;
+  }
+  .action-head .count{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.18em;color:#D8CDB4}
+  .action-grid{display:grid;grid-template-columns:1fr 1fr}
+  .action-card{padding:24px 26px;border-right:1px solid var(--rule)}
+  .action-card:last-child{border-right:none}
+  .action-meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+  .dept-tag{
+    font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--terracotta);font-weight:600;
+  }
+  .action-time{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--muted)}
+  .action-card h3{
+    font-family:"Fraunces",serif;font-weight:500;font-size:24px;line-height:1.18;letter-spacing:-.005em;
+    font-variation-settings:"opsz" 36,"SOFT" 30;margin:4px 0 10px;
+  }
+  .byline{font-family:"Newsreader",serif;font-style:italic;font-size:13.5px;color:var(--ink-2);margin-bottom:14px}
+  .byline strong{font-style:normal;font-weight:600;color:var(--ink)}
+  .summary{font-size:15.5px;line-height:1.55;color:var(--ink-2);margin-bottom:18px;font-variation-settings:"opsz" 18}
+  .summary em{color:var(--ink);font-style:italic}
+  .actions{display:flex;gap:10px;align-items:center}
+  .btn{
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:500;
+    padding:10px 16px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:2px 2px 0 var(--ink)}
+  .btn.secondary{background:transparent;color:var(--ink)}
+  .btn.danger{border-color:var(--terracotta);background:var(--terracotta);color:var(--paper)}
+  .btn.ghost{background:transparent;color:var(--ink-2);border:none;border-bottom:1px solid var(--rule);padding:10px 4px}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--ink);transform:none;box-shadow:none}
+
+  /* ---------- Main two-col layout ---------- */
+  .main{display:grid;grid-template-columns:1fr 360px;gap:48px;align-items:start}
+  .ops-section{margin-bottom:36px}
+  .ops-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    border-bottom:1px solid var(--ink);padding-bottom:6px;margin-bottom:14px;
+  }
+  .ops-head h2{
+    font-family:"Fraunces",serif;font-weight:600;font-size:22px;letter-spacing:-.005em;
+    font-variation-settings:"opsz" 24,"SOFT" 30;
+  }
+  .ops-head .ops-meta{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .item{
+    padding:14px 0 18px;border-bottom:1px dotted var(--rule);
+    display:grid;grid-template-columns:1fr auto;gap:8px 24px;align-items:start;
+  }
+  .item:last-child{border-bottom:none}
+  .item h3{
+    font-family:"Fraunces",serif;font-weight:500;font-size:19px;line-height:1.25;
+    font-variation-settings:"opsz" 24,"SOFT" 50;letter-spacing:-.003em;
+    grid-column:1/2;
+  }
+  .item .ts{
+    font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted);
+    grid-column:2/3;text-align:right;white-space:nowrap;align-self:start;padding-top:6px;
+  }
+  .item .by{
+    grid-column:1/3;font-family:"Newsreader",serif;font-style:italic;font-size:13px;color:var(--ink-2);margin-top:-2px;
+  }
+  .item .by strong{font-style:normal;font-weight:600;color:var(--ink)}
+  .item .lineage{
+    grid-column:1/3;font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--muted);
+    letter-spacing:.04em;line-height:1.5;
+  }
+  .item .lineage .arrow{color:var(--rule);margin:0 4px}
+  .item .lineage .terminal{color:var(--ink);font-weight:600}
+  .item .note{
+    grid-column:1/3;font-size:14.5px;color:var(--ink-2);font-variation-settings:"opsz" 16;
+  }
+  .item .note .pos{color:var(--moss);font-weight:600}
+  .item .note .neg{color:var(--terracotta);font-weight:600}
+  .quiet{
+    padding:18px 0;text-align:center;
+    font-family:"Newsreader",serif;font-style:italic;font-size:14px;color:var(--muted);
+  }
+  .quiet::before{content:"·  ";color:var(--rule)}
+  .quiet::after{content:"  ·";color:var(--rule)}
+
+  /* drop cap on first dept */
+  .dropcap::first-letter{
+    font-family:"Fraunces",serif;font-weight:700;float:left;font-size:54px;line-height:.85;
+    padding:6px 8px 0 0;color:var(--terracotta);
+    font-variation-settings:"opsz" 72,"SOFT" 0;
+  }
+
+  /* ---------- Right rail ---------- */
+  .rail{position:sticky;top:24px}
+  .rail .panel{border:1px solid var(--ink);background:var(--paper-2);padding:18px 20px 22px;margin-bottom:20px}
+  .rail h2{
+    font-family:"Fraunces",serif;font-weight:600;font-size:14px;letter-spacing:.18em;text-transform:uppercase;
+    border-bottom:1px solid var(--ink);padding-bottom:8px;margin-bottom:14px;
+    font-variation-settings:"opsz" 14,"SOFT" 0;
+  }
+  .stat{display:grid;grid-template-columns:1fr auto;align-items:baseline;padding:8px 0;border-bottom:1px dotted var(--rule)}
+  .stat:last-child{border-bottom:none}
+  .stat .k{font-family:"Newsreader",serif;font-size:14px;color:var(--ink-2);font-style:italic}
+  .stat .v{font-family:"Fraunces",serif;font-weight:600;font-size:22px;letter-spacing:-.01em;font-variation-settings:"opsz" 24,"SOFT" 30}
+  .stat .v small{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--muted);font-weight:400;margin-left:4px;letter-spacing:.08em}
+  .stat .v.neg{color:var(--terracotta)}
+  .stat .v.pos{color:var(--moss)}
+  .bar{
+    height:6px;background:var(--rule-soft);position:relative;margin-top:6px;
+  }
+  .bar > span{display:block;height:100%;background:var(--ink)}
+  .bar.warn > span{background:var(--terracotta)}
+
+  .alert{
+    padding:10px 12px;border-left:3px solid var(--terracotta);background:#F9EBE3;
+    font-size:13px;color:var(--ink-2);margin-top:10px;line-height:1.45;
+  }
+  .alert strong{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--terracotta);font-weight:600;display:block;margin-bottom:3px}
+
+  /* ---------- Footer / Lineage thread ---------- */
+  .lineage-foot{
+    margin-top:48px;border-top:3px double var(--ink);padding-top:22px;
+  }
+  .lineage-foot h2{
+    font-family:"Fraunces",serif;font-weight:500;font-size:14px;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--ink-2);margin-bottom:18px;font-variation-settings:"opsz" 14,"SOFT" 0;
+  }
+  .thread{
+    display:grid;grid-template-columns:repeat(8,1fr);gap:14px;align-items:start;
+    font-family:"JetBrains Mono",monospace;font-size:11px;
+  }
+  .node{padding:10px 12px;border:1px solid var(--rule);background:var(--paper-2);position:relative}
+  .node .n-time{color:var(--muted);font-size:10px;letter-spacing:.08em}
+  .node .n-name{font-family:"Fraunces",serif;font-style:normal;font-weight:600;font-size:13px;letter-spacing:0;text-transform:none;color:var(--ink);margin:4px 0 2px;font-variation-settings:"opsz" 14}
+  .node .n-detail{font-size:10px;color:var(--ink-2);line-height:1.4}
+  .node.terminal{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .node.terminal .n-time,.node.terminal .n-detail{color:#C9BFA8}
+  .node.terminal .n-name{color:var(--paper)}
+  .node + .node::before{
+    content:"→";position:absolute;left:-12px;top:50%;transform:translateY(-50%);
+    color:var(--ink-2);font-weight:700;
+  }
+  .colophon{
+    margin-top:42px;padding-top:18px;border-top:1px solid var(--rule);
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)
+  }
+  .colophon em{font-family:"Newsreader",serif;text-transform:none;letter-spacing:0;font-style:italic;font-size:12px;color:var(--ink-2)}
+
+  /* responsive niceties */
+  @media (max-width:1100px){
+    .main{grid-template-columns:1fr}
+    .rail{position:static}
+    .action-grid{grid-template-columns:1fr}
+    .action-card{border-right:none;border-bottom:1px solid var(--rule)}
+    .action-card:last-child{border-bottom:none}
+    .thread{grid-template-columns:repeat(4,1fr)}
+    .masthead h1{font-size:54px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============== MASTHEAD ============== -->
+  <header class="masthead">
+    <div class="left">Editorial Desk · Internal</div>
+    <h1>The <span>Bulletin</span></h1>
+    <div class="right">Vol. I · No. 47</div>
+  </header>
+  <div class="sub-mast">
+    <div>Thursday · 7 May 2026 · 06:30 ET</div>
+    <div class="editor">prepared for <em>Eric G., Editor-in-Chief</em></div>
+    <div style="text-align:right">Operations Cycle 47 · Auto-compiled</div>
+  </div>
+
+  <!-- ============== ACTION INBOX ============== -->
+  <section class="action-inbox" aria-label="Items requiring your decision">
+    <div class="action-head">
+      <h2>Requires Your Decision</h2>
+      <div class="count">02 ITEMS · OLDEST 14h</div>
+    </div>
+    <div class="action-grid">
+
+      <article class="action-card">
+        <div class="action-meta">
+          <span class="dept-tag">Sales · Trial-Brief Agent</span>
+          <span class="action-time">Today · 09:14 ET</span>
+        </div>
+        <h3>Trial brief for ShieldFlow ready for editorial sign-off.</h3>
+        <p class="byline">Drafted by <strong>Writer-Cyber</strong> · QA pass clean · Editor-Agent approved structure</p>
+        <p class="summary">Three competitor moves identified: <em>AcmeSec entry-tier price cut (Mon)</em>, <em>FortiCore Okta partnership (Tue)</em>, <em>ShieldOne enterprise hire (Wed)</em>. Brief follows the cyber template; Counter Kit auto-generated. Awaiting your sign-off before delivery to prospect.</p>
+        <div class="actions">
+          <button class="btn">Approve &amp; Send</button>
+          <button class="btn secondary">Open in Editor</button>
+          <button class="btn ghost">Decline</button>
+        </div>
+      </article>
+
+      <article class="action-card">
+        <div class="action-meta">
+          <span class="dept-tag">Customer · Refund Agent</span>
+          <span class="action-time">Yesterday · 16:47 ET</span>
+        </div>
+        <h3>Refund request, account #C-0042 — Blindspot Guarantee invoked.</h3>
+        <p class="byline">Verified by <strong>Refund-Agent</strong> against 30-day brief log · Audit trail attached</p>
+        <p class="summary">Customer cited the Blindspot Guarantee. Agent verified claim: a material competitor move <em>was missed</em> in the Apr 24 brief (Securiti tier-shift). Refund of <em>$495</em> recommended; honoring upholds the guarantee promise. Customer remains active subscriber.</p>
+        <div class="actions">
+          <button class="btn danger">Approve Refund</button>
+          <button class="btn secondary">Open Audit Trail</button>
+          <button class="btn ghost">Override</button>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============== MAIN GRID ============== -->
+  <div class="main">
+
+    <!-- ===== Operations column ===== -->
+    <main>
+      <div class="label">Yesterday's Operations · 06 May 2026</div>
+
+      <!-- PRODUCTION -->
+      <section class="ops-section">
+        <header class="ops-head">
+          <h2 class="dropcap">Production</h2>
+          <span class="ops-meta">02 artifacts · 0 issues</span>
+        </header>
+
+        <div class="item">
+          <h3>Friday Threat Brief — Cyber SaaS, Week of 1 May.</h3>
+          <span class="ts">17:02 ET</span>
+          <div class="by">Compiled by <strong>Editor-Agent</strong>, after handoff from Writer-Cyber. Published by <strong>Publisher-Agent</strong>.</div>
+          <div class="lineage">
+            <span class="terminal">SCOUT</span> 412 signals
+            <span class="arrow">→</span> CLASSIFIER 38 candidates
+            <span class="arrow">→</span> SCORER top-4 (≥9/15)
+            <span class="arrow">→</span> WRITER draft
+            <span class="arrow">→</span> QA pass
+            <span class="arrow">→</span> EDITOR review
+            <span class="arrow">→</span> <span class="terminal">PUBLISHER</span>
+          </div>
+          <div class="note">Sent to <span class="pos">3 / 3 paying subscribers</span>. Open rate <span class="pos">100 %</span>, two replies, one forwarded internally. No errata flagged within 12h SLA.</div>
+        </div>
+
+        <div class="item">
+          <h3>Errata appended to Issue 46 — AcmeSec Pro pricing correction.</h3>
+          <span class="ts">11:30 ET</span>
+          <div class="by">Caught by <strong>QA-Agent</strong> during retrospective scan. Filed by Editor-Agent.</div>
+          <div class="lineage">
+            QA retrospective <span class="arrow">→</span> ERRATA draft <span class="arrow">→</span> EDITOR <span class="arrow">→</span> <span class="terminal">SUBSCRIBER NOTICE</span>
+          </div>
+          <div class="note">Three subscribers notified via the Errata Page footer link. <span class="pos">Trust signal preserved.</span></div>
+        </div>
+      </section>
+
+      <!-- SALES -->
+      <section class="ops-section">
+        <header class="ops-head">
+          <h2>Sales</h2>
+          <span class="ops-meta">04 artifacts · 1 needs review (above)</span>
+        </header>
+
+        <div class="item">
+          <h3>Twelve cyber-SaaS prospects enriched, eight qualified.</h3>
+          <span class="ts">throughout day</span>
+          <div class="by">Pulled by <strong>List-Builder</strong> (Apollo) · Researched by <strong>Researcher-Agent</strong> (G2, Crunchbase, Gartner MQ)</div>
+          <div class="lineage">
+            APOLLO 12 leads <span class="arrow">→</span> RESEARCHER profile <span class="arrow">→</span> QUALIFIER 8 keep / 4 drop <span class="arrow">→</span> <span class="terminal">COLD-EMAIL queue</span>
+          </div>
+          <div class="note">Drop reasons: 2 below ARR floor, 1 has Crayon contract, 1 acquired in Feb.</div>
+        </div>
+
+        <div class="item">
+          <h3>Twenty-seven cold emails sent, four replies, two discoveries booked.</h3>
+          <span class="ts">throughout day</span>
+          <div class="by">Authored by <strong>Cold-Email Agent</strong> · Triaged by <strong>Reply-Triage</strong></div>
+          <div class="lineage">
+            QUEUE 27 <span class="arrow">→</span> SENDER <span class="arrow">→</span> REPLY-TRIAGE 4 routed <span class="arrow">→</span> <span class="terminal">CALENDAR 2 booked</span>
+          </div>
+          <div class="note">Reply rate <span class="pos">14.8 %</span> (above 10 % floor). Two booked: Wed 11:00 ET, Thu 14:30 ET. Calendar invites sent.</div>
+        </div>
+
+        <div class="item">
+          <h3>Trial-Brief draft for ShieldFlow — escalated to founder.</h3>
+          <span class="ts">09:14 ET</span>
+          <div class="by"><em>See <strong>Requires Your Decision</strong> above.</em></div>
+        </div>
+      </section>
+
+      <!-- CUSTOMER -->
+      <section class="ops-section">
+        <header class="ops-head">
+          <h2>Customer</h2>
+          <span class="ops-meta">03 artifacts · 1 needs review (above)</span>
+        </header>
+
+        <div class="item">
+          <h3>Onboarding brief delivered — account #C-0049, fund vertical.</h3>
+          <span class="ts">14:22 ET</span>
+          <div class="by">Composed by <strong>Onboarding-Agent</strong> from intake form + first-brief generator output.</div>
+          <div class="lineage">
+            INTAKE <span class="arrow">→</span> SIGNALSWEEP load <span class="arrow">→</span> FIRST-BRIEF gen <span class="arrow">→</span> <span class="terminal">EMAIL delivered</span>
+          </div>
+          <div class="note">SLA met (47h of 48h target). Customer opened brief twice; no support tickets opened post-delivery.</div>
+        </div>
+
+        <div class="item">
+          <h3>Three support inquiries resolved without escalation.</h3>
+          <span class="ts">throughout day</span>
+          <div class="by">Handled by <strong>Support-Agent</strong> via Plain inbox.</div>
+          <div class="note">Topics: invoice copy (×1), brief delivery time (×1), unsubscribe-and-rejoin (×1). All closed within 90 min median.</div>
+        </div>
+
+        <div class="item">
+          <h3>Refund request — escalated to founder.</h3>
+          <span class="ts">Yesterday · 16:47 ET</span>
+          <div class="by"><em>See <strong>Requires Your Decision</strong> above.</em></div>
+        </div>
+      </section>
+
+      <!-- BUILDER (quiet day) -->
+      <section class="ops-section">
+        <header class="ops-head">
+          <h2>Builder</h2>
+          <span class="ops-meta">PRD-12 in progress</span>
+        </header>
+        <div class="quiet">Quiet day. PRD-12 (Production-agent wrappers around SignalSweep) at 60 %. No founder action required.</div>
+      </section>
+
+    </main>
+
+    <!-- ===== Right rail ===== -->
+    <aside class="rail">
+
+      <div class="panel">
+        <h2>Standing Numbers</h2>
+        <div class="stat"><span class="k">MRR</span><span class="v">$2,475 <small>5 SUBS</small></span></div>
+        <div class="stat"><span class="k">Briefs sent · this week</span><span class="v pos">4 / 4</span></div>
+        <div class="stat"><span class="k">Cold reply rate · 7d</span><span class="v">14.8%</span></div>
+        <div class="stat"><span class="k">Discoveries booked · 7d</span><span class="v pos">3</span></div>
+        <div class="stat"><span class="k">Refund rate · 30d</span><span class="v neg">1 / 5</span></div>
+      </div>
+
+      <div class="panel">
+        <h2>Agent Spend · May</h2>
+        <div class="stat"><span class="k">Claude API</span><span class="v">$312 <small>/ $400</small></span></div>
+        <div class="bar"><span style="width:78%"></span></div>
+
+        <div class="stat" style="margin-top:14px"><span class="k">Researcher tokens · weekly</span><span class="v neg">91% <small>OF CAP</small></span></div>
+        <div class="bar warn"><span style="width:91%"></span></div>
+
+        <div class="alert">
+          <strong>Quiet alert</strong>
+          Researcher-Agent at 91 % of weekly token cap with 36h to reset. Consider raising cap, or pausing low-priority enrichment.
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Today's Schedule</h2>
+        <div class="stat"><span class="k">06:30</span><span class="v" style="font-size:13px;font-family:'Newsreader',serif;font-weight:400;font-style:italic">Bulletin compiled</span></div>
+        <div class="stat"><span class="k">09:00</span><span class="v" style="font-size:13px;font-family:'Newsreader',serif;font-weight:400;font-style:italic">ShieldFlow trial · pending you</span></div>
+        <div class="stat"><span class="k">14:30</span><span class="v" style="font-size:13px;font-family:'Newsreader',serif;font-weight:400;font-style:italic">Discovery · S. Patel (cyber)</span></div>
+        <div class="stat"><span class="k">17:00</span><span class="v" style="font-size:13px;font-family:'Newsreader',serif;font-weight:400;font-style:italic">Friday-brief writer kickoff</span></div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- ============== LINEAGE THREAD ============== -->
+  <section class="lineage-foot">
+    <h2>One artifact, end-to-end — Friday Threat Brief, Issue 47</h2>
+    <div class="thread">
+      <div class="node"><div class="n-time">09:02</div><div class="n-name">Scout</div><div class="n-detail">412 signals pulled · Perplexity + 14 RSS feeds</div></div>
+      <div class="node"><div class="n-time">09:14</div><div class="n-name">Classifier</div><div class="n-detail">38 candidates flagged as competitive moves</div></div>
+      <div class="node"><div class="n-time">09:31</div><div class="n-name">Scorer</div><div class="n-detail">4 moves scored ≥ 9/15 across 5 axes</div></div>
+      <div class="node"><div class="n-time">11:08</div><div class="n-name">Writer</div><div class="n-detail">Draft assembled · 4 sections per move</div></div>
+      <div class="node"><div class="n-time">13:45</div><div class="n-name">QA</div><div class="n-detail">Fact-check pass · 0 unresolved flags</div></div>
+      <div class="node"><div class="n-time">14:30</div><div class="n-name">Editor-Agent</div><div class="n-detail">Tone &amp; structure pass · ready for desk</div></div>
+      <div class="node"><div class="n-time">16:55</div><div class="n-name">Publisher</div><div class="n-detail">PDF rendered · queued for Fri 09:00 ET</div></div>
+      <div class="node terminal"><div class="n-time">FRI 09:00</div><div class="n-name">Subscribers</div><div class="n-detail">3 / 3 delivered · awaiting opens</div></div>
+    </div>
+  </section>
+
+  <div class="colophon">
+    <div>End of Bulletin · No. 47</div>
+    <em>Compiled in 38 seconds from 14 agent ledgers · 0 manual edits</em>
+    <div>Next cycle · 08 May 06:30 ET</div>
+  </div>
+
+</div>
+</body>
+</html>

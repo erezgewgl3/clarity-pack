@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BEAAA-148 · Per-fan band factors v1.5 — Task Detail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E0D0A; --bg-2:#15140F; --bg-3:#1B1A14; --bg-4:#222019;
+    --line:#2A2820; --line-bright:#3D3A2E;
+    --ink:#E8E1CF; --ink-2:#B8B0A0; --ink-3:#7E7869; --ink-4:#52503F;
+    --live:#7DB47E; --live-soft:#1F3320;
+    --warn:#D9A23E; --warn-soft:#3A2D14;
+    --alert:#E0744A; --alert-soft:#3A1C12;
+    --you:#E5C56F; --you-soft:#3D3318;
+    --idle:#5C6878; --idle-soft:#1B2129;
+    --max-w:1280px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Geist","Helvetica Neue",sans-serif;font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11";
+  }
+  body{
+    background:
+      radial-gradient(1100px 600px at 90% -10%, rgba(217,162,62,.06), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(125,180,126,.04), transparent 70%),
+      linear-gradient(180deg,#0E0D0A 0%, #0B0A07 100%);
+    min-height:100vh;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.012) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.012) 1px, transparent 1px);
+    background-size:48px 48px;
+  }
+  .wrap{max-width:var(--max-w);margin:0 auto;padding:24px 36px 64px;position:relative;z-index:1}
+
+  /* ---------- Breadcrumb / nav ---------- */
+  .crumbs{
+    display:flex;align-items:center;gap:10px;font-family:"Geist Mono",monospace;font-size:11px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:18px;
+  }
+  .crumbs a{color:var(--ink-2);text-decoration:none}
+  .crumbs a:hover{color:var(--ink)}
+  .crumbs .sep{color:var(--ink-4)}
+  .crumbs .self{color:var(--ink)}
+
+  /* ---------- Header ---------- */
+  .head{
+    display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;
+    padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:0;
+  }
+  .h-meta{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .id-pill{
+    font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.12em;font-weight:500;
+    padding:5px 10px;border:1px solid var(--line-bright);color:var(--ink-2);
+  }
+  .state-big{
+    display:flex;align-items:center;gap:8px;
+    font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:500;
+    padding:5px 10px;border:1px solid;
+  }
+  .state-big.live{color:var(--live);border-color:var(--live);background:var(--live-soft)}
+  .state-big.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+  .state-big.alert{color:var(--alert);border-color:var(--alert);background:var(--alert-soft)}
+  .state-big .pulse{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  .priority{font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--alert);font-weight:600}
+
+  h1.title{
+    font-family:"Instrument Serif",serif;font-style:italic;font-weight:400;
+    font-size:42px;letter-spacing:-.012em;line-height:1.1;color:var(--ink);margin-bottom:8px;
+  }
+  .by{
+    font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.05em;color:var(--ink-3);
+  }
+  .by b{color:var(--ink-2);font-weight:500}
+
+  .h-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .btn{
+    font-family:"Geist Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    padding:8px 14px;border:1px solid var(--ink-2);background:var(--ink);color:var(--bg);cursor:pointer;
+    font-weight:500;transition:transform .12s ease;white-space:nowrap;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn.ghost{background:transparent;color:var(--ink-2);border-color:var(--line-bright)}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--ink-2)}
+  .btn.you{border-color:var(--you);background:var(--you);color:#1B150A}
+
+  /* ---------- TL;DR strip ---------- */
+  .tldr{
+    margin:24px 0 28px;padding:20px 24px;border:1px solid var(--line-bright);
+    background:linear-gradient(180deg, var(--bg-3), var(--bg-2));
+    display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start;
+  }
+  .tldr-lbl{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--ink-3);writing-mode:vertical-rl;transform:rotate(180deg);align-self:stretch;
+    border-right:1px solid var(--line);padding-right:16px;
+  }
+  .tldr-body{font-size:17px;line-height:1.6;font-weight:300;color:var(--ink);letter-spacing:-.005em}
+  .tldr-body b{font-weight:500;color:var(--ink)}
+  .tldr-body .you-mark{color:var(--you);border-bottom:1px dashed var(--you);padding-bottom:1px}
+  .tldr-body .alert-mark{color:var(--alert)}
+  .tldr-body em{font-family:"Instrument Serif",serif;font-style:italic;color:var(--ink-2)}
+
+  /* ---------- Two-column layout ---------- */
+  .body-grid{display:grid;grid-template-columns:1fr 320px;gap:36px;align-items:start}
+
+  /* ---------- Section ---------- */
+  .sec{margin-bottom:32px}
+  .sec-h{
+    display:flex;align-items:baseline;gap:14px;margin-bottom:14px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .sec-h h2{
+    font-family:"Instrument Serif",serif;font-style:italic;font-weight:400;
+    font-size:22px;color:var(--ink);letter-spacing:-.005em;
+  }
+  .sec-h .tag{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);
+    padding:3px 8px;border:1px solid var(--line);
+  }
+  .sec-h .ct{margin-left:auto;font-family:"Geist Mono",monospace;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em}
+
+  .prose{font-size:15px;line-height:1.7;color:var(--ink-2);font-weight:300}
+  .prose b{color:var(--ink);font-weight:500}
+  .prose p+p{margin-top:14px}
+
+  /* ---------- Resolved reference card (the killer feature) ---------- */
+  .ref-card{
+    border:1px solid var(--line);background:var(--bg-2);margin-bottom:10px;
+    transition:border-color .15s ease;
+  }
+  .ref-card:hover{border-color:var(--line-bright)}
+  .ref-head{
+    display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;
+    padding:12px 16px;border-bottom:1px solid var(--line);
+  }
+  .ref-head .id{
+    font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.06em;color:var(--ink-3);font-weight:500;
+  }
+  .ref-head .ttl{font-size:14px;color:var(--ink);font-weight:400;letter-spacing:-.003em}
+  .ref-head .who{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+  .ref-head .st{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;
+    padding:3px 8px;border:1px solid;
+  }
+  .ref-head .st.done{color:var(--live);border-color:var(--live);background:var(--live-soft)}
+  .ref-head .st.review{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+  .ref-head .st.blocked{color:var(--alert);border-color:var(--alert);background:var(--alert-soft)}
+  .ref-head .st.locked{color:var(--idle);border-color:var(--idle);background:var(--idle-soft)}
+
+  .ref-body{padding:14px 16px;font-size:13.5px;color:var(--ink-2);line-height:1.55}
+  .ref-body .quote{
+    font-family:"Instrument Serif",serif;font-style:italic;font-size:13.5px;line-height:1.6;color:var(--ink-2);
+    border-left:1px solid var(--line);padding:2px 0 2px 14px;
+  }
+  .ref-body .quote::before{content:"\201C";color:var(--ink-4);font-size:24px;font-style:normal;line-height:0;margin-right:2px;vertical-align:-6px}
+  .ref-body .quote::after{content:"\201D";color:var(--ink-4);font-size:24px;font-style:normal;line-height:0;margin-left:2px;vertical-align:-12px}
+  .ref-foot{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:9px 16px;border-top:1px dashed var(--line);
+    font-family:"Geist Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-3);
+  }
+  .ref-foot a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--line-bright);padding-bottom:1px}
+  .ref-foot a:hover{color:var(--ink);border-color:var(--ink-2)}
+
+  /* ---------- Deliverable preview (the artifact, inline) ---------- */
+  .deliverable{
+    border:1px solid var(--line-bright);background:var(--bg-2);
+    padding:0;margin-top:6px;
+  }
+  .deliv-head{
+    display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+    padding:14px 18px;border-bottom:1px solid var(--line);background:var(--bg-3);
+  }
+  .deliv-icon{
+    width:28px;height:28px;border:1px solid var(--ink-2);display:grid;place-items:center;
+    font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:.04em;color:var(--ink-2);font-weight:600;
+  }
+  .deliv-ttl{font-size:14.5px;color:var(--ink);font-weight:400;letter-spacing:-.003em}
+  .deliv-ttl small{font-family:"Geist Mono",monospace;font-size:10px;color:var(--ink-3);letter-spacing:.04em;display:block;margin-top:3px}
+  .deliv-meta{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);text-align:right;line-height:1.5}
+  .deliv-meta b{color:var(--ink-2);font-weight:500;display:block}
+
+  .deliv-preview{
+    padding:18px 22px;font-family:"Instrument Serif",serif;font-style:italic;
+    font-size:14.5px;line-height:1.7;color:var(--ink-2);
+    background:var(--bg);border-bottom:1px solid var(--line);
+  }
+  .deliv-preview .h{
+    font-family:"Geist",sans-serif;font-style:normal;font-size:13.5px;font-weight:500;color:var(--ink);
+    letter-spacing:.02em;margin-bottom:6px;
+  }
+  .deliv-preview table{
+    font-family:"Geist Mono",monospace;font-style:normal;font-size:11.5px;color:var(--ink-2);
+    margin:10px 0;border-collapse:collapse;width:100%;
+  }
+  .deliv-preview th{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);color:var(--ink-3);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+  .deliv-preview td{padding:6px 10px;border-bottom:1px dashed var(--line);color:var(--ink)}
+  .deliv-preview tr:last-child td{border-bottom:none}
+  .deliv-preview td.hl{color:var(--warn);font-weight:500}
+  .deliv-preview td.hl-live{color:var(--live);font-weight:500}
+
+  .deliv-foot{
+    display:flex;justify-content:space-between;align-items:center;padding:10px 18px;
+    font-family:"Geist Mono",monospace;font-size:10.5px;letter-spacing:.08em;color:var(--ink-3);
+  }
+  .deliv-foot .path{font-family:"Geist Mono",monospace;color:var(--ink-2)}
+  .deliv-foot .path b{color:var(--ink);font-weight:500}
+  .deliv-actions{display:flex;gap:8px}
+
+  /* ---------- Acceptance criteria ---------- */
+  .ac-list{display:flex;flex-direction:column;gap:6px}
+  .ac-item{
+    display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+    padding:11px 14px;border:1px solid var(--line);background:var(--bg-2);
+  }
+  .ac-mark{
+    width:18px;height:18px;border:1px solid var(--ink-3);display:grid;place-items:center;font-family:"Geist Mono",monospace;font-size:10px;
+  }
+  .ac-mark.done{border-color:var(--live);color:var(--live);background:var(--live-soft)}
+  .ac-mark.partial{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+  .ac-mark.todo{border-color:var(--ink-4);color:var(--ink-4)}
+  .ac-text{font-size:14px;color:var(--ink);line-height:1.45;font-weight:400}
+  .ac-text small{display:block;font-family:"Geist Mono",monospace;font-size:10.5px;color:var(--ink-3);margin-top:3px;letter-spacing:.04em}
+  .ac-text small b{color:var(--ink-2);font-weight:500}
+  .ac-state{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+  .ac-item.done .ac-state{color:var(--live)}
+  .ac-item.partial .ac-state{color:var(--warn)}
+  .ac-item.todo .ac-state{color:var(--ink-3)}
+
+  /* ---------- Right rail ---------- */
+  .rail{position:sticky;top:24px}
+  .rail .panel{
+    border:1px solid var(--line);background:var(--bg-2);padding:16px 18px;margin-bottom:16px;
+  }
+  .rail h3{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:500;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px;
+  }
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:10px 14px;font-size:13px}
+  .kv dt{font-family:"Geist Mono",monospace;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em;align-self:start;padding-top:2px;text-transform:uppercase}
+  .kv dd{color:var(--ink);font-weight:400;line-height:1.45}
+  .kv dd .tiny{display:block;font-family:"Geist Mono",monospace;font-size:10px;color:var(--ink-3);margin-top:2px;letter-spacing:.04em}
+
+  /* blocker panel */
+  .panel.alert{border-color:var(--alert);background:linear-gradient(180deg, rgba(224,116,74,.08), var(--bg-2))}
+  .panel.alert h3{color:var(--alert)}
+  .blocker-chain{font-family:"Geist Mono",monospace;font-size:11.5px;line-height:1.7;color:var(--ink-2)}
+  .blocker-chain .step{display:block;padding:3px 0}
+  .blocker-chain .step::before{content:"↳ ";color:var(--ink-4);margin-right:4px}
+  .blocker-chain .step.terminal{color:var(--you);font-weight:500}
+  .blocker-chain .step.terminal::before{content:"⚑ ";color:var(--you)}
+
+  /* activity */
+  .timeline{display:flex;flex-direction:column;gap:0}
+  .tl-item{
+    display:grid;grid-template-columns:auto 1fr;gap:12px;padding:10px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  .tl-item:last-child{border-bottom:none}
+  .tl-time{font-family:"Geist Mono",monospace;font-size:10px;color:var(--ink-3);letter-spacing:.04em;padding-top:2px;white-space:nowrap}
+  .tl-text{font-size:13px;color:var(--ink-2);line-height:1.45}
+  .tl-text b{color:var(--ink);font-weight:500}
+  .tl-text .who{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-right:6px}
+
+  /* ---------- Inline reference chip in prose ---------- */
+  .ref-inline{
+    display:inline-flex;align-items:baseline;gap:5px;padding:1px 6px;
+    font-family:"Geist Mono",monospace;font-size:11.5px;letter-spacing:.02em;
+    background:var(--bg-4);border:1px solid var(--line);color:var(--ink-2);
+    border-radius:2px;cursor:pointer;
+  }
+  .ref-inline:hover{border-color:var(--line-bright);color:var(--ink)}
+  .ref-inline .id{color:var(--ink-3);font-size:10px}
+  .ref-inline .st{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+  .ref-inline .st.done{color:var(--live)}
+  .ref-inline .st.done::before{content:" · "}
+  .ref-inline .st.review{color:var(--warn)}
+  .ref-inline .st.review::before{content:" · "}
+  .ref-inline .st.locked{color:var(--idle)}
+  .ref-inline .st.locked::before{content:" · "}
+
+  @media (max-width:1100px){
+    .body-grid{grid-template-columns:1fr}
+    .rail{position:static}
+  }
+  @media (max-width:760px){
+    .wrap{padding:18px}
+    h1.title{font-size:30px}
+    .tldr{grid-template-columns:1fr}
+    .tldr-lbl{writing-mode:horizontal-tb;transform:none;border:none;padding:0;border-bottom:1px solid var(--line);padding-bottom:8px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============== Crumbs ============== -->
+  <div class="crumbs">
+    <a href="#">BEAAA</a><span class="sep">/</span>
+    <a href="#">Issues</a><span class="sep">/</span>
+    <a href="#">Pricing methodology</a><span class="sep">/</span>
+    <span class="self">BEAAA-148</span>
+  </div>
+
+  <!-- ============== Header ============== -->
+  <header class="head">
+    <div>
+      <div class="h-meta">
+        <span class="id-pill">BEAAA-148</span>
+        <span class="state-big warn"><span class="pulse"></span>In progress · Stuck on you</span>
+        <span class="priority">High priority</span>
+      </div>
+      <h1 class="title">Per-fan band factors v1.5 — pricing-methodology validation pass</h1>
+      <div class="by">Owned by <b>CFO · Capital agent</b> · Created 5 May 2026 · Sec. 2 of 4 complete · 60% done · ETA Wed AM</div>
+    </div>
+    <div class="h-actions">
+      <button class="btn you">⚑ Answer for CFO (12% / 15%)</button>
+      <button class="btn ghost">Reassign · escalate · close</button>
+    </div>
+  </header>
+
+  <!-- ============== TL;DR ============== -->
+  <section class="tldr">
+    <div class="tldr-lbl">TL;DR · auto-summary</div>
+    <div class="tldr-body">
+      CFO is building <b>per-fan band factors v1.5</b> so the pricing model can be reconciled against the actuary's rate sheet.
+      Sec. 1 (loss-cost prior) and Sec. 2 (expense load) are done. Sec. 3 (capital charge) is anchored to a board-locked artifact.
+      <span class="alert-mark">Sec. 4 (broker comm) is blocked because CFO needs <span class="you-mark">your decision</span>: 12% or 15% broker comm.</span>
+      Once you answer (≈5 min), CFO finishes by Wed AM, the actuary unblocks, and 5 downstream pricing tickets clear.
+      <em>This summary is regenerated each time the task body changes.</em>
+    </div>
+  </section>
+
+  <!-- ============== Body grid ============== -->
+  <div class="body-grid">
+
+    <main>
+
+      <!-- WHY THIS EXISTS -->
+      <section class="sec">
+        <header class="sec-h">
+          <h2>Why this exists</h2>
+          <span class="tag">Plain English</span>
+          <span class="ct">2 paragraphs</span>
+        </header>
+        <div class="prose">
+          <p>The pricing model needs a per-fan band factor so the same trigger (e.g. T4 loss event) prices differently for cluster G1 versus cluster G2 customers. Without it, the actuary can't reconcile the model against the customer-readable rate sheet (<span class="ref-inline"><span class="id">BEAAA-141</span><span class="st review">In review</span></span>) and the underwriter can't lock policy wording (<span class="ref-inline"><span class="id">BEAAA-151</span><span class="st review">Peer review</span></span>).</p>
+          <p>This task ships <b>v1.5</b> of the band factors with four sections: loss-cost prior, expense load, capital charge, broker commission. Sections 1–2 are done; section 3 is anchored to <span class="ref-inline"><span class="id">BEAAA-25</span><span class="st locked">Board-locked</span></span> and won't move. Section 4 is the live blocker.</p>
+        </div>
+      </section>
+
+      <!-- BLOCKER (callout) -->
+      <section class="sec">
+        <header class="sec-h">
+          <h2>Right now</h2>
+          <span class="tag">Live blocker</span>
+          <span class="ct">resolves in ~5 min if you answer</span>
+        </header>
+
+        <div class="ref-card" style="border-color:var(--alert);background:linear-gradient(180deg, rgba(224,116,74,.06), var(--bg-2))">
+          <div class="ref-head">
+            <span class="id" style="color:var(--alert)">⚑ ON YOU</span>
+            <span class="ttl">Confirm broker-comm % (12% vs 15%) — needed for sec. 4 of band factors v1.5.</span>
+            <span class="who">Asked 4h ago</span>
+            <span class="st blocked">Awaiting decision</span>
+          </div>
+          <div class="ref-body">
+            CFO drafted both options. <b>12%</b> matches the channel rate Bedrock-Re uses on T4 wordings; saves ≈$3.40/policy. <b>15%</b> is the rate the CSO's pitch deck (<span class="ref-inline"><span class="id">BEAAA-137</span><span class="st done">Done</span></span>) currently quotes. CFO recommends 12% for v1.5 and a deck correction; recommendation can be auto-approved if you click 12%.
+          </div>
+          <div class="ref-foot">
+            <span>One click closes the chain · CFO finishes sec. 4 in ~3h after your answer</span>
+            <div style="display:flex;gap:8px">
+              <button class="btn you">12% — accept CFO recommendation</button>
+              <button class="btn ghost">15% — keep deck rate</button>
+              <button class="btn ghost">Open question thread</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- THE DELIVERABLE — INLINE -->
+      <section class="sec">
+        <header class="sec-h">
+          <h2>The deliverable</h2>
+          <span class="tag">Lives in cfo/BEAAA-148_per-fan-band-factors/</span>
+          <span class="ct">live preview · auto-updates as CFO writes</span>
+        </header>
+
+        <div class="deliverable">
+          <div class="deliv-head">
+            <div class="deliv-icon">XLSX</div>
+            <div class="deliv-ttl">band-factors-v1.5.xlsx <small>14 trigger types × 3 horizons × 2 clusters · 4 sections</small></div>
+            <div class="deliv-meta">last write<b>13:18 ET</b>by CFO</div>
+          </div>
+
+          <div class="deliv-preview">
+            <div class="h">Section 1 — Loss-cost prior <span style="color:var(--live);font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em">· DONE</span></div>
+            "Anchored to <span class="ref-inline"><span class="id">BEAAA-25</span><span class="st locked">Locked</span></span>. Prior tightened from 0.42 → 0.31 after T4-event reweighting. Sensitivity holds within ±8% across the 90-day band."
+
+            <div class="h" style="margin-top:18px">Section 4 — Broker commission <span style="color:var(--alert);font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em">· BLOCKED ON YOU</span></div>
+            <table>
+              <thead><tr><th>Cluster</th><th>Trigger</th><th>Net premium</th><th>Comm @ 12%</th><th>Comm @ 15%</th><th>Δ per policy</th></tr></thead>
+              <tbody>
+                <tr><td>G1</td><td>T4 loss event</td><td>$284.00</td><td class="hl-live">$34.08</td><td class="hl">$42.60</td><td>−$8.52</td></tr>
+                <tr><td>G1</td><td>T4 partial</td><td>$162.00</td><td class="hl-live">$19.44</td><td class="hl">$24.30</td><td>−$4.86</td></tr>
+                <tr><td>G2</td><td>T4 loss event</td><td>$498.00</td><td class="hl-live">$59.76</td><td class="hl">$74.70</td><td>−$14.94</td></tr>
+                <tr><td>G2</td><td>T4 partial</td><td>$305.00</td><td class="hl-live">$36.60</td><td class="hl">$45.75</td><td>−$9.15</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="deliv-foot">
+            <div class="path">📁 <b>cfo/BEAAA-148_per-fan-band-factors/</b>band-factors-v1.5.xlsx <span style="color:var(--ink-4)">·</span> revisions/ (4)</div>
+            <div class="deliv-actions">
+              <button class="btn ghost">Open in Excel</button>
+              <button class="btn ghost">View revision diff</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INPUTS / ANCHORED TO — RESOLVED INLINE -->
+      <section class="sec">
+        <header class="sec-h">
+          <h2>Anchored to (resolved)</h2>
+          <span class="tag">No clicking through</span>
+          <span class="ct">3 inputs · all resolved inline</span>
+        </header>
+
+        <article class="ref-card">
+          <div class="ref-head">
+            <span class="id">BEAAA-25</span>
+            <span class="ttl">Capital charge — board-locked input for pricing v1.x</span>
+            <span class="who">Owner: CEO</span>
+            <span class="st locked">Board-locked</span>
+          </div>
+          <div class="ref-body">
+            <div class="quote">Capital charge fixed at 14.5% of net written premium for fiscal '26, ratified by board 2 May 2026. Not subject to per-task override — any change requires board minute.</div>
+          </div>
+          <div class="ref-foot">
+            <span>Locked artifact · used as input · zero risk of drift</span>
+            <a href="#">Open BEAAA-25 ↗</a>
+          </div>
+        </article>
+
+        <article class="ref-card">
+          <div class="ref-head">
+            <span class="id">BEAAA-141</span>
+            <span class="ttl">Customer-readable pricing sheet (Bronze/Silver/Gold + per-call)</span>
+            <span class="who">Owner: Actuary</span>
+            <span class="st review">In review</span>
+          </div>
+          <div class="ref-body">
+            <div class="quote">Reconciled bands map 1:1 against tier ladder. Per-call price = band centroid × (1 + capital charge). Awaiting v1.5 band factors from this task before validation can complete.</div>
+          </div>
+          <div class="ref-foot">
+            <span>Downstream — will unblock when this task ships</span>
+            <a href="#">Open BEAAA-141 ↗</a>
+          </div>
+        </article>
+
+        <article class="ref-card">
+          <div class="ref-head">
+            <span class="id">BEAAA-149</span>
+            <span class="ttl">Pricing v1 — Actuary validation overlay (BEAAA-148 fan-out)</span>
+            <span class="who">Owner: Actuary</span>
+            <span class="st blocked">Blocked</span>
+          </div>
+          <div class="ref-body">
+            <div class="quote">Validation overlay runs four cluster × trigger sweeps. Cannot start until v1.5 band factors land. Idle 6h since reconciliation halt.</div>
+          </div>
+          <div class="ref-foot">
+            <span>Direct downstream — clears within 2h of this task closing</span>
+            <a href="#">Open BEAAA-149 ↗</a>
+          </div>
+        </article>
+      </section>
+
+      <!-- ACCEPTANCE CRITERIA -->
+      <section class="sec">
+        <header class="sec-h">
+          <h2>Acceptance criteria</h2>
+          <span class="tag">Auto-tracked</span>
+          <span class="ct">2 of 4 met · 1 blocked on you</span>
+        </header>
+
+        <div class="ac-list">
+          <div class="ac-item done">
+            <span class="ac-mark done">✓</span>
+            <div class="ac-text">Sec. 1 (loss-cost prior) reconciles to <span class="ref-inline"><span class="id">BEAAA-25</span><span class="st locked">Locked</span></span> within ±8% sensitivity band.<small><b>Met</b> · prior 0.31, sensitivity ±6.4%</small></div>
+            <span class="ac-state">Met</span>
+          </div>
+          <div class="ac-item done">
+            <span class="ac-mark done">✓</span>
+            <div class="ac-text">Sec. 2 (expense load) computed for both G1 and G2 clusters across 14 trigger types.<small><b>Met</b> · 28-row table populated, no nulls</small></div>
+            <span class="ac-state">Met</span>
+          </div>
+          <div class="ac-item partial">
+            <span class="ac-mark partial">◐</span>
+            <div class="ac-text">Sec. 3 (capital charge) applied uniformly per board-locked rate.<small><b>Partial</b> · capital charge applied; final QA pending sec. 4 close</small></div>
+            <span class="ac-state">Partial</span>
+          </div>
+          <div class="ac-item todo">
+            <span class="ac-mark todo">○</span>
+            <div class="ac-text">Sec. 4 (broker commission) confirmed and applied to both clusters.<small>Blocked on broker-comm % decision · <b>on you</b></small></div>
+            <span class="ac-state">Blocked</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ============== Right rail ============== -->
+    <aside class="rail">
+
+      <div class="panel alert">
+        <h3>⚑ Live blocker · on you</h3>
+        <div class="blocker-chain">
+          <span class="step">CFO is at 60% on band factors</span>
+          <span class="step">Sec. 4 needs broker-comm % (12 or 15)</span>
+          <span class="step terminal">YOU answer · ~5 min · clears 5 tickets</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Where it lives</h3>
+        <dl class="kv">
+          <dt>Folder</dt>
+          <dd>cfo/BEAAA-148_per-fan-band-factors/<span class="tiny">canonical home · single source of truth</span></dd>
+          <dt>Artifact</dt>
+          <dd>band-factors-v1.5.xlsx<span class="tiny">last write 13:18 by CFO · 4 revisions</span></dd>
+          <dt>Supporting</dt>
+          <dd>loss-cost-prior.md<span class="tiny">linked input · sec. 1 reference</span></dd>
+        </dl>
+      </div>
+
+      <div class="panel">
+        <h3>Owned by</h3>
+        <dl class="kv">
+          <dt>Owner</dt>
+          <dd>CFO · Capital agent<span class="tiny">on task 5h 11m today · 2d 4h total</span></dd>
+          <dt>Reviewers</dt>
+          <dd>Actuary · CEO<span class="tiny">queued · auto-notified on close</span></dd>
+          <dt>Project</dt>
+          <dd>Pricing methodology v1<span class="tiny">milestone: Tier-ladder lock · 12 May</span></dd>
+        </dl>
+      </div>
+
+      <div class="panel">
+        <h3>Activity · distilled</h3>
+        <div class="timeline">
+          <div class="tl-item"><span class="tl-time">13:18</span><div class="tl-text"><span class="who">CFO</span><b>v1.5 sec. 2 (expense load) committed.</b> 28 rows populated, no nulls.</div></div>
+          <div class="tl-item"><span class="tl-time">09:42</span><div class="tl-text"><span class="who">CFO</span>Asked YOU: <b>broker-comm %</b> — 12 or 15? (recommended 12)</div></div>
+          <div class="tl-item"><span class="tl-time">09:18</span><div class="tl-text"><span class="who">CFO</span>v1.5 sec. 1 (loss-cost prior) committed against locked input.</div></div>
+          <div class="tl-item"><span class="tl-time">Yest 17:00</span><div class="tl-text"><span class="who">Actuary</span>Flagged BEAAA-149 idle until v1.5 ships.</div></div>
+          <div class="tl-item"><span class="tl-time">Yest 14:30</span><div class="tl-text"><span class="who">Compiler</span><b>Task auto-promoted to High priority</b> — 5 downstream tickets impacted.</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Downstream impact</h3>
+        <div class="prose" style="font-size:13px">
+          Closing this task auto-clears: <span class="ref-inline"><span class="id">BEAAA-149</span><span class="st blocked">Actuary</span></span>, <span class="ref-inline"><span class="id">BEAAA-141</span><span class="st review">Pricing sheet</span></span>, <span class="ref-inline"><span class="id">BEAAA-150</span><span class="st review">Reconciliation</span></span>, <span class="ref-inline"><span class="id">BEAAA-151</span><span class="st review">Policy wording</span></span>, <span class="ref-inline"><span class="id">BEAAA-138</span><span class="st review">Meeting deck</span></span>.
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+</div>
+</body>
+</html>

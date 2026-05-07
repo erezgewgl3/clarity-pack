@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Employee Chat — BEAAA · CFO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E0D0A; --bg-2:#15140F; --bg-3:#1B1A14; --bg-4:#222019;
+    --line:#2A2820; --line-bright:#3D3A2E;
+    --ink:#E8E1CF; --ink-2:#B8B0A0; --ink-3:#7E7869; --ink-4:#52503F;
+    --live:#7DB47E; --live-soft:#1F3320;
+    --warn:#D9A23E; --warn-soft:#3A2D14;
+    --alert:#E0744A; --alert-soft:#3A1C12;
+    --you:#E5C56F; --you-soft:#3D3318;
+    --idle:#5C6878; --idle-soft:#1B2129;
+    --eric-bubble:#22201A;
+    --agent-bubble:#16140F;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Geist","Helvetica Neue",sans-serif;font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11";height:100%;overflow:hidden;
+  }
+  body{
+    background:
+      radial-gradient(900px 500px at 100% 0%, rgba(217,162,62,.05), transparent 60%),
+      linear-gradient(180deg,#0E0D0A 0%, #0B0A07 100%);
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.012) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.012) 1px, transparent 1px);
+    background-size:48px 48px;
+  }
+
+  /* ---------- Shell ---------- */
+  .shell{
+    display:grid;grid-template-columns:264px 1fr 340px;height:100vh;position:relative;z-index:1;
+    border-top:1px solid var(--line);
+  }
+
+  /* ---------- LEFT: employee list ---------- */
+  .roster{
+    border-right:1px solid var(--line);background:var(--bg-2);display:flex;flex-direction:column;height:100vh;
+  }
+  .roster-head{
+    padding:14px 16px 12px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .roster-head .ttl{
+    font-family:"Instrument Serif",serif;font-style:italic;font-size:20px;color:var(--ink);
+  }
+  .roster-head .ct{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase;
+  }
+  .roster-search{padding:10px 12px;border-bottom:1px solid var(--line)}
+  .roster-search input{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    font-family:"Geist Mono",monospace;font-size:11.5px;padding:7px 10px;letter-spacing:.04em;
+  }
+  .roster-search input::placeholder{color:var(--ink-3)}
+  .roster-search input:focus{outline:none;border-color:var(--ink-3)}
+
+  .roster-list{flex:1;overflow-y:auto;padding:6px 0}
+  .emp{
+    display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:10px;
+    padding:10px 14px;cursor:pointer;border-left:2px solid transparent;
+  }
+  .emp:hover{background:var(--bg-3)}
+  .emp.active{background:var(--bg-3);border-left-color:var(--you)}
+  .emp .av{
+    width:24px;height:24px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:"Instrument Serif",serif;font-style:italic;font-size:12px;color:var(--ink-2);position:relative;
+  }
+  .emp .av::after{
+    content:"";position:absolute;width:7px;height:7px;border-radius:50%;
+    bottom:-2px;right:-2px;border:1.5px solid var(--bg-2);
+  }
+  .emp.s-live .av::after{background:var(--live)}
+  .emp.s-warn .av::after{background:var(--warn)}
+  .emp.s-alert .av::after{background:var(--alert)}
+  .emp.s-idle .av::after{background:var(--idle)}
+  .emp .name{font-size:13.5px;color:var(--ink);font-weight:400;letter-spacing:-.003em}
+  .emp .name small{display:block;font-family:"Geist Mono",monospace;font-size:10px;color:var(--ink-3);letter-spacing:.06em;margin-top:2px}
+  .emp.active .name{color:var(--ink)}
+  .emp .badge{
+    font-family:"Geist Mono",monospace;font-size:10px;color:var(--bg);background:var(--alert);
+    padding:2px 6px;letter-spacing:.04em;font-weight:600;border-radius:2px;
+  }
+  .emp .badge.muted{background:transparent;color:var(--ink-4);border:1px solid var(--line);}
+
+  .roster-section{padding:14px 16px 8px;font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:.22em;color:var(--ink-4);text-transform:uppercase;border-top:1px solid var(--line);margin-top:8px}
+
+  /* ---------- MIDDLE: chat thread ---------- */
+  .thread{display:flex;flex-direction:column;height:100vh;background:var(--bg)}
+  .thread-head{
+    display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;
+    padding:14px 22px;border-bottom:1px solid var(--line);background:var(--bg-2);
+  }
+  .who-big{display:flex;align-items:center;gap:14px}
+  .who-big .av{
+    width:38px;height:38px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:"Instrument Serif",serif;font-style:italic;font-size:18px;color:var(--ink);position:relative;
+  }
+  .who-big .av::after{
+    content:"";position:absolute;width:9px;height:9px;border-radius:50%;
+    bottom:-2px;right:-2px;border:2px solid var(--bg-2);background:var(--live);
+  }
+  .who-big .role{font-family:"Instrument Serif",serif;font-style:italic;font-size:22px;color:var(--ink);line-height:1;}
+  .who-big .role small{display:block;font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:4px;font-style:normal}
+
+  .global-search{position:relative;max-width:380px;margin:0 auto;width:100%}
+  .global-search input{
+    width:100%;background:var(--bg);border:1px solid var(--line-bright);color:var(--ink);
+    font-family:"Geist Mono",monospace;font-size:11.5px;padding:9px 14px 9px 34px;letter-spacing:.04em;
+  }
+  .global-search input::placeholder{color:var(--ink-3)}
+  .global-search input:focus{outline:none;border-color:var(--ink-2)}
+  .global-search .icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:12px;font-family:"Geist Mono",monospace}
+  .global-search .kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:"Geist Mono",monospace;font-size:10px;color:var(--ink-3);border:1px solid var(--line);padding:2px 6px;letter-spacing:.04em}
+
+  .head-actions{display:flex;gap:8px;align-items:center}
+  .btn{
+    font-family:"Geist Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    padding:7px 12px;border:1px solid var(--ink-2);background:var(--ink);color:var(--bg);cursor:pointer;
+    font-weight:500;white-space:nowrap;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn.ghost{background:transparent;color:var(--ink-2);border-color:var(--line-bright)}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--ink-2)}
+  .btn.you{border-color:var(--you);background:var(--you);color:#1B150A}
+
+  /* topic strip */
+  .topics{
+    display:flex;gap:6px;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--bg-2);overflow-x:auto;
+    align-items:center;
+  }
+  .topic-lbl{
+    font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);
+    margin-right:6px;flex-shrink:0;
+  }
+  .topic{
+    display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border:1px solid var(--line);
+    font-family:"Geist Mono",monospace;font-size:11px;color:var(--ink-2);cursor:pointer;letter-spacing:.02em;flex-shrink:0;
+  }
+  .topic:hover{border-color:var(--line-bright);color:var(--ink)}
+  .topic.active{background:var(--bg-3);border-color:var(--ink-3);color:var(--ink)}
+  .topic .id{color:var(--ink-3);font-size:10px}
+  .topic .dot{width:5px;height:5px;border-radius:50%;background:var(--live)}
+  .topic.warn .dot{background:var(--warn)}
+  .topic.alert .dot{background:var(--alert)}
+
+  /* messages scroller */
+  .messages{flex:1;overflow-y:auto;padding:24px 22px 16px;display:flex;flex-direction:column;gap:18px}
+
+  .day-divider{
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;
+    margin:8px 0;
+  }
+  .day-divider::before,.day-divider::after{content:"";height:1px;background:var(--line)}
+  .day-divider span{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.2em;color:var(--ink-3);text-transform:uppercase;
+  }
+
+  .msg{display:grid;grid-template-columns:34px 1fr;gap:14px;max-width:780px}
+  .msg.me{justify-self:end;grid-template-columns:1fr 34px;direction:rtl}
+  .msg.me > *{direction:ltr}
+  .msg .av{
+    width:34px;height:34px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:"Instrument Serif",serif;font-style:italic;font-size:15px;color:var(--ink-2);background:var(--bg);align-self:flex-end;
+  }
+  .msg.me .av{background:var(--you-soft);border-color:var(--you);color:var(--you)}
+
+  .bubble{
+    background:var(--agent-bubble);border:1px solid var(--line);padding:13px 16px;
+    border-radius:2px;position:relative;
+  }
+  .msg.me .bubble{background:var(--eric-bubble);border-color:var(--line-bright)}
+
+  .b-meta{
+    display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-bottom:6px;
+    font-family:"Geist Mono",monospace;font-size:10.5px;letter-spacing:.04em;color:var(--ink-3);
+  }
+  .b-meta .who{color:var(--ink-2);font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+  .msg.me .b-meta .who{color:var(--you)}
+  .b-meta .ts{font-family:"Geist Mono",monospace;font-variant-numeric:tabular-nums}
+
+  .b-text{font-size:14.5px;line-height:1.55;color:var(--ink);font-weight:300;letter-spacing:-.003em}
+  .b-text b{font-weight:500}
+  .b-text p+p{margin-top:8px}
+  .b-text .num{font-family:"Geist Mono",monospace;font-size:13px;font-weight:500;color:var(--ink);background:var(--bg-4);padding:1px 5px;border:1px solid var(--line);border-radius:2px}
+  .b-text .ref-inline{
+    display:inline-flex;align-items:baseline;gap:5px;padding:1px 6px;
+    font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.02em;
+    background:var(--bg-4);border:1px solid var(--line);color:var(--ink-2);border-radius:2px;cursor:pointer;
+  }
+  .b-text .ref-inline:hover{border-color:var(--line-bright);color:var(--ink)}
+  .b-text .ref-inline .id{color:var(--ink-3);font-size:10px}
+  .b-text .ref-inline .st{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+  .b-text .ref-inline .st.review{color:var(--warn)}
+  .b-text .ref-inline .st.review::before{content:" · "}
+  .b-text .ref-inline .st.done{color:var(--live)}
+  .b-text .ref-inline .st.done::before{content:" · "}
+  .b-text .ref-inline .st.locked{color:var(--idle)}
+  .b-text .ref-inline .st.locked::before{content:" · "}
+
+  /* reasoning panel — inline reveal */
+  .reasoning{
+    margin-top:10px;border-left:2px solid var(--line);padding:6px 12px;background:var(--bg-3);
+  }
+  .reasoning summary{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase;cursor:pointer;
+    list-style:none;
+  }
+  .reasoning summary::before{content:"▸ ";color:var(--ink-4)}
+  .reasoning[open] summary::before{content:"▾ "}
+  .reasoning summary::-webkit-details-marker{display:none}
+  .reasoning .body{
+    margin-top:8px;font-size:13px;color:var(--ink-2);line-height:1.55;font-weight:300;
+    border-top:1px dashed var(--line);padding-top:8px;
+  }
+  .reasoning .body ul{padding-left:18px}
+  .reasoning .body li{margin-bottom:4px}
+  .reasoning .body code{font-family:"Geist Mono",monospace;font-size:11.5px;color:var(--ink);background:var(--bg-4);padding:1px 4px;border:1px solid var(--line)}
+
+  /* attachment in message */
+  .attach{
+    margin-top:11px;border:1px solid var(--line);background:var(--bg);
+    display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+    padding:10px 12px;
+  }
+  .attach .ico{
+    width:30px;height:30px;border:1px solid var(--line-bright);display:grid;place-items:center;
+    font-family:"Geist Mono",monospace;font-size:9px;color:var(--ink-2);font-weight:600;letter-spacing:.04em;
+  }
+  .attach .info .nm{font-size:13px;color:var(--ink);font-weight:400}
+  .attach .info .meta{font-family:"Geist Mono",monospace;font-size:10px;color:var(--ink-3);letter-spacing:.04em;margin-top:2px}
+  .attach .open{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-2);border:1px solid var(--line-bright);padding:5px 9px;cursor:pointer;
+  }
+  .attach .open:hover{color:var(--ink);border-color:var(--ink-2)}
+
+  .attach.image{padding:0;display:block}
+  .attach.image .preview-img{
+    height:140px;background:linear-gradient(135deg,#1F1B14,#2A2419);position:relative;overflow:hidden;
+    display:grid;place-items:center;
+  }
+  .attach.image .preview-img::after{
+    content:"";position:absolute;inset:0;
+    background:
+      repeating-linear-gradient(45deg,rgba(217,162,62,.04) 0 12px,transparent 12px 24px),
+      radial-gradient(circle at 30% 40%, rgba(125,180,126,.12), transparent 60%),
+      radial-gradient(circle at 70% 70%, rgba(217,162,62,.10), transparent 50%);
+  }
+  .attach.image .preview-img .label{
+    position:relative;z-index:2;font-family:"Instrument Serif",serif;font-style:italic;font-size:14px;color:var(--ink-2);
+    background:rgba(0,0,0,.6);padding:6px 12px;border:1px solid var(--line);
+  }
+  .attach.image .info-row{
+    padding:9px 12px;display:flex;justify-content:space-between;align-items:center;
+  }
+
+  /* Decision pill — when a chat message resolves to a real work object */
+  .resolved{
+    margin-top:10px;display:inline-flex;align-items:center;gap:9px;
+    padding:6px 11px;border:1px solid var(--live);background:var(--live-soft);
+    font-family:"Geist Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink);border-radius:2px;
+  }
+  .resolved::before{content:"✓";color:var(--live);font-weight:600;font-family:"Geist",sans-serif}
+  .resolved b{color:var(--live);font-weight:500;letter-spacing:.04em}
+  .resolved.warn{border-color:var(--warn);background:var(--warn-soft)}
+  .resolved.warn::before{content:"⚠"; color:var(--warn)}
+
+  /* promote-to-task action that appears on hover */
+  .promote{
+    position:absolute;top:-10px;right:14px;display:flex;gap:6px;
+    opacity:0;transition:opacity .15s ease;
+  }
+  .bubble:hover .promote{opacity:1}
+  .promote .pa{
+    font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    background:var(--bg-2);border:1px solid var(--line-bright);color:var(--ink-2);padding:4px 8px;cursor:pointer;
+  }
+  .promote .pa:hover{color:var(--ink);border-color:var(--ink-2);background:var(--bg-3)}
+
+  /* one-click decision message */
+  .decision-msg{
+    align-self:center;max-width:640px;text-align:center;
+    border:1px dashed var(--you);background:var(--you-soft);padding:11px 16px;
+  }
+  .decision-msg .lbl{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--you);
+    font-weight:600;margin-bottom:5px;
+  }
+  .decision-msg .lbl::before{content:"⚵  "}
+  .decision-msg .txt{font-size:13.5px;color:var(--ink);line-height:1.45}
+  .decision-msg .txt b{color:var(--ink)}
+  .decision-msg .meta{margin-top:6px;font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3)}
+
+  /* composer */
+  .composer{
+    border-top:1px solid var(--line);background:var(--bg-2);padding:14px 22px 16px;
+  }
+  .composer-meta{
+    display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  }
+  .composer-meta .topic-now{color:var(--ink-2);font-weight:500}
+  .composer-meta .topic-now b{color:var(--you)}
+
+  .composer-box{
+    border:1px solid var(--line-bright);background:var(--bg);padding:0;
+    transition:border-color .15s ease;
+  }
+  .composer-box:focus-within{border-color:var(--ink-3)}
+  .composer-input{
+    width:100%;background:transparent;border:none;outline:none;color:var(--ink);
+    font-family:"Geist","Helvetica Neue",sans-serif;font-size:14.5px;padding:14px 16px 4px;line-height:1.5;
+    resize:none;min-height:62px;
+  }
+  .composer-input::placeholder{color:var(--ink-3);font-style:italic}
+  .composer-foot{
+    display:flex;justify-content:space-between;align-items:center;padding:8px 14px 10px;border-top:1px dashed var(--line);
+  }
+  .composer-tools{display:flex;gap:6px}
+  .tool-btn{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-3);background:transparent;border:1px solid transparent;padding:5px 8px;cursor:pointer;
+  }
+  .tool-btn:hover{color:var(--ink-2);border-color:var(--line)}
+  .composer-foot .send-row{display:flex;gap:8px;align-items:center}
+  .composer-hint{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.04em;color:var(--ink-3)}
+  .composer-hint kbd{border:1px solid var(--line);padding:1px 4px;color:var(--ink-2)}
+
+  /* ---------- RIGHT: context rail ---------- */
+  .ctx{
+    border-left:1px solid var(--line);background:var(--bg-2);height:100vh;overflow-y:auto;padding:18px 18px 24px;
+  }
+  .ctx h3{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:500;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px;margin-top:18px;
+  }
+  .ctx h3:first-child{margin-top:0}
+  .ctx .agent-card{
+    border:1px solid var(--line);padding:14px;background:var(--bg-3);
+  }
+  .ctx .agent-card .role-line{
+    font-family:"Instrument Serif",serif;font-style:italic;font-size:22px;color:var(--ink);line-height:1.05;
+  }
+  .ctx .agent-card .role-line small{display:block;font-family:"Geist Mono",monospace;font-style:normal;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:5px}
+  .ctx .agent-card .stat-row{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);
+  }
+  .ctx .agent-card .stat-row .stat{
+    font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase;
+  }
+  .ctx .agent-card .stat-row .stat b{
+    display:block;font-family:"Instrument Serif",serif;font-style:italic;font-size:18px;font-weight:400;color:var(--ink);text-transform:none;letter-spacing:0;margin-top:2px;
+  }
+
+  .task-row{
+    display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+    padding:9px 0;border-bottom:1px dashed var(--line);
+  }
+  .task-row:last-child{border-bottom:none}
+  .task-row .id{font-family:"Geist Mono",monospace;font-size:10px;color:var(--ink-3);letter-spacing:.04em}
+  .task-row .ttl{font-size:13px;color:var(--ink-2);line-height:1.4}
+  .task-row .st{font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+  .task-row .st.review{color:var(--warn)}
+  .task-row .st.todo{color:var(--ink-3)}
+  .task-row .st.done{color:var(--live)}
+  .task-row .st.blocked{color:var(--alert)}
+
+  .pin-row{
+    font-family:"Geist Mono",monospace;font-size:11px;color:var(--ink-2);letter-spacing:.02em;
+    padding:8px 10px;background:var(--bg);border:1px dashed var(--line);
+  }
+  .pin-row b{color:var(--ink);font-weight:500}
+
+  .quick{display:flex;flex-direction:column;gap:6px}
+  .quick .qa{
+    font-family:"Geist Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-2);
+    background:transparent;border:1px solid var(--line);padding:8px 12px;text-align:left;cursor:pointer;
+  }
+  .quick .qa:hover{border-color:var(--line-bright);color:var(--ink)}
+
+  @media (max-width:1180px){
+    .shell{grid-template-columns:220px 1fr}
+    .ctx{display:none}
+  }
+  @media (max-width:760px){
+    .shell{grid-template-columns:1fr}
+    .roster{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ========== LEFT: ROSTER ========== -->
+  <aside class="roster">
+    <div class="roster-head">
+      <div class="ttl">Employees</div>
+      <span class="ct">9 · BEAAA</span>
+    </div>
+    <div class="roster-search">
+      <input placeholder="Search agents…" />
+    </div>
+    <div class="roster-list">
+      <div class="roster-section">Leadership</div>
+
+      <div class="emp s-alert">
+        <div class="av">C</div>
+        <div class="name">CEO<small>Strategy · Eric proxy</small></div>
+        <span class="badge">3</span>
+      </div>
+
+      <div class="emp s-live active">
+        <div class="av">C</div>
+        <div class="name">CFO<small>Capital · economics</small></div>
+        <span class="badge">2</span>
+      </div>
+
+      <div class="emp s-warn">
+        <div class="av">A</div>
+        <div class="name">Actuary<small>Pricing · models</small></div>
+        <span class="badge muted">·</span>
+      </div>
+
+      <div class="emp s-warn">
+        <div class="av">M</div>
+        <div class="name">CMO<small>Marketing · outreach</small></div>
+        <span class="badge muted">·</span>
+      </div>
+
+      <div class="emp s-live">
+        <div class="av">S</div>
+        <div class="name">CSO<small>Sales · pipeline</small></div>
+        <span class="badge muted">·</span>
+      </div>
+
+      <div class="emp s-live">
+        <div class="av">T</div>
+        <div class="name">CTO<small>Engineering · spike</small></div>
+        <span class="badge muted">·</span>
+      </div>
+
+      <div class="emp s-idle">
+        <div class="av">B</div>
+        <div class="name">CBDO<small>BizDev · channel</small></div>
+        <span class="badge muted">·</span>
+      </div>
+
+      <div class="emp s-warn">
+        <div class="av">U</div>
+        <div class="name">Underwriter<small>Risk · wording</small></div>
+        <span class="badge muted">·</span>
+      </div>
+
+      <div class="emp s-live">
+        <div class="av">D</div>
+        <div class="name">Designer<small>Comms · layout</small></div>
+        <span class="badge muted">·</span>
+      </div>
+
+      <div class="roster-section">Group threads</div>
+
+      <div class="emp s-live">
+        <div class="av">⚹</div>
+        <div class="name">Pricing huddle<small>CFO · Actuary · Underwriter</small></div>
+        <span class="badge muted">·</span>
+      </div>
+
+      <div class="emp s-live">
+        <div class="av">⚹</div>
+        <div class="name">GTM huddle<small>CMO · CSO · Designer</small></div>
+        <span class="badge muted">·</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ========== MIDDLE: THREAD ========== -->
+  <main class="thread">
+
+    <header class="thread-head">
+      <div class="who-big">
+        <div class="av">C</div>
+        <div class="role">CFO<small>Capital · Economics agent</small></div>
+      </div>
+      <div class="global-search">
+        <span class="icon">⌕</span>
+        <input placeholder="Search all chats and tasks across BEAAA…" />
+        <span class="kbd">⌘ K</span>
+      </div>
+      <div class="head-actions">
+        <button class="btn ghost">Open profile</button>
+        <button class="btn">+ New topic</button>
+      </div>
+    </header>
+
+    <!-- topic strip — open chat threads with this employee -->
+    <div class="topics">
+      <span class="topic-lbl">Topics ·</span>
+      <button class="topic active alert"><span class="dot"></span>Broker comm % decision <span class="id">CHT-44</span></button>
+      <button class="topic"><span class="dot"></span>Loss-cost prior method <span class="id">CHT-39</span></button>
+      <button class="topic warn"><span class="dot"></span>Capital charge sensitivity <span class="id">CHT-31</span></button>
+      <button class="topic"><span class="dot"></span>Q3 budget envelope <span class="id">CHT-22</span></button>
+      <button class="topic"><span class="dot"></span>Reinsurance carrier shortlist <span class="id">CHT-14</span></button>
+    </div>
+
+    <div class="messages">
+
+      <div class="day-divider"><span>Yesterday · 6 May 2026</span></div>
+
+      <!-- Eric -->
+      <article class="msg me">
+        <div class="bubble">
+          <div class="b-meta"><span class="who">Eric · You</span><span class="ts">16:42</span></div>
+          <div class="b-text">
+            Status on band factors v1.5? We need this to land before Wed for the actuary to validate.
+          </div>
+        </div>
+        <div class="av">E</div>
+      </article>
+
+      <!-- CFO -->
+      <article class="msg">
+        <div class="av">C</div>
+        <div class="bubble">
+          <span class="promote">
+            <button class="pa">↗ Promote to task</button>
+            <button class="pa">⚑ Pin</button>
+          </span>
+          <div class="b-meta"><span class="who">CFO</span><span class="ts">16:43 · auto-replied 14s</span></div>
+          <div class="b-text">
+            <p><b>60% done.</b> Sec. 1 (loss-cost prior) and Sec. 2 (expense load) are committed. Sec. 3 (capital charge) is anchored to <span class="ref-inline"><span class="id">BEAAA-25</span><span class="st locked">Locked</span></span> and won't move.</p>
+            <p>Sec. 4 is waiting on a decision: <b>broker commission %</b>. The CSO deck quotes <span class="num">15%</span>; Bedrock-Re's channel rate is <span class="num">12%</span>. Both are defensible — they price out differently.</p>
+          </div>
+          <details class="reasoning">
+            <summary>Show reasoning · 4 sources, 2 model runs</summary>
+            <div class="body">
+              <ul>
+                <li>Pulled Bedrock-Re channel rate from <span class="ref-inline"><span class="id">BEAAA-14</span><span class="st done">Done</span></span> reinsurance shortlist (rate sheet attached, p.3).</li>
+                <li>Cross-checked CSO deck rate in <span class="ref-inline"><span class="id">BEAAA-137</span><span class="st done">Done</span></span> — quoted at 15% in cluster G2 pitch.</li>
+                <li>Ran sensitivity sweep across both: ΔPnL ≈ <code>−$8.52/policy G1, −$14.94/policy G2</code> at 12% vs 15%.</li>
+                <li>Recommendation: <b>12%</b>. Rationale: Bedrock-Re is the negotiated channel partner; deck rate is unverified; deck can be auto-corrected.</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <!-- Eric attaches image -->
+      <article class="msg me">
+        <div class="bubble">
+          <div class="b-meta"><span class="who">Eric · You</span><span class="ts">16:51</span></div>
+          <div class="b-text">
+            But CSO showed the deck to a prospect last week with 15%. Have they already quoted that? Here's the slide.
+          </div>
+          <div class="attach image">
+            <div class="preview-img">
+              <span class="label">📎 deck-slide-12.png · 1.4 MB</span>
+            </div>
+            <div class="info-row">
+              <div>
+                <div style="font-size:12.5px;color:var(--ink)">deck-slide-12.png</div>
+                <div style="font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink-3);letter-spacing:.04em;margin-top:2px">stored in cfo/CHT-44/attachments/ · 1.4 MB · uploaded 16:51</div>
+              </div>
+              <button class="open" style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--line-bright);padding:5px 9px;cursor:pointer">Open full</button>
+            </div>
+          </div>
+        </div>
+        <div class="av">E</div>
+      </article>
+
+      <!-- CFO follow-up -->
+      <article class="msg">
+        <div class="av">C</div>
+        <div class="bubble">
+          <span class="promote">
+            <button class="pa">↗ Promote to task</button>
+            <button class="pa">⚑ Pin</button>
+          </span>
+          <div class="b-meta"><span class="who">CFO</span><span class="ts">16:52 · 18s</span></div>
+          <div class="b-text">
+            <p>Checked. CSO sent the deck to <b>three prospects</b> in cluster G2 between 1–3 May, all quoting 15%. None converted yet — pricing wasn't quoted as final, and the deck has a "subject to underwriting" footer.</p>
+            <p>Two safe paths:</p>
+            <p><b>A.</b> Lock 12% in v1.5 → I auto-open <span class="ref-inline"><span class="id">BEAAA-202</span><span class="st todo">Draft</span></span> for CSO to issue a deck v3 with 12%. Net better unit economics; ~3-day deck refresh cycle.</p>
+            <p><b>B.</b> Lock 15% in v1.5 → keeps current deck consistent, costs ≈$3.40/policy on G1 and ≈$8.52/policy on G2. No deck rework.</p>
+            <p>I'd still recommend <b>A</b>. Your call.</p>
+          </div>
+          <span class="resolved warn">Awaiting your decision · <b>~3 hr</b> blocks 5 downstream tickets</span>
+        </div>
+      </article>
+
+      <div class="day-divider"><span>Today · 7 May 2026</span></div>
+
+      <!-- Eric one-click decision -->
+      <article class="decision-msg">
+        <div class="lbl">Decision recorded</div>
+        <div class="txt">Eric chose <b>A · 12%</b>. CFO instructed to lock sec. 4 at 12% and draft deck-refresh task for CSO.</div>
+        <div class="meta">10:12 ET · governance approval logged on <span class="ref-inline" style="color:var(--ink-2)"><span class="id">BEAAA-148</span><span class="st review">In review</span></span> · audit trail attached</div>
+      </article>
+
+      <!-- CFO confirmation -->
+      <article class="msg">
+        <div class="av">C</div>
+        <div class="bubble">
+          <span class="promote">
+            <button class="pa">↗ Promote to task</button>
+            <button class="pa">⚑ Pin</button>
+          </span>
+          <div class="b-meta"><span class="who">CFO</span><span class="ts">10:13 · 22s</span></div>
+          <div class="b-text">
+            <p>Locked. Sec. 4 of <span class="ref-inline"><span class="id">BEAAA-148</span><span class="st review">In review</span></span> committed at 12%. New task <span class="ref-inline"><span class="id">BEAAA-202</span><span class="st todo">To do</span></span> assigned to CSO for deck v3 refresh — due Friday. Three affected prospects flagged for CSO follow-up note.</p>
+            <p>Per-fan band factors v1.5 finalized in ~3 hr, then I'll hand off to Actuary for validation. Will ping when v1.5.xlsx is committed.</p>
+          </div>
+          <span class="resolved">Created <b>BEAAA-202</b> · Locked sec. 4 at 12% · Notified CSO + Actuary</span>
+          <div class="attach">
+            <div class="ico">XLSX</div>
+            <div class="info">
+              <div class="nm">band-factors-v1.5.xlsx <span style="color:var(--ink-3);font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.04em">· revision 5 (sec. 4 locked)</span></div>
+              <div class="meta">cfo/BEAAA-148_per-fan-band-factors/ · last write 10:13 · 28 rows × 6 cols</div>
+            </div>
+            <button class="open">Open inline</button>
+          </div>
+        </div>
+      </article>
+
+      <!-- Eric quick follow up -->
+      <article class="msg me">
+        <div class="bubble">
+          <div class="b-meta"><span class="who">Eric · You</span><span class="ts">10:18</span></div>
+          <div class="b-text">
+            Good. Make sure the 3 prospects get a courteous note, not a "pricing changed" note. Have CSO draft and route through me before send.
+          </div>
+        </div>
+        <div class="av">E</div>
+      </article>
+
+      <!-- CFO acknowledges and creates new task -->
+      <article class="msg">
+        <div class="av">C</div>
+        <div class="bubble">
+          <span class="promote">
+            <button class="pa">↗ Promote to task</button>
+            <button class="pa">⚑ Pin</button>
+          </span>
+          <div class="b-meta"><span class="who">CFO</span><span class="ts">10:18 · 9s</span></div>
+          <div class="b-text">
+            Acknowledged. Updated <span class="ref-inline"><span class="id">BEAAA-202</span><span class="st todo">To do</span></span> with: <i>"Draft a continuity note for the 3 affected G2 prospects — frame as 'pricing finalization' not 'pricing change'. Route to Eric for approval before send."</i> CSO will draft today.
+          </div>
+          <span class="resolved">Updated <b>BEAAA-202</b> acceptance criteria · Routed to CSO with founder-review gate</span>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- composer -->
+    <div class="composer">
+      <div class="composer-meta">
+        <span class="topic-now">Topic · <b>Broker comm % decision</b> (CHT-44)</span>
+        <span>Messages persist as comments on issue · attachments stored in cfo/CHT-44/</span>
+      </div>
+      <div class="composer-box">
+        <textarea class="composer-input" placeholder="Message CFO… ⌘+Enter to send · / for slash commands · @ to mention an agent or task"></textarea>
+        <div class="composer-foot">
+          <div class="composer-tools">
+            <button class="tool-btn">📎 Attach</button>
+            <button class="tool-btn">⚑ Approve</button>
+            <button class="tool-btn">↗ New task</button>
+            <button class="tool-btn">⌗ Reference</button>
+          </div>
+          <div class="send-row">
+            <span class="composer-hint"><kbd>⌘</kbd>+<kbd>↵</kbd> to send</span>
+            <button class="btn">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ========== RIGHT: CONTEXT RAIL ========== -->
+  <aside class="ctx">
+
+    <div class="agent-card">
+      <div class="role-line">CFO<small>Capital · Economics agent</small></div>
+      <div style="margin-top:10px;font-size:13px;color:var(--ink-2);line-height:1.45;font-style:italic;font-family:'Instrument Serif',serif">
+        "Closes the gap between board-locked capital constraints and customer-readable pricing. Optimizes for unit economics under board governance."
+      </div>
+      <div class="stat-row">
+        <div class="stat">On task<b>5h 11m</b></div>
+        <div class="stat">7d done<b>7 / 14</b></div>
+        <div class="stat">Spend MTD<b>$108</b></div>
+        <div class="stat">Budget left<b>$292</b></div>
+      </div>
+    </div>
+
+    <h3>Active tasks owned</h3>
+    <div class="task-row"><span class="id">BEAAA-148</span><span class="ttl">Per-fan band factors v1.5</span><span class="st review">In review</span></div>
+    <div class="task-row"><span class="id">BEAAA-202</span><span class="ttl">CSO deck v3 — broker-comm refresh</span><span class="st todo">Drafted</span></div>
+    <div class="task-row"><span class="id">BEAAA-114</span><span class="ttl">Q3 budget envelope memo</span><span class="st todo">Queued</span></div>
+    <div class="task-row"><span class="id">BEAAA-87</span><span class="ttl">Reinsurance carrier shortlist v2</span><span class="st done">Done</span></div>
+
+    <h3>You owe CFO</h3>
+    <div class="task-row" style="background:var(--you-soft);padding-left:8px;padding-right:8px;border:1px solid var(--you);border-bottom:1px solid var(--you);margin-bottom:6px"><span class="id">·</span><span class="ttl" style="color:var(--ink)">Approve Q3 budget envelope (sitting 2d)</span><span class="st" style="color:var(--you)">⚑ You</span></div>
+
+    <h3>Recent attachments</h3>
+    <div class="pin-row">📎 <b>deck-slide-12.png</b><span style="color:var(--ink-3);font-family:'Geist Mono',monospace;font-size:10px"> · 1.4 MB · yesterday 16:51</span></div>
+    <div style="height:6px"></div>
+    <div class="pin-row">📊 <b>band-factors-v1.5.xlsx</b><span style="color:var(--ink-3);font-family:'Geist Mono',monospace;font-size:10px"> · rev 5 · today 10:13</span></div>
+    <div style="height:6px"></div>
+    <div class="pin-row">📄 <b>loss-cost-prior.md</b><span style="color:var(--ink-3);font-family:'Geist Mono',monospace;font-size:10px"> · v3 · 6 May 09:18</span></div>
+
+    <h3>Quick actions</h3>
+    <div class="quick">
+      <button class="qa">⚑ Approve outstanding (1 item)</button>
+      <button class="qa">↗ Spawn new task with CFO</button>
+      <button class="qa">⌕ Search all CFO chats</button>
+      <button class="qa">📤 Export this thread (PDF)</button>
+      <button class="qa">⏸ Pause CFO heartbeat</button>
+    </div>
+
+    <h3>Storage pin</h3>
+    <div class="pin-row">
+      📁 <b>cfo/CHT-44/</b><br/>
+      <span style="color:var(--ink-3);font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.04em">all messages persist as issue comments · attachments as work-products · single source of truth</span>
+    </div>
+
+  </aside>
+
+</div>
+</body>
+</html>
