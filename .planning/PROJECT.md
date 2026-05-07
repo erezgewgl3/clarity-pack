@@ -34,7 +34,8 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 - [ ] **Editor-Agent** ships as a regular Paperclip org-chart hire under standard agent governance (same budget caps, pause/terminate, audit log). Heartbeat-driven; produces TL;DRs, critical-path narratives, and the daily bulletin.
 - [ ] **Per-user opt-in** via Paperclip profile toggle; default OFF for existing users; classic Paperclip dashboard remains the default landing surface.
 - [ ] **Schema is additive-only**; plugin disable leaves data intact; clean uninstall preserves data; `--purge` flag is opt-in only.
-- [ ] **Plugin distribution** as an npm package installable via `paperclipai plugin install clarity-pack`; v1 audience is Eric on BEAAA only (Clipmart submission is deferred).
+- [ ] **Plugin distribution** as an npm package installable via `pnpm paperclipai plugin install clarity-pack`; v1 audience is Eric on BEAAA only (Clipmart submission is deferred).
+- [ ] **Pre-install backup, snapshot, and rollback discipline** is a hard prerequisite to any clarity-pack action against the live BEAAA Paperclip instance. Before any install, upgrade, migration, or agent registration runs in production, a one-command snapshot must capture the live Postgres database (pg_dump or filesystem snapshot of the data dir), Paperclip's filesystem-persistent state (work-products, artifact paths, plugin install dir), the current Paperclip version, and the list of currently installed plugins. A matching one-command rollback must restore that snapshot byte-for-byte. A smoke test (start Paperclip → list issues → fetch a heartbeat → list employees) must verify a restored snapshot is functionally equivalent to the pre-snapshot environment. The discipline ships as a runbook plus scripts that live in this repo, NOT as plugin code — so they work even when clarity-pack itself is broken or uninstalled.
 
 ### Out of Scope
 
@@ -70,8 +71,10 @@ The mockups establish a consistent dark editorial aesthetic (Geist + Geist Mono 
 **Reference repo and docs (Paperclip itself).**
 
 - Source: https://github.com/paperclipai/paperclip
-- Plugin spec: https://github.com/paperclipai/paperclip/blob/main/doc/plugins/PLUGIN_SPEC.md (re-read full spec during research; partial read already done — see Constraints below)
+- Plugin spec: https://github.com/paperclipai/paperclip/blob/master/doc/plugins/PLUGIN_SPEC.md (full spec re-read during project research — see `.planning/research/`)
+- Authoring guide: https://github.com/paperclipai/paperclip/blob/master/doc/plugins/PLUGIN_AUTHORING_GUIDE.md
 - Related: `doc/SPEC.md`, `doc/SPEC-implementation.md`, `doc/PRODUCT.md`, `doc/CLI.md`, `doc/DATABASE.md`, `doc/CLIPHUB.md`, `doc/execution-semantics.md`, `doc/memory-landscape.md`
+- **Branch note:** Paperclip's default branch is `master`, not `main`. Earlier project notes that referenced `/blob/main/...` URLs return 404 — always use `/blob/master/...` when fetching docs.
 
 **Pre-project decisions locked in conversation** (now durable here):
 
@@ -102,7 +105,9 @@ The mockups establish a consistent dark editorial aesthetic (Geist + Geist Mono 
   6. Clean uninstall preserves data; `--purge` flag is opt-in only.
 - **Editor-Agent integration**: a Paperclip employee whose worker uses an MCP server package for issue/activity reads. Subject to standard agent budget caps and pause/terminate. — **Why:** governance parity (Decision #6).
 - **Visual contract**: must match the four mockups in `sketches/`. — **Why:** non-throwaway design ground truth; consistency across surfaces is a value driver.
-- **PLUGIN_SPEC.md re-read required before SPEC.md is finalized for Phase 1.** Partial read already done; full spec was 64KB and must be revisited to surface any missed constraints. — **Why:** flagged action item in PRIOR-DECISIONS.md.
+- **Bookended-by-snapshots rule**: every clarity-pack install, upgrade, schema migration, or agent registration that runs against the live BEAAA Paperclip instance MUST be bookended by a verified Postgres + filesystem snapshot taken immediately before, and a working rollback path verified at least once before any feature work ships. — **Why:** Paperclip is single-tenant filesystem-persistent (PLUGIN_SPEC.md's stated deployment model); the same-origin trust model means a misbehaving plugin can hit Paperclip APIs directly; uninstall semantics for additive Postgres migrations are not yet host-enforced (PLUGIN_SPEC §21 vs PR #5205 contradict each other per Pitfalls research). The cost of "I'll restore from backup" with no rehearsed restore path is unbounded; with a rehearsed path, it is bounded at minutes.
+- **Stack pins are forced by the plugin contract** (per Stack research): React 19 (peer-only — do NOT bundle), TypeScript ^5.7.3, esbuild ^0.27.3, ESM-only, Node ≥20, shadcn `new-york`/neutral/lucide. Tailwind is inherited from host CSS — Clarity Pack does NOT ship its own Tailwind. — **Why:** PLUGIN_SPEC + ui/components.json + plugin-kitchen-sink-example dictate this; deviating breaks the same-origin trust model and bloats the bundle.
+- **PLUGIN_SPEC.md re-read completed** during project research (full 1720-line spec read against `master` branch). Findings live in `.planning/research/` and must be reflected in Phase 1 SPEC.md.
 
 ## Key Decisions
 
@@ -115,6 +120,7 @@ The mockups establish a consistent dark editorial aesthetic (Geist + Geist Mono 
 | v1 audience = Eric on BEAAA | Scope discipline — Clipmart-readiness pulls in accessibility audit, theming portability, multi-tenant safety, and public support story; not a v1 fight. | — Pending |
 | Editor-Agent named persona ("Editor-Agent") | Mockups already use editorial voice ("Compiled by Editor-Agent", "Editorial Desk · Internal"); a single named persona reads more coherently than a utility "Compiler" label. | — Pending |
 | Bulletin cadence = 06:30 ET scheduled + on-view recompute every 60s for Situation Room | Bulletin is editorial; daily cadence matches reading habit. Situation Room is operational; near-live cadence matches need without overwhelming compute. | — Pending |
+| Pre-install backup + rollback discipline before any production action | Paperclip is single-tenant filesystem-persistent and the plugin trust model is same-origin; the cost of an unrehearsed restore is unbounded. A first phase delivering snapshot/restore scripts and a working rollback drill caps that risk before any feature code touches BEAAA. | — Pending |
 
 ## Evolution
 
@@ -134,4 +140,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-07 after initialization*
+*Last updated: 2026-05-07 after initialization (research synthesis + backup/rollback as first-class requirement)*

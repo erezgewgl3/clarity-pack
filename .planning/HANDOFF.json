@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-07T17:58:33.468Z",
+  "timestamp": "2026-05-07T17:59:58.348Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -17,19 +17,11 @@
   "decisions": [],
   "uncommitted_files": [
     {
-      "status": "M",
-      "path": ".planning/HANDOFF.json"
-    },
-    {
-      "status": "??",
-      "path": ".planning/research/SUMMARY.md"
-    },
-    {
-      "status": "??",
+      "status": "D",
       "path": ".planning/research/test-write.txt"
     },
     {
-      "status": "??",
+      "status": "D",
       "path": ".planning/research/write-summary.mjs"
     },
     {
@@ -38,5 +30,5 @@
     }
   ],
   "next_action": null,
-  "context_notes": "Recent commits:\n378987c docs: add research synthesis .planning/research/STACK.md .planning/research/FEATURES.md .planning/research/ARCHITECTURE.md .planning/research/PITFALLS.md\ndfc9206 chore: add project config .planning/config.json\ncc87739 docs: initialize project .planning/PROJECT.md"
+  "context_notes": "Recent commits:\n8c83653 docs: add research synthesis .planning/research/SUMMARY.md\n378987c docs: add research synthesis .planning/research/STACK.md .planning/research/FEATURES.md .planning/research/ARCHITECTURE.md .planning/research/PITFALLS.md\ndfc9206 chore: add project config .planning/config.json\ncc87739 docs: initialize project .planning/PROJECT.md"
 }
