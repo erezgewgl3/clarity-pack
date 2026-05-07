@@ -12,7 +12,7 @@
 
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
@@ -125,4 +125,50 @@ export async function verifyManifest(dir) {
   }
   if (mismatches.length > 0) return { ok: false, mismatches };
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Plan 02 augmentation — atomic write helpers used by verify.mjs.
+// The original writeManifest above is preserved byte-identical for
+// backward compat with Plan 01's M-series tests.
+//
+// writeManifestAtomic writes to <dir>/manifest.json.tmp and renames into
+// place via fs.rename (atomic on the same filesystem on POSIX; effectively
+// atomic on Windows for files that are not open). This guarantees a power
+// cut during writeVerifiedFlag leaves the manifest either at its old
+// content or its new content — never half-written.
+// ---------------------------------------------------------------------------
+
+/**
+ * Atomically write a manifest payload to <dir>/manifest.json.
+ *
+ *   1. Serialize payload to <dir>/manifest.json.tmp (with the schemaVersion
+ *      stamp — kept in lockstep with writeManifest so reads of either are
+ *      uniform).
+ *   2. fs.rename to <dir>/manifest.json.
+ *
+ * Any partial write to the .tmp file is discarded by the rename — readers
+ * never see a torn file.
+ */
+export async function writeManifestAtomic(dir, payload) {
+  const enriched = { schemaVersion: MANIFEST_VERSION, ...payload };
+  const finalPath = path.join(dir, MANIFEST_FILENAME);
+  const tmpPath = finalPath + '.tmp';
+  await writeFile(tmpPath, JSON.stringify(enriched, null, 2) + '\n', 'utf8');
+  await rename(tmpPath, finalPath);
+}
+
+/**
+ * Read-modify-write helper. Reads the existing manifest, calls fn(manifest)
+ * to compute the new payload (sync or async), and writes it atomically.
+ * Returns the new payload.
+ *
+ * fn may mutate the manifest in place and return it, or return a new
+ * object. Either is fine — only the return value is what gets written.
+ */
+export async function updateManifest(dir, fn) {
+  const m = await readManifest(dir);
+  const next = await fn(m);
+  await writeManifestAtomic(dir, next);
+  return next;
 }

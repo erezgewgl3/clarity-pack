@@ -66,10 +66,19 @@ test('R10.d.help — smoke --help prints usage and exits 0', async () => {
   assert.match(stdout, /Usage: clarity-safety smoke/);
 });
 
-test('R10.e — verify stub exits 2 with plan-02 deferred message', async () => {
+test('R10.e — verify (Plan 02 implementation) without snapshot id exits 1 with required-arg error', async () => {
+  // Plan 01 stub returned exit 2 with "lands in plan 02"; Plan 02 replaces
+  // the stub with the real implementation, so calling verify without a
+  // positional snapshot id now exits 1 with a usage error.
   const { code, stderr } = await runCli(['verify']);
-  assert.equal(code, 2);
-  assert.match(stderr, /verify subcommand lands in plan 02/);
+  assert.equal(code, 1);
+  assert.match(stderr, /snapshot id required/);
+});
+
+test('R10.e.help — verify --help prints usage and exits 0', async () => {
+  const { code, stdout } = await runCli(['verify', '--help']);
+  assert.equal(code, 0);
+  assert.match(stdout, /Usage: clarity-safety verify/);
 });
 
 test('R10.f — gate stub exits 2 with plan-03 deferred message', async () => {

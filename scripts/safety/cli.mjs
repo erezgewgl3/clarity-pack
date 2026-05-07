@@ -21,6 +21,7 @@ import { resolvePaperclipHome, resolveSnapshotsDir, isValidSnapshotId } from './
 import { detectMode } from './lib/mode-detect.mjs';
 import * as paperclipCli from './lib/paperclip-cli.mjs';
 import { smoke } from './lib/smoke.mjs';
+import { verify } from './lib/verify.mjs';
 
 const SUBCOMMANDS = ['snapshot', 'restore', 'smoke', 'verify', 'gate', 'list', 'prune'];
 
@@ -33,7 +34,7 @@ function printRootHelp() {
       '  snapshot   Capture a Paperclip install (DB + filesystem + manifest).',
       '  restore    Restore a snapshot into a sibling staging dir (never live).',
       '  smoke      Smoke-test a restored env against its manifest.',
-      '  verify     [plan-02] Restore-to-staging then smoke; sets verifiedAt.',
+      '  verify     Restore-to-staging then smoke; sets verifiedAt.',
       '  gate       [plan-03] Refuse-or-run wrapper around an inner command.',
       '  list       Enumerate snapshots under .planning/snapshots/.',
       '  prune      Delete old snapshots; preserves <24h.',
@@ -207,6 +208,108 @@ function printSmokeHelp() {
   );
 }
 
+function printVerifyHelp() {
+  process.stdout.write(
+    [
+      'Usage: clarity-safety verify <snapshot-id> [options]',
+      '',
+      'Restore <snapshot-id> into a sibling staging dir, smoke-test the',
+      'operator-managed sibling Paperclip, and on PASS write verifiedAt +',
+      'verifiedSmokeChecks back into the manifest atomically.',
+      '',
+      'Required:',
+      '  <snapshot-id>             positional — must match snapshot-id format',
+      '  --smoke-api-url <url>     URL of the sibling Paperclip you started manually',
+      '  --company-id <id>         Paperclip company id for /agents endpoint',
+      '',
+      'Optional:',
+      '  --strategy <manual|auto>  default: manual; auto is v2 stub',
+      '  --api-key <token>         Bearer token (or PAPERCLIP_API_KEY env)',
+      '  --editor-agent-id <id>    enables heartbeat check; otherwise skipped',
+      '  --max-rehearsal-time-ms <n>  budget; default 300000 (5min)',
+      '  --paperclip-home <path>   default: $PAPERCLIP_HOME or platform default',
+      '  --instance-id <id>        default: $PAPERCLIP_INSTANCE_ID or "default"',
+      '  --target-instance-id <id> staging dir name; default "<id>.restoring"',
+      '  --target-db <name>        Postgres staging DB; default "paperclip_restoring"',
+      '  --db-url <dsn>            Postgres DSN (postgres mode only)',
+      '',
+      'On smoke FAIL: manifest unchanged; staging dir preserved for inspection.',
+      'See runbook/rehearsal-drill.md for sibling-Paperclip setup steps.',
+      ''
+    ].join('\n')
+  );
+}
+
+async function runVerify(flags) {
+  if (flags.help === true || flags.h === true) {
+    printVerifyHelp();
+    return 0;
+  }
+  const snapshotId = flags._[0];
+  if (!snapshotId) {
+    process.stderr.write('verify: snapshot id required (positional argument)\n');
+    return 1;
+  }
+  if (!isValidSnapshotId(snapshotId)) {
+    process.stderr.write(`verify: invalid snapshotId: ${snapshotId}\n`);
+    return 1;
+  }
+  const home = flags['paperclip-home'] ?? resolvePaperclipHome();
+  const instanceId = flags['instance-id'] ?? process.env.PAPERCLIP_INSTANCE_ID ?? 'default';
+  const repoRoot = repoRootFromCli();
+  const snapshotsDir = resolveSnapshotsDir(repoRoot);
+  const strategy = flags.strategy ?? 'manual';
+  const smokeApiUrl = flags['smoke-api-url'] ?? process.env.PAPERCLIP_API_URL;
+  const apiKey = flags['api-key'] ?? process.env.PAPERCLIP_API_KEY;
+  const companyId = flags['company-id'] ?? process.env.PAPERCLIP_COMPANY_ID;
+  if (!companyId) {
+    process.stderr.write('verify: --company-id (or PAPERCLIP_COMPANY_ID) is required\n');
+    return 1;
+  }
+  const editorAgentId = flags['editor-agent-id'] ?? process.env.PAPERCLIP_AGENT_ID;
+  const maxRehearsalTimeMs =
+    flags['max-rehearsal-time-ms'] !== undefined
+      ? Number(flags['max-rehearsal-time-ms'])
+      : undefined;
+  let result;
+  try {
+    result = await verify({
+      snapshotId,
+      home,
+      instanceId,
+      strategy,
+      smokeApiUrl,
+      altPort: flags['alt-port'] !== undefined ? Number(flags['alt-port']) : undefined,
+      apiKey,
+      companyId,
+      editorAgentId,
+      maxRehearsalTimeMs,
+      snapshotsDir,
+      dbUrl: flags['db-url'],
+      targetInstanceId: flags['target-instance-id'],
+      targetDb: flags['target-db']
+    });
+  } catch (err) {
+    process.stderr.write((err && err.message ? err.message : String(err)) + '\n');
+    return 1;
+  }
+  if (!result.ok) {
+    process.stderr.write(
+      `verify FAILED at ${result.failedCheck}: ${result.reason}\n` +
+        (result.stagingInstanceDir
+          ? `staging dir preserved at: ${result.stagingInstanceDir}\n`
+          : '')
+    );
+    return 1;
+  }
+  process.stdout.write(
+    `verify PASSED\n` +
+      `verifiedAt:           ${result.verifiedAt}\n` +
+      `verifiedSmokeChecks: ${result.verifiedSmokeChecks.join(', ')}\n`
+  );
+  return 0;
+}
+
 async function runSmoke(flags) {
   if (flags.help === true || flags.h === true) {
     printSmokeHelp();
@@ -285,7 +388,7 @@ async function main(argv) {
     case 'smoke':
       return runSmoke(flags);
     case 'verify':
-      return runStub('verify', 'plan 02');
+      return runVerify(flags);
     case 'gate':
       return runStub('gate', 'plan 03');
   }
