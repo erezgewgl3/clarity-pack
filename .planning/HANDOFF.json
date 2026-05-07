@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-07T17:24:33.869Z",
+  "timestamp": "2026-05-07T17:26:33.611Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -17,16 +17,8 @@
   "decisions": [],
   "uncommitted_files": [
     {
-      "status": "A",
-      "path": ".planning/HANDOFF.json"
-    },
-    {
-      "status": "A",
-      "path": ".planning/PRIOR-DECISIONS.md"
-    },
-    {
-      "status": "A",
-      "path": ".planning/PROJECT.md"
+      "status": "??",
+      "path": ".planning/config.json"
     },
     {
       "status": "??",
@@ -34,5 +26,5 @@
     }
   ],
   "next_action": null,
-  "context_notes": ""
+  "context_notes": "Recent commits:\ncc87739 docs: initialize project .planning/PROJECT.md"
 }
