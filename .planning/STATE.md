@@ -1,3 +1,18 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: executing
+last_updated: "2026-05-07T23:25:00.000Z"
+progress:
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 3
+  percent: 100
+  phase_1_status: structurally-complete-pending-rehearsal
+---
+
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
@@ -9,14 +24,16 @@
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 1 - Pre-Install Safety. Build snapshot/restore/smoke-test/runbook/pre-flight-gate so any clarity-pack action against live BEAAA has bounded blast radius, before any plugin code ships.
+**Current Focus:** Phase 1 — Pre-Install Safety
 
 ## Current Position
 
+Phase: 1 (Pre-Install Safety) — STRUCTURALLY COMPLETE, REHEARSAL PENDING
+Plan: 3 of 3 complete (Plan 01-03 SUMMARY landed)
 **Phase:** 1 - Pre-Install Safety
-**Plan:** Not started (awaiting `/gsd:plan-phase 1`)
-**Status:** Roadmap created; planning pending
-**Progress:** [          ] 0/5 phases complete
+**Plan:** All 3 plans executed; Plan 01-03 Task 3 (rehearsal drill) is `checkpoint:human-action` — Eric runs it tomorrow against fresh local Paperclip.
+**Status:** Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.
+**Progress:** [##        ] 0/5 phases complete (Phase 1 plans done; phase closure gated on rehearsal)
 
 ## Performance Metrics
 
@@ -25,8 +42,10 @@
 | v1 requirements | 79 |
 | Phases | 5 |
 | Granularity | coarse |
-| Plans complete | 0 |
-| Phases complete | 0/5 |
+| Plans complete | 3 (all of Phase 1) |
+| Phases complete | 0/5 (Phase 1 awaiting rehearsal) |
+| Phase 1 tests | 103 (Plan 01: 48, Plan 02: 33, Plan 03: 22) — 103/103 passing |
+| Phase 1 commits | 11 (RED + GREEN + docs across 3 plans) |
 
 ## Accumulated Context
 
@@ -45,7 +64,11 @@
 
 ### Open Todos
 
-- [ ] Run `/gsd:plan-phase 1` to decompose Phase 1 into executable plans.
+- [x] Run `/gsd:plan-phase 1` to decompose Phase 1 into executable plans.
+- [x] Plan 01-01 — Safety CLI core (snapshot/restore/list/prune). Done 2026-05-07.
+- [x] Plan 01-02 — Smoke + Verify. Done 2026-05-07.
+- [x] Plan 01-03 — Pre-flight gate + runbook (Tasks 1 + 2). Done 2026-05-07.
+- [ ] **Plan 01-03 Task 3 — Rehearsal drill (Eric, tomorrow against fresh local Paperclip clone).** Run `runbook/rehearsal-drill.md` end-to-end and append the first dated row to `runbook/REHEARSAL.md`. On `approved — drill clean`, Phase 1 closes.
 - [ ] Resolve 3 conflicts in Phase 2 SPEC.md (slot identity, migrations, refresh cadence) before Phase 2 planning.
 - [ ] Verify install command form (`pnpm paperclipai plugin install` vs `pnpm paperclipai install`) by running `pnpm paperclipai plugin --help` against a fresh clone in Phase 2.0 smoke spike.
 - [ ] Verify `usePluginStream` direct host-event subscription (for `issue.comment.created`) before Phase 4 design is locked.
@@ -54,19 +77,23 @@
 
 ### Active Blockers
 
-(none)
+- **SAFE-02 Part B (rehearsed at least once)** — pending Eric's drill against the fresh local Paperclip clone. Not a code blocker; the gate, runbook, and CLI are all green. The acceptance grep `^\| 20[0-9]{2}-` over `runbook/REHEARSAL.md` flips to PASS the moment Eric appends his first dated drill row.
 
 ### Phase History
 
-(none yet - roadmap just created)
+- **Phase 1 — Pre-Install Safety** (2026-05-07, ongoing pending rehearsal):
+  - Plan 01-01: 48 tests, 8 lib modules, snapshot+restore+list+prune CLI, CVE-2026-31802 mitigated, sibling-staging restore. Commits: 620ec0b, e93169e, bac5b84, 9c3148d.
+  - Plan 01-02: 33 tests, smoke + verify with deadline-AbortSignal composition + atomic manifest write-back. Commits: 2c2b444, a5d413e, d1bc2db, f5e52c4.
+  - Plan 01-03: 22 tests, gate refuse-or-run wrapper + 8-file runbook + 2 launchers. Commits: 8eb37bd (RED), 04c3412 (GREEN), d73485a (runbook).
 
 ## Session Continuity
 
-**Last session:** 2026-05-07 - Project initialized; PROJECT.md, REQUIREMENTS.md, research/ (SUMMARY, ARCHITECTURE, FEATURES, STACK, PITFALLS) drafted; ROADMAP.md and STATE.md created.
+**Last session:** 2026-05-07 - Phase 1 Plan 01-03 executed (gate.mjs + runbook + 22 tests). All 3 Phase 1 plans now structurally complete. Total Phase 1 footprint: 103 tests passing, 11 commits, ~5500 LOC. SAFE-02 Part B (rehearsed at least once) pending Eric's drill tomorrow.
 
-**Next session resume point:** Run `/gsd:plan-phase 1` to begin Phase 1 (Pre-Install Safety) plan decomposition.
+**Next session resume point:** Eric runs the rehearsal drill against the fresh local Paperclip clone tomorrow morning, following `runbook/rehearsal-drill.md` end-to-end. On `approved — drill clean`, Phase 1 verifier closes the phase and `/gsd:execute-phase` advances to Phase 2.
 
 **Files of record:**
+
 - `.planning/PROJECT.md` - core value, locked decisions, constraints
 - `.planning/REQUIREMENTS.md` - 79 v1 requirements + traceability to phases
 - `.planning/ROADMAP.md` - 5-phase roadmap with success criteria

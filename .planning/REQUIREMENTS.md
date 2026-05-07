@@ -11,11 +11,11 @@ Requirements for the Clarity Pack v1 milestone (the four surfaces + Editor-Agent
 
 The discipline that lets us touch a live Paperclip install without unbounded blast radius.
 
-- [ ] **SAFE-01**: One-command snapshot script captures, before any clarity-pack action: a Postgres dump of the Paperclip database, a filesystem archive of Paperclip's data directory (work products, plugin install dir, runtime state), the current Paperclip version, and the list of currently installed plugins — all into a single timestamped archive.
-- [ ] **SAFE-02**: One-command restore script reverses any snapshot byte-for-byte; restore must be rehearsed against a non-production Paperclip clone at least once before any clarity-pack feature code touches BEAAA.
-- [ ] **SAFE-03**: Smoke-test script verifies a restored snapshot is functionally equivalent to the pre-snapshot environment: Paperclip starts, REST API answers, sample issue is listable, an agent heartbeat fetch succeeds, the employee list renders.
-- [ ] **SAFE-04**: Runbook documents the pre-flight → install → post-install verification → rollback flow in plain English; lives in `runbook/` in this repo, not as plugin code, so it works even when clarity-pack is broken or uninstalled.
-- [ ] **SAFE-05**: Pre-flight gate refuses to run any install/upgrade/migration/agent-registration step if no snapshot has been taken in the last N minutes (default 15) or if the most recent snapshot's restore-and-smoke-test has not passed.
+- [x] **SAFE-01**: One-command snapshot script captures, before any clarity-pack action: a Postgres dump of the Paperclip database, a filesystem archive of Paperclip's data directory (work products, plugin install dir, runtime state), the current Paperclip version, and the list of currently installed plugins — all into a single timestamped archive. **Delivered Plan 01-01.**
+- [ ] **SAFE-02**: One-command restore script reverses any snapshot byte-for-byte; restore must be rehearsed against a non-production Paperclip clone at least once before any clarity-pack feature code touches BEAAA. **Part A (CLI) delivered Plan 01-01; Part B (rehearsed once) PENDING Eric's drill against fresh local Paperclip — `runbook/REHEARSAL.md` awaits the first dated row.**
+- [x] **SAFE-03**: Smoke-test script verifies a restored snapshot is functionally equivalent to the pre-snapshot environment: Paperclip starts, REST API answers, sample issue is listable, an agent heartbeat fetch succeeds, the employee list renders. **Delivered Plan 01-02.**
+- [x] **SAFE-04**: Runbook documents the pre-flight → install → post-install verification → rollback flow in plain English; lives in `runbook/` in this repo, not as plugin code, so it works even when clarity-pack is broken or uninstalled. **Delivered Plan 01-03 — 8 markdown files + 2 launchers under `runbook/`.**
+- [x] **SAFE-05**: Pre-flight gate refuses to run any install/upgrade/migration/agent-registration step if no snapshot has been taken in the last N minutes (default 15) or if the most recent snapshot's restore-and-smoke-test has not passed. **Delivered Plan 01-03 — `pnpm clarity-safety gate -- <inner-cmd>` with verifiedAt-window enforcement and dual-control bypass.**
 
 ### Plugin Scaffold + Trust-Model Hardening (SCAF)
 
@@ -179,11 +179,11 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | Phase 1 | Pending |
-| SAFE-02 | Phase 1 | Pending |
-| SAFE-03 | Phase 1 | Pending |
-| SAFE-04 | Phase 1 | Pending |
-| SAFE-05 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Done (Plan 01-01) |
+| SAFE-02 | Phase 1 | Part A done (Plan 01-01); Part B (rehearsed) pending Eric's drill |
+| SAFE-03 | Phase 1 | Done (Plan 01-02) |
+| SAFE-04 | Phase 1 | Done (Plan 01-03) |
+| SAFE-05 | Phase 1 | Done (Plan 01-03) |
 | SCAF-01 | Phase 2 | Pending |
 | SCAF-02 | Phase 2 | Pending |
 | SCAF-03 | Phase 2 | Pending |
