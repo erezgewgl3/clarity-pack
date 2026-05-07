@@ -5,6 +5,11 @@
 
 # Node
 node_modules/
+# Exception: the fake-instance test fixture intentionally checks in a
+# fake node_modules/ tree so the snapshot filter exclusion test (S2)
+# has something to assert on.
+!scripts/safety/test/fixtures/fake-instance/**/node_modules/
+!scripts/safety/test/fixtures/fake-instance/**/node_modules/**
 
 # Build / IDE / OS
 dist/

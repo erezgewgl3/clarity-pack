@@ -1,0 +1,4 @@
+{
+  "database": { "driver": "pglite", "dataDir": "./db" },
+  "ports": { "http": 3100 }
+}
