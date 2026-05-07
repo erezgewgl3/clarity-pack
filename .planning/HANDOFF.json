@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-07T20:22:49.316Z",
+  "timestamp": "2026-05-07T20:29:41.021Z",
   "source": "auto-postool",
   "partial": false,
   "phase": "1",
@@ -12,55 +12,25 @@
   "status": "auto-checkpoint",
   "completed_tasks": [
     {
-      "id": "01-01",
-      "name": "Plan 01-01: Safety CLI core (snapshot, restore, list, prune, manifest, paths, mode-detect)",
-      "status": "done",
-      "commits": ["620ec0b", "e93169e", "bac5b84", "9c3148d"]
+      "id": "01",
+      "name": "Task 1: Initialize scripts/safety/ pnpm package + manifest, paths, mode-detect, list, prune primitives + their tests",
+      "status": "done"
     },
     {
-      "id": "01-02",
-      "name": "Plan 01-02: Smoke + Verify (paperclip-api, smoke, verify, atomic manifest write-back)",
-      "status": "done",
-      "commits": ["2c2b444", "a5d413e", "d1bc2db", "f5e52c4"]
+      "id": "02",
+      "name": "Task 1: paperclip-api.mjs REST client + stub-paperclip-server fixture + their tests",
+      "status": "done"
     },
     {
-      "id": "01-03-T1",
-      "name": "Plan 01-03 Task 1: gate.mjs (refuse-or-run wrapper) + 22 tests",
-      "status": "done",
-      "commits": ["8eb37bd", "04c3412"]
-    },
-    {
-      "id": "01-03-T2",
-      "name": "Plan 01-03 Task 2: Runbook (README + 4 walkthroughs + PLATFORMS + REHEARSAL template + 2 launchers)",
-      "status": "done",
-      "commits": ["d73485a"]
+      "id": "03",
+      "name": "Task 1: gate.mjs (refuse-or-run wrapper) + tests",
+      "status": "done"
     }
   ],
-  "remaining_tasks": [
-    {
-      "id": "01-03-T3",
-      "name": "Plan 01-03 Task 3: Rehearsal drill (Eric runs runbook/rehearsal-drill.md end-to-end against fresh local Paperclip clone)",
-      "status": "pending-human-action",
-      "type": "checkpoint:human-action",
-      "blocked_by": "Eric must run the drill tomorrow and append the first dated row to runbook/REHEARSAL.md",
-      "verification_grep": "grep -qE '^\\| 20[0-9]{2}-' runbook/REHEARSAL.md"
-    }
-  ],
-  "blockers": [
-    {
-      "type": "human-action",
-      "what": "SAFE-02 Part B — rehearsal drill",
-      "owner": "eric",
-      "doc": "runbook/rehearsal-drill.md (15 named steps)",
-      "estimated_duration": "~30 minutes against PGlite-mode Paperclip"
-    }
-  ],
-  "human_actions_pending": [
-    "Eric: set up fresh local Paperclip clone (`pnpm onboard`), then run runbook/rehearsal-drill.md end-to-end. On clean PASS, append first dated row to runbook/REHEARSAL.md and reply 'approved — drill clean'."
-  ],
-  "decisions": [
-    "Plan 01-03 Task 3 is checkpoint:human-action; the executor explicitly does NOT run it. Phase 1 verifier acknowledges rehearsal-pending state."
-  ],
+  "remaining_tasks": [],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [],
   "uncommitted_files": [
     {
       "status": "M",
@@ -68,23 +38,7 @@
     },
     {
       "status": "M",
-      "path": ".planning/REQUIREMENTS.md"
-    },
-    {
-      "status": "M",
-      "path": ".planning/ROADMAP.md"
-    },
-    {
-      "status": "M",
-      "path": ".planning/STATE.md"
-    },
-    {
-      "status": "M",
       "path": ".planning/config.json"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/01-pre-install-safety/01-03-SUMMARY.md"
     },
     {
       "status": "??",
@@ -92,9 +46,13 @@
     },
     {
       "status": "??",
+      "path": "HANDOFF.md"
+    },
+    {
+      "status": "??",
       "path": "sketches/"
     }
   ],
   "next_action": "Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.",
-  "context_notes": "Status: Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.\n\nRecent commits:\nd73485a docs(01-03): runbook — README + 4 walkthroughs + PLATFORMS + REHEARSAL template + 2 launchers (SAFE-04)\n04c3412 feat(01-03): gate.mjs refuse-or-run wrapper + CLI dispatch (SAFE-05) (GREEN)\n8eb37bd test(01-03): add failing tests G1-G11 + helpers for gate.mjs (RED)\nf5e52c4 docs(01-02): complete smoke + verify plan — 33 new tests, deadline AbortSignal composition, atomic manifest write-back (SAFE-03)\nd1bc2db feat(01-02): verify.mjs orchestrates restore->smoke->atomic verifiedAt write-back (SAFE-03)"
+  "context_notes": "Status: Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.\n\nRecent commits:\n6d6b795 docs(01-03): complete pre-flight gate + runbook plan — 22 tests, 8 runbook docs, rehearsal drill pending Eric (SAFE-04, SAFE-05)\nd73485a docs(01-03): runbook — README + 4 walkthroughs + PLATFORMS + REHEARSAL template + 2 launchers (SAFE-04)\n04c3412 feat(01-03): gate.mjs refuse-or-run wrapper + CLI dispatch (SAFE-05) (GREEN)\n8eb37bd test(01-03): add failing tests G1-G11 + helpers for gate.mjs (RED)\nf5e52c4 docs(01-02): complete smoke + verify plan — 33 new tests, deadline AbortSignal composition, atomic manifest write-back (SAFE-03)"
 }
