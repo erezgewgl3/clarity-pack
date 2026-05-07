@@ -43,7 +43,7 @@ Coexistence guarantee #1 — implemented inside the plugin since Paperclip has n
 
 ### Shared Primitives (PRIM)
 
-Reused by every surface — built first in Phase 1 because Reader view, Situation Room, Bulletin, and Chat all consume them.
+Reused by every surface — built first in Phase 2 because Reader view, Situation Room, Bulletin, and Chat all consume them.
 
 - [ ] **PRIM-01**: Batch reference resolver in `src/shared/reference-resolver.ts` resolves an array of `BEAAA-NNN` IDs in one round-trip (no N+1); returns `{id, title, status, owner, excerpt}` per reference.
 - [ ] **PRIM-02**: Reference resolver respects viewer permissions — never leaks title/excerpt for a reference the current user cannot see in classic Paperclip UI.
@@ -71,9 +71,9 @@ Additional tab on every issue page; never replaces classic UI.
 - [ ] **READER-02**: TL;DR strip at the top of the tab with a "regenerated when the task body changes" freshness stamp.
 - [ ] **READER-03**: All `BEAAA-NNN` references in the prose render as inline reference chips showing ID + status badge.
 - [ ] **READER-04**: An "Anchored to (resolved)" section renders one ref-card per upstream reference with title + owner + status pill + a substantive excerpt quote — no clicking through to read the source task.
-- [ ] **READER-05**: A "The deliverable" inline preview block renders the artifact name + last-write timestamp + a v1 placeholder preview (XLSX/PDF full-fidelity preview is deferred to Phase 4).
+- [ ] **READER-05**: A "The deliverable" inline preview block renders the artifact name + last-write timestamp + a v1 placeholder preview (XLSX/PDF full-fidelity preview is deferred to Phase 5).
 - [ ] **READER-06**: Goal ancestry breadcrumb at the top (project → milestone → parent issue → this task).
-- [ ] **READER-07**: Acceptance criteria checklist with manual marking; auto-status from acceptance-criteria text + acceptance-event log is deferred to Phase 4.
+- [ ] **READER-07**: Acceptance criteria checklist with manual marking; auto-status from acceptance-criteria text + acceptance-event log is deferred to Phase 5.
 - [ ] **READER-08**: Right-rail "Live blocker · on you" panel renders the blocker-chain terminal as a single one-click action (matches the mockup's `⚑ ON YOU` callout).
 - [ ] **READER-09**: Activity timeline ("distilled") summarizes the most relevant N events, not the full audit log.
 
@@ -133,12 +133,12 @@ Cross-cutting; verified by a checklist that runs on every PR.
 
 ### Distribution & Polish (DIST)
 
-Phase 4 work — unblocks broader use without blocking BEAAA value.
+Phase 5 work — unblocks broader use without blocking BEAAA value.
 
 - [ ] **DIST-01**: Plugin is published to npm as `clarity-pack` with the `paperclipPlugin` field in `package.json` pointing at `dist/manifest.js`, `dist/worker.js`, and `dist/ui/`.
 - [ ] **DIST-02**: README documents install + opt-in toggle + rollback flow + the runbook reference.
-- [ ] **DIST-03**: Acceptance-criteria auto-status promotes from manual checklist (Phase 1) to event-derived auto-status — without breaking Phase 1's manual UX.
-- [ ] **DIST-04**: XLSX / PDF deliverable preview promotes from Phase 1's placeholder to a registry of full-fidelity previewers (xlsx → grid, pdf → embed, md → rendered, png → img).
+- [ ] **DIST-03**: Acceptance-criteria auto-status promotes from manual checklist (Phase 2) to event-derived auto-status — without breaking Phase 2's manual UX.
+- [ ] **DIST-04**: XLSX / PDF deliverable preview promotes from Phase 2's placeholder to a registry of full-fidelity previewers (xlsx → grid, pdf → embed, md → rendered, png → img).
 - [ ] **DIST-05**: Lockfile audit + accessibility pass (axe-core or equivalent) + visual regression baseline run in CI; results recorded in the milestone audit.
 
 ## v2 Requirements
@@ -175,17 +175,102 @@ Tracked but not in the current roadmap.
 
 ## Traceability
 
-Populated by the gsd-roadmapper agent during roadmap creation.
+Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (filled by roadmapper) | | |
+| SAFE-01 | Phase 1 | Pending |
+| SAFE-02 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Pending |
+| SAFE-04 | Phase 1 | Pending |
+| SAFE-05 | Phase 1 | Pending |
+| SCAF-01 | Phase 2 | Pending |
+| SCAF-02 | Phase 2 | Pending |
+| SCAF-03 | Phase 2 | Pending |
+| SCAF-04 | Phase 2 | Pending |
+| SCAF-05 | Phase 2 | Pending |
+| SCAF-06 | Phase 2 | Pending |
+| SCAF-07 | Phase 2 | Pending |
+| SCAF-08 | Phase 2 | Pending |
+| SCAF-09 | Phase 2 | Pending |
+| OPTIN-01 | Phase 2 | Pending |
+| OPTIN-02 | Phase 2 | Pending |
+| OPTIN-03 | Phase 2 | Pending |
+| OPTIN-04 | Phase 2 | Pending |
+| OPTIN-05 | Phase 2 | Pending |
+| PRIM-01 | Phase 2 | Pending |
+| PRIM-02 | Phase 2 | Pending |
+| PRIM-03 | Phase 2 | Pending |
+| PRIM-04 | Phase 2 | Pending |
+| PRIM-05 | Phase 2 | Pending |
+| PRIM-06 | Phase 2 | Pending |
+| EDITOR-01 | Phase 2 | Pending |
+| EDITOR-02 | Phase 2 | Pending |
+| EDITOR-03 | Phase 2 | Pending |
+| EDITOR-04 | Phase 2 | Pending |
+| EDITOR-05 | Phase 2 | Pending |
+| EDITOR-06 | Phase 2 | Pending |
+| READER-01 | Phase 2 | Pending |
+| READER-02 | Phase 2 | Pending |
+| READER-03 | Phase 2 | Pending |
+| READER-04 | Phase 2 | Pending |
+| READER-05 | Phase 2 | Pending |
+| READER-06 | Phase 2 | Pending |
+| READER-07 | Phase 2 | Pending |
+| READER-08 | Phase 2 | Pending |
+| READER-09 | Phase 2 | Pending |
+| ROOM-01 | Phase 2 | Pending |
+| ROOM-02 | Phase 2 | Pending |
+| ROOM-03 | Phase 2 | Pending |
+| ROOM-04 | Phase 2 | Pending |
+| ROOM-05 | Phase 2 | Pending |
+| ROOM-06 | Phase 2 | Pending |
+| ROOM-07 | Phase 2 | Pending |
+| ROOM-08 | Phase 2 | Pending |
+| BULL-01 | Phase 3 | Pending |
+| BULL-02 | Phase 3 | Pending |
+| BULL-03 | Phase 3 | Pending |
+| BULL-04 | Phase 3 | Pending |
+| BULL-05 | Phase 3 | Pending |
+| BULL-06 | Phase 3 | Pending |
+| BULL-07 | Phase 3 | Pending |
+| BULL-08 | Phase 3 | Pending |
+| BULL-09 | Phase 3 | Pending |
+| CHAT-01 | Phase 4 | Pending |
+| CHAT-02 | Phase 4 | Pending |
+| CHAT-03 | Phase 4 | Pending |
+| CHAT-04 | Phase 4 | Pending |
+| CHAT-05 | Phase 4 | Pending |
+| CHAT-06 | Phase 4 | Pending |
+| CHAT-07 | Phase 4 | Pending |
+| CHAT-08 | Phase 4 | Pending |
+| CHAT-09 | Phase 4 | Pending |
+| CHAT-10 | Phase 4 | Pending |
+| CHAT-11 | Phase 4 | Pending |
+| COEXIST-01 | Phase 2 | Pending |
+| COEXIST-02 | Phase 2 | Pending |
+| COEXIST-03 | Phase 2 | Pending |
+| COEXIST-04 | Phase 2 | Pending |
+| COEXIST-05 | Phase 5 | Pending |
+| COEXIST-06 | Phase 2 | Pending |
+| DIST-01 | Phase 5 | Pending |
+| DIST-02 | Phase 5 | Pending |
+| DIST-03 | Phase 5 | Pending |
+| DIST-04 | Phase 5 | Pending |
+| DIST-05 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 67 total
-- Mapped to phases: (filled by roadmapper)
-- Unmapped: (filled by roadmapper)
+- v1 requirements: 79 total
+- Mapped to phases: 79
+- Unmapped: 0
+
+**Per-phase loadings:**
+- Phase 1 (Pre-Install Safety): 5 requirements (SAFE-01..05)
+- Phase 2 (Scaffold + Primitives + Reader + Room + Editor + Opt-In): 48 requirements (SCAF-01..09, OPTIN-01..05, PRIM-01..06, EDITOR-01..06, READER-01..09, ROOM-01..08, COEXIST-01..04, COEXIST-06)
+- Phase 3 (Daily Bulletin): 9 requirements (BULL-01..09)
+- Phase 4 (Employee Chat): 11 requirements (CHAT-01..11)
+- Phase 5 (Distribution & Polish): 6 requirements (DIST-01..05, COEXIST-05)
 
 ---
 *Requirements defined: 2026-05-07*
-*Last updated: 2026-05-07 after initial definition*
+*Last updated: 2026-05-07 after roadmap creation (traceability populated; READER-05/READER-07/DIST-03/DIST-04 phase references corrected to Phase 5)*
