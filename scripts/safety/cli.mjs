@@ -20,6 +20,7 @@ import { restoreToStaging } from './lib/restore.mjs';
 import { resolvePaperclipHome, resolveSnapshotsDir, isValidSnapshotId } from './lib/paths.mjs';
 import { detectMode } from './lib/mode-detect.mjs';
 import * as paperclipCli from './lib/paperclip-cli.mjs';
+import { smoke } from './lib/smoke.mjs';
 
 const SUBCOMMANDS = ['snapshot', 'restore', 'smoke', 'verify', 'gate', 'list', 'prune'];
 
@@ -31,7 +32,7 @@ function printRootHelp() {
       'Subcommands:',
       '  snapshot   Capture a Paperclip install (DB + filesystem + manifest).',
       '  restore    Restore a snapshot into a sibling staging dir (never live).',
-      '  smoke      [plan-02] Smoke-test a restored env against its manifest.',
+      '  smoke      Smoke-test a restored env against its manifest.',
       '  verify     [plan-02] Restore-to-staging then smoke; sets verifiedAt.',
       '  gate       [plan-03] Refuse-or-run wrapper around an inner command.',
       '  list       Enumerate snapshots under .planning/snapshots/.',
@@ -184,6 +185,75 @@ function runStub(name, planRef) {
   return 2;
 }
 
+function printSmokeHelp() {
+  process.stdout.write(
+    [
+      'Usage: clarity-safety smoke [options]',
+      '',
+      'Run the 5-check REST smoke pass against a Paperclip server.',
+      'Optional cross-check vs a snapshot manifest (plugin set + version).',
+      '',
+      'Required:',
+      '  --api-url <url>           e.g. http://127.0.0.1:3100',
+      '  --company-id <id>         Paperclip company id for /agents endpoint',
+      '',
+      'Optional:',
+      '  --api-key <token>         Bearer token (or PAPERCLIP_API_KEY env)',
+      '  --editor-agent-id <id>    enables heartbeat check; otherwise skipped',
+      '  --timeout-ms <n>          per-check timeout (default 5000)',
+      '  --snapshot-id <id>        cross-check against snapshot manifest',
+      ''
+    ].join('\n')
+  );
+}
+
+async function runSmoke(flags) {
+  if (flags.help === true || flags.h === true) {
+    printSmokeHelp();
+    return 0;
+  }
+  const apiUrl = flags['api-url'] ?? process.env.PAPERCLIP_API_URL;
+  const apiKey = flags['api-key'] ?? process.env.PAPERCLIP_API_KEY;
+  const companyId = flags['company-id'] ?? process.env.PAPERCLIP_COMPANY_ID;
+  const editorAgentId = flags['editor-agent-id'] ?? process.env.PAPERCLIP_AGENT_ID;
+  if (!apiUrl) {
+    process.stderr.write('smoke: --api-url (or PAPERCLIP_API_URL) is required\n');
+    return 1;
+  }
+  if (!companyId) {
+    process.stderr.write('smoke: --company-id (or PAPERCLIP_COMPANY_ID) is required\n');
+    return 1;
+  }
+  const timeoutMs = flags['timeout-ms'] !== undefined ? Number(flags['timeout-ms']) : undefined;
+  const snapshotId = flags['snapshot-id'];
+  if (snapshotId !== undefined && !isValidSnapshotId(snapshotId)) {
+    process.stderr.write(`smoke: invalid --snapshot-id: ${snapshotId}\n`);
+    return 1;
+  }
+  const repoRoot = repoRootFromCli();
+  const snapshotsDir = resolveSnapshotsDir(repoRoot);
+  const result = await smoke({
+    apiUrl,
+    apiKey,
+    companyId,
+    editorAgentId,
+    timeoutMs,
+    snapshotId,
+    snapshotsDir: snapshotId ? snapshotsDir : undefined
+  });
+  for (const c of result.checks) {
+    process.stdout.write(
+      `  [${c.status.padEnd(7)}] ${c.name}${c.detail ? ' — ' + c.detail : ''}\n`
+    );
+  }
+  if (!result.ok) {
+    process.stderr.write(`smoke FAILED at ${result.failedCheck}: ${result.reason}\n`);
+    return 1;
+  }
+  process.stdout.write('smoke PASSED\n');
+  return 0;
+}
+
 async function main(argv) {
   const [, , sub, ...rest] = argv;
   if (!sub || sub === '--help' || sub === '-h') {
@@ -196,7 +266,10 @@ async function main(argv) {
     return 1;
   }
   const flags = parseFlags(rest);
-  if (flags.help === true || flags.h === true) {
+  // Subcommands with their own --help handler get first crack; otherwise
+  // fall back to the root help.
+  const SUBCOMMAND_HELP_OWNERS = new Set(['smoke', 'verify']);
+  if ((flags.help === true || flags.h === true) && !SUBCOMMAND_HELP_OWNERS.has(sub)) {
     printRootHelp();
     return 0;
   }
@@ -210,7 +283,7 @@ async function main(argv) {
     case 'prune':
       return runPrune(flags);
     case 'smoke':
-      return runStub('smoke', 'plan 02');
+      return runSmoke(flags);
     case 'verify':
       return runStub('verify', 'plan 02');
     case 'gate':

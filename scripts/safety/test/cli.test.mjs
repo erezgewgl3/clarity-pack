@@ -51,10 +51,19 @@ test('R10.c — unknown subcommand exits 1 with "unknown subcommand"', async () 
   assert.match(stderr, /unknown subcommand: unknownsub/);
 });
 
-test('R10.d — smoke stub exits 2 with plan-02 deferred message', async () => {
+test('R10.d — smoke (Plan 02 implementation) without --api-url exits 1 with required-flag error', async () => {
+  // Plan 01 stub returned exit 2 with "lands in plan 02"; Plan 02 replaces
+  // the stub with the real implementation, so calling smoke without the
+  // required --api-url flag now exits 1 with a usage error.
   const { code, stderr } = await runCli(['smoke']);
-  assert.equal(code, 2);
-  assert.match(stderr, /smoke subcommand lands in plan 02/);
+  assert.equal(code, 1);
+  assert.match(stderr, /--api-url|PAPERCLIP_API_URL/);
+});
+
+test('R10.d.help — smoke --help prints usage and exits 0', async () => {
+  const { code, stdout } = await runCli(['smoke', '--help']);
+  assert.equal(code, 0);
+  assert.match(stdout, /Usage: clarity-safety smoke/);
 });
 
 test('R10.e — verify stub exits 2 with plan-02 deferred message', async () => {
