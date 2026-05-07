@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-07T17:59:58.348Z",
+  "timestamp": "2026-05-07T18:04:28.665Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -17,12 +17,12 @@
   "decisions": [],
   "uncommitted_files": [
     {
-      "status": "D",
-      "path": ".planning/research/test-write.txt"
+      "status": "M",
+      "path": ".planning/HANDOFF.json"
     },
     {
-      "status": "D",
-      "path": ".planning/research/write-summary.mjs"
+      "status": "??",
+      "path": ".planning/REQUIREMENTS.md"
     },
     {
       "status": "??",
@@ -30,5 +30,5 @@
     }
   ],
   "next_action": null,
-  "context_notes": "Recent commits:\n8c83653 docs: add research synthesis .planning/research/SUMMARY.md\n378987c docs: add research synthesis .planning/research/STACK.md .planning/research/FEATURES.md .planning/research/ARCHITECTURE.md .planning/research/PITFALLS.md\ndfc9206 chore: add project config .planning/config.json\ncc87739 docs: initialize project .planning/PROJECT.md"
+  "context_notes": "Recent commits:\n12c46ed docs: add backup/rollback requirement; fold research into PROJECT.md (master branch, stack pins, snapshot bookending) .planning/PROJECT.md\n8c83653 docs: add research synthesis .planning/research/SUMMARY.md\n378987c docs: add research synthesis .planning/research/STACK.md .planning/research/FEATURES.md .planning/research/ARCHITECTURE.md .planning/research/PITFALLS.md\ndfc9206 chore: add project config .planning/config.json\ncc87739 docs: initialize project .planning/PROJECT.md"
 }
