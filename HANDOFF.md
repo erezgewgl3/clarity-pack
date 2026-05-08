@@ -1,156 +1,77 @@
-# Morning Handoff — Clarity Pack
+# Handoff — Clarity Pack
 
-**Date stamped:** 2026-05-07 overnight session
-**Prepared for:** Eric (you)
-**Prepared by:** Claude Opus 4.7 (autonomous overnight run, option C — no live host)
-**Read time:** ~5 minutes
-**Context expectation:** read this first; PROJECT.md and ROADMAP.md if you want more depth
+**Last updated:** end of day 2026-05-08
+**Read this first.** Then `HOSTINGER-COUNTERMOVES.md` if you want the production-VPS detail. Then `PROJECT.md` / `ROADMAP.md` if you want the clarity-pack-product detail.
 
 ---
 
-## Where we ended
+## Plain-English status
 
-**`/gsd:new-project` is complete.** Six commits walked the project from idea to a 5-phase roadmap with 79 v1 requirements, all mapped, with research grounded against the live Paperclip repo (`master` branch, full PLUGIN_SPEC.md re-read, plus PLUGIN_AUTHORING_GUIDE.md, the kitchen-sink example, and the orchestration-smoke example).
+- **Clarity Pack as a product:** Phase 1 (Pre-Install Safety) was structurally completed overnight 2026-05-07 with **103/103 tests passing**. The CLI ships at `scripts/safety/` and the human-facing runbook ships at `runbook/`. The only piece still pending is **the rehearsal drill itself** — a ~30-min manual run of `snapshot → restore-to-staging → smoke → verify → gate-test` that proves the safety discipline works end-to-end against a real Paperclip install.
+- **The rehearsal target shifted today.** Original plan was "fresh local Paperclip on Eric's laptop via PGlite." The actual plan is now: **Hostinger VPS running production-grade Paperclip for a new project called Countermoves.** That box is more valuable as a rehearsal target because it mirrors what BEAAA's eventual production looks like (real Postgres, real TLS, real domain) instead of a throwaway local instance.
+- **Where we paused:** end of Stage 8a on the Countermoves Hostinger setup. Infrastructure is fully prepped; Paperclip code is cloned and the database schema is applied (82 Drizzle migrations against `paperclip_countermoves`); the env vault has all three required variables (`DATABASE_URL` / `BETTER_AUTH_SECRET` / `SERVE_UI=true`); the only remaining step before Paperclip can start is the interactive `pnpm paperclipai onboard` wizard.
 
-**Phase 1 (Pre-Install Safety) is structurally complete with one non-autonomous step pending — your morning rehearsal drill.** All five SAFE requirements have landed code:
+## Tomorrow's first 30 minutes
 
-| Req | What | Status |
-|---|---|---|
-| SAFE-01 | One-command snapshot script | ✓ Done — `scripts/safety/cli.mjs snapshot` |
-| SAFE-02 (a) | One-command restore script | ✓ Done — `scripts/safety/cli.mjs restore` |
-| SAFE-02 (b) | **Restore rehearsed at least once** | ⚠ **Awaiting you (~30 min today)** |
-| SAFE-03 | Smoke-test script | ✓ Done — `scripts/safety/cli.mjs smoke` + `verify` |
-| SAFE-04 | Plain-English runbook | ✓ Done — `runbook/` (8 markdown files) |
-| SAFE-05 | Pre-flight gate refusing stale-snapshot installs | ✓ Done — `scripts/safety/cli.mjs gate` |
-
-**103/103 tests pass.** No partial work, no broken state.
-
----
-
-## What you do today (before any clarity-pack action against your real BEAAA install)
-
-**The rehearsal drill is the gate that unlocks Phase 2.** It must run against a non-production Paperclip — the fresh local clone you said you'd set up.
-
-The full step-by-step is in [`runbook/rehearsal-drill.md`](runbook/rehearsal-drill.md) (15 numbered steps, ~30 minutes). The condensed version:
-
-1. **Set up a fresh local Paperclip clone.** Use Paperclip's `pnpm onboard` for PGlite mode (the simplest path — no Postgres install required). Note the instance directory it creates (typically `~/.paperclip/instances/<id>/`).
-2. **Take a snapshot of the fresh install:** `pnpm clarity-safety snapshot --paperclip-dir ~/.paperclip/instances/<id>`
-3. **Modify state** so you can later prove restore worked (e.g., create a test issue in the local Paperclip).
-4. **Stop the local Paperclip.**
-5. **Restore the snapshot to a sibling staging dir** (the CLI does this automatically — your live `<id>/` is never touched): `pnpm clarity-safety restore <snapshot-id>`
-6. **Start a sibling Paperclip on port 3101** pointing at the staged dir (the runbook walks you through this — Paperclip can run two instances side-by-side because they're filesystem-isolated).
-7. **Verify the staging:** `pnpm clarity-safety verify <snapshot-id> --smoke-api-url http://localhost:3101` — this runs the 5-check smoke test, confirms plugin-list set-equality and version equality vs the manifest, and (only on PASS) atomically writes `verifiedAt` back into the snapshot manifest.
-8. **Test the gate:** run `pnpm clarity-safety gate -- echo install-would-run-here` — should succeed (snapshot is fresh and verified). Then artificially age the snapshot's `verifiedAt` (the runbook shows you how) and re-run — should refuse.
-9. **Append today's dated row to [`runbook/REHEARSAL.md`](runbook/REHEARSAL.md)** in the documented 9-column format (`| 2026-05-08 | 1 | Eric | <snapshot-id> | <restore-time> | PASS | <notes> |` etc.).
-
-The signal that Phase 1 is fully closed: `grep -qE '^\| 20[0-9]{2}-' runbook/REHEARSAL.md` exits 0. Right now it exits 1 — that's the empty-template state.
-
-**If anything fails:** capture the failure, stop, and tell me. I'll route to `/gsd:plan-phase 1 --gaps` to revise the relevant plan.
-
-**If everything passes:** reply "approved — drill clean" and we move to Phase 2.
-
----
-
-## What's in the repo right now
-
-**21 commits.** Plus three pending changes (CLAUDE.md, config.json, HANDOFF.md) that I'm committing as the final overnight commit.
-
-```
-~ Documents/Claude/Projects/Clarity Pack/
-├── .planning/
-│   ├── PROJECT.md                           ← what + why + locked decisions + constraints
-│   ├── REQUIREMENTS.md                      ← 79 v1 reqs across 11 categories, all mapped
-│   ├── ROADMAP.md                           ← 5-phase plan (Phase 1 = SAFETY)
-│   ├── STATE.md                             ← live project state
-│   ├── config.json                          ← workflow config (YOLO, Quality/Opus, parallel, all gates on)
-│   ├── PRIOR-DECISIONS.md                   ← your pre-project notes (preserved as input)
-│   ├── HANDOFF.json                         ← harness-managed handoff state
-│   ├── research/                            ← project-level research synthesis
-│   │   ├── STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md, SUMMARY.md
-│   └── phases/01-pre-install-safety/
-│       ├── 01-RESEARCH.md                   ← Phase 1 research (Opus)
-│       ├── 01-01-PLAN.md, 01-01-SUMMARY.md  ← snapshot/restore plan + executor report
-│       ├── 01-02-PLAN.md, 01-02-SUMMARY.md  ← smoke/verify plan + executor report
-│       └── 01-03-PLAN.md, 01-03-SUMMARY.md  ← gate/runbook plan + executor report
-├── scripts/safety/                          ← Phase 1 deliverable (NOT plugin code — runs standalone)
-│   ├── package.json                         ← @clarity-pack/safety, ESM, Node ≥20
-│   ├── cli.mjs                              ← entry: pnpm clarity-safety <subcommand>
-│   ├── lib/                                 ← 11 .mjs source files
-│   │   ├── manifest.mjs, paths.mjs, mode-detect.mjs
-│   │   ├── snapshot.mjs, restore.mjs
-│   │   ├── list.mjs, prune.mjs
-│   │   ├── paperclip-api.mjs, paperclip-cli.mjs
-│   │   ├── smoke.mjs, verify.mjs
-│   │   └── gate.mjs
-│   └── test/                                ← 11 test files, 103 tests, all passing
-│       ├── *.test.mjs (one per lib module + cli)
-│       └── fixtures/                        ← stub-paperclip-server + fake-instance trees
-├── runbook/                                 ← the human-facing safety docs (8 files)
-│   ├── README.md                            ← entry point
-│   ├── install-walkthrough.md               ← every clarity-pack install bookended by snapshot
-│   ├── rollback-walkthrough.md              ← if anything goes wrong
-│   ├── rehearsal-drill.md                   ← TODAY'S TASK (15 steps, ~30 min)
-│   ├── PLATFORMS.md                         ← Windows / macOS / Linux specifics
-│   ├── REHEARSAL.md                         ← drill log (currently empty template)
-│   ├── snapshot.sh, snapshot.ps1            ← one-command launchers
-├── sketches/                                ← the four mockups (visual contract for Phases 2-4)
-├── CLAUDE.md                                ← project context for future Claude sessions
-└── HANDOFF.md                               ← this file
+Open PowerShell:
+```powershell
+ssh -i $HOME\.ssh\countermoves_vps_ed25519 eric@82.29.197.74
 ```
 
+In the SSH session:
+```bash
+cd ~/paperclip
+export $(sudo cat /etc/paperclip/db.env | xargs)
+pnpm paperclipai onboard
+```
+
+When the wizard's first prompt appears, paste it back to Claude. Pick the **Custom** path with:
+- Bind: `loopback`
+- Mode: `authenticated`
+- Exposure: `public`
+- Public URL: `https://countermoves.gl3group.com`
+
+After onboard completes, start Paperclip (`pnpm dev` for now; systemd service later) and verify `https://countermoves.gl3group.com` loads from your laptop browser. Then take the first clean baseline snapshot via the clarity-pack safety CLI — that's the real Phase 1 rehearsal-drill execution.
+
+## Two phases of work, in case you forget
+
+1. **Build out the Countermoves Hostinger box.** Continues tomorrow with the onboard wizard, then Paperclip start, then snapshot baseline. Once `https://countermoves.gl3group.com` loads cleanly and a baseline snapshot is in the bag, this phase is done. **You're 80% of the way through.**
+
+2. **Develop clarity-pack against Countermoves.** Phase 2 of the GSD plan — scaffold + primitives + Reader view + Situation Room + Editor-Agent skeleton + opt-in. ~48 requirements. Starts after phase 1 closes (rehearsal drill PASS recorded in `runbook/REHEARSAL.md`). Use `/clear` and run `/gsd:plan-phase 2` when you're ready.
+
+## What does NOT change
+
+- Phase 1 of clarity-pack is structurally complete. `scripts/safety/` ships ~3000 lines of code with 103 tests, all passing. The runbook is in place. Code is committed across 12 atomic commits ending at `9c3148d` (the SUMMARY for Plan 01-01 wave); subsequent plan-02 / plan-03 commits land at `f5e52c4` and `6d6b795` per the in-repo `.planning/phases/01-pre-install-safety/` SUMMARY files.
+- BEAAA stays on its existing host. We don't touch BEAAA today, tomorrow, or until clarity-pack is proven on Countermoves.
+- The Phase 1 deliverables remain reusable: when the time comes for BEAAA, we run the same safety CLI against BEAAA's host with the same runbook.
+
+## Repo state at end of day 2026-05-08
+
+```
+24 git commits on master.
+Working tree at end of session: HANDOFF.md updated, HOSTINGER-COUNTERMOVES.md added.
+.planning/HANDOFF.json (harness-managed) and .gitignore (transient) flagged as modified by Git but managed externally — leave them.
+```
+
+The 24th commit is the morning handoff from yesterday plus the sketches commit. Today's work was overwhelmingly on the Hostinger VPS (a different machine entirely), not in this repo. The two new files in this commit (HOSTINGER-COUNTERMOVES.md + this updated HANDOFF.md) are the durable record of what happened on the remote box today.
+
+## Detailed references
+
+- **`HOSTINGER-COUNTERMOVES.md`** — every fact about the Hostinger box (IP, hostname, SSH key path, vault file, Postgres credentials, Caddy config, security posture, follow-up items). **Read this if anything goes weird with the VPS.**
+- **`runbook/rehearsal-drill.md`** — the 15-step drill. Tomorrow we run this against the Countermoves Hostinger box (NOT a fresh local PGlite as it currently reads — the steps still apply, just point at the Hostinger Paperclip).
+- **`.planning/PROJECT.md`** — clarity-pack project context, locked decisions, constraints.
+- **`.planning/ROADMAP.md`** — the 5-phase roadmap; we're between Phase 1 and Phase 2.
+- **`.planning/phases/01-pre-install-safety/01-0{1,2,3}-SUMMARY.md`** — per-plan executor reports including the 3 deviations Plan 01-01 caught and auto-fixed (DSN password leak, sibling-staging directory wipe, node-tar onentry sync-throw).
+
+## Open follow-ups (carried forward)
+
+1. Rotate the DB password and `BETTER_AUTH_SECRET` on the Hostinger box before any real Countermoves data lands. Both are in chat scrollback from today.
+2. Convert Paperclip on the Hostinger box to a systemd service running as a dedicated `paperclip` system user.
+3. Enable Postgres data-page checksums (requires cluster recreation; pre-go-live maintenance window).
+4. Confirm Hostinger VPS auto-renew or calendar a reminder; expires 2028-05-08.
+5. Update `runbook/rehearsal-drill.md` to reflect that the rehearsal target is the Countermoves Hostinger box (not a local PGlite). One markdown update.
+6. Ubuntu Pro / ESM — revisit early 2029.
+
 ---
 
-## Architectural decisions you should know about (so you can sanity-check tomorrow)
-
-These came out of research and shaped the code:
-
-1. **Paperclip's default branch is `master`, not `main`.** Every doc URL in PROJECT.md and PRIOR-DECISIONS.md was corrected. Don't re-introduce `/blob/main/...` references.
-2. **Per-user opt-in for clarity-pack must be plugin-implemented, not host-toggled.** PLUGIN_SPEC §8 has no per-user install scope and no `user` scope in `plugin_state`. Phase 2 will create a `clarity_user_prefs` table.
-3. **Editor-Agent must be a managed agent** (`agents[]` + `agents.managed` + `reconcile()`), NOT a DIY heartbeat loop. Coexistence guarantee #4 (governance parity) comes for free if we follow this.
-4. **Same-origin trust model is the largest footgun.** Plugin UI runs as same-origin trusted JS — manifest capabilities gate worker calls but NOT direct UI fetch. Phase 2 day-1 work includes an ESLint rule failing CI on raw `fetch()` to host paths from `src/ui/**`. Codified in `SCAF-05`.
-5. **`@paperclipai/mcp-server@^0.1.0` already exists** and exposes the Editor-Agent's read needs. The plugin doesn't import the MCP server as a library — it launches it as a child stdio process via `npx -y @paperclipai/mcp-server`.
-6. **Stack pins are non-negotiable** (forced by plugin contract): React 19 (peer-only, never bundled), TS ^5.7.3, esbuild ^0.27.3, ESM-only, Node ≥20, shadcn `new-york`/neutral/lucide. Don't bundle Tailwind — inherit host CSS.
-7. **CVE-2026-31802 is real** — node-tar before 7.5.11 has a Windows path-traversal vulnerability. Phase 1's restore code pins `tar@^7.5.15` AND rejects `SymbolicLink` and `Link` entries at extract time. There's a hand-crafted-malicious-archive test (R5/R6) that proves this.
-
----
-
-## Phase 1 Plan-2 work that survived three deviations
-
-Plan 01-01's executor caught and fixed three real bugs in the planned spec while implementing — these are documented in `.planning/phases/01-pre-install-safety/01-01-SUMMARY.md` under "Deviations from Plan":
-
-1. **DSN password leak in pg_dump argv** — fix routes password via `PGPASSWORD` env, username via `PGUSER`, sanitized DSN to argv. Test S5 catches it.
-2. **Sibling-staging design wiped live dir before restore** — fix extracts into `<home>/.clarity-safety-restore-<id>/` (a true tmp dir under home) and renames the inner subtree to staging; live dir is never touched. Test R3 catches it.
-3. **node-tar swallows sync throws inside `onentry`** — fix records the violation + calls `entry.ignore()`, re-throws after `tar.x` resolves. Tests R5/R6 catch it.
-
-All three are corrections from the planned design to safer real-world behavior. They're worth a 30-second skim before tomorrow's drill so the actual code matches your mental model.
-
----
-
-## What's next after the drill
-
-Once you reply "approved — drill clean":
-
-1. **`/gsd:plan-phase 2`** in a fresh chat (`/clear` first — phase boundaries are the cleanest place to reset context).
-2. Phase 2 is the BIG phase: 48 requirements covering scaffold + trust-model hardening + opt-in + shared primitives (reference resolver + deterministic blocker chain) + Editor-Agent skeleton + Reader view + Situation Room. Six of the seven internal sub-phases (scaffold, primitives, Editor-Agent, Reader view, Situation Room, opt-in) are unblocked the moment Phase 1 closes.
-3. Phase 2's research will need a working local Paperclip to spike three open conflicts before the planner runs:
-   - `detailTab` vs `taskDetailView` slot identity (which renders next to classic Paperclip tabs)
-   - Plugin-owned migrations vs `plugin_state` (PLUGIN_SPEC §21 says out-of-scope; PLUGIN_AUTHORING_GUIDE.md and PR #5205 added them — verify by running a minimal migration)
-   - Heartbeat cadence (verify empirically before TL;DR freshness SLA is set)
-4. After Phase 2 ships and Reader view + Situation Room are running on your fresh Paperclip with you opted-in, Phases 3 (Bulletin), 4 (Chat), and 5 (Polish + Distribution) follow in sequence.
-
----
-
-## Time-and-token receipt
-
-| Stage | Wall-clock | Notes |
-|---|---|---|
-| `/gsd:new-project` | ~30 min | 4 parallel research agents, synthesis, requirements, roadmap |
-| Phase 1 plan | ~25 min | research → planner → checker (1 revision) |
-| Phase 1 execute | ~90 min | 3 plans, 9 tasks, 103 tests, 12 commits |
-| Documentation + handoff | ~5 min | this file + final commit |
-
-Total: ~2.5 hours of compute, ~21 commits, ~3000 lines of code, ~1500 lines of runbook prose. Zero changes to your live BEAAA Paperclip.
-
----
-
-*Read `runbook/rehearsal-drill.md` next.*
+*If you `/clear` and start a fresh chat tomorrow: read this file, then say "I'm ready to resume on the Countermoves Hostinger box at the onboarding wizard step." Future Claude will pick up cleanly. Memory palace also has the build state under the `clarity_pack` and `countermoves` wings.*
