@@ -20,8 +20,9 @@
 // can't create symlinks without admin).
 
 import { strict as assert } from 'node:assert';
-import { createWriteStream } from 'node:fs';
-import { mkdtemp, rm, stat, writeFile, mkdir } from 'node:fs/promises';
+import { createWriteStream, symlinkSync, unlinkSync } from 'node:fs';
+import { lstat, mkdtemp, mkdir, readlink, rm, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -102,6 +103,130 @@ async function buildMaliciousArchive({ outPath, typeflag }) {
   await writeFile(outPath, gzipSync(raw));
 }
 
+/**
+ * Build a benign tar.gz containing two entries:
+ *   1. Regular file `instances/default/config.json` with content `{}`
+ *   2. SymbolicLink `instances/default/inner/link` → `../config.json`
+ *
+ * The symlink's linkpath resolves INSIDE the extracted staging tree, so
+ * the relaxed `withinAllowed` check in restore.mjs should allow it.
+ * Asserts the "allow in-tree links" branch of the CVE-2026-31802
+ * mitigation (defect 1 backfill from the 2026-05-12 rehearsal drill).
+ */
+function makeRegularFileHeader({ name, sizeBytes }) {
+  const buf = Buffer.alloc(512, 0);
+  function writeStr(offset, length, value) {
+    const s = String(value).slice(0, length);
+    buf.write(s, offset, 'utf8');
+  }
+  function writeOctal(offset, length, value) {
+    const s = value.toString(8).padStart(length - 1, '0') + '\0';
+    buf.write(s, offset, 'utf8');
+  }
+  writeStr(0, 100, name);
+  writeOctal(100, 8, 0o644);
+  writeOctal(108, 8, 0);
+  writeOctal(116, 8, 0);
+  writeOctal(124, 12, sizeBytes);
+  writeOctal(136, 12, 0);
+  buf.write('        ', 148, 'utf8');
+  buf.write('0', 156, 'utf8'); // typeflag '0' = regular file
+  buf.write('ustar\0', 257, 'utf8');
+  buf.write('00', 263, 'utf8');
+  let sum = 0;
+  for (let i = 0; i < 512; i++) sum += buf[i];
+  writeOctal(148, 8, sum);
+  return buf;
+}
+
+async function buildInTreeSymlinkArchive({ outPath }) {
+  // Entry 1 — regular file config.json (2 bytes: `{}`)
+  const contentBuf = Buffer.from('{}', 'utf8');
+  const fileHeader = makeRegularFileHeader({
+    name: 'instances/default/config.json',
+    sizeBytes: contentBuf.length
+  });
+  const dataBlock = Buffer.alloc(512, 0);
+  contentBuf.copy(dataBlock, 0);
+
+  // Entry 2 — SymbolicLink that points to a sibling INSIDE the staging tree
+  const linkHeader = makeUstarHeader({
+    name: 'instances/default/inner/link',
+    linkname: '../config.json',
+    typeflag: '2'
+  });
+  const trailer = Buffer.alloc(1024, 0);
+  const raw = Buffer.concat([fileHeader, dataBlock, linkHeader, trailer]);
+  const { gzipSync } = await import('node:zlib');
+  await writeFile(outPath, gzipSync(raw));
+}
+
+async function buildBenignInTreeSnapshotDir({ root }) {
+  const home = path.join(root, 'home');
+  await mkdir(path.join(home, 'instances', 'default'), { recursive: true });
+  await writeFile(path.join(home, 'instances', 'default', 'config.json'), '{}');
+  const snapshotsDir = path.join(root, 'snapshots');
+  const id = '2026-05-08T14-32-17Z';
+  const dir = path.join(snapshotsDir, id);
+  await mkdir(dir, { recursive: true });
+  const dbPath = path.join(dir, 'pglite-datadir.tar.gz');
+  const { gzipSync } = await import('node:zlib');
+  await writeFile(dbPath, gzipSync(Buffer.alloc(1024, 0)));
+  const fsPath = path.join(dir, 'instance-fs.tar.gz');
+  await buildInTreeSymlinkArchive({ outPath: fsPath });
+
+  await writeManifest(dir, {
+    snapshotId: id,
+    createdAt: '2026-05-08T14:32:17.043Z',
+    createdBy: { user: 'eric', host: 'ERIC-WIN11' },
+    paperclipVersion: '0.41.2',
+    paperclipMode: 'pglite',
+    paperclipHome: home,
+    paperclipInstanceId: 'default',
+    installedPlugins: [],
+    lockfileSha256: null,
+    artifacts: {
+      db: {
+        path: 'pglite-datadir.tar.gz',
+        format: 'pglite-datadir-gzip',
+        sha256: await sha256OfFile(dbPath),
+        sizeBytes: (await stat(dbPath)).size
+      },
+      fs: {
+        path: 'instance-fs.tar.gz',
+        format: 'tar+gzip',
+        sha256: await sha256OfFile(fsPath),
+        sizeBytes: (await stat(fsPath)).size
+      }
+    },
+    verifiedAt: null,
+    verifiedSmokeChecks: null,
+    gateMaxAgeMinutes: 15
+  });
+  return { home, snapshotsDir, snapshotId: id };
+}
+
+/**
+ * Detect whether the runtime can create real symlinks. On Windows
+ * without admin privilege / developer mode, symlinkSync throws EPERM.
+ * Return true if a symlink can be created in a scratch tmp dir, false
+ * otherwise.
+ */
+async function canCreateSymlinks() {
+  if (process.platform !== 'win32') return true;
+  const scratch = await mkdtemp(path.join(tmpdir(), 'clarity-safety-symlink-probe-'));
+  const linkPath = path.join(scratch, 'link');
+  try {
+    symlinkSync('target', linkPath);
+    unlinkSync(linkPath);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
+}
+
 async function buildSnapshotDir({ root, typeflag }) {
   const home = path.join(root, 'home');
   await mkdir(path.join(home, 'instances', 'default'), { recursive: true });
@@ -153,7 +278,7 @@ async function buildSnapshotDir({ root, typeflag }) {
   return { home, snapshotsDir, snapshotId: id };
 }
 
-test('R5 — SymbolicLink entry is rejected during restore extraction; staging dir contains no escape file', async () => {
+test('R5 — SymbolicLink entry whose target escapes staging is rejected; staging dir contains no escape file', async () => {
   await withTmp(async (root) => {
     const { home, snapshotsDir, snapshotId } = await buildSnapshotDir({ root, typeflag: '2' });
     const stagingDir = path.join(home, 'instances', 'default.restoring');
@@ -168,6 +293,10 @@ test('R5 — SymbolicLink entry is rejected during restore extraction; staging d
       (err) => {
         assert.match(err.message, /Refusing to extract/);
         assert.match(err.message, /SymbolicLink/);
+        // Wording check pins the relaxed mitigation to escape-only
+        // rejection — a regression to blanket rejection would still
+        // match /Refusing to extract/ but FAIL /escapes staging/.
+        assert.match(err.message, /escapes staging/);
         return true;
       }
     );
@@ -179,7 +308,7 @@ test('R5 — SymbolicLink entry is rejected during restore extraction; staging d
   });
 });
 
-test('R6 — hardlink (Link) entry is rejected during restore extraction', async () => {
+test('R6 — hardlink (Link) entry whose target escapes staging is rejected', async () => {
   await withTmp(async (root) => {
     const { home, snapshotsDir, snapshotId } = await buildSnapshotDir({ root, typeflag: '1' });
     await assert.rejects(
@@ -193,9 +322,44 @@ test('R6 — hardlink (Link) entry is rejected during restore extraction', async
       (err) => {
         assert.match(err.message, /Refusing to extract/);
         assert.match(err.message, /Link/);
+        assert.match(err.message, /escapes staging/);
         return true;
       }
     );
+  });
+});
+
+test('R7 — in-tree SymbolicLink (linkpath resolves inside staging) is allowed to extract', async (t) => {
+  if (!(await canCreateSymlinks())) {
+    t.skip('platform cannot create symlinks (Windows without admin/dev mode)');
+    return;
+  }
+  await withTmp(async (root) => {
+    const { home, snapshotsDir, snapshotId } = await buildBenignInTreeSnapshotDir({ root });
+
+    // Restore must NOT throw — in-tree symlink is permitted under the
+    // relaxed CVE-2026-31802 mitigation (defect 1 fix from 2026-05-12).
+    await restoreToStaging({
+      snapshotId,
+      home,
+      instanceId: 'default',
+      snapshotsDir
+    });
+
+    // The link landed inside the staging dir.
+    const stagingDir = path.join(home, 'instances', 'default.restoring');
+    const linkPath = path.join(stagingDir, 'inner', 'link');
+    const linkStat = await lstat(linkPath);
+    assert.ok(linkStat.isSymbolicLink(), `expected symlink at ${linkPath}`);
+
+    // Link target matches the archive entry.
+    const target = await readlink(linkPath);
+    assert.equal(target, '../config.json');
+
+    // Target resolves to the sibling config.json inside the staging
+    // tree (sanity — proves the link is functional, not just present).
+    const resolved = await stat(linkPath);
+    assert.ok(resolved.isFile(), 'link should resolve to a regular file');
   });
 });
 
