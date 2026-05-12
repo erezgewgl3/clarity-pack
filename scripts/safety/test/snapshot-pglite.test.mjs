@@ -5,9 +5,13 @@
 //   S2 — fs tar excludes node_modules/ and .cache/; includes config.json, sample.txt,
 //        master.key, plugins/package.json, plugins/pnpm-lock.yaml.
 //   S3 — excludeSecrets:true omits secrets/ from the tar; manifest.artifacts.fs.excludeSecrets:true.
+//   S1-cache-A — claude-prompt-cache/ excluded by default (defect 2 from 2026-05-12 drill).
+//   S1-cache-B — includeCaches:true re-enables capture.
+//   S1-cache-C — nested claude-prompt-cache/ at any depth is excluded.
+//   S1-cache-D — substring matches (claude-prompt-caches-archive, claude-prompt-cache.md) NOT excluded.
 
 import { strict as assert } from 'node:assert';
-import { cp, mkdtemp, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -146,5 +150,162 @@ test('S3 — excludeSecrets:true omits secrets/master.key and is recorded in man
     }
     const manifest = await readManifest(outDir);
     assert.equal(manifest.artifacts.fs.excludeSecrets, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cache-directory exclusion (defect 2 from the 2026-05-12 rehearsal drill).
+// claude-prompt-cache/ directories contain symlinks that point outside the
+// instance tree (Claude Code skill caches symlink into the user's home dir).
+// They are regenerable cache content and must be excluded from snapshots
+// by default; an opt-in `includeCaches` re-enables capture.
+// ---------------------------------------------------------------------------
+
+async function seedCacheDirs(home, opts = {}) {
+  // Adds a `claude-prompt-cache/` directory inside the instance and (when
+  // opts.nested) a deeply-nested one inside plugins/. Sibling names that
+  // are NOT segment-exact matches are added to exercise the precision of
+  // the predicate.
+  const inst = path.join(home, 'instances', 'default');
+  await mkdir(path.join(inst, 'claude-prompt-cache'), { recursive: true });
+  await writeFile(path.join(inst, 'claude-prompt-cache', 'entry.json'), '{"cached": true}');
+  if (opts.nested) {
+    const nested = path.join(inst, 'plugins', 'kitchen-sink', 'claude-prompt-cache');
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(nested, 'something.json'), '{}');
+  }
+  if (opts.lookalikes) {
+    // Directory whose name is a SUPERSET of the exclude token — must
+    // remain captured.
+    await mkdir(path.join(inst, 'claude-prompt-caches-archive'), { recursive: true });
+    await writeFile(path.join(inst, 'claude-prompt-caches-archive', 'keep.md'), 'keep me');
+    // File at instance root whose basename is a substring match — must
+    // remain captured (the predicate matches *segments*, not arbitrary
+    // path components).
+    await writeFile(path.join(inst, 'claude-prompt-cache.md'), 'sibling file, not a dir');
+  }
+}
+
+test('S1-cache-A — claude-prompt-cache/ at instance root is excluded by default', async () => {
+  await withTmp(async (root) => {
+    const home = path.join(root, 'home');
+    await copyFakeInstance(home);
+    await seedPGlite(home);
+    await seedCacheDirs(home);
+    const outDir = path.join(root, 'snap');
+    await snapshot({
+      home,
+      instanceId: 'default',
+      mode: 'pglite',
+      outDir,
+      _paperclipCli: stubCli,
+      silent: true
+    });
+    const entries = await listTarEntries(path.join(outDir, 'instance-fs.tar.gz'));
+    for (const e of entries) {
+      assert.ok(
+        !/(^|\/)claude-prompt-cache(\/|$)/.test(e),
+        `unexpected claude-prompt-cache entry: ${e}`
+      );
+    }
+    // Ordinary fixture entries are still present.
+    assert.ok(
+      entries.includes('instances/default/config.json'),
+      `expected config.json in entries:\n${entries.join('\n')}`
+    );
+  });
+});
+
+test('S1-cache-B — includeCaches:true re-enables capture of claude-prompt-cache/', async () => {
+  await withTmp(async (root) => {
+    const home = path.join(root, 'home');
+    await copyFakeInstance(home);
+    await seedPGlite(home);
+    await seedCacheDirs(home);
+    const outDir = path.join(root, 'snap');
+    await snapshot({
+      home,
+      instanceId: 'default',
+      mode: 'pglite',
+      outDir,
+      includeCaches: true,
+      _paperclipCli: stubCli,
+      silent: true
+    });
+    const entries = await listTarEntries(path.join(outDir, 'instance-fs.tar.gz'));
+    // The opt-in re-enables capture.
+    const hasCacheEntry = entries.some((e) =>
+      /(^|\/)claude-prompt-cache(\/|$)/.test(e)
+    );
+    assert.ok(
+      hasCacheEntry,
+      `expected at least one claude-prompt-cache entry with includeCaches:true. entries:\n${entries.join('\n')}`
+    );
+  });
+});
+
+test('S1-cache-C — nested claude-prompt-cache/ at any depth is excluded by default', async () => {
+  await withTmp(async (root) => {
+    const home = path.join(root, 'home');
+    await copyFakeInstance(home);
+    await seedPGlite(home);
+    await seedCacheDirs(home, { nested: true });
+    const outDir = path.join(root, 'snap');
+    await snapshot({
+      home,
+      instanceId: 'default',
+      mode: 'pglite',
+      outDir,
+      _paperclipCli: stubCli,
+      silent: true
+    });
+    const entries = await listTarEntries(path.join(outDir, 'instance-fs.tar.gz'));
+    // Neither the root-level nor the plugins/kitchen-sink/claude-prompt-cache
+    // dir survives.
+    for (const e of entries) {
+      assert.ok(
+        !/(^|\/)claude-prompt-cache(\/|$)/.test(e),
+        `unexpected claude-prompt-cache entry at any depth: ${e}`
+      );
+    }
+  });
+});
+
+test('S1-cache-D — segment-exact predicate does not over-exclude lookalike names', async () => {
+  await withTmp(async (root) => {
+    const home = path.join(root, 'home');
+    await copyFakeInstance(home);
+    await seedPGlite(home);
+    await seedCacheDirs(home, { lookalikes: true });
+    const outDir = path.join(root, 'snap');
+    await snapshot({
+      home,
+      instanceId: 'default',
+      mode: 'pglite',
+      outDir,
+      _paperclipCli: stubCli,
+      silent: true
+    });
+    const entries = await listTarEntries(path.join(outDir, 'instance-fs.tar.gz'));
+
+    // The exact-match exclusion still fires for the seeded
+    // claude-prompt-cache/ dir.
+    for (const e of entries) {
+      assert.ok(
+        !/(^|\/)claude-prompt-cache(\/|$)/.test(e),
+        `unexpected claude-prompt-cache entry: ${e}`
+      );
+    }
+    // But lookalikes are kept (substring is not a match for the
+    // segment-exact predicate).
+    const hasArchive = entries.some((e) =>
+      e.includes('claude-prompt-caches-archive/keep.md')
+    );
+    const hasSiblingFile = entries.some((e) =>
+      e === 'instances/default/claude-prompt-cache.md' ||
+      e === 'instances/default/claude-prompt-cache.md\n'
+    );
+    assert.ok(hasArchive, `expected claude-prompt-caches-archive/keep.md present. entries:\n${entries.join('\n')}`);
+    assert.ok(hasSiblingFile, `expected claude-prompt-cache.md (file, not dir) present. entries:\n${entries.join('\n')}`);
   });
 });
