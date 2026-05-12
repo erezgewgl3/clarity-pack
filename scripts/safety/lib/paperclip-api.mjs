@@ -64,7 +64,20 @@ export function getHealth(opts) {
 
 export function listIssues(opts, query = {}) {
   const limit = query && Number.isFinite(query.limit) ? query.limit : 1;
-  return call(opts, 'GET', `/api/issues?limit=${limit}`);
+  // Paperclip's /api/issues was moved to /api/companies/{id}/issues at
+  // some point post-2026-05-08 (confirmed against Hostinger 2026-05-13).
+  // companyId is now required: prefer query.companyId, fall back to opts.companyId.
+  const companyId = (query && query.companyId) || opts.companyId;
+  if (!companyId) {
+    throw new Error(
+      'listIssues: companyId is required (Paperclip moved /api/issues to /api/companies/{id}/issues)'
+    );
+  }
+  return call(
+    opts,
+    'GET',
+    `/api/companies/${encodeURIComponent(companyId)}/issues?limit=${limit}`
+  );
 }
 
 export function listCompanyAgents(opts, companyId) {

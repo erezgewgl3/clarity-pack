@@ -71,6 +71,11 @@ export async function startStubServer({ mode = 'healthy', delayMs = 0 } = {}) {
     if (url.startsWith('/api/issues')) {
       return respond(200, [{ id: 'BEAAA-1', title: 'Sample' }]);
     }
+    // Paperclip moved /api/issues to /api/companies/{id}/issues — serve
+    // either path so the stub matches both old and new safety CLI calls.
+    if (/^\/api\/companies\/[^/]+\/issues/.test(url)) {
+      return respond(200, [{ id: 'BEAAA-1', title: 'Sample' }]);
+    }
     if (url.includes('/heartbeat/invoke')) {
       if (state.mode === 'heartbeat-401') {
         return respond(401, { error: 'agent-key-rejected' });

@@ -79,7 +79,7 @@ test('API4 — abort signal triggers timeout within ~150ms', async () => {
 test('API5 — 4xx status is non-throwing; returned in result', async () => {
   const stub = await startStubServer({ mode: 'unauth' });
   try {
-    const res = await listIssues({ apiUrl: stub.baseUrl });
+    const res = await listIssues({ apiUrl: stub.baseUrl, companyId: 'co-1' });
     assert.equal(res.status, 401);
     assert.ok(res.body && typeof res.body === 'object');
   } finally {
@@ -90,7 +90,7 @@ test('API5 — 4xx status is non-throwing; returned in result', async () => {
 test('API6 — 5xx status is non-throwing; smoke layer decides fail', async () => {
   const stub = await startStubServer({ mode: 'down' });
   try {
-    const res = await listIssues({ apiUrl: stub.baseUrl });
+    const res = await listIssues({ apiUrl: stub.baseUrl, companyId: 'co-1' });
     assert.equal(res.status, 500);
     assert.ok(res.body && typeof res.body === 'object');
   } finally {

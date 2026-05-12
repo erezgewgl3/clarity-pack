@@ -150,7 +150,7 @@ export async function smoke(opts) {
       name: 'issues',
       timeoutMs,
       deadline,
-      fn: (signal) => api.listIssues(apiOpts(signal), { limit: 1 }),
+      fn: (signal) => api.listIssues(apiOpts(signal), { limit: 1, companyId }),
       validate: (body) => Array.isArray(body)
     });
     checks.push(r.check);
