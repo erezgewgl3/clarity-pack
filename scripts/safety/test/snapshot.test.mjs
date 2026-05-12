@@ -113,3 +113,40 @@ test('S8 — generated snapshotId matches the canonical regex', async () => {
     assert.match(snapshotId, /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z$/);
   });
 });
+
+test('S9 — paperclip-cli failures (e.g. 403 on plugin list) are recorded as manifest.paperclipCliWarnings, not thrown', async () => {
+  // Snapshot succeeds with paperclipVersion='unknown', installedPlugins=[],
+  // and the manifest records the failure reason for diagnostics. This
+  // covers the 2026-05-12 drill case where Paperclip's authenticated
+  // endpoints reject `pnpm paperclipai plugin list` with 403.
+  const failingCli = {
+    async getPaperclipVersion() {
+      throw new Error('pnpm paperclipai --version failed (exit 1): something');
+    },
+    async listInstalledPlugins() {
+      throw new Error('pnpm paperclipai plugin list failed (exit 1): API error 403: Board access required');
+    }
+  };
+  await withTmp(async (root) => {
+    const home = path.join(root, 'home');
+    await copyFakeInstance(home);
+    const outDir = path.join(root, 'snap');
+    const result = await snapshot({
+      home,
+      instanceId: 'default',
+      mode: 'pglite',
+      outDir,
+      _paperclipCli: failingCli,
+      silent: true
+    });
+    assert.ok(isValidSnapshotId(result.snapshotId));
+    const manifest = await readManifest(outDir);
+    assert.equal(manifest.paperclipVersion, 'unknown');
+    assert.deepEqual(manifest.installedPlugins, []);
+    assert.ok(Array.isArray(manifest.paperclipCliWarnings));
+    assert.equal(manifest.paperclipCliWarnings.length, 2);
+    assert.equal(manifest.paperclipCliWarnings[0].step, 'getPaperclipVersion');
+    assert.equal(manifest.paperclipCliWarnings[1].step, 'listInstalledPlugins');
+    assert.match(manifest.paperclipCliWarnings[1].message, /403/);
+  });
+});

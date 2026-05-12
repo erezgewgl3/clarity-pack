@@ -221,27 +221,29 @@ export async function snapshot(opts) {
   }
   await mkdir(opts.outDir, { recursive: true });
 
-  // Capture Paperclip version + installed plugins. These can fail if the
-  // server isn't reachable; surface a clear remediation message.
+  // Capture Paperclip version + installed plugins via paperclip-cli.
+  // These are metadata for the manifest, NOT load-bearing for the
+  // safety property (which is the sha256-verified DB+FS bytes). When
+  // paperclip-cli fails (e.g. authenticated Paperclip's /api/plugins
+  // requires a Bearer token we don't have, or paperclipai's `--version`
+  // returns the pnpm preamble line — see May 11 manifests), record the
+  // failure in the manifest's `paperclipCliWarnings` field and keep
+  // going. Server-up enforcement belongs in verify (which runs smoke),
+  // not snapshot — pg_dump and the fs tar do not need the server.
   const cli = opts.paperclipCli ?? opts._paperclipCli ?? null;
   let paperclipVersion = 'unknown';
   let installedPlugins = [];
+  const paperclipCliWarnings = [];
   if (cli) {
     try {
       paperclipVersion = await cli.getPaperclipVersion({ _spawn: opts._spawn });
     } catch (err) {
-      throw new Error(
-        `Could not read Paperclip version: ${err.message}\n` +
-          'Hint: start the Paperclip server (e.g. `pnpm paperclipai dev`) then re-run snapshot.'
-      );
+      paperclipCliWarnings.push({ step: 'getPaperclipVersion', message: err.message });
     }
     try {
       installedPlugins = await cli.listInstalledPlugins({ _spawn: opts._spawn });
     } catch (err) {
-      throw new Error(
-        `Could not list installed plugins: ${err.message}\n` +
-          'Hint: start the Paperclip server (e.g. `pnpm paperclipai dev`) then re-run snapshot.'
-      );
+      paperclipCliWarnings.push({ step: 'listInstalledPlugins', message: err.message });
     }
   }
 
@@ -351,23 +353,33 @@ export async function snapshot(opts) {
     artifacts: { db: dbArtifact, fs: fsArtifact },
     verifiedAt: null,
     verifiedSmokeChecks: null,
-    gateMaxAgeMinutes: 15
+    gateMaxAgeMinutes: 15,
+    ...(paperclipCliWarnings.length > 0 ? { paperclipCliWarnings } : {})
   };
   await writeManifest(opts.outDir, manifestPayload);
 
   // 5. Human-readable summary
   if (opts.silent !== true) {
-    const summary = [
+    const lines = [
       `snapshot ${snapshotId} created`,
       `  paperclip: ${paperclipVersion} (${opts.mode})`,
       `  plugins:   ${installedPlugins.length}`,
       `  db:        ${dbArtifact.path}  (${dbArtifact.sizeBytes} bytes)`,
       `  fs:        ${fsArtifact.path}  (${fsArtifact.sizeBytes} bytes)`,
-      `  location:  ${opts.outDir}`,
-      `to verify run: pnpm clarity-safety verify ${snapshotId}`,
-      'Note: snapshot includes secrets/master.key — do not share unencrypted.'
-    ].join('\n');
-    process.stdout.write(summary + '\n');
+      `  location:  ${opts.outDir}`
+    ];
+    if (paperclipCliWarnings.length > 0) {
+      lines.push(
+        `  warnings:  ${paperclipCliWarnings.length} paperclip-cli step(s) failed (recorded in manifest.paperclipCliWarnings):`
+      );
+      for (const w of paperclipCliWarnings) {
+        lines.push(`    - ${w.step}: ${w.message.split('\n')[0]}`);
+      }
+      lines.push('             (snapshot bytes are still sha256-verified; verify will catch real server-down conditions)');
+    }
+    lines.push(`to verify run: pnpm clarity-safety verify ${snapshotId}`);
+    lines.push('Note: snapshot includes secrets/master.key — do not share unencrypted.');
+    process.stdout.write(lines.join('\n') + '\n');
   }
 
   logStream.end();
