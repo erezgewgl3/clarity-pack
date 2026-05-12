@@ -31,6 +31,29 @@ const SCHEMA = {
   postgres: 'pg_dump-custom-zstd6'
 };
 
+// Regenerable cache directories that must never be included in a
+// snapshot. They contain symlinks that point outside the instance tree
+// (Claude Code skill caches symlink into the user's home dir), they
+// bloat the tar by tens to hundreds of MB, and they are regenerable on
+// first read. Defect 2 from the 2026-05-12 rehearsal drill (see
+// runbook/REHEARSAL.md § Failed Drill Attempts).
+//
+// Match is POSIX-segment-exact: a path segment equal to one of these
+// names triggers exclusion. Substring matches (e.g.
+// `claude-prompt-caches-archive` or `claude-prompt-cache.md`) do NOT
+// trigger exclusion.
+const REGENERABLE_CACHE_DIRS = new Set(['claude-prompt-cache']);
+
+function pathHasCacheSegment(posixPath) {
+  // node-tar normalizes platform separators to '/', so splitting on '/'
+  // gives us POSIX-style path segments on all hosts.
+  const segments = posixPath.split('/');
+  for (const seg of segments) {
+    if (REGENERABLE_CACHE_DIRS.has(seg)) return true;
+  }
+  return false;
+}
+
 /**
  * Generate an ISO timestamp formatted for use as a snapshot id.
  * `2026-05-08T14:32:17.043Z` → `2026-05-08T14-32-17Z`
@@ -190,6 +213,7 @@ export async function snapshot(opts) {
   }
   const excludeSecrets = opts.excludeSecrets === true;
   const includeLogs = opts.includeLogs !== false; // default true
+  const includeCaches = opts.includeCaches === true; // default false (defect 2 mitigation)
 
   const snapshotId = opts.snapshotId ?? snapshotIdNow();
   if (!isValidSnapshotId(snapshotId)) {
@@ -276,6 +300,7 @@ export async function snapshot(opts) {
   const filter = (entryPath /* relative to cwd, posix */) => {
     if (entryPath.includes('/plugins/node_modules/') || entryPath.endsWith('/plugins/node_modules')) return false;
     if (entryPath.includes('/plugins/.cache/') || entryPath.endsWith('/plugins/.cache')) return false;
+    if (!includeCaches && pathHasCacheSegment(entryPath)) return false; // defect 2 mitigation
     if (excludeSecrets && (entryPath.includes('/secrets/') || entryPath.endsWith('/secrets'))) return false;
     if (!includeLogs && (entryPath.startsWith(`${instanceRel}/logs/`) || entryPath === `${instanceRel}/logs`)) {
       return false;
