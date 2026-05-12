@@ -300,8 +300,20 @@ export async function restoreToStaging(opts) {
       dataDir,
       loadDataDir: new Blob([tarball])
     });
-    await db.exec('SELECT 1');
-    await db.close();
+    // try/finally so PGlite's WASM worker is always closed — without
+    // this a failed exec leaves the worker alive and the host process
+    // can't exit cleanly (node --test then reports exit=1 with no
+    // stderr because the event loop is still pinned by the worker).
+    try {
+      await db.exec('SELECT 1');
+    } finally {
+      try {
+        await db.close();
+      } catch {
+        // PGlite may already be torn down post-throw; ignore the
+        // close error so we don't mask the original failure.
+      }
+    }
   } else if (mode === 'postgres') {
     if (typeof opts.dbUrl !== 'string' || opts.dbUrl.length === 0) {
       throw new Error('restoreToStaging: opts.dbUrl is required in postgres mode');
