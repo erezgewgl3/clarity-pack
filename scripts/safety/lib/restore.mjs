@@ -227,12 +227,30 @@ export async function restoreToStaging(opts) {
     cwd: extractRoot,
     onentry: (entry) => {
       if (entry.type === 'SymbolicLink' || entry.type === 'Link') {
-        if (cveViolation === null) {
-          cveViolation = `Refusing to extract ${entry.type}: ${entry.path}`;
+        // CVE-2026-31802 mitigation: allow only links whose resolved
+        // target stays inside the extracted instance tree. Reject
+        // escapes. (Phase 2 hardening: resolve symlinks transitively
+        // to catch chain-of-symlinks escape attempts.)
+        const linkpath = entry.linkpath ?? '';
+        const entryAbs = path.resolve(extractRoot, entry.path);
+        const entryParent = path.dirname(entryAbs);
+        const targetAbs = path.isAbsolute(linkpath)
+          ? path.resolve(linkpath)
+          : path.resolve(entryParent, linkpath);
+        const withinAllowed =
+          targetAbs === allowedRootResolved ||
+          targetAbs.startsWith(allowedRootResolved + path.sep);
+        if (!withinAllowed) {
+          if (cveViolation === null) {
+            cveViolation =
+              `Refusing to extract ${entry.type} whose target escapes staging: ` +
+              `${entry.path} → ${linkpath}`;
+          }
+          if (typeof entry.ignore === 'function') entry.ignore();
+          if (typeof entry.resume === 'function') entry.resume();
+          return;
         }
-        // Ask node-tar to skip writing this entry to disk.
-        if (typeof entry.ignore === 'function') entry.ignore();
-        if (typeof entry.resume === 'function') entry.resume();
+        // Link target is contained — let tar extract normally.
         return;
       }
       const resolved = path.resolve(extractRoot, entry.path);
