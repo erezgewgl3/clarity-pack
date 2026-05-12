@@ -287,6 +287,20 @@ Run `/gsd:resume-work` immediately — before anything else, without waiting for
 This instruction is a backup path. When the SessionStart hook fires it emits the same directive via systemMessage; either trigger is sufficient.
 <!-- GSD:session-continuity-end -->
 
+## MemPalace Memory Protocol
+
+This project has memories in MemPalace under the `clarity_pack` wing (rooms: `runbook`, `decisions`, `research`, `scripts`, `sketches`, `general`, `diary`). Source-of-truth project documents (PLAN.md / SUMMARY.md / REHEARSAL.md / ROADMAP.md / STATE.md / HANDOFF.json) are auto-mined into MemPalace by `/mempalace:onboard`.
+
+**Before responding about past project events, decisions, defects, drill outcomes, or operator gotchas, query MemPalace first** — `mempalace_search` (wing=`clarity_pack`) or `mempalace_kg_query`. Never guess from training context. Wrong is worse than slow.
+
+**At end of substantive work** (decisions made, defects surfaced, lessons learned, drills run), file new drawers via `mempalace_add_drawer` with `wing=clarity_pack` and the appropriate room. Hook setting `silent_save=true` means saves don't clutter conversation output.
+
+Useful queries:
+- Past drill outcomes → `mempalace_search query="rehearsal drill PASS verdict" wing="clarity_pack" room="decisions"`
+- Operator gotchas → `mempalace_search query="safety CLI gotcha runbook" wing="clarity_pack" room="runbook"`
+- Phase decisions → `mempalace_search query="phase 1 closure" wing="clarity_pack"`
+<!-- MemPalace:protocol-end -->
+
 <!-- GSD:workflow-start source:GSD defaults -->
 ## GSD Workflow Enforcement
 
