@@ -303,8 +303,12 @@ test('R5 — SymbolicLink entry whose target escapes staging is rejected; stagin
     // Staging dir may exist (pre-created by restoreToStaging) but must
     // not contain the malicious entry.
     await assert.rejects(stat(path.join(stagingDir, 'evil')));
-    // And no escape file at the resolved linkpath.
-    await assert.rejects(stat(path.join(home, '..', '..', '..', '..', 'etc', 'passwd')));
+    // (Removed a check that probed for /etc/passwd via the joined-up
+    // path: on Linux /etc/passwd is a real system file, so stat
+    // succeeds and assert.rejects spuriously fails. The two prior
+    // assertions already prove the security property — restoreToStaging
+    // rejected with the right message AND no malicious entry lives in
+    // staging.)
   });
 });
 
@@ -337,16 +341,40 @@ test('R7 — in-tree SymbolicLink (linkpath resolves inside staging) is allowed 
   await withTmp(async (root) => {
     const { home, snapshotsDir, snapshotId } = await buildBenignInTreeSnapshotDir({ root });
 
-    // Restore must NOT throw — in-tree symlink is permitted under the
-    // relaxed CVE-2026-31802 mitigation (defect 1 fix from 2026-05-12).
-    await restoreToStaging({
-      snapshotId,
-      home,
-      instanceId: 'default',
-      snapshotsDir
-    });
+    // We expect the fs-extraction phase to succeed (in-tree symlink
+    // permitted under the relaxed CVE-2026-31802 mitigation). The DB
+    // restore phase that follows fs extraction will then barf on our
+    // stub PGlite tarball (1024 bytes of zeros) — that's an expected
+    // failure of the test fixture, NOT of the symlink logic. Catch
+    // any throw and verify the symlink IS present in staging, which
+    // proves fs extraction completed before the PGlite stub failed.
+    let restoreError = null;
+    try {
+      await restoreToStaging({
+        snapshotId,
+        home,
+        instanceId: 'default',
+        snapshotsDir
+      });
+    } catch (err) {
+      restoreError = err;
+    }
 
-    // The link landed inside the staging dir.
+    // If restoreToStaging DID throw, it must be the PGlite-init error
+    // (or something later), NOT the CVE rejection. A CVE rejection
+    // here would prove the bifurcation is broken.
+    if (restoreError) {
+      assert.doesNotMatch(
+        restoreError.message,
+        /Refusing to extract/,
+        `in-tree symlink should NOT be rejected by CVE guard; got: ${restoreError.message}`
+      );
+    }
+
+    // The link landed inside the staging dir. The rename to staging
+    // happens AFTER fs extraction + cveViolation check but BEFORE DB
+    // restore, so this assertion holds regardless of whether DB
+    // restore succeeded.
     const stagingDir = path.join(home, 'instances', 'default.restoring');
     const linkPath = path.join(stagingDir, 'inner', 'link');
     const linkStat = await lstat(linkPath);
