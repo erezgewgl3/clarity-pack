@@ -333,6 +333,18 @@ test('R6 — hardlink (Link) entry whose target escapes staging is rejected', as
   });
 });
 
+// Stub PGlite that satisfies restore.mjs's `new PGliteCtor(opts)` +
+// `db.exec(...)` + `db.close()` contract without loading any WASM. R7
+// exercises the symlink path, not the DB restore — using real PGlite
+// here leaks a WASM worker that pins the event loop and causes
+// node --test to report a phantom exit=1 for the file (every sub-test
+// passes, the file process just can't exit cleanly).
+class FakePGlite {
+  constructor(_opts) {}
+  async exec(_sql) { return { rows: [] }; }
+  async close() {}
+}
+
 test('R7 — in-tree SymbolicLink (linkpath resolves inside staging) is allowed to extract', async (t) => {
   if (!(await canCreateSymlinks())) {
     t.skip('platform cannot create symlinks (Windows without admin/dev mode)');
@@ -341,40 +353,19 @@ test('R7 — in-tree SymbolicLink (linkpath resolves inside staging) is allowed 
   await withTmp(async (root) => {
     const { home, snapshotsDir, snapshotId } = await buildBenignInTreeSnapshotDir({ root });
 
-    // We expect the fs-extraction phase to succeed (in-tree symlink
-    // permitted under the relaxed CVE-2026-31802 mitigation). The DB
-    // restore phase that follows fs extraction will then barf on our
-    // stub PGlite tarball (1024 bytes of zeros) — that's an expected
-    // failure of the test fixture, NOT of the symlink logic. Catch
-    // any throw and verify the symlink IS present in staging, which
-    // proves fs extraction completed before the PGlite stub failed.
-    let restoreError = null;
-    try {
-      await restoreToStaging({
-        snapshotId,
-        home,
-        instanceId: 'default',
-        snapshotsDir
-      });
-    } catch (err) {
-      restoreError = err;
-    }
+    // Restore must NOT throw — in-tree symlink is permitted under the
+    // relaxed CVE-2026-31802 mitigation (defect 1 fix from 2026-05-12).
+    // _pglite injection bypasses real WASM so the test process can
+    // exit cleanly when node --test runs the file.
+    await restoreToStaging({
+      snapshotId,
+      home,
+      instanceId: 'default',
+      snapshotsDir,
+      _pglite: FakePGlite
+    });
 
-    // If restoreToStaging DID throw, it must be the PGlite-init error
-    // (or something later), NOT the CVE rejection. A CVE rejection
-    // here would prove the bifurcation is broken.
-    if (restoreError) {
-      assert.doesNotMatch(
-        restoreError.message,
-        /Refusing to extract/,
-        `in-tree symlink should NOT be rejected by CVE guard; got: ${restoreError.message}`
-      );
-    }
-
-    // The link landed inside the staging dir. The rename to staging
-    // happens AFTER fs extraction + cveViolation check but BEFORE DB
-    // restore, so this assertion holds regardless of whether DB
-    // restore succeeded.
+    // The link landed inside the staging dir.
     const stagingDir = path.join(home, 'instances', 'default.restoring');
     const linkPath = path.join(stagingDir, 'inner', 'link');
     const linkStat = await lstat(linkPath);
