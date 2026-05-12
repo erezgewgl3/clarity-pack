@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-12T18:36:00.000Z"
+last_updated: "2026-05-13T21:45:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
-  phase_1_status: plan-01-04-pending-closes-on-rehearsal-pass
+  completed_plans: 4
+  percent: 20
+  phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger
 ---
 
 # State: Clarity Pack
@@ -28,11 +28,11 @@ progress:
 
 ## Current Position
 
-Phase: 1 (Pre-Install Safety) — 3/4 PLANS DONE; Plan 01-04 PENDING (closes Phase 1)
-**Phase:** 1 - Pre-Install Safety
-**Plan:** 4 plans. Plans 01-01..01-03 executed. Plan 01-04 (Safety CLI cleanup) was added 2026-05-12 after the first rehearsal drill failed and surfaced two real defects (one fixed in commit 9506a91; one pending). Plan 01-04 backfills the defect-1 tests, fixes defect 2 (snapshot cache-exclusion), and re-runs the drill against the live Hostinger Countermoves Paperclip.
-**Status:** Plan 01-04 ready to execute. On re-rehearsal `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.
-**Progress:** [##        ] 0/5 phases complete (3/4 Phase 1 plans done; closure gated on Plan 01-04 re-rehearsal)
+Phase: 1 (Pre-Install Safety) — **COMPLETE** ✓ (4/4 plans + rehearsal PASS row landed 2026-05-13).
+**Phase:** 1 - Pre-Install Safety (CLOSED)
+**Plan:** All 4 plans executed and merged. Plan 01-04 closed out the first drill's defects and re-rehearsed end-to-end against the live Hostinger Countermoves Paperclip. Plan 01-05 work landed in-session during that drill (5 additional gaps discovered + fixed before PASS) — see runbook/REHEARSAL.md anomaly block for the full list.
+**Status:** SAFE-01..05 all green. Pre-flight gate operational against authenticated Paperclip. Phase 2 (scaffold + primitives + Reader + Room + Editor + opt-in) is now unblocked; next command is `/gsd:plan-phase 2` or `/gsd:discuss-phase 2`.
+**Progress:** [##        ] 1/5 phases complete
 
 ## Performance Metrics
 

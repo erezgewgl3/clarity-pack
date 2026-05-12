@@ -36,10 +36,36 @@ honored bypass appends a `[BYPASS]` line below the entries table.
 
 | Date | Paperclip Version | DB Mode | Snapshot Size | Snapshot Duration | Restore Duration | Smoke Result | Anomalies | Operator |
 |------|-------------------|---------|---------------|-------------------|------------------|--------------|-----------|----------|
+| 2026-05-13 | unknown (pre-existing version-parse bug; see anomalies) | postgres | 691 KB (db 384 KB + fs 307 KB) | ~12s (observed) | ~8s (observed) | PASS | drill surfaced 5 additional issues fixed in-session before PASS — see anomalies block below | eric (driven by Claude as pair-on-keyboard) |
 
-(no completed PASS drills yet — first PASS row is added by the operator
-after running rehearsal-drill.md end-to-end against a clean Paperclip
-target)
+**Anomalies for the 2026-05-13 PASS row** — the drill against the live Countermoves Hostinger Paperclip surfaced and fixed five additional gaps in the safety CLI that the unit tests did not exercise. All fixed in the same session before this row was appended; the PASS reflects the post-fix state, not the as-shipped Plan 01-03 state:
+
+1. **R5 Linux portability** (commit `bc89228`): an `assert.rejects(stat(...))` over `path.join(home, '..', '..', '..', '..', 'etc', 'passwd')` assumed /etc/passwd doesn't exist. True on Windows; false on Linux. Removed — the two prior assertions cover the security property.
+2. **PGlite worker leak on failure** (commit `1e6021d`): `db.close()` was unreachable when `db.exec()` threw; latent bug, would have leaked a WASM worker on any failed restore. Wrapped in try/finally.
+3. **R7 uses FakePGlite** (commit `0cf196e`): real PGlite WASM pins the event loop even after close(), causing `node --test` to report file-level exit=1 despite all sub-tests passing. Injected a stub PGlite for the R7 test path.
+4. **Snapshot tolerates paperclip-cli auth failures** (commit `f2b7327`): `pnpm paperclipai plugin list` is now auth-gated; the safety CLI was throwing on 403. Errors now record into `manifest.paperclipCliWarnings` instead of halting the snapshot — the safety property is the sha256-verified DB+FS bytes, not the version metadata.
+5. **Paperclip API drift — /api/issues → /api/companies/{id}/issues** (commit `0d026fa`): Paperclip moved the issues endpoint sometime between 2026-05-08 and 2026-05-13. `paperclip-api.mjs listIssues` now requires + uses companyId; smoke + tests + stub server updated.
+
+**Two operator-side gaps surfaced during the drill** — these are NOT safety-CLI bugs but installation/usage gotchas worth recording so the runbook can be updated:
+
+a) **`paperclip_restoring` Postgres database is not auto-created by restore.mjs**: when running against a Postgres-mode Paperclip, the operator must `CREATE DATABASE paperclip_restoring OWNER paperclip` via `sudo -u postgres psql` before invoking `clarity-safety restore`. The `paperclip` role lacks `CREATEDB` privilege. Either fix: (i) grant CREATEDB to paperclip, (ii) add a pre-flight step in restore.mjs that mints the staging DB, (iii) document the manual `psql` step in `runbook/rollback-walkthrough.md`. Decision: (iii) for v1, (ii) for v2.
+
+b) **Paperclip rejects instance IDs containing `.`** (e.g. `default.restoring`): restore.mjs uses `<instanceId>.restoring` as the staging dir naming convention, but `paperclipai run` errors out with "Invalid instance id 'default.restoring'. Allowed characters: letters, numbers, '_' and '-'." Operator workaround in the drill: `mv default.restoring default-restoring` before starting the sibling. Fix: change restore.mjs's staging convention to use `-restoring` suffix instead of `.restoring`.
+
+**Drill artifacts of record (Countermoves Hostinger, 2026-05-13):**
+
+- Pre-drill commit (drill ready): `0d026fa` on master
+- Snapshot id: `2026-05-12T21-27-26Z` (Postgres mode; lives in `~/clarity-pack/.planning/snapshots/` on the VPS)
+- Test issue created post-snapshot for state-reversion proof: `COU-3 REHEARSAL-DRILL-DELETE-ME-2026-05-13`
+- Staging DB contained only COU-1 + COU-2 (correctly reverted; test issue absent)
+- Live DB contained COU-1 + COU-2 + COU-3 (correctly untouched)
+- Sibling Paperclip on port 3101 booted successfully against the restored staging dir + staging DB
+- Smoke against sibling: health ✓, issues ✓, agents ✓, plugins ✓, heartbeat skipped (no editor-agent in this DB)
+- verifiedAt written: `2026-05-12T21:40:55.394Z`
+- Gate (fresh): forwarded inner command verbatim
+- Gate (--max-age=0): refused with `snapshot-stale` + exact remediation
+
+**SAFE-02 grep:** `grep -qE '^\\| 20[0-9]{2}-' runbook/REHEARSAL.md` → MATCH (this row).
 
 ## Failed Drill Attempts
 

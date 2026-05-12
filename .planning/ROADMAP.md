@@ -7,7 +7,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: Pre-Install Safety** - Snapshot, restore, smoke-test, runbook, and pre-flight gate so any clarity-pack action against live BEAAA has bounded blast radius.
+- [x] **Phase 1: Pre-Install Safety** - Snapshot, restore, smoke-test, runbook, and pre-flight gate so any clarity-pack action against live BEAAA has bounded blast radius. **CLOSED 2026-05-13** (rehearsal PASS against Hostinger Countermoves; SAFE-01..05 green).
 - [ ] **Phase 2: Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In** - Installable plugin with day-1 trust-model hardening, shared primitives, the two on-demand surfaces, the Editor-Agent skeleton, and the per-user opt-in gate.
 - [ ] **Phase 3: Daily Bulletin** - 06:30 ET DST-safe scheduled compile with action inbox, department sections, lineage threads, two-pass verifier, and errata as a first-class type.
 - [ ] **Phase 4: Employee Chat** - Hybrid real-time chat persisting as ordinary issue comments with optimistic send, attachment graceful-degrade, and coexistence verified by plugin disable.
@@ -89,7 +89,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Pre-Install Safety | 3/4 | Executing — closure plan 01-04 pending | - |
+| 1. Pre-Install Safety | 4/4 | COMPLETE ✓ — rehearsal PASS landed | 2026-05-13 |
 | 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 0/0 | Not started | - |
 | 3. Daily Bulletin | 0/0 | Not started | - |
 | 4. Employee Chat | 0/0 | Not started | - |
