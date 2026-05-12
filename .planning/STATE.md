@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-07T23:25:00.000Z"
+last_updated: "2026-05-12T18:36:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 3
+  total_plans: 4
   completed_plans: 3
-  percent: 100
-  phase_1_status: structurally-complete-pending-rehearsal
+  percent: 75
+  phase_1_status: plan-01-04-pending-closes-on-rehearsal-pass
 ---
 
 # State: Clarity Pack
@@ -28,12 +28,11 @@ progress:
 
 ## Current Position
 
-Phase: 1 (Pre-Install Safety) — STRUCTURALLY COMPLETE, REHEARSAL PENDING
-Plan: 3 of 3 complete (Plan 01-03 SUMMARY landed)
+Phase: 1 (Pre-Install Safety) — 3/4 PLANS DONE; Plan 01-04 PENDING (closes Phase 1)
 **Phase:** 1 - Pre-Install Safety
-**Plan:** All 3 plans executed; Plan 01-03 Task 3 (rehearsal drill) is `checkpoint:human-action` — Eric runs it tomorrow against fresh local Paperclip.
-**Status:** Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.
-**Progress:** [##        ] 0/5 phases complete (Phase 1 plans done; phase closure gated on rehearsal)
+**Plan:** 4 plans. Plans 01-01..01-03 executed. Plan 01-04 (Safety CLI cleanup) was added 2026-05-12 after the first rehearsal drill failed and surfaced two real defects (one fixed in commit 9506a91; one pending). Plan 01-04 backfills the defect-1 tests, fixes defect 2 (snapshot cache-exclusion), and re-runs the drill against the live Hostinger Countermoves Paperclip.
+**Status:** Plan 01-04 ready to execute. On re-rehearsal `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.
+**Progress:** [##        ] 0/5 phases complete (3/4 Phase 1 plans done; closure gated on Plan 01-04 re-rehearsal)
 
 ## Performance Metrics
 
@@ -68,7 +67,8 @@ Plan: 3 of 3 complete (Plan 01-03 SUMMARY landed)
 - [x] Plan 01-01 — Safety CLI core (snapshot/restore/list/prune). Done 2026-05-07.
 - [x] Plan 01-02 — Smoke + Verify. Done 2026-05-07.
 - [x] Plan 01-03 — Pre-flight gate + runbook (Tasks 1 + 2). Done 2026-05-07.
-- [ ] **Plan 01-03 Task 3 — Rehearsal drill (Eric, tomorrow against fresh local Paperclip clone).** Run `runbook/rehearsal-drill.md` end-to-end and append the first dated row to `runbook/REHEARSAL.md`. On `approved — drill clean`, Phase 1 closes.
+- [x] Plan 01-03 Task 3 — First rehearsal-drill attempt (Eric, 2026-05-12 against Hostinger Countermoves). FAILED at Step 5 with two real defects surfaced (recorded in REHEARSAL.md § Failed Drill Attempts). Defect 1 fixed in commit 9506a91; Plan 01-04 covers defect 2 + re-rehearsal.
+- [ ] **Plan 01-04 — Safety CLI cleanup + re-rehearsal (Eric).** Execute Task 1 (snapshot cache-exclusion) + Task 2 (restore symlink-bifurcation tests) autonomously, then Task 3 (re-rehearsal against Hostinger). On `approved — drill clean`, Phase 1 closes.
 - [ ] Resolve 3 conflicts in Phase 2 SPEC.md (slot identity, migrations, refresh cadence) before Phase 2 planning.
 - [ ] Verify install command form (`pnpm paperclipai plugin install` vs `pnpm paperclipai install`) by running `pnpm paperclipai plugin --help` against a fresh clone in Phase 2.0 smoke spike.
 - [ ] Verify `usePluginStream` direct host-event subscription (for `issue.comment.created`) before Phase 4 design is locked.
