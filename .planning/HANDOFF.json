@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-07T20:29:41.021Z",
+  "timestamp": "2026-05-12T18:34:07.210Z",
   "source": "auto-postool",
   "partial": false,
   "phase": "1",
@@ -34,25 +34,21 @@
   "uncommitted_files": [
     {
       "status": "M",
+      "path": ".gitignore"
+    },
+    {
+      "status": "D",
       "path": ".planning/HANDOFF.json"
     },
     {
       "status": "M",
-      "path": ".planning/config.json"
+      "path": "runbook/REHEARSAL.md"
     },
     {
-      "status": "??",
-      "path": "CLAUDE.md"
-    },
-    {
-      "status": "??",
-      "path": "HANDOFF.md"
-    },
-    {
-      "status": "??",
-      "path": "sketches/"
+      "status": "M",
+      "path": "scripts/safety/lib/restore.mjs"
     }
   ],
   "next_action": "Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.",
-  "context_notes": "Status: Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.\n\nRecent commits:\n6d6b795 docs(01-03): complete pre-flight gate + runbook plan — 22 tests, 8 runbook docs, rehearsal drill pending Eric (SAFE-04, SAFE-05)\nd73485a docs(01-03): runbook — README + 4 walkthroughs + PLATFORMS + REHEARSAL template + 2 launchers (SAFE-04)\n04c3412 feat(01-03): gate.mjs refuse-or-run wrapper + CLI dispatch (SAFE-05) (GREEN)\n8eb37bd test(01-03): add failing tests G1-G11 + helpers for gate.mjs (RED)\nf5e52c4 docs(01-02): complete smoke + verify plan — 33 new tests, deadline AbortSignal composition, atomic manifest write-back (SAFE-03)"
+  "context_notes": "Status: Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.\n\nRecent commits:\nfaa5d88 docs: update HANDOFF + add HOSTINGER-COUNTERMOVES state doc (end of 2026-05-08)\n90d2527 docs: commit design mockups (visual contract for Phases 2-4)\n83844f6 docs: morning handoff + commit pending project artifacts\n6d6b795 docs(01-03): complete pre-flight gate + runbook plan — 22 tests, 8 runbook docs, rehearsal drill pending Eric (SAFE-04, SAFE-05)\nd73485a docs(01-03): runbook — README + 4 walkthroughs + PLATFORMS + REHEARSAL template + 2 launchers (SAFE-04)"
 }
