@@ -1,0 +1,7 @@
+{
+  "database": {
+    "mode": "embedded-postgres",
+    "embeddedPostgresDataDir": "/tmp/test-paperclip/db",
+    "embeddedPostgresPort": 54329
+  }
+}

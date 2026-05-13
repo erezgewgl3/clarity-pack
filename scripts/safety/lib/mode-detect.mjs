@@ -25,10 +25,16 @@ export class DetectError extends Error {
  * Detect Paperclip's DB mode by reading config.json.
  *
  * Resolution order:
- *   1. database.driver === 'pglite'   → 'pglite'
- *   2. database.driver === 'postgres' → 'postgres'
- *   3. database.connectionString set  → 'postgres' (postgres:// implies hosted)
- *   4. otherwise                      → DetectError with --mode hint
+ *   1. database.driver === 'pglite'              → 'pglite'
+ *   2. database.driver === 'postgres'            → 'postgres'
+ *   3. database.mode === 'embedded-postgres'     → 'postgres'  (Paperclip-managed
+ *                                                  native PG server; same wire
+ *                                                  protocol as hosted, so snapshot
+ *                                                  treats it identically. Caller
+ *                                                  derives dbUrl from
+ *                                                  embeddedPostgresPort.)
+ *   4. database.connectionString set             → 'postgres' (postgres:// implies hosted)
+ *   5. otherwise                                 → DetectError with --mode hint
  */
 export async function detectMode(configPath) {
   let raw;
@@ -61,6 +67,7 @@ export async function detectMode(configPath) {
   if (db && typeof db === 'object') {
     if (db.driver === 'pglite') return 'pglite';
     if (db.driver === 'postgres') return 'postgres';
+    if (db.mode === 'embedded-postgres') return 'postgres';
     if (typeof db.connectionString === 'string' && db.connectionString.length > 0) {
       return 'postgres';
     }

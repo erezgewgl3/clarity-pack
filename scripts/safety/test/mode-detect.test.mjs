@@ -21,6 +21,11 @@ test('D2 — postgres fixture returns "postgres"', async () => {
   assert.equal(got, 'postgres');
 });
 
+test('D2b — embedded-postgres fixture returns "postgres" (Paperclip dev mode; same wire protocol as hosted)', async () => {
+  const got = await detectMode(path.join(FIXTURES, 'paperclip-embedded-postgres-config.json'));
+  assert.equal(got, 'postgres');
+});
+
 test('D3 — malformed fixture throws DetectError with --mode hint', async () => {
   await assert.rejects(
     () => detectMode(path.join(FIXTURES, 'paperclip-malformed-config.json')),
