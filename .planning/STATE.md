@@ -10,7 +10,7 @@ progress:
   total_plans: 8
   completed_plans: 4
   percent: 22
-  phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger. SPIKE SURFACED 3 deferred safety-CLI defects (mode-detect FIXED inline; pg_dump-PATH + pg_dump-version-mismatch DEFERRED to new Phase 1 cleanup plan).
+  phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger Countermoves (hosted Postgres). Plan 01-05 cleanup landed 2026-05-13 — pg-dump-locator with bundled-first discovery + version pre-check + dbUrl auto-derivation + operator-gotchas.md catalog. All 3 Phase 2 spike defects now disposed: defect-1 fixed (mode-detect), defect-2 fixed (locator), defect-3 documented (version-mismatch is inherent to pg_dump; clean error path + runbook workaround shipped). Full safety CLI suite: 122 pass / 0 fail.
   phase_2_status: EXECUTING — Plan 02-01 Task 1 complete (commit bef083e); Plan 02-01 Task 2 PARTIAL (Checks A/C/D/E/F confirmed empirically OR architecturally; Check B + snapshot bookend DEFERRED due to Windows ESM-path bug in upstream Paperclip plugin loader). 5 high-value findings cascade into Plans 02-02/02-03/02-04. See `.planning/phases/02-scaffold-and-surfaces/02-01-SMOKE-FINDINGS.md`.
 ---
 

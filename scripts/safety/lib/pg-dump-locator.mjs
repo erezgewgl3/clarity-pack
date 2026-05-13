@@ -149,10 +149,17 @@ async function realPgDumpVersion(pgDumpPath) {
   return parseInt(match[1], 10);
 }
 
-async function realServerVersion(dbUrl) {
-  // Use psql alongside pg_dump (both ship together). Numeric server_version_num
-  // is more parseable than human-formatted server_version.
-  const psqlPath = exeName(process.platform).replace('pg_dump', 'psql');
+async function realServerVersion(dbUrl, pgDumpPath) {
+  // Use psql alongside pg_dump (both ship together in the same bin/ dir).
+  // Derive psql's path from pg_dump's path to avoid a separate PATH search:
+  // pg_dump and psql live as siblings in every Postgres client distribution.
+  // This matters on Windows where the install dir (e.g. C:\Program Files\
+  // PostgreSQL\17\bin) is often not on system PATH but explicit --pg-bin still
+  // works.
+  const psqlBaseName = process.platform === 'win32' ? 'psql.exe' : 'psql';
+  const psqlPath = pgDumpPath
+    ? path.join(path.dirname(pgDumpPath), psqlBaseName)
+    : psqlBaseName;
   const stdout = await runCapture(
     psqlPath,
     [dbUrl, '-tA', '-c', "SELECT current_setting('server_version_num')::int"],
@@ -198,7 +205,7 @@ export async function assertVersionMatch(pgDumpPath, dbUrl, opts = {}) {
 
   const [client, server] = await Promise.all([
     pgDumpFetcher(pgDumpPath),
-    serverFetcher(dbUrl),
+    serverFetcher(dbUrl, pgDumpPath),
   ]);
 
   if (client !== server) {
