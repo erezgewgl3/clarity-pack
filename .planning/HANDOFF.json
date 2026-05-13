@@ -1,75 +1,54 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-13T10:13:01.199Z",
-  "source": "auto-postool",
-  "partial": false,
+  "timestamp": "2026-05-14T01:00:00.000Z",
+  "source": "manual-pause",
+  "partial": true,
   "phase": "2",
   "phase_name": "Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In",
   "phase_dir": ".planning/phases/02-scaffold-and-surfaces",
-  "plan": null,
+  "plan": "02-03b",
   "task": null,
-  "total_tasks": 4,
-  "status": "auto-checkpoint",
-  "completed_tasks": [],
-  "remaining_tasks": [
-    {
-      "id": "02-01",
-      "name": "Task 1: Scaffold the minimal package (package.json + tsconfig + tsconfig.manifest + esbuild scripts + UI stub + manifest + worker + migration)",
-      "status": "not_started"
-    },
+  "total_tasks": 3,
+  "status": "paused-after-drill",
+  "completed_tasks": [
     {
       "id": "02-02",
-      "name": "\\\"` and every CSS selector in src/ui/primitives/theme.css starts with `[data-clarity-surface]` (SCAF-06)\"",
-      "status": "not_started"
-    },
+      "name": "Scaffold + 6 primitives + trust-model hardening",
+      "status": "done"
+    }
+  ],
+  "remaining_tasks": [
     {
       "id": "02-03",
-      "name": "Task 1: Editor-Agent skeleton (manifest declaration + reconcile + compile-tldr with idempotency + self-loop filter + token cap + circuit breaker) + migrations + tests",
+      "name": "Editor-Agent + Reader view — Tasks 1+2 GREEN, Task 3 drill PARTIAL; defects routed to 02-03b",
+      "status": "drill-partial"
+    },
+    {
+      "id": "02-03b",
+      "name": "Gap closure — handler shapes + flatten-blocker-chain + React keys + install-helper.sh",
       "status": "not_started"
     },
     {
       "id": "02-04",
-      "name": "Task 1: Opt-in gate (migrations + clarity_user_prefs handlers + opt-in-guard wrap for ALL existing handlers + settings page UI + Enable-Clarity CTA + useOptIn hook) + tests",
+      "name": "Situation Room + opt-in + coexistence CI",
       "status": "not_started"
     }
   ],
   "blockers": [],
-  "human_actions_pending": [],
-  "decisions": [],
-  "uncommitted_files": [
+  "human_actions_pending": [
+    "Plan 02-03b Task 3 — re-rehearse Reader view on Countermoves after handler rewrite. Pre-snapshot the Countermoves DB before starting."
+  ],
+  "decisions": [
     {
-      "status": "D",
-      "path": ".planning/HANDOFF.json"
+      "name": "5 platform pitfalls handled inline during 02-03 drill",
+      "summary": "Capability ui.page.register added to manifest; apostrophe removed from migration SQL comment; 3 CREATE INDEX statements removed from migration; SDK install requires npm install in extracted dir (kludge documented, scripts/install-helper.sh planned); SSH access uses eric@ + countermoves_vps_ed25519 key."
     },
     {
-      "status": "M",
-      "path": ".planning/ROADMAP.md"
-    },
-    {
-      "status": "M",
-      "path": ".planning/STATE.md"
-    },
-    {
-      "status": "??",
-      "path": ".claude/"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/02-scaffold-and-surfaces/02-01-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/02-scaffold-and-surfaces/02-02-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/02-scaffold-and-surfaces/02-03-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/02-scaffold-and-surfaces/02-04-PLAN.md"
+      "name": "Plan 02-03 does NOT close until 02-03b passes Task 3",
+      "summary": "Reader tab renders but with major component gaps (no Breadcrumb, no body prose, no DeliverablePreview, no LiveBlockerPanel due to 502). Closure deferred."
     }
   ],
-  "next_action": "All 11 locked decisions (D-01..D-11) honored. Checker found 6 warnings on first pass; all resolved in revision pass; final verdict VERIFICATION PASSED with 0 blockers. Plans ready for `/gsd:execute-phase 2`.",
-  "context_notes": "Status: All 11 locked decisions (D-01..D-11) honored. Checker found 6 warnings on first pass; all resolved in revision pass; final verdict VERIFICATION PASSED with 0 blockers. Plans ready for `/gsd:execute-phase 2`.\n\nRecent commits:\nb3b6211 docs(state): record phase 2 context session\n7832d2c docs(02): capture phase context\n0986192 docs(claude.md): add MemPalace Memory Protocol section\n4c1a448 docs: Phase 1 CLOSED — rehearsal PASS row against Hostinger 2026-05-13\n0d026fa fix(01-05): Paperclip API drift — /api/issues moved to /api/companies/{id}/issues"
+  "uncommitted_files": [],
+  "next_action": "In a fresh chat, type: `continue with plan 02-03b`. Claude will run /gsd:resume-work, restore context from this file, read the 02-03b PLAN + the 02-03 REHEARSAL-FINDINGS, and route to /gsd:execute-phase 2 picking up at plan 02-03b.",
+  "context_notes": "Tonight's drill against Countermoves (82.29.197.74) PROVED 5 platform pitfalls and SURFACED 4 implementation defects. Plugin INSTALLED and ACTIVATED on Countermoves (status `ready`, uuid `0d4fc40a-0541-4b67-8979-9d346cb9c07b`). Reader tab APPEARS next to classic tabs (COEXIST-01 ✓). Schema discipline ✓ (public.* untouched, 4 new tables in plugin namespace). Pre-snapshot id `2026-05-13T20-27-43Z`. All 5 platform fixes already committed; 4 implementation fixes are 02-03b's job.\n\nKey MemPalace drawers (clarity_pack/runbook):\n- SSH access (filed 2026-05-13)\n- Apostrophe-in-comment regex bug (filed 2026-05-14)\n- CREATE INDEX rejected by validator (filed 2026-05-14)\n\nWhen resuming, READ in this order:\n1. .planning/HANDOFF.json (this file)\n2. .planning/phases/02-scaffold-and-surfaces/02-03-REHEARSAL-FINDINGS.md\n3. .planning/phases/02-scaffold-and-surfaces/02-03b-PLAN.md\n4. .planning/phases/02-scaffold-and-surfaces/02-03-SUMMARY.md (status section)\n\nThen route to /gsd:execute-phase 2."
 }

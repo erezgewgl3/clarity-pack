@@ -95,7 +95,15 @@ completed: 2026-05-13
 
 ## Status
 
-**Tasks 1 + 2 complete; Task 3 manual checkpoint pending Eric's verification against a local Paperclip clone.** Per the executor checkpoint protocol, plan closure (and the ROADMAP flip) happens AFTER Task 3 returns "approved — reader green". This SUMMARY is the pre-checkpoint record; Eric's verdict appends a closure-row to runbook/REHEARSAL.md (Phase 2 install rehearsals section).
+**PARTIAL — Drilled 2026-05-13 / 14 against live Countermoves Hostinger Paperclip. Plugin installs and activates (status `ready`); Reader tab renders but with significant component gaps. Verdict: PARTIAL — Check A partial-fail, B-F not attempted.**
+
+Drill record: see `02-03-REHEARSAL-FINDINGS.md` in this directory for the full breakdown:
+- 5 platform pitfalls discovered and fixed inline (capability missing, apostrophe-in-comment regex bug, CREATE INDEX rejected by validator, worker can't find SDK at runtime, SSH user/key memory miss).
+- 4 implementation defects identified but NOT fixed tonight (issue.reader handler returns thin data, flatten-blocker-chain returns 502, React key warnings, npm install kludge for local-path install).
+
+Plan 02-03 does NOT close yet. Plan 02-03b (`02-03b-PLAN.md`) is the gap-closure plan that addresses the 4 implementation defects via empirical SDK-shape discovery + handler rewrite + integration tests + install-helper.sh. After 02-03b Task 3 returns "approved — reader green", Plan 02-03 closes (ROADMAP.md flip + STATE.md counter advance).
+
+Pre-drill snapshot id: `2026-05-13T20-27-43Z` (Postgres mode; `/home/eric/clarity-pack/.planning/snapshots/2026-05-13T20-27-43Z` on Countermoves). Plugin uuid on Countermoves: `0d4fc40a-0541-4b67-8979-9d346cb9c07b`.
 
 ## Performance
 

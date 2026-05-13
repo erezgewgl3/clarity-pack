@@ -27,7 +27,12 @@ const manifest: PaperclipPluginManifestV1 = {
   capabilities: [
     // Slot-registration capabilities — REQUIRED for the host to accept the
     // detailTab + settingsPage + page slots below (Plan 02-01 Task 1 Finding #5).
+    // ui.page.register added 2026-05-13 during Plan 02-03 Task 3 rehearsal — host
+    // validator (paperclipai/paperclip@master server/src/services/plugin-validator)
+    // rejected install with "Missing required capabilities for declared features:
+    // ui.page.register". One cap per page-bearing slot type.
     'ui.detailTab.register',
+    'ui.page.register',
     'instance.settings.register',
     // Data + agents capabilities — full Phase-2 scope.
     'database.namespace.migrate',
