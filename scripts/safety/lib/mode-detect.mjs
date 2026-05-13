@@ -77,3 +77,65 @@ export async function detectMode(configPath) {
     'set --mode=pglite|postgres explicitly on the snapshot CLI invocation'
   );
 }
+
+// Hardcoded creds for Paperclip's embedded-postgres dev server.
+// Source: paperclipai/paperclip@master server/src/index.ts (verbatim).
+// Not config-driven — the dev-runner always uses these.
+const EMBEDDED_PG_USER = 'paperclip';
+const EMBEDDED_PG_PASSWORD = 'paperclip';
+const EMBEDDED_PG_DATABASE = 'paperclip';
+const EMBEDDED_PG_HOST = '127.0.0.1';
+
+/**
+ * Detect Paperclip's DB mode AND derive a dbUrl when possible.
+ *
+ * Returns `{ mode, dbUrl, source }` where source is one of:
+ *   - 'embedded-postgres-derived' — built from database.embeddedPostgresPort + hardcoded creds
+ *   - 'config.connectionString'   — taken verbatim from database.connectionString
+ *   - 'pglite-no-url'             — pglite mode; dbUrl is null
+ *
+ * Throws DetectError if the mode is postgres but no connection info is reachable
+ * (operator must pass --db-url to recover).
+ *
+ * Plan 01-05 Task 2 — eliminates the manual `--db-url=postgresql://paperclip:paperclip@127.0.0.1:54329/paperclip`
+ * workaround from the Plan 02-01 Task 2 smoke spike.
+ */
+export async function detectConnectionConfig(configPath) {
+  // First resolve the mode using the existing detectMode logic; that also
+  // produces the DetectError variants for missing/malformed config.
+  const mode = await detectMode(configPath);
+  if (mode === 'pglite') {
+    return { mode: 'pglite', dbUrl: null, source: 'pglite-no-url' };
+  }
+
+  // For postgres mode, re-read the config to inspect connection-shape fields.
+  // (detectMode does not return the parsed object; a second small read keeps
+  // the function signatures simple. config.json is tiny.)
+  const raw = await readFile(configPath, 'utf8');
+  const parsed = JSON.parse(raw);
+  const db = parsed?.database ?? null;
+
+  if (typeof db?.connectionString === 'string' && db.connectionString.length > 0) {
+    return {
+      mode: 'postgres',
+      dbUrl: db.connectionString,
+      source: 'config.connectionString',
+    };
+  }
+
+  if (db?.mode === 'embedded-postgres' && typeof db.embeddedPostgresPort === 'number') {
+    const dbUrl = `postgresql://${EMBEDDED_PG_USER}:${EMBEDDED_PG_PASSWORD}@${EMBEDDED_PG_HOST}:${db.embeddedPostgresPort}/${EMBEDDED_PG_DATABASE}`;
+    return {
+      mode: 'postgres',
+      dbUrl,
+      source: 'embedded-postgres-derived',
+    };
+  }
+
+  throw new DetectError(
+    'Cannot derive dbUrl: config.json has postgres-mode database but no connectionString and no embeddedPostgresPort',
+    'pass --db-url=postgresql://user:pass@host:port/db on the snapshot CLI invocation, ' +
+      'or correct config.json to include either database.connectionString (hosted Postgres) ' +
+      'or database.embeddedPostgresPort (embedded-postgres dev mode)',
+  );
+}

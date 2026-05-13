@@ -1,0 +1,6 @@
+{
+  "database": {
+    "mode": "embedded-postgres",
+    "embeddedPostgresDataDir": "/tmp/test-paperclip/db"
+  }
+}
