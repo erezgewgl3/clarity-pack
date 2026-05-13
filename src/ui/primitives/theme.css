@@ -1,0 +1,90 @@
+/* src/ui/primitives/theme.css
+ *
+ * Plan 02-02 Task 2 — SCAF-06 + COEXIST-01: every Clarity CSS selector is
+ * scoped to [data-clarity-surface] so Clarity styles cannot bleed onto host
+ * page elements. No global resets (*, body, html). No second Tailwind config
+ * (we inherit host CSS variables wherever they exist).
+ *
+ * Custom-property naming: --clarity-<token>. Color tokens use oklch so we get
+ * a perceptually-uniform warm-dark palette without the neon look — matches
+ * the sketches/paperclip-fix-*.html mockups.
+ */
+
+[data-clarity-surface] {
+  /* Base palette — warm-dark, mockup-aligned. */
+  --clarity-bg: oklch(0.18 0.01 60);
+  --clarity-fg: oklch(0.93 0.005 60);
+  --clarity-muted: oklch(0.55 0.01 60);
+  --clarity-border: oklch(0.30 0.01 60);
+
+  /* State-pill backgrounds — 5 states from PRIM-04 / sketches:
+   *   Working / Stuck / AwaitingYou / Standby / AwaitingPeer
+   */
+  --clarity-state-working-bg: oklch(0.62 0.13 145);
+  --clarity-state-stuck-bg: oklch(0.62 0.18 25);
+  --clarity-state-awaiting-you-bg: oklch(0.70 0.18 80);
+  --clarity-state-standby-bg: oklch(0.55 0.02 60);
+  --clarity-state-awaiting-peer-bg: oklch(0.55 0.10 220);
+
+  /* Typography — Geist + Geist Mono + Instrument Serif per SCAF-08. Falls
+   * back to system stack if those families aren't loaded. */
+  font-family: 'Geist', system-ui, -apple-system, sans-serif;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface] .clarity-state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--clarity-bg);
+  background: var(--clarity-state-standby-bg);
+}
+
+[data-clarity-surface] .clarity-state-pill.clarity-state-working {
+  background: var(--clarity-state-working-bg);
+}
+
+[data-clarity-surface] .clarity-state-pill.clarity-state-stuck {
+  background: var(--clarity-state-stuck-bg);
+}
+
+[data-clarity-surface] .clarity-state-pill.clarity-state-awaiting-you {
+  background: var(--clarity-state-awaiting-you-bg);
+}
+
+[data-clarity-surface] .clarity-state-pill.clarity-state-standby {
+  background: var(--clarity-state-standby-bg);
+}
+
+[data-clarity-surface] .clarity-state-pill.clarity-state-awaiting-peer {
+  background: var(--clarity-state-awaiting-peer-bg);
+}
+
+[data-clarity-surface] .clarity-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--clarity-border);
+  border-radius: 4px;
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.85em;
+  color: var(--clarity-fg);
+  background: transparent;
+}
+
+[data-clarity-surface] .clarity-ref-chip--loading {
+  opacity: 0.6;
+}
+
+[data-clarity-surface] .clarity-ref-chip[data-status='done'] {
+  border-color: var(--clarity-state-working-bg);
+}
+
+[data-clarity-surface] .clarity-ref-chip[data-status='blocked'] {
+  border-color: var(--clarity-state-stuck-bg);
+}
