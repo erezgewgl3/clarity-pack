@@ -9,9 +9,9 @@ progress:
   completed_phases: 1
   total_plans: 8
   completed_plans: 4
-  percent: 20
-  phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger
-  phase_2_status: PLANNED — 4 plans (02-01..02-04) verified by checker on 2nd iteration; 48/48 reqs covered; ready for /gsd:execute-phase 2
+  percent: 22
+  phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger. SPIKE SURFACED 3 deferred safety-CLI defects (mode-detect FIXED inline; pg_dump-PATH + pg_dump-version-mismatch DEFERRED to new Phase 1 cleanup plan).
+  phase_2_status: EXECUTING — Plan 02-01 Task 1 complete (commit bef083e); Plan 02-01 Task 2 PARTIAL (Checks A/C/D/E/F confirmed empirically OR architecturally; Check B + snapshot bookend DEFERRED due to Windows ESM-path bug in upstream Paperclip plugin loader). 5 high-value findings cascade into Plans 02-02/02-03/02-04. See `.planning/phases/02-scaffold-and-surfaces/02-01-SMOKE-FINDINGS.md`.
 ---
 
 # State: Clarity Pack

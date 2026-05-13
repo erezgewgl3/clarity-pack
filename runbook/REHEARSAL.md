@@ -92,6 +92,53 @@ reached production.
 
 ---
 
+## Phase 2 install rehearsals
+
+This section records the Plan 02-01 Task 2 install spike — the rehearsal of `pnpm paperclipai plugin install` against a virgin Paperclip clone, separate from Phase 1's snapshot/restore rehearsals (which appear in the `## Entries` table above).
+
+**Columns:** Date | Paperclip clone version | DB Mode | Install Command Form | Slot Confirmed | Migration Schema Name | COEXIST-03 verdict | Operator
+
+| Date       | Paperclip clone version | DB Mode           | Install Command Form                      | Slot Confirmed   | Migration Schema Name             | COEXIST-03 verdict     | Operator |
+|------------|-------------------------|-------------------|-------------------------------------------|------------------|-----------------------------------|------------------------|----------|
+| 2026-05-13 | b947a7d7 (master)       | embedded-postgres | `paperclipai plugin install <local-path>` | DEFERRED (Linux) | plugin_clarity_pack_cdd6bda4bd ✓ | CONFIRMED architecturally + partial empirical | eric (driven by Claude as pair-on-keyboard) |
+
+**Verdict for the 2026-05-13 row:** `PARTIAL — install workflow blocked on Windows by upstream Paperclip ESM-path bug; Checks A/C/D/E/F all CONFIRMED or banked architecturally; D-01 visual confirmation deferred to first Linux Paperclip (WSL, fresh Linux VPS, or BEAAA itself).`
+
+**Empirical anchors (5 high-value findings):**
+
+1. **Check A (Install Command Form) — CONFIRMED:** `paperclipai plugin install <local-path|@npm/pkg|@npm/pkg@version>` per verbatim `pnpm paperclipai plugin --help` output. Lifecycle subcommands `install/list/uninstall/enable/disable/inspect/init/examples` all available. See [`02-01-SMOKE-FINDINGS.md`](../.planning/phases/02-scaffold-and-surfaces/02-01-SMOKE-FINDINGS.md) §"Install Command Form" for the full text.
+2. **Check C (D-02 Migrations) — CONFIRMED with critical correction:** schema name is **deterministic, not templated**. `derivePluginDatabaseNamespace(manifest.id)` → `plugin_clarity_pack_cdd6bda4bd`. Migration SQL must bake this literal into every DDL statement; `COMMENT ON` is the only exception. `public.*` diff before vs after install: 0 changes. The plan's original "host substitutes" assumption was FALSIFIED — cascade is non-optional for Plans 02-02/02-03/02-04 manifest reconciliation.
+3. **Check D (COEXIST-03) — CONFIRMED architecturally + partial empirical:** fixture row inserted into `plugin_clarity_pack_cdd6bda4bd.clarity_user_prefs` survives across psql queries; plugin-lifecycle.ts state machine documents `disabled → ready → uninstalled` with NO `DROP SCHEMA` in production code paths. Full CLI-driven disable test deferred (plugin stuck in `status=error` from finding #5).
+4. **Check E (D-08(f) Postinstall Audit) — CONFIRMED:** clarity-pack transitive tree (10 packages) has only one vestigial `postinstall` declaration (esbuild's deprecated `install.js`), which pnpm 9.x default-deny blocks; platform binary is delivered via `@esbuild/<platform>` optional dep. Tree diff `--ignore-scripts` vs default: empty.
+5. **Check F (useInstanceConfig SDK path) — FALLBACK REQUIRED:** SDK 2026.512.0 does NOT export `useInstanceConfig` from any subpath. UI must use `usePluginData('clarity-pack/get-instance-config')` wrapped in a local primitive; worker handler returns `ctx.config.get()`. Plan 02-04 LOCKED to this pattern.
+
+**Concurrent defect discoveries (impact records, not failures of this spike):**
+
+- **Phase 1 safety CLI defect cluster (3 stacked):** [1] `mode-detect.mjs` schema drift (looks for `database.driver`, current Paperclip writes `database.mode`) — **FIXED INLINE this spike, 5/5 tests pass**. [2] `pg_dump` not on Windows PATH by default + embedded-postgres Windows bundle ships server-only (no client tools). [3] embedded-postgres 18.1-beta requires same-major-version pg_dump; stable winget client only goes to 17.x. Combined, no automated snapshot bookend is possible for an embedded-postgres-mode Paperclip on Windows. New Phase 1 cleanup plan required before BEAAA install can be bookended (unless BEAAA's deployment is confirmed to use hosted Postgres with matching client tools, which Hostinger Countermoves already does).
+- **Paperclip plugin loader Node-ESM-on-Windows path bug:** plugin install registers correctly + migrates correctly, but worker boot fails with `ERR_UNSUPPORTED_ESM_URL_SCHEME` because the host imports the worker via raw `c:\...\worker.js` instead of `file:///C:/.../worker.js`. Linux-immune; Hostinger Paperclip is unaffected. File upstream issue against `paperclipai/paperclip`.
+
+**Two new operator gotchas to fold into the BEAAA runbook (separate from the Phase 1 gotchas already recorded above):**
+
+c) **`pnpm dev` does not create `config.json`** — the dev-runner reports the path in its boot banner but leaves the file absent. `paperclipai onboard -y` (non-interactive quickstart) is required to materialize `config.json` + `.env` + `secrets/`. Sequence on first install of any fresh Paperclip clone: `git clone → pnpm install → pnpm dev (boot) → paperclipai onboard -y → THEN safety CLI operations`.
+
+d) **Paperclip embedded-postgres credentials are hardcoded `paperclip:paperclip@127.0.0.1:54329/paperclip`** (per [`paperclip/server/src/index.ts`](https://github.com/paperclipai/paperclip/blob/b947a7d7/server/src/index.ts), not stored in config.json or .env). Any psql-driven inspection of an `embedded-postgres`-mode Paperclip uses these credentials. (Hosted-Postgres deployments use whatever Paperclip's onboard sets; that path is unaffected.)
+
+**Drill artifacts of record (local Windows clone, 2026-05-13):**
+
+- Clarity-pack pre-spike state: commit `bef083e` (Task 1 smoke scaffold)
+- Paperclip clone path: `C:\Users\erezg\Documents\paperclip-smoke-clone`, SHA `b947a7d76c331b3ce4069d3be0ade25cc89b1b90`, branch `master`
+- Tarball produced: `clarity-pack-0.1.0-smoke.tgz` (2152 bytes; contents: `dist/manifest.js`, `dist/ui/index.js`, `dist/worker.js`, `migrations/0001_init.sql`, `package.json`)
+- Plugin installed to Paperclip DB as `clarity-pack`, pluginId `2f55c8f8-7776-496a-b404-5f7248bcf907`, status `error` (worker boot blocked by Windows ESM path bug)
+- Schema created: `plugin_clarity_pack_cdd6bda4bd` containing 1 table (`clarity_user_prefs`)
+- Test row inserted: `(user_id='smoke-test-user', opted_in_at='2026-05-13 19:50:32+03')` — confirmed round-trip read OK
+- `public.*` baseline: 86 tables before install, 86 tables after (diff empty)
+- safety CLI mode-detect fix: new fixture + test D2b (5/5 mode-detect tests pass)
+- See `.planning/phases/02-scaffold-and-surfaces/02-01-SMOKE-FINDINGS.md` for the comprehensive record.
+
+**SAFE-02 grep:** `grep -qE '^\\| 20[0-9]{2}-' runbook/REHEARSAL.md` → MATCH (existing PASS row above + this PARTIAL row both satisfy the regex).
+
+---
+
 ## Bypass Audit Log
 
 Every honored `--gate-bypass` invocation appends a `[BYPASS]` line

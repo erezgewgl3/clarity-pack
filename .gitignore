@@ -19,3 +19,9 @@ Thumbs.db
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# pnpm pack tarballs (transient build artifacts from local pack-and-install spikes)
+*.tgz
+
+# Claude Code tool state (harness-managed; not project artifact)
+.claude/
