@@ -31,7 +31,18 @@ const SCOPE_PREFIX = '[data-clarity-surface]';
 // Selectors are allowed if they start with the scope prefix OR are an @-rule.
 // `:root[data-clarity-surface]` is also acceptable (rare, but documented in
 // PLAN if needed for CSS-variable definitions that target the root element).
-const SELECTOR_OK_RE = /^\s*(\[data-clarity-surface\]|:root\[data-clarity-surface\]|@[a-z-]+\b)/i;
+// Accepts:
+//   [data-clarity-surface]                       — bare attribute (matches any value)
+//   [data-clarity-surface='reader']              — qualified by value (STRICTER scope)
+//   [data-clarity-surface="reader"]              — same, double-quoted
+//   :root[data-clarity-surface]                  — :root combined form (rare)
+//   @<at-rule>                                   — @import / @media / @supports / etc.
+//
+// All forms are scoped per SCAF-06 + COEXIST-01 — the qualified-value form is
+// MORE restrictive than the bare attribute (it only matches one named surface)
+// and was added in Plan 02-03 Task 2 to differentiate Reader / Situation Room
+// CSS without prefixing every selector with a long compound.
+const SELECTOR_OK_RE = /^\s*(\[data-clarity-surface(=(['"])[a-z0-9_-]+\3)?\]|:root\[data-clarity-surface(=(['"])[a-z0-9_-]+\5)?\]|@[a-z-]+\b)/i;
 
 function stripComments(input) {
   return input.replace(/\/\*[\s\S]*?\*\//g, '');
