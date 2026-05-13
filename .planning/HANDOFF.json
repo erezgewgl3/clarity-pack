@@ -1,54 +1,75 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-12T18:34:07.210Z",
+  "timestamp": "2026-05-13T10:13:01.199Z",
   "source": "auto-postool",
   "partial": false,
-  "phase": "1",
-  "phase_name": "Pre-Install Safety",
-  "phase_dir": ".planning/phases/01-pre-install-safety",
-  "plan": "3",
+  "phase": "2",
+  "phase_name": "Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In",
+  "phase_dir": ".planning/phases/02-scaffold-and-surfaces",
+  "plan": null,
   "task": null,
-  "total_tasks": 3,
+  "total_tasks": 4,
   "status": "auto-checkpoint",
-  "completed_tasks": [
+  "completed_tasks": [],
+  "remaining_tasks": [
     {
-      "id": "01",
-      "name": "Task 1: Initialize scripts/safety/ pnpm package + manifest, paths, mode-detect, list, prune primitives + their tests",
-      "status": "done"
+      "id": "02-01",
+      "name": "Task 1: Scaffold the minimal package (package.json + tsconfig + tsconfig.manifest + esbuild scripts + UI stub + manifest + worker + migration)",
+      "status": "not_started"
     },
     {
-      "id": "02",
-      "name": "Task 1: paperclip-api.mjs REST client + stub-paperclip-server fixture + their tests",
-      "status": "done"
+      "id": "02-02",
+      "name": "\\\"` and every CSS selector in src/ui/primitives/theme.css starts with `[data-clarity-surface]` (SCAF-06)\"",
+      "status": "not_started"
     },
     {
-      "id": "03",
-      "name": "Task 1: gate.mjs (refuse-or-run wrapper) + tests",
-      "status": "done"
+      "id": "02-03",
+      "name": "Task 1: Editor-Agent skeleton (manifest declaration + reconcile + compile-tldr with idempotency + self-loop filter + token cap + circuit breaker) + migrations + tests",
+      "status": "not_started"
+    },
+    {
+      "id": "02-04",
+      "name": "Task 1: Opt-in gate (migrations + clarity_user_prefs handlers + opt-in-guard wrap for ALL existing handlers + settings page UI + Enable-Clarity CTA + useOptIn hook) + tests",
+      "status": "not_started"
     }
   ],
-  "remaining_tasks": [],
   "blockers": [],
   "human_actions_pending": [],
   "decisions": [],
   "uncommitted_files": [
-    {
-      "status": "M",
-      "path": ".gitignore"
-    },
     {
       "status": "D",
       "path": ".planning/HANDOFF.json"
     },
     {
       "status": "M",
-      "path": "runbook/REHEARSAL.md"
+      "path": ".planning/ROADMAP.md"
     },
     {
       "status": "M",
-      "path": "scripts/safety/lib/restore.mjs"
+      "path": ".planning/STATE.md"
+    },
+    {
+      "status": "??",
+      "path": ".claude/"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/02-scaffold-and-surfaces/02-01-PLAN.md"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/02-scaffold-and-surfaces/02-02-PLAN.md"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/02-scaffold-and-surfaces/02-03-PLAN.md"
+    },
+    {
+      "status": "??",
+      "path": ".planning/phases/02-scaffold-and-surfaces/02-04-PLAN.md"
     }
   ],
-  "next_action": "Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.",
-  "context_notes": "Status: Awaiting Eric's rehearsal drill to satisfy SAFE-02 acceptance condition (a completed dated row in `runbook/REHEARSAL.md`); on `approved — drill clean`, Phase 1 closes and Phase 2 unblocks.\n\nRecent commits:\nfaa5d88 docs: update HANDOFF + add HOSTINGER-COUNTERMOVES state doc (end of 2026-05-08)\n90d2527 docs: commit design mockups (visual contract for Phases 2-4)\n83844f6 docs: morning handoff + commit pending project artifacts\n6d6b795 docs(01-03): complete pre-flight gate + runbook plan — 22 tests, 8 runbook docs, rehearsal drill pending Eric (SAFE-04, SAFE-05)\nd73485a docs(01-03): runbook — README + 4 walkthroughs + PLATFORMS + REHEARSAL template + 2 launchers (SAFE-04)"
+  "next_action": "All 11 locked decisions (D-01..D-11) honored. Checker found 6 warnings on first pass; all resolved in revision pass; final verdict VERIFICATION PASSED with 0 blockers. Plans ready for `/gsd:execute-phase 2`.",
+  "context_notes": "Status: All 11 locked decisions (D-01..D-11) honored. Checker found 6 warnings on first pass; all resolved in revision pass; final verdict VERIFICATION PASSED with 0 blockers. Plans ready for `/gsd:execute-phase 2`.\n\nRecent commits:\nb3b6211 docs(state): record phase 2 context session\n7832d2c docs(02): capture phase context\n0986192 docs(claude.md): add MemPalace Memory Protocol section\n4c1a448 docs: Phase 1 CLOSED — rehearsal PASS row against Hostinger 2026-05-13\n0d026fa fix(01-05): Paperclip API drift — /api/issues moved to /api/companies/{id}/issues"
 }

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-13T23:30:00.000Z"
+last_updated: "2026-05-13T23:50:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 4
+  total_plans: 8
   completed_plans: 4
   percent: 20
   phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger
-  phase_2_status: CONTEXT CAPTURED — 11 decisions locked (D-01..D-11); ready for /gsd:plan-phase 2
+  phase_2_status: PLANNED — 4 plans (02-01..02-04) verified by checker on 2nd iteration; 48/48 reqs covered; ready for /gsd:execute-phase 2
 ---
 
 # State: Clarity Pack
@@ -25,15 +25,19 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 2 — Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In (context captured 2026-05-13)
+**Current Focus:** Phase 2 — Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In (planned 2026-05-13; ready to execute)
 
 ## Current Position
 
-Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **CONTEXT CAPTURED** (11 decisions locked; awaiting planning).
+Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **PLANNED** (4 PLAN.md files; checker PASSED on 2nd iteration; 48/48 reqs covered).
 **Phase:** 2 - Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In
-**Plan:** TBD — context discussion completed 2026-05-13. Plan structure decided (4 plans inside-out: 02-01 smoke spike, 02-02 scaffold + trust-model + primitives, 02-03 Editor-Agent + Reader, 02-04 Situation Room + opt-in + CI). Next: `/gsd:plan-phase 2`.
-**Status:** Three blocking SPEC conflicts resolved (D-01 detailTab, D-02 database.migrationsDir + plugin namespace, D-03 60s configurable via instanceConfigSchema) — D-01 and D-02 carry empirical verification gates in Plan 02-01. Editor-Agent boundaries locked (D-04..D-07). Plan decomposition locked (D-08..D-11). Day-1 trust-model hardening details = Claude's Discretion.
-**Progress:** [##        ] 1/5 phases complete; Phase 2 context-ready
+**Plans:** 4 plans written and verified 2026-05-13.
+  - 02-01 (Wave 1, autonomous): Smoke spike — minimal manifest + worker + migration + detailTab stub; install rehearsal against fresh local Paperclip clone resolves D-01 + D-02 empirically. Reqs: SCAF-03, COEXIST-03.
+  - 02-02 (Wave 2, autonomous): Scaffold + trust-model hardening + 6 shared primitives. Reqs: SCAF-01/02/04..09 + PRIM-01..06 + COEXIST-01 + COEXIST-04 (16).
+  - 02-03 (Wave 3, mixed — manual checkpoint for governance parity): Editor-Agent skeleton + Reader view tab. Reqs: EDITOR-01..06 + READER-01..09 + COEXIST-02 (16).
+  - 02-04 (Wave 4, mixed — manual checkpoint for visual fidelity + Phase 2 closure): Situation Room + opt-in gate + coexistence CI. Reqs: OPTIN-01..05 + ROOM-01..08 + COEXIST-06 (14).
+**Status:** All 11 locked decisions (D-01..D-11) honored. Checker found 6 warnings on first pass; all resolved in revision pass; final verdict VERIFICATION PASSED with 0 blockers. Plans ready for `/gsd:execute-phase 2`.
+**Progress:** [##        ] 1/5 phases complete; Phase 2 planned (4 plans, 48 reqs covered)
 
 ## Performance Metrics
 
@@ -89,9 +93,9 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-13 — Phase 1 CLOSED (rehearsal PASS against Hostinger Countermoves landed 2026-05-13). Phase 2 discuss-phase ran: 11 decisions captured (D-01..D-11) into `.planning/phases/02-scaffold-and-surfaces/02-CONTEXT.md`. Three blocking SPEC conflicts resolved with verification gates for Plan 02-01 smoke spike. Plan decomposition = 4 plans inside-out.
+**Last session:** 2026-05-13 — Phase 2 planning completed. Four PLAN.md files written into `.planning/phases/02-scaffold-and-surfaces/`. Plan-checker verified PASSED on iteration 2 (6 first-pass warnings — tsconfig.manifest.json file-list, follower postMessage assertion, useInstanceConfig hook origin, sync vs async hash, PLUGIN_DISABLED vs WORKER_UNAVAILABLE, missing prose-with-ref-chips + deliverable-preview entries — all resolved in revision pass). 48/48 phase requirements covered, no gaps, no duplicates. D-01..D-11 honored across all four plans.
 
-**Next session resume point:** Run `/gsd:plan-phase 2` to decompose Phase 2 into Plan 02-01 (smoke spike) + 02-02 (scaffold + primitives) + 02-03 (Editor + Reader) + 02-04 (Room + opt-in + CI). Plan 02-01 acceptance bar gates D-01 and D-02 empirically before downstream plans execute.
+**Next session resume point:** Run `/gsd:execute-phase 2` to execute Wave 1 (Plan 02-01 smoke spike) bookended by `clarity-safety snapshot` per Phase 1 protocol. Plan 02-01 acceptance bar gates D-01 (detailTab vs taskDetailView) and D-02 (plugin-namespace migrations) empirically against a fresh local Paperclip clone before Waves 2..4 execute.
 
 **Files of record:**
 

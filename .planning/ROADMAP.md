@@ -43,8 +43,14 @@ Plans:
   4. The Editor-Agent runs as a standard Paperclip employee declared in `agents[]` and reconciled per-company via `ctx.agents.managed.reconcile()`, inherits Paperclip's heartbeat / budget caps / pause-terminate / audit log automatically (verified by pausing it in classic UI and observing compile output halt), filters its own writes from its own triggers to prevent self-loops, enforces a hard `max_tokens` cap per LLM call, and pauses behind a banner after 3 consecutive failures.
   5. A user with no `clarity_user_prefs` row sees the Paperclip classic dashboard as the default landing surface and an "Enable Clarity Pack" inline CTA on each Clarity surface; toggling on writes only the current user's row, and every `getData` / `performAction` handler enforces the opt-in check server-side under the same-origin trust model.
   6. The coexistence verification checklist runs in CI on every PR and fails the build if any of: original UI replaced, any DDL touches `public.*`, plugin-disable destroys data, Editor-Agent has special privileges, or visual-regression detects CSS bleed-through into host UI.
-**Plans**: TBD
+**Plans**: 4 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 02-01-PLAN.md — Smoke spike: minimal manifest + worker + migration + detailTab stub; install rehearsal against fresh local Paperclip clone resolves D-01 (slot identity) and D-02 (migrations approach) empirically. Wave 1, autonomous.
+- [ ] 02-02-PLAN.md — Scaffold + trust-model hardening + shared primitives: full four-surface manifest, ESLint no-raw-fetch + no-raw-anchor rules, CSS scope enforcement, usePoll primitive, reference resolver, blocker chain flattener, state pill, ref chip, lockfile + postinstall audit. Wave 2, autonomous.
+- [ ] 02-03-PLAN.md — Editor-Agent skeleton + Reader view tab: agents[] manifest declaration, ctx.agents.managed.reconcile, compile-tldr with idempotency + self-loop filter + token cap + circuit breaker + pause banner; Reader tab renders TL;DR strip + ref chips + Anchored-to ref cards + breadcrumb + AC checklist + activity timeline + right-rail Live blocker panel. Wave 3, mixed (manual checkpoint for visual fidelity + governance parity verification).
+- [ ] 02-04-PLAN.md — Situation Room + opt-in gate + coexistence CI: 60s materialized snapshot job + agent grid + critical path strip + artifacts shelf + BroadcastChannel leader election + visibility guard; clarity_user_prefs + useOptIn + opt-in-guard wrap on every handler + settings page + Enable-Clarity CTA; six-assertion coexistence CI workflow. Wave 4, mixed (manual checkpoint for Phase 2 closure).
 
 ### Phase 3: Daily Bulletin
 **Goal**: A 06:30 ET editorial digest auto-compiles each morning - DST-safe across both transitions, idempotent, with a "Requires Your Decision" inbox at the top, department sections with lineage threads, a Standing Numbers panel sourced from SQL (never LLM-generated), a two-pass verifier that rejects on number mismatch, errata as a first-class append-only item type, and an explicit failed-compile banner. The bulletin renders inside Paperclip via the page slot and persists as an ordinary Paperclip issue ("Bulletin No. N") so it survives plugin disable.
@@ -90,7 +96,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Pre-Install Safety | 4/4 | COMPLETE ✓ — rehearsal PASS landed | 2026-05-13 |
-| 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 0/0 | Not started | - |
+| 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 0/4 | Planning complete (2026-05-13) — ready for /gsd:execute-phase 2 | - |
 | 3. Daily Bulletin | 0/0 | Not started | - |
 | 4. Employee Chat | 0/0 | Not started | - |
 | 5. Distribution & Polish | 0/0 | Not started | - |
