@@ -55,6 +55,7 @@ function makeFakeCtx({ llm, initialCache = [] } = {}) {
         async query(sql, params) {
           dbCalls.push({ kind: 'query', sql, params });
           if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
+            // intentional: matches whether SELECT is multi-line or not (FROM .. tldr_cache is the unique marker)
             const [surface, scope_id] = params;
             const matching = cacheRows.filter((r) => r.surface === surface && r.scope_id === scope_id);
             matching.sort((a, b) => (a.generated_at < b.generated_at ? 1 : -1));

@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@paperclipai/plugin-sdk": "2026.512.0",
+    "@types/node": "^20.19.0",
     "@types/react": "^19.0.0",
     "@typescript-eslint/parser": "^8.59.3",
     "esbuild": "^0.27.3",

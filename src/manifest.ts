@@ -38,7 +38,11 @@ const manifest: PaperclipPluginManifestV1 = {
     'issue.documents.read',
     'issue.documents.write',
     'agents.managed',
+    'agents.read',
+    'agents.pause',
+    'agents.resume',
     'events.subscribe',
+    'companies.read',
   ],
   entrypoints: {
     worker: './dist/worker.js',
@@ -101,7 +105,57 @@ const manifest: PaperclipPluginManifestV1 = {
       },
     ],
   },
-  // agents[] lands in Plan 02-03 (Editor-Agent declaration + reconcile wiring).
+  // Plan 02-03 Task 1 — Editor-Agent (Editorial Desk) declaration. Per
+  // PluginManagedAgentDeclaration shape (verified against
+  // node_modules/@paperclipai/shared/dist/types/plugin.d.ts:86 + the
+  // plugin-llm-wiki example at
+  // paperclipai/paperclip@master:packages/plugins/plugin-llm-wiki/src/manifest.ts:152).
+  //
+  // Adapter preference per D-04..D-07: claude_local first (Eric's chosen
+  // adapter for v1 dogfood), process fallback (host installs an in-process
+  // adapter if claude_local isn't configured). The actual LLM provider is
+  // configured by the operator via the Paperclip agent panel after install —
+  // we never bake API keys into the plugin manifest.
+  //
+  // MCP server invocation is described in the adapterConfig.mcpServers map
+  // (the shape the claude_local adapter expects). The version pin
+  // 2026.512.0 matches @paperclipai/mcp-server's date-based npm version; npx
+  // -y pulls it on first launch.
+  agents: [
+    {
+      agentKey: 'editor-agent',
+      displayName: 'Editor-Agent',
+      role: 'editor',
+      title: 'Editorial Desk',
+      icon: 'feather',
+      capabilities:
+        'Compiles TL;DRs, critical-path narratives, and the Daily Bulletin from Paperclip issue + activity context. Always attributes to "Editorial Desk".',
+      adapterType: 'claude_local',
+      adapterPreference: ['claude_local', 'process'],
+      adapterConfig: {
+        // MCP server config — claude_local adapter pattern; the host wires
+        // these stdio commands into the agent's tool surface at run time.
+        mcpServers: {
+          paperclip: {
+            command: 'npx',
+            args: ['-y', '@paperclipai/mcp-server@2026.512.0'],
+          },
+        },
+      },
+      // Start paused so Eric can review the agent in classic UI before
+      // anything runs — coexistence-friendly default.
+      status: 'paused',
+      // No monthly budget cap baked into the manifest; Eric sets per-company
+      // via classic admin UI. D-05 MAX_TOKENS=4000 lives in compile-tldr.ts
+      // (input-side cap), not here.
+      budgetMonthlyCents: 0,
+      instructions: {
+        // v1 ships inline; v2 may move to a sibling AGENTS.md per plugin-llm-wiki pattern.
+        content:
+          'You are the Clarity Pack Editorial Desk. Your job: compile plain-English TL;DRs, critical-path narratives, and the daily Bulletin for Eric. Always sign off as "Editorial Desk". Never refer to yourself by any other name. Never write more than 8000 characters in a single TL;DR. If you cannot compile a useful summary, output the literal string "Insufficient context" — the host treats that as a graceful skip.',
+      },
+    },
+  ],
 };
 
 export default manifest;

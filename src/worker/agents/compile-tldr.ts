@@ -1,0 +1,226 @@
+// src/worker/agents/compile-tldr.ts
+//
+// Plan 02-03 Task 1 — the core TL;DR compile loop. Implements four locked
+// hardening properties:
+//
+//   - EDITOR-03 idempotency: content_hash over (surface, scope_id, inputs)
+//     dedupes; same inputs twice = ONE LLM call.
+//   - EDITOR-04 self-loop input: writes carry EDITOR_WRITE_TAG so the next
+//     heartbeat's filterSelfLoopEvents() excludes them.
+//   - EDITOR-05 max-tokens cap: estimated input tokens are checked BEFORE
+//     invoking the LLM adapter. Cap breach → recordFailure + throw, no LLM
+//     spend.
+//   - D-06 circuit breaker: any throw (LLM error, schema-validation failure,
+//     cap breach) is recorded; after MAX_CONSECUTIVE_FAILURES the agent is
+//     paused.
+//
+// Architecture note — SDK 2026.512.0 does NOT expose ctx.llm.complete() OR
+// ctx.agents.onHeartbeat(). The plan's pseudocode assumed those APIs; the
+// real surfaces are:
+//   - LLM calls go through the agent's adapter (claude_local / process) when
+//     the agent is woken via ctx.agents.invoke(agentId, companyId, {prompt}).
+//   - The agent calls back into our worker via MCP tools (Phase 3 deepens
+//     this) and uses our tools to write the resulting TL;DR.
+//
+// For v1 dogfood we expose compileTldr() as the kernel both paths converge
+// on: the agent's adapter may call it via an MCP tool, or our event-handler
+// may invoke it directly with a stub adapter while the MCP wiring beds in.
+// The injectable `ctx.llm` shape is the seam — production wires it to
+// ctx.agents.invoke(); tests inject a stub.
+
+import crypto from 'node:crypto';
+
+import { upsertTldr, getTldrByScope, type TldrRow, type TldrCacheCtx } from '../db/tldr-cache.ts';
+import {
+  recordFailure,
+  recordSuccess,
+  type CircuitBreakerCtx,
+} from './circuit-breaker.ts';
+import { EDITOR_WRITE_TAG } from './self-loop-filter.ts';
+
+/**
+ * D-05 placeholder. Instrument actual P50/P95 input tokens during dogfood and
+ * lock the final value before Phase 3 Bulletin. Cap is enforced BEFORE every
+ * LLM call (not after) — output overage cannot bill us, only input overage
+ * can.
+ */
+export const MAX_TOKENS = 4000;
+
+/**
+ * Stable agent id for compiled-by attribution. Survives reconciliation cycles;
+ * the resolved agentId UUID changes per-company while this tag stays constant
+ * so cross-company queries can identify our writes uniformly.
+ */
+export const EDITOR_AGENT_ID_TAG = 'clarity-pack-editor-agent';
+
+/**
+ * Rough token estimator. ~4 chars per token is the OpenAI/Anthropic published
+ * rule-of-thumb for English. Replace with tiktoken (or the model-specific
+ * tokenizer) in v2 once we know which adapter the operator picked.
+ */
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Output schema validation. EDITOR-05 lists this as a "failure" mode that
+ * counts toward the circuit breaker. Empty string, non-string, or absurdly
+ * long output all qualify. The upper bound (8000 chars ≈ 2000 tokens) is
+ * a sanity check, not a billing cap — the cap is on INPUT (MAX_TOKENS).
+ */
+function validateLlmOutput(body: unknown): asserts body is string {
+  if (typeof body !== 'string' || body.length === 0 || body.length > 8000) {
+    throw new Error(`Editor-Agent output failed schema validation (len=${typeof body === 'string' ? body.length : 'non-string'})`);
+  }
+}
+
+export type LlmAdapter = {
+  /**
+   * Run the LLM completion. Production wires this to ctx.agents.invoke() via
+   * an adapter shim; tests inject a stub that returns a canned string or
+   * throws to simulate failures.
+   */
+  complete(args: { maxTokens: number; prompt: string }): Promise<string>;
+};
+
+export type CompileTldrCtx = TldrCacheCtx &
+  CircuitBreakerCtx & {
+    logger?: { info?(...a: unknown[]): void; warn?(...a: unknown[]): void; error?(...a: unknown[]): void };
+    llm?: LlmAdapter;
+  };
+
+export type CompileTldrArgs = {
+  surface: TldrRow['surface'];
+  scopeId: string;
+  inputs: { body: string; comments: string[]; refs: string[] };
+  agentKey: string;
+  agentId: string;
+  companyId: string;
+  /**
+   * Optional adapter override. When absent, ctx.llm is used (or compileTldr
+   * throws with a helpful "no llm adapter wired" message). Tests pass a stub.
+   */
+  llm?: LlmAdapter;
+};
+
+function buildPrompt(args: CompileTldrArgs): string {
+  // Minimal v1 prompt. Phase 3 will tune for Bulletin/Situation Room voice
+  // ("Editorial Desk" persona). Kept short here so input tokens stay well
+  // under MAX_TOKENS for typical issues.
+  const lines = [
+    'You are the Clarity Pack Editorial Desk. Compile a plain-English TL;DR for the following Paperclip issue.',
+    '',
+    `Surface: ${args.surface}`,
+    `Scope id: ${args.scopeId}`,
+    '',
+    'Issue body:',
+    args.inputs.body,
+    '',
+  ];
+  if (args.inputs.comments.length > 0) {
+    lines.push('Recent comments:');
+    for (const c of args.inputs.comments) lines.push(`- ${c}`);
+    lines.push('');
+  }
+  if (args.inputs.refs.length > 0) {
+    lines.push(`Referenced ids: ${args.inputs.refs.join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Build the deterministic content hash. Inputs that produce the same canonical
+ * JSON-stringified blob produce the same hash, regardless of insertion order.
+ * (We sort keys at the top level for stability.)
+ */
+function contentHashFor(args: CompileTldrArgs): string {
+  const canonical = JSON.stringify({
+    surface: args.surface,
+    scopeId: args.scopeId,
+    body: args.inputs.body,
+    comments: args.inputs.comments,
+    refs: args.inputs.refs,
+  });
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+/**
+ * Compile a TL;DR for one (surface, scopeId, inputs) triple. Cache hit on
+ * identical inputs returns the cached row without invoking the LLM (EDITOR-03).
+ * Token-cap breach throws BEFORE the LLM call (EDITOR-05). LLM errors / output
+ * schema failures count toward the circuit breaker (D-06).
+ */
+export async function compileTldr(
+  ctx: CompileTldrCtx,
+  args: CompileTldrArgs,
+): Promise<TldrRow> {
+  const contentHash = contentHashFor(args);
+
+  // EDITOR-03: check cache by (surface, scope_id). If the most-recent row's
+  // hash matches, return it without an LLM call.
+  const cached = await getTldrByScope(ctx, args.surface, args.scopeId);
+  if (cached && cached.content_hash === contentHash) {
+    return cached;
+  }
+
+  // EDITOR-05: enforce cap BEFORE invoking the LLM, not after.
+  const prompt = buildPrompt(args);
+  const inputTokens = estimateTokens(prompt);
+  if (inputTokens > MAX_TOKENS) {
+    await recordFailure(ctx, {
+      agentKey: args.agentKey,
+      agentId: args.agentId,
+      companyId: args.companyId,
+      reason: `input_tokens=${inputTokens} exceeds MAX_TOKENS=${MAX_TOKENS}`,
+    });
+    throw new Error(`Editor-Agent input exceeds max_tokens cap (${inputTokens} > ${MAX_TOKENS})`);
+  }
+
+  // Resolve adapter (arg override > ctx.llm). No fallback to a global — we
+  // want the call to fail loudly during wiring if production forgot to plumb it.
+  const llm = args.llm ?? ctx.llm;
+  if (!llm) {
+    throw new Error('Editor-Agent compileTldr called without an LLM adapter wired into ctx.llm');
+  }
+
+  let body: string;
+  try {
+    body = await llm.complete({ maxTokens: MAX_TOKENS, prompt });
+  } catch (err) {
+    await recordFailure(ctx, {
+      agentKey: args.agentKey,
+      agentId: args.agentId,
+      companyId: args.companyId,
+      reason: `llm_error: ${(err as Error).message}`,
+    });
+    throw err;
+  }
+
+  // Output schema validation. Failures count toward circuit breaker.
+  try {
+    validateLlmOutput(body);
+  } catch (err) {
+    await recordFailure(ctx, {
+      agentKey: args.agentKey,
+      agentId: args.agentId,
+      companyId: args.companyId,
+      reason: `output_schema_invalid: ${(err as Error).message}`,
+    });
+    throw err;
+  }
+
+  recordSuccess(args.agentKey);
+
+  const tldr: TldrRow = {
+    surface: args.surface,
+    scope_id: args.scopeId,
+    content_hash: contentHash,
+    body,
+    generated_at: new Date().toISOString(),
+    source_revisions: [contentHash],
+    compiled_by_agent_id: EDITOR_AGENT_ID_TAG,
+    tags: [EDITOR_WRITE_TAG], // D-04 self-loop filter tag
+  };
+  await upsertTldr(ctx, tldr);
+  return tldr;
+}

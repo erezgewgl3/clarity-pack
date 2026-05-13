@@ -37,7 +37,7 @@ function makeFakeDbCtx(initialRows = []) {
       },
       async query(sql, params) {
         calls.push({ kind: 'query', sql, params });
-        if (/SELECT.*FROM\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
+        if (/SELECT[\s\S]*FROM\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
           const [surface, scope_id] = params;
           const matching = rows.filter((r) => r.surface === surface && r.scope_id === scope_id);
           matching.sort((a, b) => (a.generated_at < b.generated_at ? 1 : -1));
