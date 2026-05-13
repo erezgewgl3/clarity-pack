@@ -10,6 +10,12 @@ node_modules/
 # has something to assert on.
 !scripts/safety/test/fixtures/fake-instance/**/node_modules/
 !scripts/safety/test/fixtures/fake-instance/**/node_modules/**
+# Same exception for fake-paperclip-clone (Plan 01-05 Task 1 — pg-dump-locator
+# tests need a fake @embedded-postgres bundle tree to assert bundled-binary
+# discovery for Linux/macOS AND the deliberate absence of pg_dump.exe in the
+# Windows bundle. The bundle dirs LIVE under node_modules/ by pnpm convention.)
+!scripts/safety/test/fixtures/fake-paperclip-clone/**/node_modules/
+!scripts/safety/test/fixtures/fake-paperclip-clone/**/node_modules/**
 
 # Build / IDE / OS
 dist/

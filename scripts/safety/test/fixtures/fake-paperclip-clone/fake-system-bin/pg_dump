@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fixture stub for Plan 01-05 Task 1 test P4.
+# Simulates a pg_dump installed somewhere on system PATH (e.g. /usr/bin/pg_dump
+# on Linux, C:\Program Files\PostgreSQL\17\bin\pg_dump.exe on Windows).
+# locatePgDump's system-PATH discovery should find this when the pathEnv test
+# parameter is set to this directory.
+echo "pg_dump (PostgreSQL) 17.9 (fixture)"

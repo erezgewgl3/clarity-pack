@@ -1,0 +1,5 @@
+REM Fixture stub for Plan 01-05 Task 1 test P4 (Windows variant).
+REM See ./pg_dump for the Linux/macOS variant; both required so the test is
+REM platform-portable. locatePgDump's system-PATH search uses platform-specific
+REM exe-name resolution (pg_dump on POSIX, pg_dump.exe on Windows).
+@echo pg_dump (PostgreSQL) 17.9 (fixture)
