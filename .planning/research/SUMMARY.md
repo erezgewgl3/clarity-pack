@@ -39,7 +39,7 @@ These items appeared in two or more research files without coordination. Highest
 
 9. **Stack is non-negotiable.** React 19 (peer-only, never bundled), TS ^5.7.3, esbuild ^0.27.3, ESM-only, Node >=20, shadcn new-york/neutral/lucide. Do not ship Tailwind — inherit host CSS. These are FORCED by Paperclip plugin contract.
 
-10. **MCP is solved.** @paperclipai/mcp-server@^0.1.0 exposes all Editor-Agent read needs. Run via npx -y @paperclipai/mcp-server. The plugin does not import the MCP server as a library; the adapter launches it as a child stdio process.
+10. **MCP is solved.** @paperclipai/mcp-server@2026.512.0 (date-based npm versioning) exposes all Editor-Agent read needs. Run via npx -y @paperclipai/mcp-server. The plugin does not import the MCP server as a library; the adapter launches it as a child stdio process.
 
 11. **Phase 1 build order is dictated by shared primitives.** src/shared/reference-resolver.ts and src/shared/blocker-chain.ts must exist before Reader view or Situation Room can be built. 12 of 18 pitfalls land in Phase 1.
 
@@ -52,11 +52,11 @@ These items appeared in two or more research files without coordination. Highest
 The Paperclip plugin contract makes the following non-negotiable.
 
 **Top 3 FORCED stack pins:**
-- @paperclipai/plugin-sdk@^1.0.0 — sole supported plugin API; everything else is built on it
+- @paperclipai/plugin-sdk@2026.512.0 — sole supported plugin API; everything else is built on it (date-based npm versioning; pin EXACTLY)
 - React ^19.0.0 as peer dependency (never bundled) — host externalizes it; bundling breaks hook singletons and the bridge
 - esbuild ^0.27.3 with externals for react, react-dom, react/jsx-runtime, @paperclipai/plugin-sdk/ui, @paperclipai/plugin-sdk/ui/hooks — host singletons; bundling any of these breaks the bridge
 
-Additional forced choices: TypeScript ^5.7.3, ESM-only ("type": "module"), Node >=20, shadcn new-york/neutral/cssVariables/lucide (match ui/components.json exactly), database.migrationsDir + plain SQL files (not Drizzle Kit — Drizzle is a host concern), @paperclipai/mcp-server@^0.1.0 for Editor-Agent reads.
+Additional forced choices: TypeScript ^5.7.3, ESM-only ("type": "module"), Node >=20, shadcn new-york/neutral/cssVariables/lucide (match ui/components.json exactly), database.migrationsDir + plain SQL files (not Drizzle Kit — Drizzle is a host concern), @paperclipai/mcp-server@2026.512.0 for Editor-Agent reads (date-based npm versioning, pin EXACTLY).
 
 The paperclipPlugin field in package.json pointing to dist/manifest.js, dist/worker.js, and dist/ui/ is the host discovery mechanism. Without it, paperclipai plugin install fails silently.
 

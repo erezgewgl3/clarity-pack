@@ -1,0 +1,71 @@
+# Posts a Telegram message to Eric whenever Renovate (or any other bot) opens
+# a dependency-bump PR labeled "dependencies". Set-and-forget complement to
+# renovate.json — the watcher Eric explicitly asked for so the SDK pin
+# doesn't become a cat-and-mouse game.
+#
+# Setup (one-time, after the repo is pushed to GitHub):
+#   1. https://github.com/<org>/<repo>/settings/secrets/actions
+#   2. Add repo secret: TELEGRAM_BOT_TOKEN  (your bot's token from @BotFather)
+#   3. Add repo secret: TELEGRAM_CHAT_ID    (the chat id that should receive the ping;
+#                                            for personal bots this is your numeric user id)
+#   4. Done. PRs labeled "dependencies" will ping you in Telegram with PR title + URL.
+#
+# If the secrets are missing, the workflow logs a warning and exits 0 — never blocks the PR.
+
+name: notify-deps
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  notify-telegram:
+    if: contains(github.event.pull_request.labels.*.name, 'dependencies')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] || [ -z "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secret is missing — skipping notification"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compose message
+        if: steps.check.outputs.skip != 'true'
+        id: msg
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ', ') }}
+        run: |
+          # Detect the high-priority Paperclip-SDK bump (carries label "paperclip-bump")
+          PRIORITY=""
+          if [[ ",${LABELS}," == *",paperclip-bump,"* ]]; then
+            PRIORITY="🚨 PAPERCLIP SDK BUMP — re-run Plan 02-01 smoke against Countermoves before merging.%0A%0A"
+          fi
+
+          # Telegram MarkdownV2 escaping is finicky; use plain text with %0A for newlines
+          # (URL-encoded for the GET-param body).
+          TEXT="${PRIORITY}📦 [${REPO}] PR #${PR_NUMBER}: ${PR_TITLE}%0A%0A${PR_URL}%0A%0ALabels: ${LABELS}"
+          echo "text=${TEXT}" >> "$GITHUB_OUTPUT"
+
+      - name: Send Telegram message
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          curl -fsS -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=${{ steps.msg.outputs.text }}" \
+            -d "disable_web_page_preview=false" \
+            -o /dev/null \
+            -w "Telegram POST → HTTP %{http_code}\n"

@@ -57,7 +57,7 @@ Reused by every surface — built first in Phase 2 because Reader view, Situatio
 The single Paperclip employee that produces every TL;DR, critical-path narrative, and bulletin.
 
 - [ ] **EDITOR-01**: Editor-Agent is declared in the manifest's `agents[]` array and reconciled per-company via `ctx.agents.managed.reconcile()` — never via a custom `setInterval` / DIY heartbeat.
-- [ ] **EDITOR-02**: Editor-Agent uses `@paperclipai/mcp-server@^0.1.0` (run via `npx -y @paperclipai/mcp-server`) for issue, comment, document, and heartbeat-context reads.
+- [ ] **EDITOR-02**: Editor-Agent uses `@paperclipai/mcp-server@2026.512.0` (date-based npm versioning; run via `npx -y @paperclipai/mcp-server`) for issue, comment, document, and heartbeat-context reads.
 - [ ] **EDITOR-03**: Every Editor-Agent compile is idempotent — keyed on `(surface, scope_id, content_hash)`; re-running with unchanged inputs is a no-op.
 - [ ] **EDITOR-04**: Editor-Agent filters its own `actor_type=plugin` + `actor_id=clarity-pack-editor-agent` events from its own triggers to prevent self-loops (TL;DR write → `issue.updated` → TL;DR write).
 - [ ] **EDITOR-05**: Hard `max_tokens` cap per LLM call; circuit breaker pauses the agent after 3 consecutive failures and surfaces a banner instead of silent retry.

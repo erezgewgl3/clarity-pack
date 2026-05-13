@@ -12,7 +12,7 @@
 
 | What | Choice | FORCED / RECOMMENDED / OPTIONAL | Why (one-liner) |
 |---|---|---|---|
-| Plugin SDK | `@paperclipai/plugin-sdk@^1.0.0` | **FORCED** | Sole supported public API for Paperclip plugins. Provides `definePlugin`, `runWorker`, `usePluginData`, `usePluginAction`, etc. |
+| Plugin SDK | `@paperclipai/plugin-sdk@2026.512.0` | **FORCED** | Sole supported public API for Paperclip plugins. Provides `definePlugin`, `runWorker`, `usePluginData`, `usePluginAction`, etc. **Date-based versioning** on npm (workspace `package.json` says `1.0.0` but the publish pipeline overrides with `YYYY.MMDD.X`). Pin EXACTLY; Renovate auto-bumps via PR. **Update history:** `^1.0.0` (research 2026-05-07, never published) → `2026.512.0` (corrected 2026-05-13 per npm reality). |
 | Plugin API version | `apiVersion: 1` in manifest | **FORCED** | Only currently supported value (`PaperclipPluginManifestV1`). |
 | Manifest type | `PaperclipPluginManifestV1` from SDK | **FORCED** | Host validates against this schema at install time. |
 | Language | TypeScript `^5.7.3` | **FORCED** | Matches host; SDK ships only `.d.ts` files at this tier. |
@@ -26,7 +26,7 @@
 | Worker entrypoint | `runWorker(plugin, import.meta.url)` at end of `worker.ts` | **FORCED** | Boots the JSON-RPC-over-stdio loop the host expects. |
 | Database / ORM | Drizzle ORM `^0.38.4` + `postgres@^3.4.5` (host-pinned) | **FORCED-IF-USING-DB** | Host's `@paperclipai/db` pins these. Plugin migrations run inside host's Drizzle pipeline. |
 | Migration tool | Plain SQL files in `migrations/` (declared via `database.migrationsDir`) | **FORCED-IF-USING-DB** | Host runs them in filename order before worker startup, scoped to `ctx.db.namespace`. Drizzle Kit is the host's authoring tool, not the plugin's. |
-| MCP server (for Editor-Agent) | `@paperclipai/mcp-server@^0.1.0` | **FORCED** | The official MCP wrapper around Paperclip's REST API. Includes `paperclipGetHeartbeatContext`, `paperclipListIssues`, `paperclipListComments`, `paperclipListDocuments` — exactly what the Editor-Agent reads. Built on `@modelcontextprotocol/sdk@^1.29.0`. |
+| MCP server (for Editor-Agent) | `@paperclipai/mcp-server@2026.512.0` | **FORCED** | The official MCP wrapper around Paperclip's REST API. Includes `paperclipGetHeartbeatContext`, `paperclipListIssues`, `paperclipListComments`, `paperclipListDocuments` — exactly what the Editor-Agent reads. Built on `@modelcontextprotocol/sdk@^1.29.0`. **Date-based versioning** (same scheme as plugin-sdk). Pin EXACTLY; Renovate auto-bumps. |
 | Agent execution model | Managed agent (`agents[]` manifest entry + `ctx.agents.managed.reconcile`) with `adapterPreference: ["codex_local", "claude_local", "process"]` | **FORCED** | Single supported mechanism for a plugin to ship a heartbeat-driven org-chart hire. |
 | Install command | `pnpm paperclipai plugin install <package[@version]>` | **FORCED** | Per `PLUGIN_SPEC.md` §8.2. |
 | Distribution | npm public package | **FORCED** | Host install path requires reachable npm registry (PLUGIN_SPEC.md §1 deployment notes). |
@@ -348,7 +348,7 @@ routines: [
 
 ## 4. MCP Server Pattern
 
-**Package:** `@paperclipai/mcp-server@^0.1.0` — already first-party, lives at `packages/mcp-server` in the Paperclip repo. It is **a thin MCP wrapper over Paperclip's existing REST API**, not a database client and not a fork of business logic (per its README, verbatim):
+**Package:** `@paperclipai/mcp-server@2026.512.0` — already first-party, lives at `packages/mcp-server` in the Paperclip repo. (Date-based npm versioning; workspace `package.json` says `0.1.0` but publish pipeline overrides.) It is **a thin MCP wrapper over Paperclip's existing REST API**, not a database client and not a fork of business logic (per its README, verbatim):
 
 > "This package is a thin MCP wrapper over the existing Paperclip REST API. It does not talk to the database directly and it does not reimplement business logic."
 
@@ -487,7 +487,8 @@ clarity-pack/
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@paperclipai/plugin-sdk": "^1.0.0"
+    "@paperclipai/plugin-sdk": "2026.512.0"
+    // Date-based versioning. Pin EXACTLY (no caret). Renovate auto-bumps via PR.
     // do NOT add @paperclipai/shared as a runtime dep unless we end up using its types in worker/ui
   },
   "devDependencies": {
@@ -598,7 +599,7 @@ Note the docs/CLI.md document does **not** mention these (its WebFetch in our re
 
 | Technology | Version | Status | Why |
 |---|---|---|---|
-| `@paperclipai/plugin-sdk` | `^1.0.0` | FORCED | Single supported public API. |
+| `@paperclipai/plugin-sdk` | `2026.512.0` | FORCED | Single supported public API. Date-based versioning. |
 | TypeScript | `^5.7.3` | FORCED | Matches host pin. |
 | React | `^19.0.0` (peer `>=18`) | FORCED | Host UI runtime. Externalize, do not bundle. |
 | React DOM | `^19.0.0` | FORCED | Same. |
@@ -606,7 +607,7 @@ Note the docs/CLI.md document does **not** mention these (its WebFetch in our re
 | shadcn/ui | "new-york" style, neutral baseColor, lucide icons | FORCED | Match host `components.json`. |
 | Drizzle ORM (host-side) | `^0.38.4` | FORCED-IF-USING-DB | Host runs migrations. We ship raw SQL. |
 | `postgres` driver (host-side) | `^3.4.5` | INDIRECT | Used by host's Drizzle pipeline; not a plugin dep. |
-| MCP server | `@paperclipai/mcp-server@^0.1.0` | FORCED | Editor-Agent reads. |
+| MCP server | `@paperclipai/mcp-server@2026.512.0` | FORCED | Editor-Agent reads. Date-based versioning. |
 | MCP SDK (transitive) | `@modelcontextprotocol/sdk@^1.29.0` | INDIRECT | Inside the MCP server. |
 | Node | `>=20` | FORCED | Worker target. |
 | pnpm | `9.x` | RECOMMENDED | Matches host workspace tooling (`9.15.4`). |
@@ -741,7 +742,7 @@ pnpm paperclipai plugin install clarity-pack
 | esbuild | `^0.27.3` | UI target `es2022`, worker target `node20`, format `esm` | Per SDK presets. |
 | Node | `>=20` | All | Worker process target. |
 | Drizzle ORM (host) | `^0.38.4` | host-only; plugin ships raw SQL | Do not pin Drizzle in our `package.json`. |
-| `@paperclipai/mcp-server` | `^0.1.0` | `@modelcontextprotocol/sdk@^1.29.0` | Editor-Agent's read surface. |
+| `@paperclipai/mcp-server` | `2026.512.0` | `@modelcontextprotocol/sdk@^1.29.0` | Editor-Agent's read surface. Date-based versioning. |
 
 **Watchpoints:**
 - Upstream Drizzle is at `0.45.x` and a `1.0.0-beta` is in flight. Paperclip pins `0.38.x`. **We must not chase upstream; track host.** When host bumps Drizzle, retest our migrations.
@@ -796,7 +797,7 @@ pnpm paperclipai plugin install clarity-pack
 | Plugin UI is same-origin trusted JS, not iframed | HIGH | PLUGIN_SPEC.md §19 explicit caveat. |
 | Heartbeat-driven agent = `agents[]` manifest + `ctx.agents.managed.reconcile` | MEDIUM | Documented in PLUGIN_AUTHORING_GUIDE.md and shipped in kitchen-sink, but PLUGIN_SPEC.md does not yet codify the field. The implementation is ahead of the formal spec. Phase 1 should re-verify by running kitchen-sink end-to-end and inspecting the agents-table side-effects. |
 | Plugin migrations via `database.migrationsDir` + plain SQL in plugin namespace | MEDIUM | Same gap as above — guide and SDK code support it; formal spec text says "out of scope." We treat the guide + working code as authoritative. Phase 1 must cite both, and should write `0001_clarity_init.sql` and verify it applies via `pnpm paperclipai plugin install` against a fresh local instance. |
-| `@paperclipai/mcp-server@^0.1.0` is the MCP server pattern | HIGH | Verbatim from `packages/mcp-server/{package.json,README.md}`. |
+| `@paperclipai/mcp-server` is the MCP server pattern (npm pinned exactly to `2026.512.0`) | HIGH | Verbatim from `packages/mcp-server/{package.json,README.md}`. Workspace `package.json` says `0.1.0` but npm publish overrides with date version. |
 | Install command is `pnpm paperclipai plugin install <name>` | HIGH for the spec; MEDIUM for whether the CLI binary actually wires it up exactly as written — `doc/CLI.md` doesn't echo it. Phase 1 should sanity-check by running `pnpm paperclipai plugin --help` once. |
 | Drizzle ORM 0.38.4 is the host's pin | HIGH | `packages/db/package.json`. |
 

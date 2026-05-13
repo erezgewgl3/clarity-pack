@@ -1,0 +1,59 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  "schedule": ["before 9am on monday"],
+  "timezone": "America/New_York",
+  "labels": ["dependencies"],
+  "rangeStrategy": "pin",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 9am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "Group Paperclip SDK + MCP server bumps. They ship in lockstep on the same date-based versioning scheme; one PR per release.",
+      "groupName": "paperclip ecosystem",
+      "matchPackageNames": [
+        "@paperclipai/plugin-sdk",
+        "@paperclipai/mcp-server",
+        "@paperclipai/shared"
+      ],
+      "versioning": "loose",
+      "rangeStrategy": "pin",
+      "schedule": ["at any time"],
+      "labels": ["dependencies", "paperclip-bump"],
+      "addLabels": ["needs-smoke-rerun"],
+      "prBodyNotes": [
+        ":rotating_light: **PAPERCLIP SDK BUMP — re-run Plan 02-01 smoke spike before merging.** Date-based versioning means we cannot trust SemVer compat guarantees. Run the snapshot-bookended install rehearsal against Countermoves (or BEAAA) and confirm: D-01 slot still renders, D-02 migrations still apply to plugin namespace, COEXIST-03 disable still preserves data. Update `runbook/REHEARSAL.md` with a new dated row before merging."
+      ]
+    },
+    {
+      "description": "React + react-dom must move together. Host pins React 19; never bump past major host pin.",
+      "groupName": "react",
+      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "description": "Pin esbuild and TypeScript to host pins. Major bumps require host coordination.",
+      "matchPackageNames": ["esbuild", "typescript"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Group all dev dependency patches into one weekly PR.",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "dev dependencies (patch)"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security", "dependencies"],
+    "addLabels": ["needs-immediate-review"],
+    "schedule": ["at any time"]
+  },
+  "configMigration": true
+}

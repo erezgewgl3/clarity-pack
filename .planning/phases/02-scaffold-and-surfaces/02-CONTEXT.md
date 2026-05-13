@@ -98,7 +98,7 @@ Scope anchor: Phase 2 ships the Reader view and Situation Room **only**. The Dai
 - `doc/plugins/PLUGIN_AUTHORING_GUIDE.md` — `agents[]` declaration, `ctx.agents.managed.reconcile()`, `database.migrationsDir` + plugin namespace mechanics, `ctx.db.query()` / `ctx.db.execute()`, `instanceConfigSchema`
 - `doc/DATABASE.md` — Postgres 17, Drizzle 0.38.4, plugin namespace tracking tables
 - `packages/plugins/examples/plugin-kitchen-sink-example/` — Verbatim manifest + worker + `build-ui.mjs` + `tsconfig.json` reference patterns
-- `packages/mcp-server/` — `@paperclipai/mcp-server@^0.1.0` for Editor-Agent reads (not used in Plan 02-01 smoke; lands in Plan 02-03)
+- `packages/mcp-server/` — `@paperclipai/mcp-server@2026.512.0` for Editor-Agent reads (date-based npm versioning; not used in Plan 02-01 smoke; lands in Plan 02-03)
 - **Branch note:** Paperclip default branch is `master`, not `main`. All `/blob/master/...` URLs (PROJECT.md Decision #9).
 
 ### Hostinger pre-flight (operator state — re-verify start of each session)
