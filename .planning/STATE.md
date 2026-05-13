@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-13T21:45:00.000Z"
+last_updated: "2026-05-13T23:30:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 1
@@ -11,6 +11,7 @@ progress:
   completed_plans: 4
   percent: 20
   phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger
+  phase_2_status: CONTEXT CAPTURED — 11 decisions locked (D-01..D-11); ready for /gsd:plan-phase 2
 ---
 
 # State: Clarity Pack
@@ -24,15 +25,15 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 1 — Pre-Install Safety
+**Current Focus:** Phase 2 — Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In (context captured 2026-05-13)
 
 ## Current Position
 
-Phase: 1 (Pre-Install Safety) — **COMPLETE** ✓ (4/4 plans + rehearsal PASS row landed 2026-05-13).
-**Phase:** 1 - Pre-Install Safety (CLOSED)
-**Plan:** All 4 plans executed and merged. Plan 01-04 closed out the first drill's defects and re-rehearsed end-to-end against the live Hostinger Countermoves Paperclip. Plan 01-05 work landed in-session during that drill (5 additional gaps discovered + fixed before PASS) — see runbook/REHEARSAL.md anomaly block for the full list.
-**Status:** SAFE-01..05 all green. Pre-flight gate operational against authenticated Paperclip. Phase 2 (scaffold + primitives + Reader + Room + Editor + opt-in) is now unblocked; next command is `/gsd:plan-phase 2` or `/gsd:discuss-phase 2`.
-**Progress:** [##        ] 1/5 phases complete
+Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **CONTEXT CAPTURED** (11 decisions locked; awaiting planning).
+**Phase:** 2 - Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In
+**Plan:** TBD — context discussion completed 2026-05-13. Plan structure decided (4 plans inside-out: 02-01 smoke spike, 02-02 scaffold + trust-model + primitives, 02-03 Editor-Agent + Reader, 02-04 Situation Room + opt-in + CI). Next: `/gsd:plan-phase 2`.
+**Status:** Three blocking SPEC conflicts resolved (D-01 detailTab, D-02 database.migrationsDir + plugin namespace, D-03 60s configurable via instanceConfigSchema) — D-01 and D-02 carry empirical verification gates in Plan 02-01. Editor-Agent boundaries locked (D-04..D-07). Plan decomposition locked (D-08..D-11). Day-1 trust-model hardening details = Claude's Discretion.
+**Progress:** [##        ] 1/5 phases complete; Phase 2 context-ready
 
 ## Performance Metrics
 
@@ -88,9 +89,9 @@ Phase: 1 (Pre-Install Safety) — **COMPLETE** ✓ (4/4 plans + rehearsal PASS r
 
 ## Session Continuity
 
-**Last session:** 2026-05-07 - Phase 1 Plan 01-03 executed (gate.mjs + runbook + 22 tests). All 3 Phase 1 plans now structurally complete. Total Phase 1 footprint: 103 tests passing, 11 commits, ~5500 LOC. SAFE-02 Part B (rehearsed at least once) pending Eric's drill tomorrow.
+**Last session:** 2026-05-13 — Phase 1 CLOSED (rehearsal PASS against Hostinger Countermoves landed 2026-05-13). Phase 2 discuss-phase ran: 11 decisions captured (D-01..D-11) into `.planning/phases/02-scaffold-and-surfaces/02-CONTEXT.md`. Three blocking SPEC conflicts resolved with verification gates for Plan 02-01 smoke spike. Plan decomposition = 4 plans inside-out.
 
-**Next session resume point:** Eric runs the rehearsal drill against the fresh local Paperclip clone tomorrow morning, following `runbook/rehearsal-drill.md` end-to-end. On `approved — drill clean`, Phase 1 verifier closes the phase and `/gsd:execute-phase` advances to Phase 2.
+**Next session resume point:** Run `/gsd:plan-phase 2` to decompose Phase 2 into Plan 02-01 (smoke spike) + 02-02 (scaffold + primitives) + 02-03 (Editor + Reader) + 02-04 (Room + opt-in + CI). Plan 02-01 acceptance bar gates D-01 and D-02 empirically before downstream plans execute.
 
 **Files of record:**
 
