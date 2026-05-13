@@ -1,0 +1,53 @@
+{
+  "issueId": "BEAAA-555",
+  "body": "Underwriting timeline for Q3 needs revision because BEAAA-141 added a new compliance step. See BEAAA-203 for the supplier impact, and BEAAA-417 covers the Hostinger-side deployment gate. Eric needs to sign the carrier addendum before close.",
+  "ancestry": {
+    "project": { "id": "p-1", "title": "BEAAA Insurance", "url": "/projects/p-1" },
+    "milestone": { "id": "m-q3", "title": "Q3 Launch", "url": "/milestones/m-q3" },
+    "parent": { "id": "BEAAA-100", "title": "Q3 underwriting prep", "url": "/issues/BEAAA-100" }
+  },
+  "refCards": [
+    { "id": "BEAAA-141", "title": "Compliance step v2", "status": "in_progress", "ownerUserId": "carrier-ops", "excerpt": "New SOC-2 attestation must be on file before any quote moves to bind. This blocks the original 30-day timeline by an estimated 7 calendar days.", "url": "/issues/BEAAA-141" },
+    { "id": "BEAAA-203", "title": "Supplier billing review", "status": "blocked", "ownerUserId": "finance-team", "excerpt": "Supplier ChartSwift has invoiced for unverified line items totaling $12,400. Finance is holding payment until we clear the line items against the SoW.", "url": "/issues/BEAAA-203" },
+    { "id": "BEAAA-417", "title": "Hostinger deploy gate", "status": "done", "ownerUserId": "eric", "excerpt": "Caddyfile reverse-proxy now sets header_up Host 127.0.0.1 in front of Paperclip Vite; production probes are clean as of 2026-05-11.", "url": "/issues/BEAAA-417" }
+  ],
+  "tldr": {
+    "surface": "issue",
+    "scope_id": "BEAAA-555",
+    "content_hash": "abc123",
+    "body": "Q3 timeline at risk: BEAAA-141 added a SOC-2 step that costs 7 days; BEAAA-203 is holding supplier billing; BEAAA-417 closed clean. Action on Eric: countersign the carrier addendum.",
+    "generated_at": "2026-05-13T20:14:00Z",
+    "source_revisions": ["abc123"],
+    "compiled_by_agent_id": "clarity-pack-editor-agent",
+    "tags": ["clarity:editor-write"]
+  },
+  "acItems": [
+    { "id": 1, "issue_id": "BEAAA-555", "label": "Carrier addendum countersigned", "checked": false, "display_order": 0 },
+    { "id": 2, "issue_id": "BEAAA-555", "label": "Supplier billing dispute closed", "checked": false, "display_order": 1 },
+    { "id": 3, "issue_id": "BEAAA-555", "label": "SOC-2 attestation on file", "checked": true, "display_order": 2 }
+  ],
+  "activityRaw": [
+    { "kind": "state_change", "actor": "eric", "at": "2026-05-13T19:00:00Z", "detail": "todo -> in_progress" },
+    { "kind": "label_change", "actor": "system", "at": "2026-05-13T19:01:00Z", "detail": "added: priority/high" },
+    { "kind": "comment", "actor": "carrier-ops", "at": "2026-05-13T19:30:00Z", "detail": "SOC-2 step added" },
+    { "kind": "label_change", "actor": "system", "at": "2026-05-13T19:31:00Z", "detail": "added: blocked" },
+    { "kind": "title_edit", "actor": "eric", "at": "2026-05-13T19:40:00Z", "detail": "minor wording" },
+    { "kind": "work_product_write", "actor": "editor-agent-uuid", "at": "2026-05-13T20:14:00Z", "detail": "TL;DR compiled" },
+    { "kind": "comment", "actor": "finance-team", "at": "2026-05-13T20:30:00Z", "detail": "Holding supplier payment" },
+    { "kind": "state_change", "actor": "eric", "at": "2026-05-13T21:00:00Z", "detail": "in_progress -> blocked" },
+    { "kind": "label_change", "actor": "system", "at": "2026-05-13T21:01:00Z", "detail": "removed: priority/high" },
+    { "kind": "comment", "actor": "eric", "at": "2026-05-13T21:15:00Z", "detail": "Awaiting carrier" },
+    { "kind": "label_change", "actor": "system", "at": "2026-05-13T21:16:00Z", "detail": "added: priority/critical" },
+    { "kind": "work_product_write", "actor": "editor-agent-uuid", "at": "2026-05-13T21:30:00Z", "detail": "TL;DR recompiled" }
+  ],
+  "deliverable": {
+    "filename": "Q3-underwriting-plan.xlsx",
+    "last_write_at": "2026-05-13T20:10:00Z"
+  },
+  "blockerChain": {
+    "startId": "BEAAA-555",
+    "pathIds": ["BEAAA-555", "BEAAA-141"],
+    "terminal": { "kind": "HUMAN_ACTION_ON", "userId": "eric", "label": "Eric to countersign carrier addendum" },
+    "isStale": false
+  }
+}
