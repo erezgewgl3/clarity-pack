@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": false,
+    "sourceMap": false,
+    "isolatedModules": false
+  },
+  "include": ["src/manifest.ts"],
+  "exclude": ["src/worker.ts", "src/ui/**", "src/worker/**", "src/shared/**", "test/**"]
+}
