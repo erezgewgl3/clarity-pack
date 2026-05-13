@@ -3,7 +3,9 @@
   "version": "0.1.0-smoke",
   "description": "Paperclip plugin — four Clarity surfaces + Editor-Agent (smoke spike).",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "pnpm build:worker && pnpm build:ui && pnpm build:manifest",
     "build:worker": "node scripts/build-worker.mjs",
@@ -17,16 +19,22 @@
     "worker": "./dist/worker.js",
     "ui": "./dist/ui/"
   },
-  "files": ["dist/", "migrations/", "README.md"],
+  "files": [
+    "dist/",
+    "migrations/",
+    "README.md"
+  ],
   "peerDependencies": {
+    "@paperclipai/plugin-sdk": "2026.512.0",
     "react": ">=18",
-    "react-dom": ">=18",
-    "@paperclipai/plugin-sdk": "2026.512.0"
+    "react-dom": ">=18"
   },
   "devDependencies": {
     "@paperclipai/plugin-sdk": "2026.512.0",
     "@types/react": "^19.0.0",
+    "@typescript-eslint/parser": "^8.59.3",
     "esbuild": "^0.27.3",
+    "eslint": "^10.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.7.3"
