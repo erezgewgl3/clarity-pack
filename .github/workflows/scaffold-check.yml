@@ -1,0 +1,59 @@
+# .github/workflows/scaffold-check.yml
+#
+# Plan 02-02 Task 3 — CI gate that enforces the trust-model + scaffold
+# invariants on every PR + push to main:
+#   - SCAF-04: pnpm-lock.yaml frozen; no postinstall scripts (audit script
+#     fails the build if any unallowlisted dep declares one)
+#   - SCAF-05 / SCAF-09: lint rules ban raw fetch + raw <a href> in src/ui/
+#   - SCAF-06 / COEXIST-01: CSS scope check — every theme.css selector
+#     scoped under [data-clarity-surface]
+#   - SCAF-07 / PITFALLS.md #1: use-poll terminal vs transient state machine
+#     covered by node:test
+#   - PRIM-01/02/03/04/05/06: shared primitives + worker handlers covered by
+#     node:test
+#   - All TypeScript compiles cleanly (tsc --noEmit)
+#   - The plugin builds (worker.js + ui bundle + manifest.js emitted)
+#
+# Runs on every PR and on push to main. Cache pnpm store for speed.
+
+name: scaffold-check
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: install (frozen lockfile, scripts disabled via .npmrc)
+        run: pnpm install --frozen-lockfile
+
+      - name: postinstall audit (SCAF-04 / COEXIST-04)
+        run: node scripts/audit-postinstall.mjs
+
+      - name: CSS scope check (SCAF-06 / COEXIST-01)
+        run: node scripts/check-css-scope.mjs
+
+      - name: ESLint (SCAF-05 / SCAF-09) — src/ only; fixtures are deliberately bad and exercised by node:test
+        run: npx eslint src/
+
+      - name: typecheck
+        run: pnpm typecheck
+
+      - name: unit tests (shared + worker + UI primitives)
+        run: node --test "test/shared/*.test.mjs" "test/worker/*.test.mjs" "test/ui/*.test.mjs"
+
+      - name: build (worker + ui + manifest)
+        run: pnpm build

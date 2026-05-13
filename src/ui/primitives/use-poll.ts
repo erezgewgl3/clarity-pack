@@ -287,7 +287,6 @@ export function usePoll<T>(opts: UsePollOptions<T>): UsePollResult<T> {
     return () => loop.stop();
     // We intentionally re-create the loop only when the key changes — fetcher
     // / intervalMs changes do NOT restart polling. Callers should memoize.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opts.key]);
 
   return { data, error, stale: false, isLeader: null };
