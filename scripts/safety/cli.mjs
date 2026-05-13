@@ -18,7 +18,7 @@ import { pruneSnapshots } from './lib/prune.mjs';
 import { snapshot } from './lib/snapshot.mjs';
 import { restoreToStaging } from './lib/restore.mjs';
 import { resolvePaperclipHome, resolveSnapshotsDir, isValidSnapshotId } from './lib/paths.mjs';
-import { detectMode } from './lib/mode-detect.mjs';
+import { detectMode, detectConnectionConfig, DetectError } from './lib/mode-detect.mjs';
 import * as paperclipCli from './lib/paperclip-cli.mjs';
 import { smoke } from './lib/smoke.mjs';
 import { verify } from './lib/verify.mjs';
@@ -44,6 +44,11 @@ function printRootHelp() {
       '  --paperclip-home <path>   default: $PAPERCLIP_HOME or platform default',
       '  --instance-id <id>        default: $PAPERCLIP_INSTANCE_ID or "default"',
       '  --help, -h                show this help',
+      '',
+      'Snapshot-specific flags (postgres mode):',
+      '  --db-url <dsn>            explicit postgresql:// DSN (overrides config-derived)',
+      '  --pg-bin <path>           explicit path to pg_dump binary (overrides locator)',
+      '  --paperclip-clone <path>  Paperclip-clone root for bundled @embedded-postgres discovery',
       ''
     ].join('\n')
   );
@@ -93,10 +98,30 @@ async function runSnapshot(flags) {
   const instanceId = flags['instance-id'] ?? process.env.PAPERCLIP_INSTANCE_ID ?? 'default';
   const repoRoot = repoRootFromCli();
   const snapshotsDir = resolveSnapshotsDir(repoRoot);
+  const configPath = path.join(home, 'instances', instanceId, 'config.json');
+
+  // Mode + dbUrl resolution (Plan 01-05 Task 3):
+  // - If --db-url is explicit, use it verbatim with operator-supplied --mode (or detected).
+  // - Otherwise, call detectConnectionConfig to derive both. For embedded-postgres mode
+  //   this builds postgresql://paperclip:paperclip@127.0.0.1:<port>/paperclip from config.
   let mode = flags.mode;
-  if (!mode) {
-    mode = await detectMode(path.join(home, 'instances', instanceId, 'config.json'));
+  let dbUrl = flags['db-url'];
+  if (!dbUrl && (!mode || mode === 'postgres')) {
+    try {
+      const conn = await detectConnectionConfig(configPath);
+      mode = conn.mode;
+      dbUrl = conn.dbUrl;
+    } catch (err) {
+      if (err instanceof DetectError) {
+        process.stderr.write(`snapshot: ${err.message}\nhint: ${err.hint}\n`);
+        return 1;
+      }
+      throw err;
+    }
+  } else if (!mode) {
+    mode = await detectMode(configPath);
   }
+
   const snapshotIdNow = new Date().toISOString().replace(/[:.]/g, '-').replace(/-\d+Z$/, 'Z');
   const outDir = flags.out ?? path.join(snapshotsDir, snapshotIdNow);
   const result = await snapshot({
@@ -104,7 +129,9 @@ async function runSnapshot(flags) {
     instanceId,
     mode,
     outDir,
-    dbUrl: flags['db-url'],
+    dbUrl,
+    pgBinPath: flags['pg-bin'],
+    paperclipClonePath: flags['paperclip-clone'],
     excludeSecrets: flags['exclude-secrets'] === true,
     includeLogs: flags['include-logs'] !== false,
     paperclipCli,

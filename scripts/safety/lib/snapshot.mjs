@@ -105,7 +105,7 @@ function withDbName(_url, _dbName) {
  *   --file=<outDir>/postgres.dump
  *   --dbname=<dsn>
  */
-async function runPgDump({ outDir, dbUrl, _spawn, logStream }) {
+async function runPgDump({ outDir, dbUrl, pgDumpPath, _spawn, logStream }) {
   // Strip the password (and userinfo) from the DSN before it lands in
   // argv. Argv is visible to anyone with `ps` privileges (Security Domain
   // T2 — Information Disclosure). PGPASSWORD env is the documented
@@ -144,7 +144,7 @@ async function runPgDump({ outDir, dbUrl, _spawn, logStream }) {
 
   let child;
   try {
-    child = _spawn('pg_dump', argv, {
+    child = _spawn(pgDumpPath, argv, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: childEnv
     });
@@ -187,11 +187,15 @@ async function runPgDump({ outDir, dbUrl, _spawn, logStream }) {
  *   mode          — 'pglite' | 'postgres'
  *   outDir        — absolute path of the snapshot output dir
  *   dbUrl?        — postgres mode only
+ *   pgBinPath?    — postgres mode: explicit pg_dump path (skips locator search; Plan 01-05 Task 3)
+ *   paperclipClonePath? — postgres mode: hint for bundled-binary discovery (Plan 01-05 Task 3)
  *   excludeSecrets? — opt-in: omit instances/<id>/secrets/ from the fs tar
  *   includeLogs?    — default true; pass false to omit instances/<id>/logs/
  *   _paperclipCli?  — override paperclip-cli helpers for tests
  *   _pglite?        — override the PGlite class for tests
  *   _spawn?         — override cross-spawn for pg_dump tests
+ *   _locatePgDump?  — override locatePgDump for tests (Plan 01-05)
+ *   _assertVersionMatch? — override assertVersionMatch for tests (Plan 01-05)
  *
  * Returns: { snapshotId, manifestPath }
  */
@@ -281,7 +285,30 @@ export async function snapshot(opts) {
       throw new Error('snapshot: opts.dbUrl is required in postgres mode');
     }
     const spawnImpl = opts._spawn ?? crossSpawn.spawn;
-    await runPgDump({ outDir: opts.outDir, dbUrl: opts.dbUrl, _spawn: spawnImpl, logStream });
+
+    // Locate pg_dump: explicit override → bundled @embedded-postgres → system PATH.
+    // Then pre-check major-version compatibility BEFORE spawning the dump.
+    // Both are injectable for tests; production callers use the real implementations
+    // from pg-dump-locator.mjs.
+    const locatePgDumpImpl =
+      opts._locatePgDump ?? (await import('./pg-dump-locator.mjs')).locatePgDump;
+    const assertVersionMatchImpl =
+      opts._assertVersionMatch ??
+      (await import('./pg-dump-locator.mjs')).assertVersionMatch;
+
+    const { pgDumpPath } = await locatePgDumpImpl({
+      pgBinOverride: opts.pgBinPath,
+      paperclipClonePath: opts.paperclipClonePath,
+    });
+    await assertVersionMatchImpl(pgDumpPath, opts.dbUrl);
+
+    await runPgDump({
+      outDir: opts.outDir,
+      dbUrl: opts.dbUrl,
+      pgDumpPath,
+      _spawn: spawnImpl,
+      logStream,
+    });
     const dbPath = path.join(opts.outDir, 'postgres.dump');
     dbArtifact = {
       path: 'postgres.dump',

@@ -7,7 +7,7 @@
 
 import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
-import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -148,5 +148,117 @@ test('S9 — paperclip-cli failures (e.g. 403 on plugin list) are recorded as ma
     assert.equal(manifest.paperclipCliWarnings[0].step, 'getPaperclipVersion');
     assert.equal(manifest.paperclipCliWarnings[1].step, 'listInstalledPlugins');
     assert.match(manifest.paperclipCliWarnings[1].message, /403/);
+  });
+});
+
+// Plan 01-05 Task 3: snapshot.mjs uses pg-dump-locator + assertVersionMatch
+// for postgres mode. Both are injectable for tests.
+
+test('S-locator-A — snapshot postgres-mode invokes pg_dump using the path returned by locatePgDump', async () => {
+  // Stub locatePgDump to return a TAGGED path; stub assertVersionMatch to no-op;
+  // stub spawn to capture the binary used in the spawn call. Fake spawn also
+  // writes the expected postgres.dump file so the downstream sha256/manifest
+  // steps don't fail on a missing file.
+  let spawnedBinary = null;
+  let snapOutDir = null;
+  const fakeSpawn = (binary, argv, _opts) => {
+    spawnedBinary = binary;
+    // Extract --file=<path> from argv and write a stub dump there.
+    const fileArg = argv.find((a) => typeof a === 'string' && a.startsWith('--file='));
+    if (fileArg) {
+      const dumpPath = fileArg.slice('--file='.length);
+      // fire-and-forget — the close-event handler runs after the write below
+      writeFile(dumpPath, 'fake-pg_dump-output').catch(() => {});
+    }
+    return {
+      stdout: null,
+      stderr: { on: () => {} },
+      on(event, cb) {
+        if (event === 'close') queueMicrotask(() => cb(0));
+      },
+    };
+  };
+
+  await withTmp(async (root) => {
+    const home = path.join(root, 'home');
+    await copyFakeInstance(home);
+    snapOutDir = path.join(root, 'snap');
+    await snapshot({
+      home,
+      instanceId: 'default',
+      mode: 'postgres',
+      outDir: snapOutDir,
+      dbUrl: 'postgresql://paperclip:paperclip@127.0.0.1:54329/paperclip',
+      _paperclipCli: stubCli,
+      _spawn: fakeSpawn,
+      _locatePgDump: async () => ({
+        pgDumpPath: '/test/tagged-pg_dump-binary',
+        source: 'override',
+      }),
+      _assertVersionMatch: async () => {},
+      silent: true,
+    });
+    assert.equal(
+      spawnedBinary,
+      '/test/tagged-pg_dump-binary',
+      'snapshot must use the path returned by locatePgDump for its pg_dump spawn',
+    );
+  });
+});
+
+test('S-locator-B — snapshot postgres-mode aborts cleanly when assertVersionMatch throws (pg_dump NOT invoked)', async () => {
+  let spawnedBinary = null;
+  const fakeSpawn = (binary, _argv, _opts) => {
+    spawnedBinary = binary;
+    return {
+      stdout: null,
+      stderr: { on: () => {} },
+      on(event, cb) {
+        if (event === 'close') queueMicrotask(() => cb(0));
+      },
+    };
+  };
+
+  await withTmp(async (root) => {
+    const home = path.join(root, 'home');
+    await copyFakeInstance(home);
+    const outDir = path.join(root, 'snap');
+    await assert.rejects(
+      () =>
+        snapshot({
+          home,
+          instanceId: 'default',
+          mode: 'postgres',
+          outDir,
+          dbUrl: 'postgresql://paperclip:paperclip@127.0.0.1:54329/paperclip',
+          _paperclipCli: stubCli,
+          _spawn: fakeSpawn,
+          _locatePgDump: async () => ({
+            pgDumpPath: '/test/should-not-be-invoked',
+            source: 'override',
+          }),
+          _assertVersionMatch: async () => {
+            const e = new Error(
+              'pg_dump major version 17 cannot dump server version 18. ' +
+                'PostgreSQL requires matching major version. ' +
+                'Install pg_dump 18 client tools OR use restore-by-deletion fallback for throwaway dev clones ' +
+                '(runbook/operator-gotchas.md §pg-dump-version-mismatch).',
+            );
+            e.name = 'VersionMismatchError';
+            throw e;
+          },
+          silent: true,
+        }),
+      (err) => {
+        assert.match(err.message, /pg_dump major version 17/);
+        assert.match(err.message, /server version 18/);
+        return true;
+      },
+    );
+    assert.equal(
+      spawnedBinary,
+      null,
+      'pg_dump must NOT have been invoked when assertVersionMatch throws',
+    );
   });
 });

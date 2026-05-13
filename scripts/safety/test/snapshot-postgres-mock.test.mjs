@@ -83,6 +83,9 @@ test('S5 — pg_dump argv is exactly [--format=custom, --compress=zstd:6, --no-o
     const captured = {};
     const spawnStub = makePgDumpSpawnStub(captured);
     const dbUrl = 'postgresql://paperclip:s3cr3t@localhost:5432/paperclip';
+    // Plan 01-05 Task 3: snapshot now requires _locatePgDump + _assertVersionMatch
+    // overrides (the production code path goes through the locator + version-check
+    // before reaching the spawn that this test exercises).
     await snapshot({
       home,
       instanceId: 'default',
@@ -90,6 +93,8 @@ test('S5 — pg_dump argv is exactly [--format=custom, --compress=zstd:6, --no-o
       outDir,
       dbUrl,
       _spawn: spawnStub,
+      _locatePgDump: async () => ({ pgDumpPath: 'pg_dump', source: 'override' }),
+      _assertVersionMatch: async () => {},
       _paperclipCli: stubCli,
       silent: true
     });
@@ -119,16 +124,31 @@ test('S5 — pg_dump argv is exactly [--format=custom, --compress=zstd:6, --no-o
   });
 });
 
-test('S6 — pg_dump ENOENT throws with platform-specific install hint', async () => {
+test('S6 — pg_dump missing-from-system throws LocateError with platform-specific install hint', async () => {
+  // Plan 01-05 Task 3: snapshot now goes through locatePgDump BEFORE spawn.
+  // If pg_dump is genuinely absent from every search location, the locator
+  // throws LocateError carrying a platform-specific install hint in `.hint`.
+  // We simulate that "no pg_dump anywhere" condition by injecting a
+  // _locatePgDump stub that throws the same LocateError the real locator
+  // would produce on a clean machine.
+  const { LocateError } = await import('../lib/pg-dump-locator.mjs');
+  const hintByPlatform = {
+    win32:
+      'On Windows: install PostgreSQL client tools via `winget install PostgreSQL.PostgreSQL.17` (or the major version matching your Paperclip embedded-postgres server). Then either add C:\\Program Files\\PostgreSQL\\<ver>\\bin to PATH or pass --pg-bin <path-to-pg_dump.exe>.',
+    darwin:
+      'On macOS: install PostgreSQL client tools via `brew install postgresql@17` (or the major version matching your Paperclip embedded-postgres server). Then either add the keg-only bin dir to PATH or pass --pg-bin <path>.',
+  };
+  const hint =
+    hintByPlatform[process.platform] ??
+    'On Linux: install PostgreSQL client tools via `apt install postgresql-client-17` / `dnf install postgresql17` / equivalent. Then ensure pg_dump is on PATH or pass --pg-bin <path>.';
+  const stubLocator = async () => {
+    throw new LocateError('pg_dump not found.\nSearched:\n  system PATH: (empty)', hint);
+  };
+
   await withTmp(async (root) => {
     const home = path.join(root, 'home');
     await copyFakeInstance(home);
     const outDir = path.join(root, 'snap');
-    const enoentSpawn = (_cmd, _args, _opts) => {
-      const err = new Error('spawn pg_dump ENOENT');
-      err.code = 'ENOENT';
-      throw err;
-    };
     await assert.rejects(
       () =>
         snapshot({
@@ -137,22 +157,25 @@ test('S6 — pg_dump ENOENT throws with platform-specific install hint', async (
           mode: 'postgres',
           outDir,
           dbUrl: 'postgresql://u@h:5432/p',
-          _spawn: enoentSpawn,
+          _locatePgDump: stubLocator,
           _paperclipCli: stubCli,
-          silent: true
+          silent: true,
         }),
       (err) => {
-        assert.match(err.message, /pg_dump.*not on PATH/);
-        // Platform-specific hint must be present.
+        // The thrown error is the LocateError itself (snapshot.mjs lets it
+        // propagate); its `.message` and `.hint` carry the install context.
+        assert.ok(err instanceof LocateError, 'expected LocateError');
+        assert.match(err.message, /pg_dump not found/);
+        // Platform-specific hint must be present on the `.hint` field.
         if (process.platform === 'win32') {
-          assert.match(err.message, /winget install PostgreSQL\.PostgreSQL\.17/);
+          assert.match(err.hint, /winget install PostgreSQL\.PostgreSQL\.17/);
         } else if (process.platform === 'darwin') {
-          assert.match(err.message, /brew install postgresql@17/);
+          assert.match(err.hint, /brew install postgresql@17/);
         } else {
-          assert.match(err.message, /postgresql-client-17|postgresql17/);
+          assert.match(err.hint, /postgresql-client-17|postgresql17/);
         }
         return true;
-      }
+      },
     );
   });
 });
