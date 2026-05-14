@@ -27,15 +27,19 @@ function shortAgo(iso: string): string {
   return `${day}d`;
 }
 
-export function ActivityTimeline({ events }: { events: ActivityEvent[] }): React.ReactElement {
+export function ActivityTimeline({ events }: { events: ActivityEvent[] | undefined }): React.ReactElement {
+  // DEV-15 (drill 2026-05-14): defensive null-safety. Same pattern as
+  // AnchoredToCards / AcChecklist — handler may return events as undefined
+  // when degraded; crashing on .length blows the whole Reader tab.
+  const safe = events ?? [];
   return (
     <section className="clarity-activity-timeline" data-clarity-region="activity">
       <h3>Recent activity</h3>
-      {events.length === 0 ? (
+      {safe.length === 0 ? (
         <p className="clarity-activity-empty">No relevant activity yet.</p>
       ) : (
         <ul>
-          {events.map((e, i) => (
+          {safe.map((e, i) => (
             <li key={`${e.at}-${i}`} className="clarity-activity-item" data-kind={e.kind}>
               <span className="clarity-activity-kind">{e.kind}</span>
               <span className="clarity-activity-actor">{e.actor}</span>

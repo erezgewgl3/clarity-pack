@@ -21,18 +21,24 @@ export function AcChecklist({
   userId,
 }: {
   issueId: string;
-  items: AcItem[];
+  items: AcItem[] | undefined;
   userId?: string | null;
 }): React.ReactElement {
   const toggleAc = usePluginAction('ac-toggle');
+  // DEV-15 (drill 2026-05-14): defensive null-safety. Same pattern as
+  // AnchoredToCards — the issue-reader worker handler may return acItems
+  // as undefined when a sub-handler degrades, and the host's
+  // PluginSlotErrorBoundary crashes the whole Reader tab if we read
+  // .length on undefined.
+  const safe = items ?? [];
   return (
     <section className="clarity-ac-checklist" data-clarity-region="ac-checklist">
       <h3>Acceptance criteria</h3>
-      {items.length === 0 ? (
+      {safe.length === 0 ? (
         <p className="clarity-ac-empty">No acceptance criteria recorded yet.</p>
       ) : (
         <ul>
-          {items.map((it) => (
+          {safe.map((it) => (
             <li key={it.id} className="clarity-ac-item">
               <label>
                 <input
