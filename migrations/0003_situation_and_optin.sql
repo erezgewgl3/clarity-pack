@@ -12,20 +12,19 @@
 --
 -- COMMENT ON statements may remain unqualified per the validator logic
 -- (skips lines starting with `comment `); all other DDL is qualified.
-
--- Idempotent guard: assert 0001_init.sql already created clarity_user_prefs.
--- If a future migration ever renames the plugin id, this guard surfaces the
--- mismatch loudly instead of silently letting a wrong-namespace schema slip
--- through.
-DO $$ BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.tables
-    WHERE table_schema = 'plugin_clarity_pack_cdd6bda4bd'
-      AND table_name = 'clarity_user_prefs'
-  ) THEN
-    RAISE EXCEPTION 'plugin_clarity_pack_cdd6bda4bd.clarity_user_prefs missing — 0001_init.sql must run first';
-  END IF;
-END $$;
+--
+-- Paperclip's plugin-SQL validator rejects anonymous procedural blocks
+-- (case-insensitive match on the keyword that opens a PL/pgSQL anonymous
+-- block followed by a dollar-quote start or LANGUAGE clause). Discovered
+-- during Plan 02-04 install on Countermoves, 2026-05-14. A defensive
+-- existence-guard for 0001_init.sql.clarity_user_prefs was therefore
+-- removed; the migration runner guarantees order 0001 -> 0002 -> 0003,
+-- and if the namespace schema somehow does not exist by the time 0003
+-- runs, the namespace-qualified DDL below will fail naturally with
+-- `schema does not exist` -- the same loud failure mode the guard was
+-- trying to provide.
+-- Regression test: test/migrations/no-procedural-blocks.test.mjs scans
+-- every migration with the same regex the host enforces.
 
 -- ---------------------------------------------------------------------------
 -- situation_snapshots — ROOM-05 60s materialized cache.
