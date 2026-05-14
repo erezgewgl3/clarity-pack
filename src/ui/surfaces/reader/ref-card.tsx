@@ -26,15 +26,22 @@ function statusToPill(status: RefCardData['status']): StatePillState {
   }
 }
 
-export function AnchoredToCards({ cards }: { cards: RefCardData[] }): React.ReactElement {
+export function AnchoredToCards({ cards }: { cards: RefCardData[] | undefined }): React.ReactElement {
+  // DEV-15 (drill 2026-05-14): defensive null-safety. The issue-reader
+  // worker handler returns `refCards: undefined` when resolve-refs fails to
+  // fetch a referenced issue (e.g. cross-org BEAAA-* placeholders in a test
+  // issue body 404 against the local Paperclip). Without this guard the
+  // whole Reader tab crashes at `cards.length` and the host renders a red
+  // "Clarity Pack failed to render" boundary.
+  const safe = cards ?? [];
   return (
     <section className="clarity-anchored-to" data-clarity-region="anchored-to">
       <h3>Anchored to (resolved)</h3>
-      {cards.length === 0 ? (
+      {safe.length === 0 ? (
         <p className="clarity-anchored-empty">No upstream references in this task.</p>
       ) : (
         <ul className="clarity-anchored-list">
-          {cards.map((c) => (
+          {safe.map((c) => (
             <RefCard key={c.id} card={c} />
           ))}
         </ul>
