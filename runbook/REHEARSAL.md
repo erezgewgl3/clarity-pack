@@ -151,6 +151,7 @@ This sub-section records the Plan 02-03 Task 3 / 02-03b Task 3 manual checkpoint
 | Date       | Plugin version | Plugin uuid                                | Issue | Pre-snapshot id            | Components rendered                                                                                                  | Console clean | Verdict   | Operator |
 |------------|----------------|--------------------------------------------|-------|----------------------------|-----------------------------------------------------------------------------------------------------------------------|---------------|-----------|----------|
 | 2026-05-14 | 0.2.0 (manifest) / 0.1.0-smoke (npm) | `0d4fc40a-0541-4b67-8979-9d346cb9c07b` | COU-4 | `2026-05-14T06-02-00Z`     | 4/8 (TldrStrip placeholder, AnchoredToCards empty, AcChecklist empty, ActivityTimeline empty); 1/8 error (LiveBlockerPanel showing typed EXTERNAL terminal); 3/8 missing (Breadcrumb, ProseWithRefChips, DeliverablePreview) | ❌ | NOT APPROVED | eric (driven by Claude as pair-on-keyboard) |
+| 2026-05-14 | 0.2.0 (manifest) / 0.1.0-smoke (npm, sha256 `7543C9506A35A150…`, 18,190 bytes) | `0d4fc40a-0541-4b67-8979-9d346cb9c07b` | COU-1 | `2026-05-14T08-58-29Z`     | 7/8 visible (Breadcrumb populated "Onboarding", TldrStrip "Compiling TL;DR…" placeholder, ProseWithRefChips renders issue body, AnchoredToCards graceful empty, AcChecklist graceful empty, ActivityTimeline shows comment, LiveBlockerPanel renders graceful "EXTERNAL/No active blockers"); 1/8 unverified (DeliverablePreview not scrolled into view but mockup-conformant code path verified by source-grep test) | ⚠ — 4 React key warnings remain (Task 3 deferred to Plan 02-05); zero 502s; zero `companyId required` errors; zero fail-loud worker terminal text | **`approved — reader green`** WITH 3 polish items deferred | eric (driven by Claude as pair-on-keyboard) |
 
 **Verdict for the 2026-05-14 row:** `not approved — sub-check A partial fail. 3 of 8 Reader components missing; 1 in error state. Root cause: useHostContext().companyId returns null in detail-tab slots on this Paperclip version, causing both issue.reader and flatten-blocker-chain handlers to bail per their fail-loud companyId guards. Plan 02-03b Task 2 fixed the SDK shape drift but left a UI-side gap because unit tests mock useHostContext() and never see real null values.`
 
@@ -176,6 +177,43 @@ This sub-section records the Plan 02-03 Task 3 / 02-03b Task 3 manual checkpoint
 - No post-snapshot taken (drill ended at sub-check A; no destructive action against live state)
 
 **SAFE-02 grep:** still MATCH via the prior PASS row.
+
+---
+
+### 2026-05-14T09:08+ — APPROVED — Plan 02-03c gap-closure drill against Countermoves
+
+**Verdict for the 2026-05-14T09:08+ row:** `approved — reader green WITH 3 polish items deferred`. The blocking 02-03b/02-03c defects (companyId-null + ReaderView prop-shape) are CLOSED. Reader tab renders populated data on COU-1; ProseWithRefChips renders the issue body for the first time on the live host; the worker fail-loud terminal text from the prior drill is gone. Plans 02-03 + 02-03b + 02-03c all close together.
+
+**Empirical anchors (this drill):**
+
+1. **Primary 02-03b/02-03c root cause was misdiagnosed** — the prior drill diagnosed `useHostContext().companyId` returns null for detail-tab slots as the root cause. That is a real concern (proven by reading `~/paperclip/ui/src/plugins/slots.tsx` `slotContextToHostContext` source — Plan 02-03c Task 1 captured the empirical contract in `02-03c-HOST-CONTEXT.md`). But it was secondary. The PRIMARY failure was that `ReaderView`'s prop signature was `{ entityId }: { entityId: string }`, but the host invokes slot components with `{ slot, context }` per `PluginSlotComponentProps`. `entityId` at the top level was ALWAYS `undefined` → `issue.reader`'s `if (!issueId) return emptyResult()` silently returned empty for every render. The fail-loud surfaced via `flatten-blocker-chain`'s stricter `if (!startId || !companyId) graceful()` guard, which the prior drill correctly flagged but mis-attributed. Fixed in commit `cf3084f`: ReaderView now reads `context.entityId` per `PluginDetailTabProps` shape (SDK 2026.512.0 types.d.ts:197-203 statically guarantees non-null).
+2. **Resolver hook works as designed** — `useResolvedCompanyId()` (commit `516477f`) successfully short-circuits to `useHostContext().companyId` when populated and falls back to URL parsing + `companies.resolve-prefix` worker handler when null. Confirmed by zero `companyId required` errors in the drill console.
+3. **Defect-class structurally impossible** — both `ReaderView` and `LiveBlockerPanel` now use the `*WithCompany` inner-component split. The inner components only mount when companyId is a real UUID, making `companyId ?? ''` to the worker structurally impossible.
+4. **Coexistence guarantee #6 still holding across 3 reinstalls in this drill** — plugin uuid `0d4fc40a-0541-4b67-8979-9d346cb9c07b` preserved across uninstall + reinstall + reinstall + reinstall. Namespace tables intact.
+5. **One mid-drill commit** to address Task 4 attempt #1 findings: `cf3084f` (Task 2.5 + 2.6 — PluginDetailTabProps shape + handler graceful-empty for empty prefix).
+
+**3 polish items deferred to follow-on plans (drill not blocked on these):**
+
+1. **Plan 02-05 — React key warnings cleanup** (per `02-03c-REACT-KEYS.md`): 4 warnings on `ClaritySurfaceRoot`, `Breadcrumb`, `AnchoredToCards`, `ActivityTimeline`. Hypothesized root cause: host's plugin-loader `applyJsxRuntimeKey` shim interaction with our esbuild jsx-runtime emit. Not blocking.
+2. **Plan 02-06 — LiveBlockerPanel UX cleanup**: panel renders the literal `EXTERNAL` kind even for the graceful "No active blockers" terminal. Worker uses `EXTERNAL` as catch-all kind for both fail-loud AND graceful-empty cases; UI must differentiate. Not blocking — just looks alarming.
+3. **Plan 02-07 — Activity timeline date formatting**: timeline rendering "commentb2a22e50-d772-4b70-bb50-4f4e93c2e9843d agoConfirmed operational — …" — comment UUID is leaking into the formatted-timestamp slot. Pre-existing bug in `activity-timeline.tsx`, masked until populated data arrived. Not blocking.
+
+**Two operator gotchas surfaced (file in MemPalace runbook):**
+
+- **Manual `pnpm paperclipai ...` MUST be run from `~/paperclip`** — `cd ~/paperclip` before any `paperclipai` command. The `install-helper.sh` does this automatically (commit `27c1ef8`); manual `uninstall` / `list` / `--version` calls do NOT and will fail with `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "paperclipai" not found`.
+- **Safety CLI `verify` subcommand requires `--company-id` (or `PAPERCLIP_COMPANY_ID` env)** — undocumented operator gotcha. Snapshot bytes are sha256-verified at capture time, so for routine bookend pairs `verify` is optional; only needed when actually rehearsing a rollback against live state.
+
+**Drill artifacts of record (Countermoves Hostinger, 2026-05-14T09:08+):**
+
+- Pre-drill commits in plugin repo (most recent first): `cf3084f` (Task 2.5+2.6 gap fixes), `8cdf1f1` (Task 2.4 LiveBlockerPanel retrofit), `23b34a8` (Task 2.3 ReaderView retrofit), `516477f` (Task 2.2 hook), `76f6538` (Task 2.1 worker handler), `1d424b2` (Task 1 HOST-CONTEXT.md), `bc65655` (plan 02-03c)
+- Tarball shipped: `clarity-pack-0.1.0-smoke.tgz`, sha256 prefix `7543C9506A35A150…`, size 18,190 bytes
+- Pre-drill snapshot: `2026-05-14T08-58-29Z` (412,376 bytes pgdump + 3,338,544 bytes fs tar; sha256-verified)
+- Post-drill snapshot: `2026-05-14T09-50-17Z` (412,631 bytes pgdump + 3,439,203 bytes fs tar; sha256-verified)
+- Test issue used: COU-1 "Smoke test — confirm CEO agent is operational"
+- Plugin status post-install: `ready` (uuid preserved across drill cycle: `0d4fc40a-0541-4b67-8979-9d346cb9c07b`)
+- Plan 02-03 + 02-03b + 02-03c all CLOSE on this verdict.
+
+**SAFE-02 grep:** continues to MATCH (this row is dated `2026-05-14`).
 
 ---
 

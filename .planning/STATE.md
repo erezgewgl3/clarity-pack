@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-13T23:50:00.000Z"
+last_updated: "2026-05-14T09:50:17Z"
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 8
-  completed_plans: 4
-  percent: 22
+  total_plans: 11
+  completed_plans: 5
+  percent: 30
   phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger Countermoves (hosted Postgres). Plan 01-05 cleanup landed 2026-05-13 — pg-dump-locator with bundled-first discovery + version pre-check + dbUrl auto-derivation + operator-gotchas.md catalog. All 3 Phase 2 spike defects now disposed: defect-1 fixed (mode-detect), defect-2 fixed (locator), defect-3 documented (version-mismatch is inherent to pg_dump; clean error path + runbook workaround shipped). Full safety CLI suite: 122 pass / 0 fail.
-  phase_2_status: EXECUTING — Plan 02-01 PARTIAL (Check B Linux-deferred); Plan 02-02 COMPLETE 2026-05-13 (5-slot manifest + 6 primitives + trust-model hardening; 34 new tests pass; SUMMARY `02-02-SUMMARY.md`); Plans 02-03 (Editor-Agent + Reader view) and 02-04 (Situation Room + opt-in + coexistence CI) pending. Total Phase 2 progress: ~50% by plan count.
+  phase_2_status: EXECUTING — Plans 02-01 PARTIAL (Check B Linux-deferred), 02-02 COMPLETE 2026-05-13, 02-03 + 02-03b + 02-03c CLOSE TOGETHER 2026-05-14T09:08+ on rehearsal verdict 'approved — reader green WITH 3 polish items deferred' (drill against Countermoves COU-1; commits 1d424b2..cf3084f; suite 84→125 tests; pre-snapshot 2026-05-14T08-58-29Z, post-snapshot 2026-05-14T09-50-17Z). 3 follow-on plans filed (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date) — non-blocking polish. Plan 02-04 (Situation Room + opt-in + coexistence CI) UNBLOCKED, ready to plan/execute. Total Phase 2 progress: 4/7 by plan count (02-03b superseded by 02-03c).
 ---
 
 # State: Clarity Pack
@@ -25,19 +25,19 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 2 — Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In (planned 2026-05-13; ready to execute)
+**Current Focus:** Phase 2 — executing. Plans 02-03 + 02-03b + 02-03c CLOSED 2026-05-14 on rehearsal verdict 'approved — reader green'. Plan 02-04 (Situation Room + opt-in gate + coexistence CI) UNBLOCKED, ready to execute.
 
 ## Current Position
 
-Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **PLANNED** (4 PLAN.md files; checker PASSED on 2nd iteration; 48/48 reqs covered).
-**Phase:** 2 - Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In
-**Plans:** 4 plans written and verified 2026-05-13.
-  - 02-01 (Wave 1, autonomous): Smoke spike — minimal manifest + worker + migration + detailTab stub; install rehearsal against fresh local Paperclip clone resolves D-01 + D-02 empirically. Reqs: SCAF-03, COEXIST-03.
-  - 02-02 (Wave 2, autonomous): Scaffold + trust-model hardening + 6 shared primitives. Reqs: SCAF-01/02/04..09 + PRIM-01..06 + COEXIST-01 + COEXIST-04 (16).
-  - 02-03 (Wave 3, mixed — manual checkpoint for governance parity): Editor-Agent skeleton + Reader view tab. Reqs: EDITOR-01..06 + READER-01..09 + COEXIST-02 (16).
-  - 02-04 (Wave 4, mixed — manual checkpoint for visual fidelity + Phase 2 closure): Situation Room + opt-in gate + coexistence CI. Reqs: OPTIN-01..05 + ROOM-01..08 + COEXIST-06 (14).
-**Status:** All 11 locked decisions (D-01..D-11) honored. Checker found 6 warnings on first pass; all resolved in revision pass; final verdict VERIFICATION PASSED with 0 blockers. Plans ready for `/gsd:execute-phase 2`.
-**Progress:** [##        ] 1/5 phases complete; Phase 2 planned (4 plans, 48 reqs covered)
+Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **EXECUTING**
+**Plans (post 02-03c close):**
+  - 02-01 PARTIAL — smoke spike (Linux Check B deferred — non-blocking, accepted)
+  - 02-02 COMPLETE 2026-05-13 — scaffold + 6 primitives + trust-model hardening
+  - 02-03 + 02-03b + 02-03c CLOSED TOGETHER 2026-05-14T09:08+ — Editor-Agent + Reader view + companyId resolver + drill APPROVED on Countermoves COU-1
+  - 02-04 NEXT — Situation Room + opt-in gate + coexistence CI (16 reqs: OPTIN-01..05 + ROOM-01..08 + COEXIST-06)
+  - 02-05 + 02-06 + 02-07 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date) — non-blocking, can interleave with Phase 3
+**Status:** 02-03c drill APPROVED. Suite 84→125 tests across the 02-03c arc (commits 1d424b2..cf3084f). Pre-snapshot 2026-05-14T08-58-29Z + post-snapshot 2026-05-14T09-50-17Z bookend the drill. Plan 02-04 unblocked.
+**Progress:** [###       ] 1/5 phases complete; Phase 2 ~57% by plan count (4/7 incl. 02-03c gap-closure; 02-03b superseded)
 
 ## Performance Metrics
 
@@ -93,9 +93,9 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-13 — Phase 2 planning completed. Four PLAN.md files written into `.planning/phases/02-scaffold-and-surfaces/`. Plan-checker verified PASSED on iteration 2 (6 first-pass warnings — tsconfig.manifest.json file-list, follower postMessage assertion, useInstanceConfig hook origin, sync vs async hash, PLUGIN_DISABLED vs WORKER_UNAVAILABLE, missing prose-with-ref-chips + deliverable-preview entries — all resolved in revision pass). 48/48 phase requirements covered, no gaps, no duplicates. D-01..D-11 honored across all four plans.
+**Last session:** 2026-05-14 — Plan 02-03c executed end-to-end (Tasks 1-4 + mid-drill gap fixes 2.5/2.6). Drill APPROVED against Countermoves COU-1 with verdict `approved — reader green WITH 3 polish items deferred`. Closes Plans 02-03 + 02-03b + 02-03c together. Pre-snapshot `2026-05-14T08-58-29Z` + post-snapshot `2026-05-14T09-50-17Z` bookend the drill. Suite went 84→125 tests. The mid-drill discovery: 02-03b's "useHostContext().companyId returns null" diagnosis was secondary; the PRIMARY failure was that ReaderView's prop signature was `{ entityId }` but the host invokes slot components with `{ slot, context }` per PluginSlotComponentProps — entityId at the top level was always undefined. Fixed by reading `context.entityId` per `PluginDetailTabProps` (SDK 2026.512.0 statically guarantees non-null for detail-tab slots). Captured in commit `cf3084f`.
 
-**Next session resume point:** Run `/gsd:execute-phase 2` to execute Wave 1 (Plan 02-01 smoke spike) bookended by `clarity-safety snapshot` per Phase 1 protocol. Plan 02-01 acceptance bar gates D-01 (detailTab vs taskDetailView) and D-02 (plugin-namespace migrations) empirically against a fresh local Paperclip clone before Waves 2..4 execute.
+**Next session resume point:** Run `/gsd:plan-phase 2 --plan 02-04` (or just discuss 02-04) to plan Situation Room + opt-in gate + coexistence CI (16 reqs: OPTIN-01..05 + ROOM-01..08 + COEXIST-06). Plan 02-04 is the last Phase 2 plan; closes Phase 2. The 3 deferred follow-ons (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date) can interleave or defer to Phase 3 — non-blocking.
 
 **Files of record:**
 
