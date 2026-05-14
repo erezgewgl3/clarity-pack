@@ -27,20 +27,32 @@ function readSrc() {
   return readFileSync(HOOK_PATH, 'utf8');
 }
 
-test('use-opt-in.ts toggle invalidates get-opt-in cache via .refresh() OR an invalidationKey bump (DEV-10)', () => {
+// Path A: destructure refresh from usePluginData, call as refresh() (no dot).
+// Path B: bump an invalidationKey React state and thread through usePluginData params.
+function detectPathA(src) {
+  // Must destructure `refresh` from usePluginData AND call it (either as
+  // `refresh()` or `.refresh()`).
+  const destructures = /const\s*\{[^}]*\brefresh\b[^}]*\}\s*=\s*usePluginData/.test(src);
+  const calls = /(^|[^.\w])refresh\(\)/m.test(src) || /\.refresh\(\)/.test(src);
+  return destructures && calls;
+}
+
+function detectPathB(src) {
+  return /invalidationKey/.test(src) && /setVersion|setInvalidationKey|setKey/.test(src);
+}
+
+test('use-opt-in.ts toggle invalidates get-opt-in cache via refresh() (Path A) OR an invalidationKey bump (Path B) (DEV-10)', () => {
   const src = readSrc();
-  const usesRefresh = /\.refresh\(\)/.test(src);
-  const usesInvalidationKey = /invalidationKey/.test(src) && /setVersion|setInvalidationKey|setKey/.test(src);
   assert.ok(
-    usesRefresh || usesInvalidationKey,
-    'expected useOptIn to call .refresh() (Path A) or bump an invalidationKey state (Path B) after setOptIn resolves',
+    detectPathA(src) || detectPathB(src),
+    'expected useOptIn to call refresh() (Path A) or bump an invalidationKey state (Path B) after setOptIn resolves',
   );
 });
 
 test('use-opt-in.ts destructures refresh from usePluginData (Path A wiring)', () => {
   const src = readSrc();
   // Only assert if Path A is used; otherwise Path B's params-bump is fine.
-  if (/\.refresh\(\)/.test(src)) {
+  if (detectPathA(src)) {
     assert.match(
       src,
       /const\s*\{[^}]*\brefresh\b[^}]*\}\s*=\s*usePluginData/,
@@ -58,13 +70,16 @@ test('use-opt-in.ts destructures refresh from usePluginData (Path A wiring)', ()
 
 test('use-opt-in.ts toggle awaits setOptIn and then calls refresh / bumps key (sequence contract)', () => {
   const src = readSrc();
-  // Order check: in the toggle function body, setOptIn must come before refresh.
-  const toggleMatch = src.match(/toggle\s*=?\s*async[\s\S]*?\}\;/);
+  // Find the toggle function body. Support both forms:
+  //   const toggle = async (): Promise<void> => { ... };
+  //   async function toggle() { ... }
+  const toggleMatch = src.match(/toggle\s*=\s*async[\s\S]*?\}\s*;/) || src.match(/async\s+function\s+toggle[\s\S]*?\n\}/);
   assert.ok(toggleMatch, 'expected toggle to be an async function');
   const body = toggleMatch[0];
   const setOptInIdx = body.search(/setOptIn\(/);
-  const refreshIdx = body.search(/\.refresh\(\)|setVersion|setInvalidationKey/);
+  // Either refresh() call (with or without dot prefix) or a setVersion bump
+  const refreshIdx = body.search(/(^|[^.\w])refresh\(\)|\.refresh\(\)|setVersion\(|setInvalidationKey\(/m);
   assert.ok(setOptInIdx >= 0, 'toggle body must call setOptIn');
-  assert.ok(refreshIdx >= 0, 'toggle body must call refresh or bump invalidation key');
+  assert.ok(refreshIdx >= 0, `toggle body must call refresh or bump invalidation key. Body:\n${body}`);
   assert.ok(setOptInIdx < refreshIdx, 'toggle must await setOptIn BEFORE invalidating');
 });
