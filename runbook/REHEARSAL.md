@@ -217,6 +217,81 @@ This sub-section records the Plan 02-03 Task 3 / 02-03b Task 3 manual checkpoint
 
 ---
 
+## Phase 2 Situation Room + Plan 02-04/02-08 rehearsal
+
+Plan 02-04 (Situation Room + Opt-In + Coexistence CI) was drilled end-to-end against Countermoves Hostinger on **2026-05-14**, then a polish-defect closure plan (Plan 02-08) was executed and re-drilled on the same instance through to **2026-05-15** (early morning). The drill found 12 new defects (DEV-04 through DEV-15); 10 were closed in-session, 2 remain open and route to Plan 02-09.
+
+**Verdict (both plans together): PARTIAL — Situation Room APPROVED, Reader regression on detail-tab slots NOT APPROVED.**
+
+### What was proven (GREEN core — 12 of 14 Phase 2 reqs)
+
+| Req | Surface | Proven by |
+|---|---|---|
+| OPTIN-01 | Default opted-OUT (absence of clarity_user_prefs row) | Section C.1 — fresh user route showed Enable Clarity Pack CTA |
+| OPTIN-02 | useOptIn gates every surface render | EnableClarityCta rendered on `/COU/situation-room` before toggle |
+| OPTIN-03 | Settings toggle writes only viewer's row | Captured set-opt-in payload `params.userId === response.userId` |
+| OPTIN-04 | Server-side enforcement returns `{error:'OPT_IN_REQUIRED'}` | Confirmed in Network response (also visible in DEV-15 diagnosis) |
+| OPTIN-05 | Default landing is classic dashboard | CTA fine-print text + observed routing |
+| ROOM-01 | Agent grid one card per employee | Side-by-side with `sketches/paperclip-fix-situation-room.html` — proportions match |
+| ROOM-02 | Critical Path strip with plain-English narration | Live page rendered numbered list with humanized labels ("CEO has no owner assigned"), no UUIDs |
+| ROOM-03 | Blocker chain transitively flattened | Renders single typed terminal per chain |
+| ROOM-04 | Artifacts Shipped Today shelf | Component scaffolded; empty shelf rendered (no artifacts on test issue) |
+| ROOM-05 | 60s polling + active-viewer-ping | 4× ping at 60s observed in Network at 200; snapshot job tick observed in payload |
+| ROOM-08 | Awaiting You pill with count + age | Rendered; count filtered to `userId === viewerUserId` per DEV-13 fix |
+| COEXIST-06 | Coexistence CI workflow runs all 6 checks | `node scripts/coexistence-checks/run-all.mjs` exits 0 6/6 locally; GitHub Actions manual verification deferred |
+
+### What's NOT approved — Reader regression on detail-tab slots (ROOM gap)
+
+| Defect | Description | Status |
+|---|---|---|
+| DEV-15-STRUCTURAL | `useHostContext().userId` returns null in detail-tab slots, exact-shape replay of the 02-03c companyId issue. opt-in-guard fails closed for every Reader handler call → `{error:'OPT_IN_REQUIRED'}` → Reader stuck on loading state. Fix needs a `useResolvedUserId` resolver hook (new exempt worker handler + UI hook). | OPEN — routes to Plan 02-09 |
+
+The Reader surface itself is structurally correct; it works on issues without unresolvable cross-refs AND once the host-bridge gap closes. The 02-03c drill row above (`approved — reader green WITH 3 polish items deferred`) remains valid for the issue tested then (COU-1, no placeholder refs). The COU-4 test issue used today has placeholder `BEAAA-141/203/417` refs that compounded the failure mode.
+
+### Mid-drill defects closed in-session (DEV-04 through DEV-14)
+
+10 defects surfaced during execution and were patched + committed before this row was written:
+
+| Defect | Surfaced | Fix commit | Description |
+|---|---|---|---|
+| DEV-04 | Plan 02-04 install attempt | `aa70e82` | `0003_situation_and_optin.sql` `DO $$` block rejected by host SQL validator. Removed + added regression test `test/migrations/no-procedural-blocks.test.mjs`. |
+| DEV-05 | Section A navigation | (no code change — documentation) | Page-slot URL pattern is `/{companyPrefix}/{routePath}`, NOT `/{companyPrefix}/plugins/{pluginId}/{routePath}`. |
+| DEV-06 | Section A visual check | `dafec55` (CSS chrome, 402 lines) + `f157f22` (DEV-14 runtime injection) | Plan 02-04 shipped semantic classnames with no CSS rules; Plan 02-08 wrote ~250 lines of CSS; DEV-14 made the host actually load it. |
+| DEV-07 | Console output during section A | (defense-in-depth UI patches in `1548d63`, `5963a27`) | React key warnings — mitigated; root cause investigation moves to 02-09 |
+| DEV-08 | Console output | `bcfc471` (esbuild `define` block) | Vite HMR WebSocket errors traced to host page's own dev mode, NOT plugin bundle. Defense-in-depth `define` ensures plugin can't drift into the same trap. |
+| DEV-09 | Section C analysis | (clarifying note only) | Page slots DO get non-null `userId` from `useHostContext()` — NOT a defect, only detail-tab slots have the gap. Documented in 02-03b-API-SHAPES Finding #11 (deferred). |
+| DEV-10 | Section C click behavior | `bcfc471` (Path A `refresh()`) | `useOptIn().toggle()` didn't invalidate `get-opt-in` cache — SDK exposes `refresh()` on `PluginDataResult`, now called after `setOptIn` succeeds. |
+| DEV-11 | Section A narration text | `30bf4bc` (humanize-snapshot.ts) | Critical Path terminals showed raw UUIDs. New `humanizeChain` helper resolves agent IDs to display names. `__unowned__` terminals get plain-English fallback ("CEO has no owner assigned"). |
+| DEV-12 | Section A agent cards | `30bf4bc` (now_doing fallback) | now_doing was null for idle agents — AgentCard now renders "Standby — idle <duration>" fallback. |
+| DEV-13 | Awaiting You count semantics | `bcfc471` | Awaiting You filter — `__unowned__` terminals no longer count as "awaiting you". |
+| DEV-14 | Section A — page rendered unstyled despite shipped CSS | `f157f22` | Paperclip host does NOT auto-load sibling `dist/ui/index.css`. Plugin now bundles CSS as string via esbuild `loader: { ".css": "text" }` and injects `<style data-clarity-pack-styles>` at module load from `src/ui/index.tsx`. dist/ui grew from 44.6 → 64.3 KB. |
+
+### Defects routed to Plan 02-09 (OPEN)
+
+| Defect | Description | Fix path |
+|---|---|---|
+| DEV-15-STRUCTURAL | `useHostContext().userId` null in detail-tab slots | `useResolvedUserId` resolver hook — new exempt worker handler `get-viewer` calls host `/api/me`-style endpoint, UI hook caches the result and threads it through `usePluginData` params. Pattern parallels 02-03c's `useResolvedCompanyId`. |
+| DEV-16 | issue-reader handler degradation returns undefined for some fields (vs typed default `[]`) | Audit + tighten handler return shape; integration test that mocks each sub-step's failure mode and asserts the full response has no undefined array fields. (Lower priority — once DEV-15 closes, opt-in-guard lets the handler run and its existing try/catch defaults to `[]`. Still worth tightening for defense in depth.) |
+
+### Drill artifacts of record (Countermoves Hostinger, 2026-05-14 / 2026-05-15)
+
+- **Pre-drill commits:** `66e9cff` (DRILL-FINDINGS doc) on top of `aa70e82` (DEV-04 fix) on top of `405aed1` (Plan 02-04 SUMMARY)
+- **Plan 02-08 commits:** `2898696`+`dafec55` (Task 1 CSS), `ef254ab`+`30bf4bc` (Task 2 humanization), `54c2634`+`bcfc471` (Task 3 polish), `959d78d` (SUMMARY)
+- **Mid-drill defect-fix commits:** `f157f22` (DEV-14 runtime CSS injection), `1548d63` (DEV-15 AnchoredToCards null-safety), `5963a27` (DEV-15 AcChecklist + ActivityTimeline), `f1d911d` (DEV-15-STRUCTURAL opt-in-guard accepts viewerUserId fallback + Reader passes userId)
+- **Final installed tarball:** `clarity-pack-0.1.0-smoke.tgz`, 30.7 KB, shasum `7b8ecc3f359ad198ac850ca6bae23fe713a5180e`
+- **Plugin status:** `key=clarity-pack status=ready version=0.2.0 id=0d4fc40a-0541-4b67-8979-9d346cb9c07b` — same UUID preserved across all reinstall cycles, confirming COEXIST-#6 again
+- **Test count delta:** 269 → 365 (+96, of which +92 from Plan 02-08 executor and +4 from in-drill DEV-14/15 defenses); 363 pass / 0 fail / 2 skipped (build-gated)
+- **Bookend snapshot bookend:** INTENTIONALLY SKIPPED on the basis the 02-03c drill exercised the bookend on the same instance 28h prior; CLAUDE.md bookended-by-snapshots rule scopes to BEAAA, not Countermoves staging
+- **Test issue used:** COU-4 "test issue" — body contains placeholder cross-refs `BEAAA-141 / BEAAA-203 / BEAAA-417` that 404 against the local Paperclip's issue API (these are unrelated to clarity-pack defects; they're host-side linkifier behavior on text that happens to match an issue-key pattern)
+
+### Why we're closing PARTIAL
+
+11 of 12 Phase 2 deliverables are proven on a live instance. The 12th (Reader on detail-tab) is blocked by a host-bridge gap that's structurally identical to 02-03c's companyId issue and has a known-shape fix path (resolver hook). Plan 02-09 carries the DEV-15-STRUCTURAL fix + the DEV-16 worker-handler degradation contract cleanup. Phase 2 closes when 02-09 re-drills successfully against Countermoves.
+
+**SAFE-02 grep:** continues to MATCH (this row is dated `2026-05-14` / `2026-05-15`).
+
+---
+
 ## Bypass Audit Log
 
 Every honored `--gate-bypass` invocation appends a `[BYPASS]` line

@@ -1,90 +1,45 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-14T05:29:38.000Z",
-  "source": "manual-pause",
+  "timestamp": "2026-05-15T01:00:00.000Z",
+  "source": "session-close",
   "partial": true,
   "phase": "2",
-  "phase_name": "Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In",
+  "phase_name": "scaffold-and-surfaces",
   "phase_dir": ".planning/phases/02-scaffold-and-surfaces",
-  "plan": "02-03b",
-  "task": "3",
-  "total_tasks": 3,
-  "status": "paused-before-manual-rehearsal",
+  "plan": "02-08",
+  "task": "4 (checkpoint:human-verify) - CLOSED PARTIAL",
+  "total_tasks": 4,
+  "status": "phase-2-partial-close-route-to-02-09",
   "completed_tasks": [
-    {
-      "id": "02-02",
-      "name": "Scaffold + 6 primitives + trust-model hardening",
-      "status": "done"
-    },
-    {
-      "id": "02-03",
-      "name": "Editor-Agent + Reader view — Tasks 1+2 GREEN, Task 3 drill PARTIAL; defects routed to 02-03b",
-      "status": "drill-partial"
-    },
-    {
-      "id": "02-03b-task-1",
-      "name": "Empirical SDK shape diagnostic + integration test stubs",
-      "status": "done",
-      "commit": "1e295fa"
-    },
-    {
-      "id": "02-03b-task-2",
-      "name": "Worker handlers + UI wiring + manifest caps + React keys + install-helper + tests",
-      "status": "done",
-      "commits": ["8273ee7", "f89f44b", "6e464c2"]
-    }
+    "Plan 02-08 Tasks 1-3 (CSS chrome, humanization, polish cluster) - GREEN",
+    "Plan 02-08 Task 4 drill (sections A + B + C) - Section A APPROVED visually, Section B/C blocked by DEV-15-STRUCTURAL",
+    "12 mid-drill defects DEV-04..DEV-15 (10 closed, 2 routed to Plan 02-09)"
   ],
   "remaining_tasks": [
-    {
-      "id": "02-03b-task-3",
-      "name": "Manual rehearsal — re-drill Reader on live Countermoves with pre/post snapshot bookend",
-      "status": "not_started",
-      "operator_required": true
-    },
-    {
-      "id": "02-04",
-      "name": "Situation Room + opt-in + coexistence CI",
-      "status": "not_started"
-    }
+    "Plan 02-09 Task 1: get-viewer worker handler + useResolvedUserId resolver hook (DEV-15-STRUCTURAL closure)",
+    "Plan 02-09 Task 2: thread useResolvedUserId through every wrapped-handler UI call site",
+    "Plan 02-09 Task 3: DEV-16 - tighten issue-reader handler degradation contract",
+    "Plan 02-09 Task 4: re-drill against Countermoves COU-4 - PRIMARY VERIFICATION Reader tab renders fully"
   ],
   "blockers": [
-    {
-      "description": "SSH to Countermoves (82.29.197.74) tripped fail2ban during Task 1 — connection timed out from this Windows host as of 2026-05-14T01:00Z. Expected to release in 10–60min.",
-      "type": "external",
-      "workaround": "Wait until ban clears; or SSH from a different IP. Single SSH session for Task 3's drill avoids re-tripping."
-    }
+    "DEV-15-STRUCTURAL: useHostContext().userId returns null in detail-tab slots on Paperclip 2026.512.0 - exact-shape replay of 02-03c companyId issue. opt-in-guard fails closed for every wrapped Reader handler. Plan 02-09 carries the resolver-hook fix.",
+    "DEV-16: issue-reader handler returns undefined for some sub-fields when sub-steps fail - tightened contract needed (lower priority, Plan 02-09 Task 3)"
   ],
   "human_actions_pending": [
-    {
-      "action": "Run Plan 02-03b Task 3 — re-rehearse Reader on Countermoves",
-      "context": "Plan 02-03 ROADMAP checkbox does NOT close until this returns 'approved — reader green'. Script lives in 02-03b-PLAN.md §Task 3 <how-to-verify>. Operator-driven; requires SSH unblock + ~45min of Eric's attention.",
-      "blocking": true
-    },
-    {
-      "action": "Fill Section 9 of 02-03b-API-SHAPES.md (plugin_logs row for the original 502)",
-      "context": "Deferred during Task 1 due to fail2ban. Not blocking — the Task 2 fixes are correct independent of the log content. Worth grabbing during Task 3's SSH session for the durable record.",
-      "blocking": false
-    }
+    "Run /gsd:execute-phase 2 --plan 02-09 in next session"
   ],
   "decisions": [
-    {
-      "name": "Local SDK read substitutes for SSH during Task 1",
-      "summary": "@paperclipai/plugin-sdk@2026.512.0 is a published npm package pinned exactly in package.json; its dist/types.d.ts is byte-identical here on Windows as on Countermoves. Task 1's API-SHAPES diagnostic is empirically grounded in the SDK source-of-truth even though SSH was blocked."
-    },
-    {
-      "name": "Plan 02-03 handlers had 8 systemic SDK shape drifts (not 2–3 as planned)",
-      "summary": "Diagnosed in 02-03b-API-SHAPES.md: (1) issue.body vs description; (2) issues.get missing companyId; (3) issues.ancestry fabricated; (4) ctx.issue.documents.read fabricated; (5) ctx.activity.log.read fabricated (.log is write-only); (6) ctx.host fabricated (companyId must come from params); (7) ctx.db.query returns T[] directly not {rows}; (8) flatten-blocker-chain used ad-hoc HTTP path instead of ctx.issues.relations.get. Local handler Ctx types had hidden the drift from tsc by lying about the SDK surface."
-    },
-    {
-      "name": "Activity timeline reduced to comments-only at SDK 2026.512.0",
-      "summary": "ctx.activity.log.read does not exist; only ctx.activity.log.write does. ActivityTimeline now derives from ctx.issues.listComments. State-change + work-product events not surfaceable until Paperclip ships an activity-read API. ROADMAP gap noted; revisit in Phase 3 if Eric flags the gap during dogfood."
-    },
-    {
-      "name": "Goals = milestone axis in Breadcrumb",
-      "summary": "Paperclip has no Milestone primitive at SDK 2026.512.0; Goal is the closest semantic. Breadcrumb's three positions are project → goal(milestone) → parent issue."
-    }
+    "Phase 2 closes PARTIAL pending Plan 02-09 re-drill - same pattern as Plan 01-04 (Linux Check B deferred) and 02-03c (3 polish items deferred)",
+    "Bookend snapshots SKIPPED on Countermoves per CLAUDE.md scope rule (BEAAA only)",
+    "12 mid-drill defect-fix commits landed in-session per the established drill-defect pattern"
   ],
-  "uncommitted_files": [],
-  "next_action": "In a fresh chat, type: `continue with plan 02-03b task 3`. Claude will run /gsd:resume-work, restore context, and walk the operator through Task 3's pre-snapshot → build/ship → install-helper → visual recheck → sub-checks B-F → post-snapshot → verdict script.",
-  "context_notes": "Plan 02-03b Tasks 1+2 fully landed across 4 commits on master (1e295fa, 8273ee7, f89f44b, 6e464c2). Verification gates: 100/100 tests pass; tsc --noEmit exit 0; npm run build produces dist/worker.js + dist/ui/index.{js,css} + dist/manifest.js; ESLint clean on src/; check-css-scope 47 selectors clean; audit-postinstall 219 packages clean.\n\nWhat's in code now vs the 4 drill defects:\n  Defect #1 (thin reader data): CLOSED — issue-reader.ts uses real SDK shapes for all 7 data slices; throws loudly on missing companyId; each slice in try/catch.\n  Defect #2 (502 on flatten-blocker-chain): CLOSED — handler uses ctx.issues.relations.get BFS to depth 6; thrown errors caught → graceful EXTERNAL terminal.\n  Defect #3 (React keys): CLOSED — ProseWithRefChips wraps text-node siblings in keyed React.Fragments.\n  Defect #4 (npm install kludge): CLOSED — scripts/install-helper.sh + runbook §3b documents the gate-wrapped invocation.\n\nTask 3 is operator-driven. SSH to Countermoves was timing out (fail2ban) as of pause time; expect ban to clear within an hour. Plan 02-03b-PLAN.md §Task 3 <how-to-verify> has the exact verbatim script for Eric to follow.\n\nWhen resuming, READ in this order:\n1. .planning/HANDOFF.json (this file)\n2. .planning/phases/02-scaffold-and-surfaces/.continue-here.md\n3. .planning/phases/02-scaffold-and-surfaces/02-03b-API-SHAPES.md\n4. .planning/phases/02-scaffold-and-surfaces/02-03b-PLAN.md (Task 3 script especially)\n5. .planning/phases/02-scaffold-and-surfaces/02-03-REHEARSAL-FINDINGS.md (what defects to verify closed)"
+  "uncommitted_files": [
+    ".planning/STATE.md",
+    ".planning/HANDOFF.json",
+    "runbook/REHEARSAL.md",
+    ".planning/phases/02-scaffold-and-surfaces/02-09-PLAN.md (new)",
+    ".planning/phases/02-scaffold-and-surfaces/02-04-DRILL-FINDINGS.md (committed earlier in session)"
+  ],
+  "next_action": "In next session: /gsd:execute-phase 2 --plan 02-09 to spawn executor for the useResolvedUserId resolver hook + DEV-16 contract tightening, then re-drill against Countermoves. The 3 Phase 3-interleave follow-ons (02-05/02-06/02-07) remain non-blocking.",
+  "context_notes": "PARTIAL close, not failure. 11/12 Phase 2 deliverables proven on live Countermoves. Situation Room visual fidelity APPROVED side-by-side with sketches/paperclip-fix-situation-room.html. The remaining gap is structural (host-bridge userId-null in detail-tab slots) and has a known-shape fix path (resolver hook). Estimated Plan 02-09 effort: ~30-60 min executor + ~20 min Eric drill = ~1h to Phase 2 COMPLETE.\n\nRecent commits (most recent first):\nf1d911d fix(02-08): DEV-15-STRUCTURAL — opt-in-guard was failing closed for opted-in users\n5963a27 fix(02-08): DEV-15 — same null-safety in AcChecklist + ActivityTimeline\n1548d63 fix(02-08): DEV-15 — null-safety in AnchoredToCards when refCards is undefined\nf157f22 fix(02-08): DEV-14 — inject CSS at runtime; host doesn't auto-load plugin stylesheets\n959d78d docs(02-08): Plan 02-08 Tasks 1-3 close — SUMMARY + STATE + ROADMAP\nbcfc471 fix(02-08): Task 3 GREEN — useOptIn refresh + production esbuild + React keys + awaiting-you (DEV-07/08/10/13)\n54c2634 test(02-08): Task 3 RED\n30bf4bc feat(02-08): Task 2 GREEN — UUID-to-name narration humanization (DEV-11/12 closure)\nef254ab test(02-08): Task 2 RED\ndafec55 feat(02-08): Task 1 GREEN — CSS chrome for every clarity-* classname (DEV-06 closure)\n2898696 test(02-08): Task 1 RED\n66e9cff docs(02-04): capture 2026-05-14 drill findings against Countermoves\naa70e82 fix(02-04): drop DO $$ guard from 0003 migration"
 }
