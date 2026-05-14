@@ -27,6 +27,13 @@ await build({
   platform: "browser",
   target: "es2022",
   jsx: "automatic",
+  loader: {
+    // DEV-14 (drill 2026-05-14): import CSS as a string so the JS bundle can
+    // inject it at runtime via a <style> tag. Paperclip's host does NOT
+    // auto-load sibling CSS files; without this loader, dist/ui/index.css
+    // ships in the tarball but never reaches the page.
+    ".css": "text"
+  },
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
     "import.meta.env.DEV": "false",

@@ -7,11 +7,13 @@
 // Bulletin stub / Chat stub / Settings) wraps its top-level component in
 // <ClaritySurfaceRoot name="...">.
 //
-// Importing theme.css here ensures the CSS is bundled wherever the primitive
-// is used — surfaces don't have to remember to import it separately.
+// Style injection is centralized in src/ui/index.tsx (DEV-14 fix from the
+// 2026-05-14 re-rehearsal drill — Paperclip's host does NOT auto-load plugin
+// CSS files; the bundle must inject its own <style> at runtime). This
+// primitive no longer imports theme.css directly; instead, every entry path
+// goes through src/ui/index.tsx which does the one-time injection.
 
 import * as React from 'react';
-import './theme.css';
 
 export type ClaritySurfaceName =
   | 'reader'
