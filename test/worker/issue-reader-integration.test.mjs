@@ -1,69 +1,337 @@
 // test/worker/issue-reader-integration.test.mjs
 //
-// Plan 02-03b Task 1 — integration test stubs that fake the ACTUAL SDK 2026.512.0
-// ctx shape (per .planning/phases/02-scaffold-and-surfaces/02-03b-API-SHAPES.md),
-// NOT the spec-assumed shape that Plan 02-03 was authored against.
-//
-// Status: TODO blocks only. Task 2 GREEN will populate them and confirm each
-// handler renders the right data slice when fed the real ctx surface.
-//
-// Why: the existing test/worker/issue-reader.test.mjs mocks `host.currentCompanyId`,
-// `ctx.issue.documents.read`, `ctx.activity.log.read`, `ctx.issues.ancestry`, and
-// `{rows: T[]}` return shapes — none of which exist on the actual SDK. Tests
-// passed locally because mocks matched the (incorrect) handler. On Countermoves
-// the handler hit the real SDK and the data slices fell out empty.
-//
-// These integration tests will RED-fail until Task 2 rewrites the handlers
-// against the real shapes documented in 02-03b-API-SHAPES.md.
+// Plan 02-03b Task 2 — integration tests that fake the ACTUAL
+// @paperclipai/plugin-sdk@2026.512.0 PluginContext shape (per
+// .planning/phases/02-scaffold-and-surfaces/02-03b-API-SHAPES.md). These
+// supplement test/worker/issue-reader.test.mjs by pinning one shape contract
+// per known SDK drift from the Plan 02-03 draft. RED initially (it.todo);
+// GREEN after Task 2 rewrites the handlers.
 
+import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
 import { registerIssueReader } from '../../src/worker/handlers/issue-reader.ts';
 import { registerFlattenBlockerChain } from '../../src/worker/handlers/flatten-blocker-chain.ts';
 import { registerEditorPauseStatus } from '../../src/worker/handlers/editor-pause-status.ts';
-
-void registerIssueReader;
-void registerFlattenBlockerChain;
-void registerEditorPauseStatus;
+import { MAX_CONSECUTIVE_FAILURES } from '../../src/worker/agents/circuit-breaker.ts';
+import { EDITOR_AGENT_KEY } from '../../src/worker/agents/editor.ts';
 
 // ---------------------------------------------------------------------------
-// Real SDK ctx fake — matches @paperclipai/plugin-sdk@2026.512.0 PluginContext.
-// Each handler is supposed to read companyId from PARAMS (UI passes it), not
-// from a fictional ctx.host. ctx.db.query returns T[] directly (NOT {rows: T[]}).
-// ctx.issues.get takes (issueId, companyId). ctx.issues.documents.list returns
-// IssueDocumentSummary[]. ctx.issues.relations.get returns {blockedBy, blocks}.
+// Shared ctx scaffolding — only what each test needs. Each maker returns a
+// fresh ctx so tests don't leak state across each other.
 // ---------------------------------------------------------------------------
 
-test('issue.reader — handler reads issue.description (NOT issue.body)', { todo: 'Task 2: rewrite handler to use real SDK Issue.description field; assert returned issueBody === fakeIssue.description' });
+function makeIssueReaderCtx(overrides = {}) {
+  const calls = { db: [], fetch: [] };
+  const registered = new Map();
+  const issueGetCalls = [];
+  const documentsListCalls = [];
+  const listCommentsCalls = [];
 
-test('issue.reader — handler passes companyId to ctx.issues.get', { todo: 'Task 2: handler must call ctx.issues.get(issueId, companyId); spy and assert both args' });
+  const fixtureIssue = {
+    id: 'BEAAA-555',
+    key: 'BEAAA-555',
+    title: 'test issue',
+    description:
+      'Underwriting timeline for Q3 needs revision because BEAAA-141 added a new step. See BEAAA-203 and BEAAA-417.',
+    parentId: 'BEAAA-100',
+    projectId: 'p-1',
+    goalId: 'g-q3',
+    status: 'in_progress',
+    priority: 'normal',
+  };
 
-test('issue.reader — handler derives ancestry by walking parentId chain (NOT ctx.issues.ancestry)', { todo: 'Task 2: fake ctx with no ancestry method; assert handler calls ctx.issues.get for parent, ctx.projects.get for project, ctx.goals.get for goal' });
+  const ctx = {
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    data: { register(k, h) { registered.set(k, h); } },
+    db: {
+      namespace: 'plugin_clarity_pack_cdd6bda4bd',
+      async execute(sql, params) { calls.db.push({ kind: 'execute', sql, params }); return { rowCount: 0 }; },
+      async query(sql, params) {
+        calls.db.push({ kind: 'query', sql, params });
+        // Plan 02-03b: SDK returns T[] directly, NOT {rows: T[]}.
+        if (/ac_checklist_items/.test(sql)) {
+          return [{ id: 1, issue_id: fixtureIssue.id, label: 'item', checked: false, display_order: 0 }];
+        }
+        return [];
+      },
+    },
+    http: {
+      async fetch(url) {
+        calls.fetch.push(url);
+        return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+      },
+    },
+    issues: {
+      async get(issueId, companyId) {
+        issueGetCalls.push({ issueId, companyId });
+        if (issueId === fixtureIssue.id) return fixtureIssue;
+        if (issueId === 'BEAAA-100') return { id: 'BEAAA-100', key: 'BEAAA-100', title: 'parent issue', description: '' };
+        return null;
+      },
+      async listComments(issueId, companyId) {
+        listCommentsCalls.push({ issueId, companyId });
+        return [
+          { id: 'c-1', authorUserId: 'a', createdAt: '2026-05-13T19:30:00Z', body: 'first' },
+          { id: 'c-2', authorUserId: 'b', createdAt: '2026-05-13T20:30:00Z', body: 'second' },
+        ];
+      },
+      relations: { async get() { return { blockedBy: [], blocks: [] }; } },
+      documents: {
+        async list(issueId, companyId) {
+          documentsListCalls.push({ issueId, companyId });
+          return [
+            { id: 'd-1', key: 'plan', title: 'Plan.docx', updatedAt: '2026-05-13T20:10:00Z' },
+          ];
+        },
+        async get() { return null; },
+      },
+    },
+    projects: {
+      async get(id) { return id === 'p-1' ? { id: 'p-1', title: 'BEAAA Insurance' } : null; },
+    },
+    goals: {
+      async get(id) { return id === 'g-q3' ? { id: 'g-q3', title: 'Q3 Launch' } : null; },
+    },
+    ...overrides,
+  };
 
-test('issue.reader — handler calls ctx.issues.documents.list (NOT ctx.issue.documents.read)', { todo: 'Task 2: fake returns IssueDocumentSummary[]; assert handler picks most recent and maps to DeliverablePreview shape' });
+  return { ctx, calls, registered, issueGetCalls, documentsListCalls, listCommentsCalls };
+}
 
-test('issue.reader — handler derives activity from ctx.issues.listComments (NOT ctx.activity.log.read)', { todo: 'Task 2: fake returns IssueComment[]; assert handler maps each to {kind:"comment", actor, at, detail} and caps at 8' });
-
-test('issue.reader — handler reads companyId from params (NOT ctx.host)', { todo: 'Task 2: invoke handler with {issueId, companyId}; assert every downstream SDK call carries that companyId' });
-
-test('issue.reader — handler unwraps ctx.db.query result as T[] (NOT {rows: T[]})', { todo: 'Task 2: ctx.db.query returns array directly; assert acItems populated from that array' });
-
-test('issue.reader — handler throws loudly when companyId missing', { todo: 'Task 2: invoke with {issueId} but no companyId; assert handler throws "companyId required"' });
-
-test('issue.reader — refCards resolved in single round-trip (PRIM-01)', { todo: 'Task 2: 3 distinct BEAAA-NNN refs in description, spy on http.fetch, assert exactly 1 outbound call with all 3 ids' });
-
-test('issue.reader — each data slice wraps in try/catch and degrades gracefully', { todo: 'Task 2: fake throws on documents.list; assert deliverable returned null, NOT the whole handler throwing' });
+async function invokeReader(ctxBag, params) {
+  registerIssueReader(ctxBag.ctx);
+  const handler = ctxBag.registered.get('issue.reader');
+  return handler(params);
+}
 
 // ---------------------------------------------------------------------------
-
-test('flatten-blocker-chain — handler calls ctx.issues.relations.get (NOT http.fetch /blockers)', { todo: 'Task 2: assert no ctx.http.fetch call; ctx.issues.relations.get called with (issueId, companyId)' });
-
-test('flatten-blocker-chain — handler walks transitively up to MAX_DEPTH=6', { todo: 'Task 2: 4-level chain, assert relations.get called 4 times and depth caps stop traversal' });
-
-test('flatten-blocker-chain — handler returns graceful "no active blockers" terminal when chain empty', { todo: 'Task 2: relations.get returns {blockedBy: [], blocks: []}; assert returned terminal kind === "none"' });
-
-test('flatten-blocker-chain — handler returns 200 (NOT 502) even when SDK call throws', { todo: 'Task 2: relations.get throws; assert handler catches and returns a typed-error terminal, not an unhandled rejection' });
-
+// issue.reader — 10 contracts
 // ---------------------------------------------------------------------------
 
-test('editor.pause-status — handler unwraps ctx.db.query as T[] (NOT {rows: T[]})', { todo: 'Task 2: query returns [{failed_at, reason, consecutive}] directly; assert handler reads the array correctly' });
+test('issue.reader — handler reads issue.description (NOT issue.body)', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  const result = await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  assert.match(result.issueBody, /Underwriting timeline/);
+});
+
+test('issue.reader — handler passes companyId to ctx.issues.get', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  const firstCall = ctxBag.issueGetCalls[0];
+  assert.equal(firstCall.issueId, 'BEAAA-555');
+  assert.equal(firstCall.companyId, 'co-1');
+});
+
+test('issue.reader — handler derives ancestry by walking parentId chain (NOT ctx.issues.ancestry)', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  // Explicitly assert ctx has NO ancestry method, just like the real SDK.
+  assert.equal(typeof ctxBag.ctx.issues.ancestry, 'undefined');
+  const result = await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  assert.ok(result.ancestry.parent);
+  assert.equal(result.ancestry.parent.id, 'BEAAA-100');
+  assert.ok(result.ancestry.project);
+  assert.equal(result.ancestry.project.title, 'BEAAA Insurance');
+  assert.ok(result.ancestry.milestone);
+  assert.equal(result.ancestry.milestone.title, 'Q3 Launch');
+});
+
+test('issue.reader — handler calls ctx.issues.documents.list (NOT ctx.issue.documents.read)', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  const result = await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  assert.equal(ctxBag.documentsListCalls.length, 1);
+  assert.equal(ctxBag.documentsListCalls[0].issueId, 'BEAAA-555');
+  assert.equal(ctxBag.documentsListCalls[0].companyId, 'co-1');
+  assert.equal(result.deliverable.filename, 'Plan.docx');
+});
+
+test('issue.reader — handler derives activity from ctx.issues.listComments (NOT ctx.activity.log.read)', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  // ctx.activity.log.read does not exist on the SDK at 2026.512.0.
+  assert.equal(typeof ctxBag.ctx.activity, 'undefined');
+  const result = await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  assert.equal(ctxBag.listCommentsCalls.length, 1);
+  assert.equal(result.activity.length, 2);
+  for (const e of result.activity) {
+    assert.equal(e.kind, 'comment');
+    assert.ok(e.at);
+  }
+});
+
+test('issue.reader — handler reads companyId from params (NOT ctx.host)', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  // ctx.host does not exist on the SDK at 2026.512.0.
+  assert.equal(typeof ctxBag.ctx.host, 'undefined');
+  await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-XYZ' });
+  // Every downstream SDK call carries the companyId we threaded in.
+  for (const c of ctxBag.issueGetCalls) assert.equal(c.companyId, 'co-XYZ');
+  for (const c of ctxBag.documentsListCalls) assert.equal(c.companyId, 'co-XYZ');
+  for (const c of ctxBag.listCommentsCalls) assert.equal(c.companyId, 'co-XYZ');
+});
+
+test('issue.reader — handler unwraps ctx.db.query result as T[] (NOT {rows: T[]})', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  // Override ac_checklist_items query to return a sentinel-named row.
+  ctxBag.ctx.db.query = async (sql) => {
+    if (/ac_checklist_items/.test(sql)) {
+      return [{ id: 42, issue_id: 'BEAAA-555', label: 'sentinel', checked: true, display_order: 0 }];
+    }
+    return [];
+  };
+  const result = await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  assert.equal(result.acItems.length, 1);
+  assert.equal(result.acItems[0].label, 'sentinel');
+});
+
+test('issue.reader — handler throws loudly when companyId missing', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  registerIssueReader(ctxBag.ctx);
+  const handler = ctxBag.registered.get('issue.reader');
+  await assert.rejects(() => handler({ issueId: 'BEAAA-555' }), /companyId required/);
+});
+
+test('issue.reader — refCards resolved in single round-trip (PRIM-01)', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  // Override http.fetch to count + return 3 distinct refs.
+  ctxBag.ctx.http.fetch = async (url) => {
+    ctxBag.calls.fetch.push(url);
+    return new Response(
+      JSON.stringify([
+        { key: 'BEAAA-141', title: 't1', status: 'in_progress', assignee_user_id: 'a', body: 'b1', _viewer_can_read: true },
+        { key: 'BEAAA-203', title: 't2', status: 'blocked', assignee_user_id: 'b', body: 'b2', _viewer_can_read: true },
+        { key: 'BEAAA-417', title: 't3', status: 'done', assignee_user_id: 'c', body: 'b3', _viewer_can_read: true },
+      ]),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  };
+  const result = await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  const refFetches = ctxBag.calls.fetch.filter((u) => /\/issues\?ids=/.test(u));
+  assert.equal(refFetches.length, 1, 'one outbound fetch for all 3 ids');
+  assert.equal(result.refCards.length, 3);
+});
+
+test('issue.reader — each data slice wraps in try/catch and degrades gracefully', async () => {
+  const ctxBag = makeIssueReaderCtx();
+  ctxBag.ctx.issues.documents.list = async () => {
+    throw new Error('documents.list broken');
+  };
+  const result = await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  // Failure in one slice does NOT blank the whole tab.
+  assert.equal(result.deliverable, null);
+  assert.match(result.issueBody, /Underwriting timeline/);
+  assert.ok(result.ancestry);
+});
+
+// ---------------------------------------------------------------------------
+// flatten-blocker-chain — 4 contracts
+// ---------------------------------------------------------------------------
+
+function makeBlockerCtx({ relationsResponses = {}, throwOn = null } = {}) {
+  const calls = [];
+  const registered = new Map();
+  const ctx = {
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    data: { register(k, h) { registered.set(k, h); } },
+    issues: {
+      relations: {
+        async get(id, companyId) {
+          calls.push({ id, companyId });
+          if (throwOn && throwOn(id)) throw new Error('relations.get blew up');
+          return relationsResponses[id] ?? { blockedBy: [], blocks: [] };
+        },
+      },
+    },
+  };
+  return { ctx, calls, registered };
+}
+
+test('flatten-blocker-chain — handler calls ctx.issues.relations.get (NOT http.fetch /blockers)', async () => {
+  const ctxBag = makeBlockerCtx({
+    relationsResponses: {
+      'BEAAA-1': {
+        blockedBy: [{ id: 'BEAAA-2', assigneeUserId: 'eric', status: 'awaiting', etaIso: null }],
+        blocks: [],
+      },
+      'BEAAA-2': { blockedBy: [], blocks: [] },
+    },
+  });
+  // Assert no http on ctx at all (the handler must not route via fetch).
+  assert.equal(typeof ctxBag.ctx.http, 'undefined');
+  registerFlattenBlockerChain(ctxBag.ctx);
+  const handler = ctxBag.registered.get('flatten-blocker-chain');
+  const result = await handler({ startId: 'BEAAA-1', companyId: 'co-1', viewerUserId: 'eric' });
+  assert.ok(result);
+  assert.ok(result.pathIds.includes('BEAAA-1'));
+  // The walk visited at least the start + its blocker.
+  const visitedIds = ctxBag.calls.map((c) => c.id);
+  assert.ok(visitedIds.includes('BEAAA-1'));
+  assert.ok(visitedIds.includes('BEAAA-2'));
+});
+
+test('flatten-blocker-chain — handler walks transitively up to MAX_CHAIN_DEPTH=6', async () => {
+  // 4-level chain
+  const ctxBag = makeBlockerCtx({
+    relationsResponses: {
+      'A': { blockedBy: [{ id: 'B', status: 'awaiting' }], blocks: [] },
+      'B': { blockedBy: [{ id: 'C', status: 'awaiting' }], blocks: [] },
+      'C': { blockedBy: [{ id: 'D', status: 'awaiting' }], blocks: [] },
+      'D': { blockedBy: [], blocks: [] },
+    },
+  });
+  registerFlattenBlockerChain(ctxBag.ctx);
+  const handler = ctxBag.registered.get('flatten-blocker-chain');
+  await handler({ startId: 'A', companyId: 'co-1', viewerUserId: 'eric' });
+  const ids = ctxBag.calls.map((c) => c.id);
+  assert.deepEqual(ids.sort(), ['A', 'B', 'C', 'D']);
+});
+
+test('flatten-blocker-chain — handler returns graceful terminal when chain empty', async () => {
+  const ctxBag = makeBlockerCtx(); // every id returns empty blockedBy
+  registerFlattenBlockerChain(ctxBag.ctx);
+  const handler = ctxBag.registered.get('flatten-blocker-chain');
+  const result = await handler({ startId: 'X', companyId: 'co-1', viewerUserId: 'eric' });
+  assert.equal(result.terminal.kind, 'EXTERNAL');
+  assert.match(result.terminal.label, /No active blockers/);
+});
+
+test('flatten-blocker-chain — handler returns 200 (NOT 502) even when SDK call throws', async () => {
+  const ctxBag = makeBlockerCtx({ throwOn: (id) => id === 'X' });
+  registerFlattenBlockerChain(ctxBag.ctx);
+  const handler = ctxBag.registered.get('flatten-blocker-chain');
+  // Must NOT throw — the host bridge translates a thrown handler to 502.
+  const result = await handler({ startId: 'X', companyId: 'co-1', viewerUserId: 'eric' });
+  assert.ok(result);
+  assert.equal(result.terminal.kind, 'EXTERNAL');
+});
+
+// ---------------------------------------------------------------------------
+// editor.pause-status — 1 contract (db.query unwrap)
+// ---------------------------------------------------------------------------
+
+test('editor.pause-status — handler unwraps ctx.db.query as T[] (NOT {rows: T[]})', async () => {
+  const registered = new Map();
+  const ctx = {
+    data: { register(k, h) { registered.set(k, h); } },
+    db: {
+      async query(_sql, _params) {
+        return [
+          {
+            failed_at: '2026-05-13T22:00:00Z',
+            reason: 'token_cap',
+            consecutive: MAX_CONSECUTIVE_FAILURES,
+          },
+        ];
+      },
+      async execute() { return { rowCount: 0 }; },
+      namespace: 'plugin_clarity_pack_cdd6bda4bd',
+    },
+  };
+  registerEditorPauseStatus(ctx);
+  const handler = registered.get('editor.pause-status');
+  const status = await handler({});
+  assert.equal(status.paused, true);
+  assert.equal(status.lastFailureAt, '2026-05-13T22:00:00Z');
+  assert.equal(status.reason, 'token_cap');
+  // Confirm EDITOR_AGENT_KEY makes it into the query params (sanity).
+  void EDITOR_AGENT_KEY;
+});

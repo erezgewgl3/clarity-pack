@@ -1,13 +1,15 @@
 // src/worker/db/tldr-cache.ts
 //
-// Plan 02-03 Task 1 — TL;DR cache CRUD. EDITOR-03 idempotency is enforced via
-// the UNIQUE (surface, scope_id, content_hash) constraint + ON CONFLICT DO
-// NOTHING semantics: upserting the same hash twice is a no-op.
+// Plan 02-03b Task 2 — fix the {rows}-unwrap bug. SDK's PluginDatabaseClient
+// query<T>() returns T[] directly, not {rows: T[]}. The Plan 02-03 draft was
+// modeled on node-postgres and silently returned no TL;DR even when one was
+// cached.
 //
-// Every SQL string targets the baked plugin namespace
-// `plugin_clarity_pack_cdd6bda4bd.tldr_cache` literally. Paperclip's host
-// validators reject unqualified targets at runtime AND at migration time per
-// 02-01 SMOKE-FINDINGS Finding #4 — there is no template substitution.
+// EDITOR-03 idempotency is enforced via the UNIQUE (surface, scope_id,
+// content_hash) constraint + ON CONFLICT DO NOTHING semantics: upserting the
+// same hash twice is a no-op.
+
+import type { PluginDatabaseClient } from '@paperclipai/plugin-sdk';
 
 export type TldrRow = {
   surface: 'issue' | 'situation' | 'bulletin';
@@ -21,10 +23,7 @@ export type TldrRow = {
 };
 
 export type TldrCacheCtx = {
-  db: {
-    execute(sql: string, params: unknown[]): Promise<unknown>;
-    query(sql: string, params: unknown[]): Promise<{ rows: TldrRow[] }>;
-  };
+  db: PluginDatabaseClient;
 };
 
 /**
@@ -61,7 +60,7 @@ export async function getTldrByScope(
   surface: TldrRow['surface'],
   scopeId: string,
 ): Promise<TldrRow | null> {
-  const result = await ctx.db.query(
+  const rows = await ctx.db.query<TldrRow>(
     `SELECT surface, scope_id, content_hash, body, generated_at, source_revisions, compiled_by_agent_id, tags
      FROM plugin_clarity_pack_cdd6bda4bd.tldr_cache
      WHERE surface = $1 AND scope_id = $2
@@ -69,5 +68,5 @@ export async function getTldrByScope(
      LIMIT 1`,
     [surface, scopeId],
   );
-  return result.rows[0] ?? null;
+  return rows[0] ?? null;
 }

@@ -37,13 +37,17 @@ function makeFakeDbCtx(initialRows = []) {
       },
       async query(sql, params) {
         calls.push({ kind: 'query', sql, params });
+        // Plan 02-03b: SDK PluginDatabaseClient.query<T>() returns T[] directly,
+        // NOT {rows: T[]}. Tests that mocked {rows} were modeled after the
+        // node-postgres shape that drove the original drill defect (#7 in
+        // 02-03b-API-SHAPES.md).
         if (/SELECT[\s\S]*FROM\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
           const [surface, scope_id] = params;
           const matching = rows.filter((r) => r.surface === surface && r.scope_id === scope_id);
           matching.sort((a, b) => (a.generated_at < b.generated_at ? 1 : -1));
-          return { rows: matching.slice(0, 1) };
+          return matching.slice(0, 1);
         }
-        return { rows: [] };
+        return [];
       },
     },
   };

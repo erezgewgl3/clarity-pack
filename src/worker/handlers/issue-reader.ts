@@ -1,37 +1,70 @@
 // src/worker/handlers/issue-reader.ts
 //
-// Plan 02-03 Task 2 — registers the 'issue.reader' data handler. Composes:
-//   - tldr from plugin_clarity_pack_cdd6bda4bd.tldr_cache (most-recent row)
-//   - refCards by extracting BEAAA-NNN from body + resolving in ONE round-trip
-//     (PRIM-01)
-//   - ancestry (project → milestone → parent) via ctx.issues.ancestry
-//   - acItems from plugin_clarity_pack_cdd6bda4bd.ac_checklist_items
-//   - activity distilled to <= 8 items (READER-09: only state_change, comment,
-//     work_product_write — drops label_change / title_edit / etc.)
-//   - deliverable via ctx.issue.documents.read({ latest: true }), normalized
+// Plan 02-03b Task 2 — issue.reader data handler, rewritten against the actual
+// @paperclipai/plugin-sdk@2026.512.0 PluginContext surface. The Plan 02-03 draft
+// of this handler assumed seven SDK shapes that don't exist; see
+// .planning/phases/02-scaffold-and-surfaces/02-03b-API-SHAPES.md for the full
+// diagnosis.
 //
-// All SQL targets the baked plugin namespace (Finding #4). Opt-in check is
-// NOT enforced here (Plan 02-04 adds the opt-in-guard wrapper); for 02-03
-// the assumption is "viewer is opted in" and a follow-up plan flips the
-// switch.
+// Composes the reader payload:
+//   - tldr        from plugin namespace tldr_cache (most-recent for issueId)
+//   - issueBody   = Issue.description (NOT Issue.body — that field doesn't exist)
+//   - refCards    from BEAAA-NNN extraction → single round-trip via resolveRefs (PRIM-01)
+//   - ancestry    derived by walking parentId chain + resolving projectId + goalId
+//                 (ctx.issues.ancestry does not exist; we walk ctx.issues.get)
+//   - acItems     from plugin namespace ac_checklist_items
+//   - activity    from ctx.issues.listComments (ctx.activity.log.read does not
+//                 exist; the activity surface in the SDK is write-only at this
+//                 version. We map each comment to a comment-kind timeline event.)
+//   - deliverable from ctx.issues.documents.list (most-recent summary)
+//
+// Companies come from PARAMS, not from a fictional ctx.host.currentCompanyId.
+// The UI side reads useHostContext() and passes companyId in usePluginData.
+//
+// Each data slice is wrapped in try/catch so partial-API failures degrade
+// gracefully to null/empty rather than blanking the whole tab.
+
+import type {
+  PluginIssuesClient,
+  PluginDatabaseClient,
+  PluginHttpClient,
+  PluginDataClient,
+  PluginLogger,
+  PluginProjectsClient,
+  PluginGoalsClient,
+  Issue,
+  IssueComment,
+} from '@paperclipai/plugin-sdk';
 
 import type { RefCardData, TLDR } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { getTldrByScope, type TldrCacheCtx } from '../db/tldr-cache.ts';
 
 const REF_PATTERN = /\bBEAAA-\d+\b/g;
-const ACTIVITY_KEEP_KINDS = new Set(['state_change', 'comment', 'work_product_write']);
 const ACTIVITY_LIMIT = 8; // READER-09
-const RAW_ACTIVITY_FETCH = 50;
+const ANCESTRY_MAX_DEPTH = 8;
 const EXCERPT_MAX = 280;
+const COMMENT_DETAIL_MAX = 120;
+
+export type AncestryNode = { id: string; title: string; url: string } | null;
+export type Ancestry = { project: AncestryNode; milestone: AncestryNode; parent: AncestryNode };
+
+export type ActivityEvent = {
+  kind: 'comment';
+  actor: string | null;
+  at: string;
+  detail: string;
+};
+
+export type DeliverableSummary = { filename: string; last_write_at: string | null } | null;
 
 export type IssueReaderResult = {
   tldr: TLDR | null;
   refCards: RefCardData[];
-  ancestry: { project: unknown; milestone: unknown; parent: unknown } | null;
+  ancestry: Ancestry | null;
   acItems: unknown[];
-  activity: unknown[];
-  deliverable: { filename: string; last_write_at: string } | null;
+  activity: ActivityEvent[];
+  deliverable: DeliverableSummary;
   issueBody: string | null;
 };
 
@@ -44,114 +77,264 @@ type RawHostIssue = {
   _viewer_can_read?: boolean;
 };
 
-function truncateExcerpt(body: string | undefined, max = EXCERPT_MAX): string {
-  if (!body) return '';
-  if (body.length <= max) return body;
-  const slice = body.slice(0, max - 1);
+function truncate(s: string | undefined | null, max: number): string {
+  if (!s) return '';
+  if (s.length <= max) return s;
+  const slice = s.slice(0, max - 1);
   const lastSpace = slice.lastIndexOf(' ');
   return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice) + '…';
 }
 
 export type IssueReaderCtx = {
-  logger?: { info?(...a: unknown[]): void; warn?(...a: unknown[]): void; error?(...a: unknown[]): void };
-  host?: { currentCompanyId?: string };
-  data: {
-    register(key: string, handler: (params: Record<string, unknown>) => Promise<unknown>): void;
-  };
-  db: {
-    execute(sql: string, params: unknown[]): Promise<unknown>;
-    query(sql: string, params: unknown[]): Promise<{ rows: unknown[] }>;
-  };
-  http: {
-    fetch(url: string, init?: { method?: string }): Promise<{ json(): Promise<unknown> }>;
-  };
-  issues: {
-    get(issueId: string): Promise<{ id: string; body: string }>;
-    ancestry?(issueId: string): Promise<{ project: unknown; milestone: unknown; parent: unknown }>;
-  };
-  issue: {
-    documents: { read(issueId: string, opts?: { latest?: boolean }): Promise<{ filename: string; last_write_at: string } | null> };
-  };
-  activity: {
-    log: { read(opts: { issueId: string; limit?: number }): Promise<Array<{ kind: string; actor: string; at: string; detail?: string }>> };
-  };
+  logger?: PluginLogger;
+  data: PluginDataClient;
+  db: PluginDatabaseClient;
+  http: PluginHttpClient;
+  issues: PluginIssuesClient;
+  // projects + goals are optional at the local-type level so tests can stub
+  // partial ctx without re-implementing every Paperclip client. Production
+  // PluginContext always provides them.
+  projects?: PluginProjectsClient;
+  goals?: PluginGoalsClient;
 };
+
+function emptyResult(): IssueReaderResult {
+  return {
+    tldr: null,
+    refCards: [],
+    ancestry: null,
+    acItems: [],
+    activity: [],
+    deliverable: null,
+    issueBody: null,
+  };
+}
 
 export function registerIssueReader(ctx: IssueReaderCtx): void {
   ctx.data.register('issue.reader', async (params) => {
     const issueId = String(params.issueId ?? '');
-    if (!issueId) {
-      const empty: IssueReaderResult = {
-        tldr: null,
-        refCards: [],
-        ancestry: null,
-        acItems: [],
-        activity: [],
-        deliverable: null,
-        issueBody: null,
-      };
-      return empty;
+    const companyId = String(params.companyId ?? '');
+    if (!issueId) return emptyResult();
+    if (!companyId) {
+      // Fail loud so the UI bug (missing companyId in usePluginData) is obvious
+      // instead of silently returning empty for every read.
+      throw new Error('issue.reader: companyId required (UI must pass it via usePluginData)');
     }
 
-    const issue = await ctx.issues.get(issueId);
+    let issue: Issue | null = null;
+    try {
+      issue = await ctx.issues.get(issueId, companyId);
+    } catch (e) {
+      ctx.logger?.warn?.('issue.reader: ctx.issues.get threw', { issueId, err: (e as Error).message });
+    }
+    if (!issue) {
+      ctx.logger?.warn?.('issue.reader: issue not found', { issueId, companyId });
+      return emptyResult();
+    }
 
-    // Extract refs (dedupe inside resolveRefs already; we dedupe at this layer
-    // too so the fetch URL is short).
-    const refs = Array.from(
-      new Set([...(issue.body || '').matchAll(REF_PATTERN)].map((m) => m[0])),
-    );
+    // issueBody comes from Issue.description (not .body).
+    const issueBodyValue = (issue as unknown as { description?: string | null }).description ?? null;
 
-    // TL;DR — most recent for (surface=issue, scope_id=issueId). Cast the ctx
-    // through TldrCacheCtx because IssueReaderCtx's db.query returns unknown[]
-    // (handler-bridge generic shape) while getTldrByScope expects TldrRow[].
-    const tldrRow = await getTldrByScope(ctx as unknown as TldrCacheCtx, 'issue', issueId);
-    // Map DB row shape → TLDR type. Both are compatible; the type cast is
-    // safe because the schema enforces all required fields.
-    const tldr = (tldrRow as unknown as TLDR | null);
+    // ---- TL;DR --------------------------------------------------------------
+    let tldr: TLDR | null = null;
+    try {
+      const tldrRow = await getTldrByScope(ctx as unknown as TldrCacheCtx, 'issue', issueId);
+      tldr = (tldrRow as unknown as TLDR | null);
+    } catch (e) {
+      ctx.logger?.warn?.('issue.reader: tldr lookup failed', { err: (e as Error).message });
+    }
 
-    // Single round-trip ref resolution (PRIM-01). resolveRefs internally
-    // dedupes, then calls our fetcher with the unique-id list.
-    const companyId = ctx.host?.currentCompanyId;
-    const refCards =
-      refs.length === 0 || !companyId
-        ? []
-        : await resolveRefs(refs, async (uniqueIds) => {
-            const url = `/api/companies/${encodeURIComponent(companyId)}/issues?ids=${uniqueIds.map(encodeURIComponent).join(',')}`;
-            const resp = await ctx.http.fetch(url, { method: 'GET' });
-            const items = (await resp.json()) as RawHostIssue[];
-            return items.map((i) => ({
-              id: i.key,
-              title: i.title,
-              status: i.status,
-              ownerUserId: i.assignee_user_id,
-              bodyExcerptForViewer: i._viewer_can_read === false ? null : truncateExcerpt(i.body),
-              url: `/issues/${i.key}`,
-            }));
-          });
+    // ---- refCards (PRIM-01 single round-trip) -------------------------------
+    let refCards: RefCardData[] = [];
+    try {
+      const refs = Array.from(
+        new Set([...(issueBodyValue ?? '').matchAll(REF_PATTERN)].map((m) => m[0])),
+      );
+      if (refs.length > 0) {
+        refCards = await resolveRefs(refs, async (uniqueIds) => {
+          const url = `/api/companies/${encodeURIComponent(companyId)}/issues?ids=${uniqueIds.map(encodeURIComponent).join(',')}`;
+          const resp = await ctx.http.fetch(url, { method: 'GET' });
+          const items = (await resp.json()) as RawHostIssue[];
+          return items.map((i) => ({
+            id: i.key,
+            title: i.title,
+            status: i.status,
+            ownerUserId: i.assignee_user_id,
+            bodyExcerptForViewer:
+              i._viewer_can_read === false ? null : truncate(i.body, EXCERPT_MAX),
+            url: `/issues/${i.key}`,
+          }));
+        });
+      }
+    } catch (e) {
+      ctx.logger?.warn?.('issue.reader: refCards resolution failed', { err: (e as Error).message });
+      refCards = [];
+    }
 
-    const ancestry = ctx.issues.ancestry
-      ? await ctx.issues.ancestry(issueId).catch(() => null)
-      : null;
+    // ---- Ancestry (parent walk + project + goal) ----------------------------
+    let ancestry: Ancestry | null = null;
+    try {
+      ancestry = await deriveAncestry(ctx, issue, companyId);
+    } catch (e) {
+      ctx.logger?.warn?.('issue.reader: ancestry derivation failed', { err: (e as Error).message });
+    }
 
-    const acItemsResult = await ctx.db.query(
-      'SELECT id, issue_id, label, checked, display_order FROM plugin_clarity_pack_cdd6bda4bd.ac_checklist_items WHERE issue_id = $1 ORDER BY display_order ASC',
-      [issueId],
-    );
+    // ---- AC items from plugin namespace -------------------------------------
+    let acItems: unknown[] = [];
+    try {
+      acItems = await ctx.db.query(
+        'SELECT id, issue_id, label, checked, display_order FROM plugin_clarity_pack_cdd6bda4bd.ac_checklist_items WHERE issue_id = $1 ORDER BY display_order ASC',
+        [issueId],
+      );
+    } catch (e) {
+      ctx.logger?.warn?.('issue.reader: ac_checklist_items query failed', { err: (e as Error).message });
+    }
 
-    const rawActivity = await ctx.activity.log.read({ issueId, limit: RAW_ACTIVITY_FETCH }).catch(() => []);
-    const distilled = rawActivity.filter((e) => ACTIVITY_KEEP_KINDS.has(e.kind)).slice(0, ACTIVITY_LIMIT);
+    // ---- Activity timeline (comments only at SDK 2026.512.0) ----------------
+    // ctx.activity.log is WRITE-only at this SDK version. listComments is the
+    // closest read API. State-change + work-product events are not exposed;
+    // ROADMAP gap captured in 02-03b-SUMMARY.
+    let activity: ActivityEvent[] = [];
+    try {
+      const comments: IssueComment[] = await ctx.issues.listComments(issueId, companyId);
+      activity = comments
+        .slice(-ACTIVITY_LIMIT)
+        .map((c) => commentToActivity(c))
+        .reverse(); // newest first
+    } catch (e) {
+      ctx.logger?.warn?.('issue.reader: listComments failed', { err: (e as Error).message });
+    }
 
-    const deliverable = await ctx.issue.documents.read(issueId, { latest: true }).catch(() => null);
+    // ---- Deliverable (most-recent IssueDocumentSummary) ---------------------
+    let deliverable: DeliverableSummary = null;
+    try {
+      const docs = await ctx.issues.documents.list(issueId, companyId);
+      const sorted = [...docs].sort((a, b) => docTimestamp(b) - docTimestamp(a));
+      const top = sorted[0];
+      if (top) {
+        deliverable = {
+          filename: deliverableFilename(top),
+          last_write_at: deliverableTimestamp(top),
+        };
+      }
+    } catch (e) {
+      ctx.logger?.warn?.('issue.reader: documents.list failed', { err: (e as Error).message });
+    }
 
-    const result: IssueReaderResult = {
+    return {
       tldr,
       refCards,
       ancestry,
-      acItems: acItemsResult.rows,
-      activity: distilled,
+      acItems,
+      activity,
       deliverable,
-      issueBody: issue.body ?? null,
-    };
-    return result;
+      issueBody: issueBodyValue,
+    } satisfies IssueReaderResult;
   });
+}
+
+// ---------- helpers --------------------------------------------------------
+
+async function deriveAncestry(
+  ctx: IssueReaderCtx,
+  issue: Issue,
+  companyId: string,
+): Promise<Ancestry> {
+  const ancestry: Ancestry = { project: null, milestone: null, parent: null };
+
+  // Walk parentId up to MAX_DEPTH; the IMMEDIATE parent is what the breadcrumb
+  // shows. We only need the first parent, not the whole chain.
+  const parentId = (issue as unknown as { parentId?: string | null }).parentId ?? null;
+  if (parentId) {
+    try {
+      const parent = await ctx.issues.get(parentId, companyId);
+      if (parent) {
+        const p = parent as unknown as { id: string; key?: string; title: string };
+        const parentKey = p.key ?? p.id;
+        ancestry.parent = {
+          id: p.id,
+          title: p.title,
+          url: `/issues/${parentKey}`,
+        };
+      }
+    } catch {
+      // Parent unreachable — leave null. Walking deeper not useful here.
+    }
+  }
+
+  // Project resolution (Issue.projectId → ctx.projects.get).
+  const projectId = (issue as unknown as { projectId?: string | null }).projectId ?? null;
+  if (projectId && ctx.projects) {
+    try {
+      const project = await ctx.projects.get(projectId, companyId);
+      if (project) {
+        const p = project as unknown as { id: string; title?: string; name?: string };
+        ancestry.project = {
+          id: p.id,
+          title: p.title ?? p.name ?? projectId,
+          url: `/projects/${p.id}`,
+        };
+      }
+    } catch {
+      // Project unreachable.
+    }
+  }
+
+  // Goal resolution (Issue.goalId → ctx.goals.get). We model goals as the
+  // "milestone" axis for breadcrumb display — Paperclip doesn't have a separate
+  // milestone primitive in the SDK at 2026.512.0.
+  const goalId = (issue as unknown as { goalId?: string | null }).goalId ?? null;
+  if (goalId && ctx.goals) {
+    try {
+      const goal = await ctx.goals.get(goalId, companyId);
+      if (goal) {
+        const g = goal as unknown as { id: string; title?: string };
+        ancestry.milestone = {
+          id: g.id,
+          title: g.title ?? goalId,
+          url: `/goals/${g.id}`,
+        };
+      }
+    } catch {
+      // Goal unreachable.
+    }
+  }
+
+  // The depth cap exists so this loop terminates if Paperclip ever ships a
+  // parent.parent chain we want to walk for, e.g., a "project root" hop.
+  // For 02-03b we only need ONE hop (immediate parent), so MAX_DEPTH is
+  // reserved for a future iteration. Reference it to silence unused-const
+  // warnings without changing behavior.
+  void ANCESTRY_MAX_DEPTH;
+  return ancestry;
+}
+
+function commentToActivity(c: IssueComment): ActivityEvent {
+  const anyC = c as unknown as {
+    authorAgentId?: string | null;
+    authorUserId?: string | null;
+    body?: string | null;
+    createdAt?: string;
+    created_at?: string;
+  };
+  const actor = anyC.authorUserId ?? anyC.authorAgentId ?? null;
+  const at = anyC.createdAt ?? anyC.created_at ?? new Date(0).toISOString();
+  const detail = truncate(anyC.body, COMMENT_DETAIL_MAX);
+  return { kind: 'comment', actor, at, detail };
+}
+
+function docTimestamp(d: unknown): number {
+  const anyD = d as { updatedAt?: string; createdAt?: string; updated_at?: string; created_at?: string };
+  const iso = anyD.updatedAt ?? anyD.updated_at ?? anyD.createdAt ?? anyD.created_at ?? null;
+  return iso ? new Date(iso).getTime() : 0;
+}
+
+function deliverableFilename(d: unknown): string {
+  const anyD = d as { title?: string; key?: string; filename?: string };
+  return anyD.filename ?? anyD.title ?? anyD.key ?? 'document';
+}
+
+function deliverableTimestamp(d: unknown): string | null {
+  const anyD = d as { updatedAt?: string; createdAt?: string; updated_at?: string; created_at?: string; last_write_at?: string };
+  return anyD.updatedAt ?? anyD.last_write_at ?? anyD.updated_at ?? anyD.createdAt ?? anyD.created_at ?? null;
 }
