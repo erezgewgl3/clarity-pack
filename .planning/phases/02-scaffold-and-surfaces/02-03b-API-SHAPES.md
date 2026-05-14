@@ -232,3 +232,45 @@ All shapes needed to rewrite `issue-reader.ts`, `flatten-blocker-chain.ts`, and 
 3. Updating the UI side (`ReaderView`, `LiveBlockerPanel`) to pass `companyId` from `useHostContext()`.
 4. Adding the 6 new manifest capabilities listed in Section 8.
 5. Writing integration tests in `test/worker/issue-reader-integration.test.mjs` that fake-ctx the SHAPES above (not the spec-assumed shapes), so RED→GREEN runs locally without a live Paperclip.
+
+---
+
+## Finding #11 — `useHostContext().userId` is null in detail-tab slots (Plan 02-09)
+
+**Date observed:** 2026-05-14 (Plan 02-04 drill) and 2026-05-15 (Plan 02-08 drill).
+**Surfaced by:** Two consecutive drills against Countermoves COU-4. Every opt-in-guard-wrapped UI call from the Reader tab received `{error: 'OPT_IN_REQUIRED'}` even though the viewer was an opted-in user with a row in `clarity_user_prefs`.
+
+### Root cause
+
+The SDK's `useHostContext().userId` is fed from `slotContextToHostContext()` in `~/paperclip/ui/src/plugins/slots.tsx`, which reads from `authApi.getSession()` inside `PluginBridgeScope`. That session call is a TanStack-Query subscription — during the host's initial query-loading window, `getSession()` returns `null`, and the slot's `userId` is therefore `null`. The window only persists for a few hundred milliseconds in practice, but it is reliably long enough to cause the very first `usePluginData` call from each newly-mounted slot to fire with empty userId.
+
+See `02-03c-HOST-CONTEXT.md` §1 — the universal mapping pipeline confirms the same pipeline feeds `companyId` and `userId`. The 02-03b finding (companyId-null during the issue query loading window) is the same defect class for a different field.
+
+### SDK surface verified to confirm worker-side resolution is not possible
+
+- `PluginContext` (types.d.ts:1292-1345) has NO `users`, `user`, `session`, or `identity` accessor.
+- `GetDataParams` (protocol.d.ts:210-217) = `{key, params, renderEnvironment}` — no envelope-level userId. The HTTP-bridge envelope's `companyId` (visible in 02-04 captured payload) is also NOT forwarded to the worker as a separate field; it must be threaded through `params`.
+- `ctx.http.fetch` (types.d.ts:386-399) is outbound Node fetch from the worker process — no browser session cookies.
+
+A worker handler called `get-viewer` could not resolve caller identity because the bridge gives it no caller-identity input to read.
+
+### Resolution — Plan 02-09 UI-side fetch resolver
+
+`src/ui/primitives/use-resolved-user-id.ts`. Plugin UI is same-origin trusted JavaScript (PLUGIN_SPEC.md §19) and can call Paperclip's Better Auth `/api/auth/get-session` endpoint directly with `credentials: 'include'`. The host session cookie is sent automatically; the response shape is `{user: {id}, session: {}}` (Better Auth canonical).
+
+Worker handlers continue to read `userId` from params (the convention captured in 02-03b §5 — params, NOT a fictional `ctx.host`). The resolver hook ensures the UI threads a real value, never an empty string.
+
+### Field-shape addendum to Section 5
+
+The Section 5 conclusion that `useHostContext().userId` is "reliable" was correct for **page slots** (verified by the captured set-opt-in payload showing `params.userId: 'E8TMB44X...'`). It is NOT reliable for **detail-tab slots** during the auth-session loading window. Resolver hook required for detail-tab consumers.
+
+This is the same pattern as Plan 02-03c's `useResolvedCompanyId` resolver hook for companyId. Two parallel resolvers now compose (companyId first, then userId) in the Reader's render tree.
+
+### Affected files (Plan 02-09)
+
+- New: `src/ui/primitives/use-resolved-user-id.ts`
+- Modified: `src/ui/primitives/ref-chip.tsx`, `src/ui/surfaces/reader/index.tsx`, `src/ui/surfaces/reader/pause-banner.tsx`, `src/ui/surfaces/reader/live-blocker-panel.tsx`
+
+### Re-verification
+
+Closes once the Countermoves re-drill against COU-4 (Plan 02-09 Task 4) confirms (a) Reader tab renders fully, (b) DevTools Network shows real UUIDs in `userId` params for `issue.reader` / `editor.pause-status` / `resolve-refs` and `viewerUserId` for `flatten-blocker-chain`, (c) no React error boundary, (d) no `TypeError: Cannot read properties of undefined` in Console.
