@@ -1,0 +1,43 @@
+=== COMPANY-SHAPE PROBE START ===
+--- A. shared package layout ---
+access.ts
+activity.ts
+adapter-skills.ts
+agent.ts
+approval.ts
+asset.ts
+budget.ts
+company-portability.ts
+company-skill.ts
+company.ts
+cost.ts
+dashboard.ts
+environment.ts
+feedback.ts
+finance.ts
+goal.ts
+heartbeat.ts
+inbox-dismissal.ts
+index.ts
+instance.ts
+issue-tree-control.ts
+issue.ts
+live.ts
+plugin.ts
+project.ts
+quota.ts
+routine.ts
+search.ts
+secrets.ts
+sidebar-badges.ts
+
+--- B. interface Company definition ---
+/home/eric/paperclip/packages/shared/src/types/company.ts:3:export interface Company {
+
+--- C. FULL Company interface (with field comments) ---
+Source: /home/eric/paperclip/packages/shared/src/types/company.ts
+
+--- D. companies table schema (psql, if DB env captured) ---
+(no DBURL ΓÇö sudo not cached; D skipped, C is source-of-truth anyway)
+
+=== COMPANY-SHAPE PROBE END ===

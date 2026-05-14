@@ -35,6 +35,13 @@ import {
   registerEditorPauseStatus,
   type EditorPauseStatusCtx,
 } from './worker/handlers/editor-pause-status.ts';
+// Plan 02-03c Task 2 — companies.resolve-prefix handler. Backs the UI's
+// useResolvedCompanyId() fallback when useHostContext().companyId is null
+// (detail-tab loading window). See 02-03c-HOST-CONTEXT.md for evidence.
+import {
+  registerCompaniesResolve,
+  type CompaniesResolveCtx,
+} from './worker/handlers/companies-resolve.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -46,6 +53,9 @@ const plugin = definePlugin({
     registerIssueReader(ctx as unknown as IssueReaderCtx);
     registerAcChecklist(ctx as unknown as AcChecklistCtx);
     registerEditorPauseStatus(ctx as unknown as EditorPauseStatusCtx);
+
+    // ---- Plan 02-03c companyId resolver (UI fallback path) ------------------
+    registerCompaniesResolve(ctx as unknown as CompaniesResolveCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
