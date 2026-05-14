@@ -1,45 +1,35 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-15T01:00:00.000Z",
-  "source": "session-close",
-  "partial": true,
-  "phase": "2",
-  "phase_name": "scaffold-and-surfaces",
+  "timestamp": "2026-05-15T12:00:00.000Z",
+  "source": "execute-phase",
+  "partial": false,
+  "phase": 2,
+  "phase_name": "2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **EXECUTING (Plan 02-09 awaiting Task 4 Countermoves re-drill)**",
   "phase_dir": ".planning/phases/02-scaffold-and-surfaces",
-  "plan": "02-08",
-  "task": "4 (checkpoint:human-verify) - CLOSED PARTIAL",
+  "plan": "02-09",
+  "task": "4 (checkpoint:human-verify)",
   "total_tasks": 4,
-  "status": "phase-2-partial-close-route-to-02-09",
+  "status": "auto-tasks-complete-awaiting-human-checkpoint",
   "completed_tasks": [
-    "Plan 02-08 Tasks 1-3 (CSS chrome, humanization, polish cluster) - GREEN",
-    "Plan 02-08 Task 4 drill (sections A + B + C) - Section A APPROVED visually, Section B/C blocked by DEV-15-STRUCTURAL",
-    "12 mid-drill defects DEV-04..DEV-15 (10 closed, 2 routed to Plan 02-09)"
+    "02-09 Task 1: useResolvedUserId UI-side resolver (Better-Auth fetch fallback) — commits a49e720 RED, e8ea853 GREEN",
+    "02-09 Task 2: thread useResolvedUserId through ref-chip + reader/index + pause-banner + live-blocker-panel — commits c1c3930 RED, a00371d GREEN",
+    "02-09 Task 3: DEV-16 issue-reader degradation contract locked with 8 per-sub-step tests — commit 21473fd",
+    "02-09 docs: SUMMARY + Finding #11 appended to 02-03b-API-SHAPES.md — commit 7b5f1be"
   ],
   "remaining_tasks": [
-    "Plan 02-09 Task 1: get-viewer worker handler + useResolvedUserId resolver hook (DEV-15-STRUCTURAL closure)",
-    "Plan 02-09 Task 2: thread useResolvedUserId through every wrapped-handler UI call site",
-    "Plan 02-09 Task 3: DEV-16 - tighten issue-reader handler degradation contract",
-    "Plan 02-09 Task 4: re-drill against Countermoves COU-4 - PRIMARY VERIFICATION Reader tab renders fully"
+    "02-09 Task 4: Eric's Countermoves re-drill against /COU/issues/COU-4 — see 02-09-PLAN.md <how-to-verify>"
   ],
-  "blockers": [
-    "DEV-15-STRUCTURAL: useHostContext().userId returns null in detail-tab slots on Paperclip 2026.512.0 - exact-shape replay of 02-03c companyId issue. opt-in-guard fails closed for every wrapped Reader handler. Plan 02-09 carries the resolver-hook fix.",
-    "DEV-16: issue-reader handler returns undefined for some sub-fields when sub-steps fail - tightened contract needed (lower priority, Plan 02-09 Task 3)"
-  ],
+  "blockers": [],
   "human_actions_pending": [
-    "Run /gsd:execute-phase 2 --plan 02-09 in next session"
+    "Eric: SSH to Countermoves Hostinger (ssh -i $HOME\\.ssh\\countermoves_vps_ed25519 eric@82.29.197.74), deploy via npm pack + scp + install-helper.sh, hard-refresh /COU/issues/COU-4, verify Reader renders fully, DevTools Network shows real UUIDs in userId/viewerUserId for all 4 wrapped handlers, Console clean. Resume signal: 'approved — phase 2 closed'."
   ],
   "decisions": [
-    "Phase 2 closes PARTIAL pending Plan 02-09 re-drill - same pattern as Plan 01-04 (Linux Check B deferred) and 02-03c (3 polish items deferred)",
-    "Bookend snapshots SKIPPED on Countermoves per CLAUDE.md scope rule (BEAAA only)",
-    "12 mid-drill defect-fix commits landed in-session per the established drill-defect pattern"
+    "STRUCTURAL DEVIATION from Plan 02-09 Task 1 plan text: implemented as UI-side useResolvedUserId resolver (Better-Auth fetch to /api/auth/get-session, credentials:'include') instead of the worker get-viewer handler the plan proposed. SDK pre-flight verification showed PluginContext has no caller-identity accessor (no users/user/session/identity); GetDataParams has no envelope-level userId; ctx.http.fetch is outbound Node fetch without browser cookies; UI cannot bootstrap a worker get-viewer call without already knowing userId (circular dependency). Plan's explicit escape hatch ('TBD by handler author'; 'STOP if neither path works') authorized. EXEMPT_HANDLER_KEYS unchanged (no new worker handler shipped). Documented in src/ui/primitives/use-resolved-user-id.ts header + 02-09-SUMMARY.md + 02-03b-API-SHAPES.md Finding #11."
   ],
   "uncommitted_files": [
-    ".planning/STATE.md",
-    ".planning/HANDOFF.json",
-    "runbook/REHEARSAL.md",
-    ".planning/phases/02-scaffold-and-surfaces/02-09-PLAN.md (new)",
-    ".planning/phases/02-scaffold-and-surfaces/02-04-DRILL-FINDINGS.md (committed earlier in session)"
+    ".planning/STATE.md (orchestrator-updated for 02-09 close)",
+    ".planning/HANDOFF.json (this file)"
   ],
-  "next_action": "In next session: /gsd:execute-phase 2 --plan 02-09 to spawn executor for the useResolvedUserId resolver hook + DEV-16 contract tightening, then re-drill against Countermoves. The 3 Phase 3-interleave follow-ons (02-05/02-06/02-07) remain non-blocking.",
-  "context_notes": "PARTIAL close, not failure. 11/12 Phase 2 deliverables proven on live Countermoves. Situation Room visual fidelity APPROVED side-by-side with sketches/paperclip-fix-situation-room.html. The remaining gap is structural (host-bridge userId-null in detail-tab slots) and has a known-shape fix path (resolver hook). Estimated Plan 02-09 effort: ~30-60 min executor + ~20 min Eric drill = ~1h to Phase 2 COMPLETE.\n\nRecent commits (most recent first):\nf1d911d fix(02-08): DEV-15-STRUCTURAL — opt-in-guard was failing closed for opted-in users\n5963a27 fix(02-08): DEV-15 — same null-safety in AcChecklist + ActivityTimeline\n1548d63 fix(02-08): DEV-15 — null-safety in AnchoredToCards when refCards is undefined\nf157f22 fix(02-08): DEV-14 — inject CSS at runtime; host doesn't auto-load plugin stylesheets\n959d78d docs(02-08): Plan 02-08 Tasks 1-3 close — SUMMARY + STATE + ROADMAP\nbcfc471 fix(02-08): Task 3 GREEN — useOptIn refresh + production esbuild + React keys + awaiting-you (DEV-07/08/10/13)\n54c2634 test(02-08): Task 3 RED\n30bf4bc feat(02-08): Task 2 GREEN — UUID-to-name narration humanization (DEV-11/12 closure)\nef254ab test(02-08): Task 2 RED\ndafec55 feat(02-08): Task 1 GREEN — CSS chrome for every clarity-* classname (DEV-06 closure)\n2898696 test(02-08): Task 1 RED\n66e9cff docs(02-04): capture 2026-05-14 drill findings against Countermoves\naa70e82 fix(02-04): drop DO $$ guard from 0003 migration"
+  "next_action": "Awaiting Eric's Countermoves COU-4 re-drill per 02-09-PLAN.md Task 4 <how-to-verify>. On 'approved — phase 2 closed' verdict: continuation agent flips Plans 02-04 + 02-08 + 02-09 SUMMARY statuses APPROVED, marks 14 Phase 2 reqs Implemented, updates STATE.md (phase_2_status: COMPLETE, completed_phases: 1→2, percent: 32→40), updates ROADMAP.md, files MemPalace drawer in clarity_pack/decisions.",
+  "context_notes": "Plan 02-09 Tasks 1-3 closed in 6 atomic RED→GREEN commits a49e720..7b5f1be. Suite 365→422 tests (+57; 420 pass / 0 fail / 2 skip). Typecheck clean. dist/ui/index.js 64.3→67.8 KB (+3.5 KB); dist/worker.js 38.9 KB unchanged. Finding #11 appended to 02-03b-API-SHAPES.md documenting detail-tab userId-null semantics + UI-side resolver pattern. The architectural deviation (UI fetch vs worker handler) was forced by SDK gaps and approved by the plan's own STOP escape hatch — NOT a freestyle choice.\n\nRecent commits:\n7b5f1be docs(02-09): SUMMARY (Tasks 1-3 complete) + Finding #11 (userId-null detail-tab gap)\n21473fd test(02-09): Task 3 - lock issue-reader DEV-16 degradation contract\na00371d feat(02-09): Task 2 GREEN - thread useResolvedUserId through all wrapped-handler UI call sites\nc1c3930 test(02-09): Task 2 RED - useResolvedUserId threading contract at all wrapped-handler call sites\ne8ea853 feat(02-09): Task 1 GREEN - useResolvedUserId hook with Better-Auth fallback\na49e720 test(02-09): Task 1 RED - useResolvedUserId UI-side resolver contract"
 }
