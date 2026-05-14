@@ -51,7 +51,8 @@ Plans:
 - [ ] 02-01-PLAN.md — Smoke spike: minimal manifest + worker + migration + detailTab stub; install rehearsal against fresh local Paperclip clone resolves D-01 (slot identity) and D-02 (migrations approach) empirically. Wave 1, autonomous.
 - [x] 02-02-PLAN.md — Scaffold + trust-model hardening + shared primitives: full four-surface manifest, ESLint no-raw-fetch + no-raw-anchor rules, CSS scope enforcement, usePoll primitive, reference resolver, blocker chain flattener, state pill, ref chip, lockfile + postinstall audit. Wave 2, autonomous. **Done 2026-05-13** — 34 new tests (156/157 total suite pass); SUMMARY: `02-02-SUMMARY.md`.
 - [ ] 02-03-PLAN.md — Editor-Agent skeleton + Reader view tab: agents[] manifest declaration, ctx.agents.managed.reconcile, compile-tldr with idempotency + self-loop filter + token cap + circuit breaker + pause banner; Reader tab renders TL;DR strip + ref chips + Anchored-to ref cards + breadcrumb + AC checklist + activity timeline + right-rail Live blocker panel. Wave 3, mixed (manual checkpoint for visual fidelity + governance parity verification).
-- [~] 02-04-PLAN.md — Situation Room + opt-in gate + coexistence CI: **Tasks 1-3 COMPLETE 2026-05-14T15:39Z** (suite 141→266 tests; 6 commits 0eabd63..11d0680; SUMMARY: `02-04-SUMMARY.md`). Task 4 (manual rehearsal — checkpoint:human-verify gate) AWAITING HUMAN. On 'approved — phase 2 closed' verdict, Phase 2 closes.
+- [~] 02-04-PLAN.md — Situation Room + opt-in gate + coexistence CI: **Tasks 1-3 COMPLETE 2026-05-14T15:39Z** (suite 141→266 tests; 6 commits 0eabd63..11d0680; SUMMARY: `02-04-SUMMARY.md`). Task 4 drill 2026-05-14T19:15Z = PARTIAL — 8 gap defects DEV-06..DEV-13 (visual fidelity + UUID narration + polish cluster) → spawned 02-08. Closure deferred to Plan 02-08 Task 4 re-drill.
+- [~] 02-08-PLAN.md — Gap-closure for 02-04 PARTIAL: CSS chrome (DEV-06) + UUID-narration humanization (DEV-11/12) + polish cluster (DEV-07/08/10/13). **Tasks 1-3 COMPLETE 2026-05-14T23:00Z** (suite 269→361 tests; 6 commits 2898696..bcfc471; SUMMARY: `02-08-SUMMARY.md`). Task 4 (Countermoves re-drill — checkpoint:human-verify gate, blocking) AWAITING HUMAN. On 'approved — phase 2 closed' verdict, Plan 02-04 flips PARTIAL→APPROVED and Phase 2 closes.
 
 ### Phase 3: Daily Bulletin
 **Goal**: A 06:30 ET editorial digest auto-compiles each morning - DST-safe across both transitions, idempotent, with a "Requires Your Decision" inbox at the top, department sections with lineage threads, a Standing Numbers panel sourced from SQL (never LLM-generated), a two-pass verifier that rejects on number mismatch, errata as a first-class append-only item type, and an explicit failed-compile banner. The bulletin renders inside Paperclip via the page slot and persists as an ordinary Paperclip issue ("Bulletin No. N") so it survives plugin disable.
@@ -97,7 +98,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Pre-Install Safety | 4/4 | COMPLETE ✓ — rehearsal PASS landed | 2026-05-13 |
-| 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 0/4 | Planning complete (2026-05-13) — ready for /gsd:execute-phase 2 | - |
+| 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 4/5 (02-04+02-08 PARTIAL paired) | Plan 02-08 Tasks 1-3 complete 2026-05-14T23:00Z; Task 4 re-drill awaiting Eric on Countermoves | - |
 | 3. Daily Bulletin | 0/0 | Not started | - |
 | 4. Employee Chat | 0/0 | Not started | - |
 | 5. Distribution & Polish | 0/0 | Not started | - |

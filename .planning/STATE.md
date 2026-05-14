@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T15:40:00Z"
+last_updated: "2026-05-14T23:00:00Z"
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 11
-  completed_plans: 5  # 02-04 Tasks 1-3 complete; Task 4 awaiting human rehearsal — full plan-close pending
-  percent: 30
+  total_plans: 12
+  completed_plans: 5  # 02-04 PARTIAL still pending Plan 02-08 re-drill closure
+  percent: 32
   phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger Countermoves (hosted Postgres). Plan 01-05 cleanup landed 2026-05-13 — pg-dump-locator with bundled-first discovery + version pre-check + dbUrl auto-derivation + operator-gotchas.md catalog. All 3 Phase 2 spike defects now disposed: defect-1 fixed (mode-detect), defect-2 fixed (locator), defect-3 documented (version-mismatch is inherent to pg_dump; clean error path + runbook workaround shipped). Full safety CLI suite: 122 pass / 0 fail.
-  phase_2_status: EXECUTING — Plan 02-04 Tasks 1-3 COMPLETE 2026-05-14T15:39Z (suite 141→266 tests, 6 commits 0eabd63..11d0680, opt-in gate + Situation Room + coexistence CI). Task 4 AWAITING HUMAN — checkpoint:human-verify gate; operator runs manual rehearsal against local Paperclip clone per 02-04-PLAN.md <how-to-verify> sections A-E. On 'approved — phase 2 closed', a continuation agent closes Phase 2. Prior: Plans 02-01 PARTIAL (Check B Linux-deferred), 02-02 COMPLETE 2026-05-13, 02-03+02-03b+02-03c CLOSE TOGETHER 2026-05-14T09:08+ on rehearsal verdict 'approved — reader green'. 3 follow-on plans filed (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date) — non-blocking polish.
+  phase_2_status: EXECUTING — Plan 02-08 Tasks 1-3 COMPLETE 2026-05-14T23:00Z (suite 269→361 tests, 6 commits 2898696..bcfc471, gap-closure for Plan 02-04 PARTIAL — CSS chrome + UUID-narration humanization + useOptIn refresh + production esbuild). Task 4 (Countermoves re-drill, checkpoint:human-verify) AWAITING HUMAN — operator runs <how-to-verify> sections A-D per 02-08-PLAN.md (Section E intentionally skipped — 28h after 02-03c drill exercised the snapshot bookend on same instance). On 'approved — phase 2 closed' verdict, Plan 02-04 flips PARTIAL→APPROVED, Phase 2 closes. Prior: 02-01 PARTIAL (Check B Linux-deferred), 02-02 COMPLETE 2026-05-13, 02-03+02-03b+02-03c CLOSED 2026-05-14T09:08+ ('approved — reader green'), 02-04 Tasks 1-3 COMPLETE 2026-05-14T15:39Z but drill 2026-05-14T19:15Z found 8 gap defects (DEV-06..DEV-13) → spawned 02-08. Three follow-on plans filed for Phase 3-interleave (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date — non-blocking).
 ---
 
 # State: Clarity Pack
@@ -25,20 +25,21 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 2 — executing. Plan 02-04 Tasks 1-3 COMPLETE 2026-05-14T15:39Z (suite 141→266; 6 commits 0eabd63..11d0680). Task 4 AWAITING HUMAN — manual rehearsal against local Paperclip clone closes Phase 2 on 'approved — phase 2 closed' verdict. Plans 02-03 + 02-03b + 02-03c CLOSED 2026-05-14 on prior rehearsal verdict 'approved — reader green'.
+**Current Focus:** Phase 2 — executing. Plan 02-08 Tasks 1-3 COMPLETE 2026-05-14T23:00Z (suite 269→361; 6 commits 2898696..bcfc471) — gap-closure for Plan 02-04 PARTIAL. Task 4 AWAITING HUMAN — Eric re-drills against Countermoves per 02-08-PLAN.md <how-to-verify>. On 'approved — phase 2 closed' verdict, Plan 02-04 flips PARTIAL→APPROVED and Phase 2 closes.
 
 ## Current Position
 
-Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **EXECUTING (Plan 02-04 awaiting Task 4 human rehearsal)**
-**Plans (post 02-04 Tasks 1-3 close):**
+Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **EXECUTING (Plan 02-08 awaiting Task 4 Countermoves re-drill)**
+**Plans:**
   - 02-01 PARTIAL — smoke spike (Linux Check B deferred — non-blocking, accepted)
   - 02-02 COMPLETE 2026-05-13 — scaffold + 6 primitives + trust-model hardening
   - 02-03 + 02-03b + 02-03c CLOSED TOGETHER 2026-05-14T09:08+ — Editor-Agent + Reader view + companyId resolver + drill APPROVED on Countermoves COU-1
-  - 02-04 Tasks 1-3 COMPLETE 2026-05-14T15:39Z — opt-in gate + Situation Room + coexistence CI (16 reqs: OPTIN-01..05 + ROOM-01..08 + COEXIST-06)
-  - 02-04 Task 4 AWAITING HUMAN — manual rehearsal against local Paperclip clone closes Phase 2
+  - 02-04 PARTIAL — Tasks 1-3 COMPLETE 2026-05-14T15:39Z, Task 4 drill 2026-05-14T19:15Z found 8 gap defects DEV-06..DEV-13 → spawned 02-08
+  - 02-08 Tasks 1-3 COMPLETE 2026-05-14T23:00Z — gap-closure for 02-04 (CSS chrome + UUID-narration humanization + useOptIn refresh + production esbuild + awaiting-you semantics)
+  - 02-08 Task 4 AWAITING HUMAN — Countermoves re-drill closes Plan 02-04 + Phase 2 on 'approved — phase 2 closed' verdict
   - 02-05 + 02-06 + 02-07 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date) — non-blocking, can interleave with Phase 3
-**Status:** 02-04 Tasks 1-3 commits 0eabd63 (Task 1 RED) → 3a8a6aa (Task 1 GREEN) → 05dcb88 (Task 2 RED) → 25a4ea7 (Task 2 GREEN) → 81cf2ab (Task 3 RED) → 11d0680 (Task 3 GREEN). Suite 141→266 tests, 0 fail. Typecheck + build + coexistence run-all all clean.
-**Progress:** [###       ] 1/5 phases complete; Phase 2 ~71% by plan count (5/7 incl. 02-04 partial; 02-03b superseded)
+**Status:** 02-08 commits 2898696 (Task 1 RED) → dafec55 (Task 1 GREEN) → ef254ab (Task 2 RED) → 30bf4bc (Task 2 GREEN) → 54c2634 (Task 3 RED) → bcfc471 (Task 3 GREEN). Suite 269→361 pass / 0 fail / 1 skip. Typecheck + build + coexistence run-all all clean. dist/ui/index.css grew from 8.2 KB to 17.5 KB.
+**Progress:** [###       ] 1/5 phases complete; Phase 2 ~85% by plan count (6/7 incl. 02-04+02-08 partial pairing)
 
 ## Performance Metrics
 
@@ -94,9 +95,9 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-14T15:08-15:39 — Plan 02-04 Tasks 1-3 executed end-to-end with strict TDD discipline (RED→GREEN per task; 6 commits). Task 1 ships the opt-in gate: clarity_user_prefs migrations idempotent guard; wrapDataHandler / wrapActionHandler + EXEMPT_HANDLER_KEYS Set; get-opt-in + set-opt-in + get-instance-config handlers; useOptIn hook; EnableClarityCta + SettingsPage UI; every 02-02/02-03 handler wrapped (OPTIN-04). DEVIATION DEV-01 was the major one: SDK 2026.512.0 PluginContext has NO `host` field, so the plan's `ctx.host.currentUserId` pattern was structurally impossible — followed the 02-03b convention (UI threads userId via useHostContext + params; worker reads params). Task 2 ships the Situation Room: 60s recompute-situation cron job; situation.snapshot + active-viewer-ping handlers; useLeaderElection + usePollWithLeader + createLeaderBroadcast (the revision iteration 2 follower-postMessage-bridge contract is asserted by a two-tab test using a pure in-memory channel bus, no React); useInstanceConfig FALLBACK (per 02-01 Check F LOCKED); AgentCard + CriticalPathStrip + AwaitingYouPill + ArtifactsShippedShelf + Sparkline subcomponents matching the sketches mockup. Task 3 ships the coexistence CI: six COEXIST-01..06 scripts + run-all.mjs + .github/workflows/coexistence.yml; SQL-comment-stripping so doc-comments don't trigger false positives (DEV-02). Suite 141→266 tests. Plan 02-04 Task 4 (manual rehearsal against local Paperclip clone) is the only remaining work for Phase 2 closure.
+**Last session:** 2026-05-14T21:00-23:00 — Plan 02-08 Tasks 1-3 executed end-to-end with strict TDD discipline (RED→GREEN per task; 6 commits 2898696..bcfc471). Closes 8 defects (DEV-06 through DEV-13) surfaced by the 2026-05-14 drill against Countermoves. Task 1 ships ~310 lines of substantive CSS — palette extension, CTA cluster, page chrome (responsive @media at 1180/760px), agent card + terminal-kind variants, critical path, awaiting-you pill, artifacts shelf, sparkline; theme.css 353→755 lines; dist/ui/index.css 8.2 KB→17.5 KB; new test/ui/clarity-pack-css-rules.test.mjs uses parse-based assertion (Node 24 can't reliably evaluate oklch + color-mix via JSDOM). Task 2 ships humanizeChain pure helper: scrubs UUIDs from terminal.label, three-pass rewrite (__unowned__ form + UUID substitution + belt-and-suspenders); shipped agent-only per DEV-11-AGENT-ONLY deviation (SDK 2026.512.0 has no PluginUsersClient — verified by grep on dist/types.d.ts); wired into situation-snapshot job's per-company loop; agent-card.tsx now has nowDoingFallback() for DEV-12. Task 3 ships useOptIn refresh wiring (Path A — SDK exposes refresh() on PluginDataResult), production-mode esbuild define block as defense-in-depth for DEV-08, react-key static analysis catches future regressions; DEV-13 awaitingYouCount fix landed in Task 2's coordinated edit to situation-snapshot.ts. Suite 269→361 pass / 0 fail / 1 skip. Typecheck + build + coexistence run-all all clean.
 
-**Next session resume point:** Operator runs Plan 02-04 Task 4 manual rehearsal — see 02-04-PLAN.md `<how-to-verify>` sections A-E. On 'approved — phase 2 closed' verdict, a continuation agent runs the closure (update STATE.md, ROADMAP.md to phase-2-complete; mark requirements complete). The 3 deferred follow-ons (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date) can interleave with Phase 3 — non-blocking.
+**Next session resume point:** Operator runs Plan 02-08 Task 4 — Countermoves re-drill per 02-08-PLAN.md `<how-to-verify>` sections A-D. Pre-flight (5 min): confirm Caddyfile, local test suite, npm pack + scp + install on Countermoves. Section A (visual fidelity side-by-side with mockup) is the PRIMARY bar. Section B (zero UUIDs in narration; Cmd-F for `-d772-`). Section C (UI flips without refresh; clean DevTools console). Section D (coexistence CI optional re-verify). Section E SKIPPED — 28h after 02-03c drill on same instance. On `approved — phase 2 closed` verdict: continuation agent appends REHEARSAL.md row, flips 02-04 SUMMARY status to APPROVED, marks 14 requirements complete (OPTIN-01..05 + ROOM-01..08 + COEXIST-06), updates STATE.md to phase_2_status: COMPLETE + completed_phases: 2 + percent: 40, updates ROADMAP.md, appends 02-03b-API-SHAPES.md Finding #11 (page-slot useHostContext semantics — DEV-09), files MemPalace drawer in clarity_pack/decisions, makes single closing docs commit. The 3 deferred follow-ons (02-05/02-06/02-07) can interleave with Phase 3.
 
 **Files of record:**
 
