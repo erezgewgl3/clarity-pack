@@ -13,6 +13,14 @@
 // Now reads from PluginDetailTabProps shape — context.entityId is statically
 // non-null per SDK 2026.512.0 types.d.ts:197-203.
 //
+// Plan 02-09 Task 2 — DEV-15-STRUCTURAL: viewer identity now comes from
+// useResolvedUserId() (Better-Auth-backed) instead of context.userId / a
+// `userId ?? ''` fallback. Detail-tab slots returned null userId until
+// authApi.getSession() resolved, which made opt-in-guard fail-closed for
+// issue.reader (the wrapped handler returned OPT_IN_REQUIRED, the inner
+// data shape was the error object, and every downstream component crashed
+// reading data.refCards / data.acItems / etc).
+//
 // Plan 02-03c Task 2 — retrofit to use the resolver hook so the detail-tab
 // loading window (issue query in flight → useHostContext().companyId is null
 // per 02-03c-HOST-CONTEXT.md Section 1) renders an explicit "Resolving
@@ -38,6 +46,7 @@ import type { PluginDetailTabProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
+import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { useOptIn } from '../../primitives/use-opt-in.ts';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
@@ -64,13 +73,14 @@ export type ReaderViewData = {
 
 export function ReaderView({ context }: PluginDetailTabProps): React.ReactElement {
   // Per SDK PluginDetailTabProps, context.entityId is statically non-null
-  // for detail-tab slots — host guarantees it. context.userId mirrors
-  // useHostContext().userId (same bridge value, just from the prop instead of
-  // the hook). companyId comes from the resolver hook because for detail-tab
+  // for detail-tab slots — host guarantees it. context.userId previously
+  // mirrored useHostContext().userId here (which is null in detail-tab slots
+  // during the host's authApi.getSession() loading window) — Plan 02-09
+  // replaces that read with useResolvedUserId() inside the inner component.
+  // companyId likewise comes from the resolver hook because for detail-tab
   // slots the host's PluginSlotMount may pass `issue.companyId` which is
   // undefined while the issue query is in flight (02-03c-HOST-CONTEXT.md §1).
   const entityId = context.entityId;
-  const userId = context.userId;
 
   // Plan 02-04 Task 1 — OPTIN-02 gate. useOptIn() must be called BEFORE the
   // companyId resolver so opted-out users see the CTA even when companyId
@@ -95,15 +105,13 @@ export function ReaderView({ context }: PluginDetailTabProps): React.ReactElemen
 
   // Plan 02-03c — companyId resolver hook gates the data fetch.
   // Hooks-rules safety: useResolvedCompanyId is called unconditionally below.
-  return <ReaderViewOptedIn entityId={entityId} userId={userId} />;
+  return <ReaderViewOptedIn entityId={entityId} />;
 }
 
 function ReaderViewOptedIn({
   entityId,
-  userId,
 }: {
   entityId: string;
-  userId: string | null;
 }): React.ReactElement {
   const { companyId, loading: companyLoading, error: companyError } = useResolvedCompanyId();
 
@@ -137,7 +145,6 @@ function ReaderViewOptedIn({
     <ReaderViewWithCompany
       entityId={entityId}
       companyId={companyId}
-      userId={userId}
     />
   );
 }
@@ -148,29 +155,63 @@ function ReaderViewOptedIn({
 function ReaderViewWithCompany({
   entityId,
   companyId,
+}: {
+  entityId: string;
+  companyId: string;
+}): React.ReactElement {
+  // Plan 02-09 Task 2 — DEV-15-STRUCTURAL closure: viewer identity sourced
+  // from the resolver hook. In detail-tab slots useHostContext().userId is
+  // null until authApi.getSession() resolves (02-03c-HOST-CONTEXT.md §1);
+  // useResolvedUserId() short-circuits when the host bridge has a real id
+  // and otherwise fetches /api/auth/get-session (Better Auth) directly via
+  // same-origin trusted-JS access. While the resolver is in flight, we
+  // render the loading placeholder rather than firing issue.reader with an
+  // empty userId (the pre-02-09 pattern that fail-closed opt-in-guard).
+  const { userId, loading: userIdLoading, error: userIdError } = useResolvedUserId();
+
+  if (userIdLoading) {
+    return (
+      <ClaritySurfaceRoot name="reader">
+        <p className="clarity-reader-loading">Resolving viewer identity…</p>
+      </ClaritySurfaceRoot>
+    );
+  }
+
+  if (userIdError === 'no-user-context' || !userId) {
+    return (
+      <ClaritySurfaceRoot name="reader">
+        <p className="clarity-reader-error" data-clarity-error="no-user-context">
+          Reader view unavailable — could not identify the active user.
+          Reload the page to retry; if it persists, sign out and back in.
+        </p>
+      </ClaritySurfaceRoot>
+    );
+  }
+
+  return (
+    <ReaderViewReady entityId={entityId} companyId={companyId} userId={userId} />
+  );
+}
+
+// Final inner component — renders ONLY when companyId + userId are both
+// real strings. usePluginData's params shape stays stable across renders.
+function ReaderViewReady({
+  entityId,
+  companyId,
   userId,
 }: {
   entityId: string;
   companyId: string;
-  userId: string | null;
+  userId: string;
 }): React.ReactElement {
-  // DEV-15-STRUCTURAL (drill 2026-05-14): opt-in-guard wraps `issue.reader`
-  // and refuses callers whose params don't carry the viewer identity. Without
-  // userId here, the guard returned {error:'OPT_IN_REQUIRED'} for opted-in
-  // users, the UI received the error shape instead of ReaderViewData, every
-  // downstream component crashed reading `.refCards`, `.acItems`, etc.
-  // Thread the viewer identity explicitly. The guard accepts userId or the
-  // legacy viewerUserId; we prefer the canonical name here.
   const { data, loading } = usePluginData<ReaderViewData | { error: string }>('issue.reader', {
     issueId: entityId,
     companyId,
-    userId: userId ?? '',
+    userId,
   });
   if (loading || !data || 'error' in data) {
-    // Loading state OR opt-in-guard short-circuited (no userId yet, or the
-    // viewer is genuinely opted-out — in which case the surface gate above
-    // this component already routes to the CTA, so we should never get here
-    // with an OPT_IN_REQUIRED in practice).
+    // Loading state OR opt-in-guard short-circuited (shouldn't happen here
+    // because we already gated on optedIn upstream AND userId is real).
     return (
       <ClaritySurfaceRoot name="reader">
         <p className="clarity-reader-loading">Loading Reader view…</p>

@@ -8,9 +8,18 @@
 //
 // The literal "Editorial Desk paused — last compile failed at" is locked by
 // D-07 + reader-view.test.mjs; do not edit it without updating the test.
+//
+// Plan 02-09 Task 2 — DEV-15-STRUCTURAL: viewer identity now comes from
+// useResolvedUserId() instead of useHostContext().userId. In detail-tab slots
+// the host bridge returns null userId until authApi.getSession() resolves,
+// which previously fail-closed the editor.pause-status call (opt-in-guard
+// returned OPT_IN_REQUIRED; banner stayed null even for legitimate paused
+// states from opted-in users).
 
 import * as React from 'react';
-import { usePluginData, useHostContext } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+
+import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 
 export type EditorPauseStatus = {
   paused: boolean;
@@ -27,18 +36,17 @@ function formatHHMM(iso: string | null): string {
 }
 
 export function PauseBanner(): React.ReactElement | null {
-  // DEV-15-STRUCTURAL (drill 2026-05-14): editor.pause-status is wrapped by
-  // opt-in-guard. Without userId in params the guard returns
-  // {error:'OPT_IN_REQUIRED'} and `data.paused` is undefined — banner stays
-  // null which masks legitimate paused states from opted-in users. Thread
-  // userId from useHostContext.
-  const { userId } = useHostContext();
+  // Plan 02-09 Task 2 — resolver-sourced userId. While resolving we pass
+  // empty params; opt-in-guard returns OPT_IN_REQUIRED; the banner stays
+  // null (which is the right default — we don't want a pause banner racing
+  // a fully-resolved render).
+  const { userId, loading: userIdLoading } = useResolvedUserId();
   const { data } = usePluginData<EditorPauseStatus | { error: string }>(
     'editor.pause-status',
-    { userId: userId ?? '' },
+    !userIdLoading && userId ? { userId } : {},
   );
   const [dismissed, setDismissed] = React.useState(false);
-  if (!data || 'error' in data || !data.paused || dismissed) return null;
+  if (userIdLoading || !data || 'error' in data || !data.paused || dismissed) return null;
   const ts = formatHHMM(data.lastFailureAt);
   return (
     <footer
