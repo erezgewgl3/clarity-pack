@@ -92,13 +92,21 @@ test('handler throws when prefix is not found in companies.list()', async () => 
   );
 });
 
-test('handler throws when companyPrefix is missing or empty', async () => {
-  const { ctx, registered } = makeFakeCtx({ companies: SAMPLE });
+test('handler returns null (no-op, NOT a throw) when companyPrefix is missing or empty', async () => {
+  // The hook calls this handler unconditionally per React rules-of-hooks;
+  // when host companyId is populated the hook passes empty params and
+  // ignores the result. Throwing here surfaces as 502 in the browser console
+  // even though the hook short-circuits. Return null silently instead.
+  const { ctx, listCalls, registered } = makeFakeCtx({ companies: SAMPLE });
   registerCompaniesResolve(ctx);
   const handler = registered.get('companies.resolve-prefix');
-  await assert.rejects(() => handler({}), /companyPrefix required/i);
-  await assert.rejects(() => handler({ companyPrefix: '' }), /companyPrefix required/i);
-  await assert.rejects(() => handler({ companyPrefix: null }), /companyPrefix required/i);
+  assert.equal(await handler({}), null, 'missing prefix → null');
+  assert.equal(await handler({ companyPrefix: '' }), null, 'empty prefix → null');
+  assert.equal(await handler({ companyPrefix: '   ' }), null, 'whitespace-only prefix → null');
+  assert.equal(await handler({ companyPrefix: null }), null, 'null prefix → null');
+  // Importantly: companies.list was NOT called for any of these (no wasted
+  // host round-trip when there's nothing to resolve).
+  assert.equal(listCalls.length, 0, 'companies.list not called for no-op invocations');
 });
 
 test('handler throws when companies.list returns empty (host visibility issue)', async () => {

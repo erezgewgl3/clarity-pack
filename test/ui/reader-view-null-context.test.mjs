@@ -49,10 +49,14 @@ test('ReaderView NEVER passes empty-string companyId to usePluginData (the 02-03
   );
 });
 
-test('ReaderView reads userId via useHostContext (userId is reliable per 02-03c-HOST-CONTEXT.md universal rule)', () => {
-  // The hook chain: useResolvedCompanyId for companyId, useHostContext for userId
-  // (the universal pipeline guarantees userId is non-null when authenticated).
-  assert.match(READER_SRC, /useHostContext\(\)/);
+test('ReaderView accepts PluginDetailTabProps {context} shape (Task 2.5 gap fix — primary drill defect)', () => {
+  // The 02-03b/02-03c drill root cause: ReaderView destructured `{entityId}`
+  // at the top level, but the host invokes slot components with `{slot, context}`
+  // (per ~/paperclip/ui/src/plugins/slots.tsx PluginSlotComponentProps). So
+  // entityId was always undefined → issue.reader silently returned empty.
+  // The fix reads entityId and userId from context.entityId / context.userId.
+  assert.match(READER_SRC, /\{\s*context\s*\}\s*:\s*PluginDetailTabProps/, 'ReaderView destructures {context} from PluginDetailTabProps');
+  assert.match(READER_SRC, /context\.entityId/, 'reads entityId from context, not top-level prop');
 });
 
 test('ReaderView renders an explicit "Resolving company context…" placeholder during the resolver loading window', () => {

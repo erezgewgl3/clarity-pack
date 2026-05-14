@@ -18,12 +18,14 @@
 
 import type { Company, PluginCompaniesClient, PluginLogger } from '@paperclipai/plugin-sdk';
 
+export type CompaniesResolveResult = { companyId: string; displayName: string } | null;
+
 export type CompaniesResolveCtx = {
   logger?: PluginLogger;
   data: {
     register(
       key: string,
-      handler: (params: Record<string, unknown>) => Promise<{ companyId: string; displayName: string }>,
+      handler: (params: Record<string, unknown>) => Promise<CompaniesResolveResult>,
     ): void;
   };
   companies: PluginCompaniesClient;
@@ -33,8 +35,16 @@ export function registerCompaniesResolve(ctx: CompaniesResolveCtx): void {
   ctx.data.register('companies.resolve-prefix', async (params) => {
     const raw = params?.companyPrefix;
     const prefix = typeof raw === 'string' ? raw.trim() : '';
+
+    // Empty-prefix is a no-op (NOT a fail-loud throw). The resolver hook
+    // calls this handler unconditionally per React rules-of-hooks; when host
+    // companyId is already populated the hook passes empty params and ignores
+    // the result. Throwing here would surface as 502 in the browser console
+    // even though the hook short-circuits to the host-provided UUID. Return
+    // null and let the hook's null-data branch evaluate to no-company-context
+    // (which is THEN gated by the hook's hostCompanyId short-circuit).
     if (!prefix) {
-      throw new Error('companyPrefix required');
+      return null;
     }
 
     const companies: Company[] = await ctx.companies.list();

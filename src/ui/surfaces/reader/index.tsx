@@ -1,10 +1,23 @@
 // src/ui/surfaces/reader/index.tsx
 //
-// Plan 02-03c Task 2 — retrofit ReaderView to use the resolver hook so the
-// detail-tab loading window (issue query in flight → useHostContext().companyId
-// is null per 02-03c-HOST-CONTEXT.md Section 1) renders an explicit
-// "Resolving company context…" placeholder instead of silently passing
-// empty-string companyId to the worker (the 02-03b drill defect).
+// Plan 02-03c Task 2.5 (drill gap-fix) — primary 02-03b/02-03c drill defect
+// root cause: ReaderView's prop signature was `{ entityId }: { entityId: string }`,
+// but the host invokes slot components with `{ slot, context }` per
+// `PluginSlotComponentProps` in ~/paperclip/ui/src/plugins/slots.tsx. entityId
+// at the top level was ALWAYS undefined → issue.reader's `if (!issueId) return
+// emptyResult()` silently returned empty for every render → cascading empty
+// states. The previous "useHostContext().companyId returns null" diagnosis
+// (02-03b) was correct but secondary; this prop-shape bug was the primary
+// failure surfaced by flatten-blocker-chain's stricter fail-loud guard.
+//
+// Now reads from PluginDetailTabProps shape — context.entityId is statically
+// non-null per SDK 2026.512.0 types.d.ts:197-203.
+//
+// Plan 02-03c Task 2 — retrofit to use the resolver hook so the detail-tab
+// loading window (issue query in flight → useHostContext().companyId is null
+// per 02-03c-HOST-CONTEXT.md Section 1) renders an explicit "Resolving
+// company context…" placeholder instead of silently passing empty-string
+// companyId to the worker.
 //
 // Plan 02-03b Task 2 — adds the companyId param to usePluginData. The
 // worker handler at src/worker/handlers/issue-reader.ts now requires
@@ -20,7 +33,8 @@
 // usePluginData('flatten-blocker-chain') call (independent cadence).
 
 import * as React from 'react';
-import { usePluginData, useHostContext } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import type { PluginDetailTabProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
@@ -46,8 +60,15 @@ export type ReaderViewData = {
   issueBody: string | null;
 };
 
-export function ReaderView({ entityId }: { entityId: string }): React.ReactElement {
-  const { userId } = useHostContext();
+export function ReaderView({ context }: PluginDetailTabProps): React.ReactElement {
+  // Per SDK PluginDetailTabProps, context.entityId is statically non-null
+  // for detail-tab slots — host guarantees it. context.userId mirrors
+  // useHostContext().userId (same bridge value, just from the prop instead of
+  // the hook). companyId comes from the resolver hook because for detail-tab
+  // slots the host's PluginSlotMount may pass `issue.companyId` which is
+  // undefined while the issue query is in flight (02-03c-HOST-CONTEXT.md §1).
+  const entityId = context.entityId;
+  const userId = context.userId;
   const { companyId, loading: companyLoading, error: companyError } = useResolvedCompanyId();
 
   // Resolver in flight — render the explicit placeholder so users can see we
@@ -80,7 +101,7 @@ export function ReaderView({ entityId }: { entityId: string }): React.ReactEleme
     <ReaderViewWithCompany
       entityId={entityId}
       companyId={companyId}
-      userId={userId ?? null}
+      userId={userId}
     />
   );
 }
