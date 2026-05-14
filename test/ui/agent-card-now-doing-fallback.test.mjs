@@ -39,16 +39,16 @@ test('agent-card.tsx has a now_doing null fallback (not just `now_doing ? ... : 
   const src = readSrc();
   // The current code returns null when now_doing is null. The fallback must NOT
   // be a bare `: null` — it should resolve to a string (Standby/Working + age).
-  // We grep for an absence of the old pattern `{employee.now_doing ? (...) : null}`
-  // followed by something that proves a fallback exists.
-  // Two acceptable shapes:
-  //   {employee.now_doing ?? `Standby ...`}
-  //   {employee.now_doing ? ... : (someFallbackExpression)}
-  // where the fallback expression mentions employee.state or formatAge.
-  assert.match(
-    src,
-    /now_doing\s*\?\?|now_doing\s*\?[^:]*:[\s\S]*?(formatAge|humaniseState|Standby|idle|state)/,
-    'expected now_doing fallback path to reference state/age (not bare ": null")',
+  // Three acceptable shapes:
+  //   {employee.now_doing ?? `Standby ...`}                  inline ??
+  //   {employee.now_doing ? ... : (someFallbackExpression)}  inline ternary
+  //   helper function nowDoingFallback(employee) that reads now_doing + state/age
+  // All three must mention now_doing reading AND state/age formatting nearby.
+  const hasInline = /now_doing\s*\?\?|now_doing\s*\?[^:]*:[\s\S]*?(formatAge|humaniseState|Standby|idle|state)/.test(src);
+  const hasHelper = /function\s+\w*[Ff]allback[\s\S]*?now_doing[\s\S]*?(formatAge|humaniseState|Standby|idle|state)/.test(src);
+  assert.ok(
+    hasInline || hasHelper,
+    'expected now_doing fallback path to reference state/age (inline or via helper); got neither shape',
   );
 });
 

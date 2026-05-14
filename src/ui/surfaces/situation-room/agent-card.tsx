@@ -12,6 +12,7 @@
 import * as React from 'react';
 
 import { StatePill, type StatePillState } from '../../primitives/state-pill.tsx';
+import { formatAge, humaniseState } from '../../primitives/state-pill-format.ts';
 import type { BlockerChainResult } from '../../../shared/types.ts';
 import { Sparkline } from './sparkline.tsx';
 
@@ -41,18 +42,33 @@ function normaliseState(raw: string): StatePillState {
   }
 }
 
+/**
+ * Plan 02-08 Task 2 (DEV-12) — when now_doing is null, derive a fallback line
+ * from state + age so the card body never renders empty. Phase 3's
+ * Editor-Agent prose pass will eventually fill this with richer text; until
+ * then, "Standby — idle 2m" / "Working for 5m" is better than nothing.
+ */
+function nowDoingFallback(employee: AgentEmployee): string {
+  if (employee.now_doing) return employee.now_doing;
+  const state = normaliseState(employee.state);
+  const age = formatAge(employee.age_ms);
+  if (state === 'Standby') {
+    return `Standby — idle ${age}`;
+  }
+  return `${humaniseState(state)} for ${age}`;
+}
+
 export function AgentCard({ employee }: { employee: AgentEmployee }): React.ReactElement {
   const state = normaliseState(employee.state);
   const terminal = employee.blocker_chain?.terminal;
+  const nowDoingText = nowDoingFallback(employee);
   return (
     <div className="clarity-agent-card" data-clarity-region="agent-card">
       <header className="clarity-agent-card-header">
         <span className="clarity-agent-role">{employee.role}</span>
         <StatePill state={state} age={employee.age_ms} />
       </header>
-      {employee.now_doing ? (
-        <p className="clarity-now-doing">{employee.now_doing}</p>
-      ) : null}
+      <p className="clarity-now-doing">{nowDoingText}</p>
       {terminal ? (
         <p className="clarity-agent-terminal" data-terminal-kind={terminal.kind}>
           <span className="clarity-agent-terminal-kind">{terminal.kind.replace(/_/g, ' ')}</span>

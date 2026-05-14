@@ -28,6 +28,7 @@ import {
   type BlockerEdge,
 } from '../../shared/blocker-chain.ts';
 import type { BlockerChainResult } from '../../shared/types.ts';
+import { humanizeChain, buildIdLookup, type IdLookup } from './humanize-snapshot.ts';
 
 const MAX_CHAIN_DEPTH = 6;
 const CRITICAL_PATH_MAX = 3;
@@ -100,6 +101,7 @@ async function buildEmployeeRow(
   emp: Agent,
   companyId: string,
   viewerUserId: string,
+  lookup: IdLookup,
 ): Promise<EmployeeSnapshot> {
   const anyEmp = emp as unknown as {
     id?: string;
@@ -168,12 +170,17 @@ async function buildEmployeeRow(
 
   // PRIM-03: deterministic chain. flattenBlockerChain returns one of the
   // four canonical Terminal kinds — never an LLM-derived label.
-  const blockerChain = flattenBlockerChain({
+  const rawChain = flattenBlockerChain({
     startId: startId || userId,
     edges,
     nodeMeta,
     viewerUserId,
   });
+
+  // Plan 02-08 Task 2 (DEV-11) — humanize before reaching the UI.
+  // Every blocker_chain.terminal.label is asserted UUID-free by
+  // test/worker/situation-snapshot-narration.test.mjs.
+  const blockerChain = humanizeChain(rawChain, lookup);
 
   return {
     userId,
@@ -243,10 +250,19 @@ export function registerSituationSnapshotJob(ctx: SituationSnapshotCtx): void {
         continue;
       }
 
+      // Plan 02-08 Task 2 — build the per-company IdLookup BEFORE we walk the
+      // employees. Agents-only (DEV-11-AGENT-ONLY): SDK 2026.512.0 has no
+      // PluginUsersClient, so we don't try to resolve human-user UUIDs. The
+      // captured drill payload contained only agent UUIDs anyway.
+      const lookup: IdLookup = buildIdLookup({
+        agents: employees as unknown as Array<{ user_id?: string; id?: string; role?: string }>,
+        users: [],
+      });
+
       const employeeRows: EmployeeSnapshot[] = [];
       for (const emp of employees) {
         try {
-          employeeRows.push(await buildEmployeeRow(ctx, emp, companyId, viewerUserId));
+          employeeRows.push(await buildEmployeeRow(ctx, emp, companyId, viewerUserId, lookup));
         } catch (e) {
           ctx.logger?.warn?.('situation-snapshot: employee row build failed', {
             err: (e as Error).message,
@@ -254,14 +270,24 @@ export function registerSituationSnapshotJob(ctx: SituationSnapshotCtx): void {
         }
       }
 
+      // Plan 02-08 Task 2 — critical_path chains are picked from already-
+      // humanized employee chains, so they inherit UUID-free labels. No
+      // second humanizeChain pass needed; the integration test asserts both
+      // surfaces are UUID-free anyway.
       const criticalPath = pickTopChains(
         employeeRows.map((e) => e.blocker_chain),
         CRITICAL_PATH_MAX,
       );
 
-      const awaitingYouCount = employeeRows.filter(
-        (e) => e.blocker_chain.terminal.kind === 'HUMAN_ACTION_ON',
-      ).length;
+      // Plan 02-08 Task 3 (DEV-13) — Awaiting You count must filter on
+      // userId === viewerUserId. The previous implementation counted every
+      // HUMAN_ACTION_ON terminal including '__unowned__' which inflated the
+      // pill count in the drill. Now: only count terminals whose userId
+      // matches the company owner's userId (the current viewer).
+      const awaitingYouCount = employeeRows.filter((e) => {
+        const t = e.blocker_chain.terminal;
+        return t.kind === 'HUMAN_ACTION_ON' && t.userId === viewerUserId;
+      }).length;
 
       const payload: SituationPayload = {
         employees: employeeRows,
