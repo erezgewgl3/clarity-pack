@@ -142,6 +142,43 @@ d) **Paperclip embedded-postgres credentials are hardcoded `paperclip:paperclip@
 
 ---
 
+## Phase 2 Reader-tab visual rehearsals
+
+This sub-section records the Plan 02-03 Task 3 / 02-03b Task 3 manual checkpoint drills — the visual-fidelity test of the Reader detail-tab against a live Paperclip with a real test issue. Separate from the install rehearsals above because the acceptance bar is "renders all 7 mockup elements + console clean", not "install succeeds".
+
+**Columns:** Date | Plugin version (manifest) | Plugin uuid | Issue | Pre-snapshot id | Components rendered | Console clean | Verdict | Operator
+
+| Date       | Plugin version | Plugin uuid                                | Issue | Pre-snapshot id            | Components rendered                                                                                                  | Console clean | Verdict   | Operator |
+|------------|----------------|--------------------------------------------|-------|----------------------------|-----------------------------------------------------------------------------------------------------------------------|---------------|-----------|----------|
+| 2026-05-14 | 0.2.0 (manifest) / 0.1.0-smoke (npm) | `0d4fc40a-0541-4b67-8979-9d346cb9c07b` | COU-4 | `2026-05-14T06-02-00Z`     | 4/8 (TldrStrip placeholder, AnchoredToCards empty, AcChecklist empty, ActivityTimeline empty); 1/8 error (LiveBlockerPanel showing typed EXTERNAL terminal); 3/8 missing (Breadcrumb, ProseWithRefChips, DeliverablePreview) | ❌ | NOT APPROVED | eric (driven by Claude as pair-on-keyboard) |
+
+**Verdict for the 2026-05-14 row:** `not approved — sub-check A partial fail. 3 of 8 Reader components missing; 1 in error state. Root cause: useHostContext().companyId returns null in detail-tab slots on this Paperclip version, causing both issue.reader and flatten-blocker-chain handlers to bail per their fail-loud companyId guards. Plan 02-03b Task 2 fixed the SDK shape drift but left a UI-side gap because unit tests mock useHostContext() and never see real null values.`
+
+**Empirical anchors (this drill):**
+
+1. **Install pathway validated** — `scripts/install-helper.sh` works end-to-end against Hostinger Countermoves after one mid-drill fix (commit `27c1ef8`): original draft invoked `paperclipai plugin install` as a bare command, but `paperclipai` is a pnpm workspace script that only resolves from inside `~/paperclip`. Patched helper does `pushd $PAPERCLIP_HOME; pnpm paperclipai plugin install …; popd`.
+2. **`pnpm paperclipai plugin install` rejects re-install** — error 400 "Plugin already installed: clarity-pack". No `--force` or replace flag on `install`. Documented surface (per `--help`): `list/install/uninstall/enable/disable/inspect/examples`. No `upgrade` despite PLUGIN_SPEC.md §8.2 listing it.
+3. **`pnpm paperclipai plugin uninstall <key>` is non-destructive** — keeps namespace tables. Plugin UUID `0d4fc40a-…` was preserved across uninstall+reinstall. This confirms **COEXIST-#6 is wired correctly** ("Clean uninstall preserves data; --purge flag is opt-in only"). `--force` is the destructive path.
+4. **Snapshot safety-CLI warnings on this VPS** — `getPaperclipVersion: pnpm paperclipai --version failed (exit 254)` + `listInstalledPlugins: pnpm paperclipai plugin list failed (exit 254)`. Cause: safety CLI spawns `pnpm paperclipai` from `~/clarity-pack/scripts/safety/`, where the workspace script doesn't resolve. Bytes-level safety property is unaffected (sha256-verified); only the cli-sidecar metadata is missing. Fix is the same shape as the install-helper fix — wrap with `cd $PAPERCLIP_HOME` in the safety CLI's `paperclip-cli.mjs` invocation. Not in scope for 02-03b.
+5. **404s on `/api/issues/BEAAA-{141,203,417}` are Paperclip-internal**, not from our plugin. Sourced from `client.ts:22` (host's API client). Cause: Paperclip's Grabbit auto-linkifier scans rendered issue bodies for issue keys and validates them; BEAAA-* refs live on a different Paperclip instance. Cosmetic console noise. Not actionable for us.
+
+**React key warnings (secondary):** Console showed `Each child in a list should have a unique 'key' prop` warnings on `ClaritySurfaceRoot` (from ReaderView) and `AnchoredToCards`. Bundled `dist/ui/index.js` has correct keys at every `.map()` call (`c.id` on AnchoredToCards line 177; fragment keys on prose-with-ref-chips). Defect-#3 from 02-03 drill is NOT fully closed despite commit `f89f44b`'s claim — root cause requires deeper investigation, possibly a host-side wrapper re-rendering our children through a path that loses key tracking. Parked behind the companyId blocker.
+
+**Resolution path:** New plan **02-03c** to (a) diagnose why `useHostContext().companyId` returns null for detail-tab slots — likely needs `companyPrefix` → companyId resolution via a worker handler that calls `ctx.companies.get`, or a different SDK hook for detail-tab context, or a manifest scope declaration; (b) re-investigate React key warnings post-companyId fix. Plan 02-03 remains OPEN.
+
+**Drill artifacts of record (Countermoves Hostinger, 2026-05-14):**
+
+- Pre-drill commits in plugin repo: `27c1ef8` (install-helper fix) on top of `7a2c221` (pause at 02-03b task 3)
+- Tarball shipped: `clarity-pack-0.1.0-smoke.tgz`, shasum `1274176c38f892c2bd8f5ea1d49b500093347342`
+- Pre-drill Paperclip snapshot: `2026-05-14T06-02-00Z` (411 KB pgdump + 3.07 MB fs tar; sha256-verified)
+- Test issue used: COU-4 "test issue", body contains `BEAAA-141`, `BEAAA-203`, `BEAAA-417`
+- Plugin status post-install: `ready` (uuid preserved across uninstall+reinstall: `0d4fc40a-0541-4b67-8979-9d346cb9c07b`)
+- No post-snapshot taken (drill ended at sub-check A; no destructive action against live state)
+
+**SAFE-02 grep:** still MATCH via the prior PASS row.
+
+---
+
 ## Bypass Audit Log
 
 Every honored `--gate-bypass` invocation appends a `[BYPASS]` line
