@@ -20,8 +20,14 @@
 #      --no-fund --no-audit for less output noise, --include=dev to override
 #      a NODE_ENV=production environment if present.
 #   4. Bump dist/manifest.js mtime so any mtime-cache the host keeps invalidates.
-#   5. Invoke `paperclipai plugin install <extracted-dir>`. Streams the host's
-#      stdout/stderr verbatim; this script's exit code is the host's exit code.
+#   5. Invoke `pnpm paperclipai plugin install <extracted-dir>` from inside
+#      the Paperclip workspace (PAPERCLIP_HOME, default $HOME/paperclip).
+#      `paperclipai` is a pnpm workspace script and is not on PATH as a bare
+#      binary; this pushd is mandatory. Streams stdout/stderr verbatim; this
+#      script's exit code is the host's exit code.
+#
+# Environment:
+#   PAPERCLIP_HOME — path to the Paperclip checkout (default: $HOME/paperclip).
 #
 # Exit codes:
 #   0 — install succeeded.
@@ -29,6 +35,7 @@
 #   3 — extraction failed.
 #   4 — npm install failed.
 #   5 — paperclipai plugin install failed; rerun manually after diagnosing.
+#   6 — PAPERCLIP_HOME directory missing.
 #
 # This script is designed to live on the operator's box (Hostinger Countermoves
 # or local Paperclip clone) and be invoked AFTER `scp`-ing a tarball produced
@@ -83,10 +90,20 @@ if [[ -f dist/manifest.js ]]; then
 fi
 popd >/dev/null
 
-echo "==> Invoking paperclipai plugin install"
-if ! paperclipai plugin install "$PKG_DIR"; then
-  echo "paperclipai plugin install failed" >&2
+PAPERCLIP_HOME="${PAPERCLIP_HOME:-$HOME/paperclip}"
+if [[ ! -d "$PAPERCLIP_HOME" ]]; then
+  echo "PAPERCLIP_HOME does not exist: $PAPERCLIP_HOME" >&2
+  echo "set PAPERCLIP_HOME=/path/to/paperclip and re-run" >&2
+  exit 6
+fi
+
+echo "==> Invoking pnpm paperclipai plugin install (from $PAPERCLIP_HOME)"
+pushd "$PAPERCLIP_HOME" >/dev/null
+if ! pnpm paperclipai plugin install "$PKG_DIR"; then
+  popd >/dev/null
+  echo "pnpm paperclipai plugin install failed" >&2
   exit 5
 fi
+popd >/dev/null
 
 echo "==> install-helper.sh complete: $PKG_DIR"
