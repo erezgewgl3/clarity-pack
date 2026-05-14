@@ -1,0 +1,21 @@
+name: coexistence
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  coexistence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run six COEXIST-01..06 assertions
+        run: node scripts/coexistence-checks/run-all.mjs
+      - name: Verify test/ci/coexistence-checklist.test.mjs covers the bad fixtures
+        run: node --test --experimental-strip-types test/ci/coexistence-checklist.test.mjs
