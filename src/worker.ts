@@ -42,6 +42,19 @@ import {
   registerGetInstanceConfig,
   type GetInstanceConfigCtx,
 } from './worker/handlers/get-instance-config.ts';
+// Plan 02-04 Task 2 — Situation Room handlers + 60s job.
+import {
+  registerSituationRoomHandlers,
+  type SituationRoomCtx,
+} from './worker/handlers/situation-room.ts';
+import {
+  registerActiveViewerPing,
+  type ActiveViewerPingCtx,
+} from './worker/handlers/active-viewer-ping.ts';
+import {
+  registerSituationSnapshotJob,
+  type SituationSnapshotCtx,
+} from './worker/jobs/situation-snapshot.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -67,6 +80,11 @@ const plugin = definePlugin({
     // resolver used by the UI to compute companyId BEFORE the user is even
     // identified. Task 2 will decide if it should be added to the EXEMPT set.
     registerCompaniesResolve(ctx as unknown as CompaniesResolveCtx);
+
+    // ---- Plan 02-04 Task 2 — Situation Room handlers + job ------------------
+    registerSituationRoomHandlers(ctx as unknown as SituationRoomCtx);
+    registerActiveViewerPing(ctx as unknown as ActiveViewerPingCtx);
+    registerSituationSnapshotJob(ctx as unknown as SituationSnapshotCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.

@@ -56,6 +56,9 @@ const manifest: PaperclipPluginManifestV1 = {
     'agents.resume',
     'events.subscribe',
     'companies.read',
+    // Plan 02-04 Task 2 — required for the recompute-situation 60s job
+    // declared in jobs[] below (PLUGIN_SPEC §17).
+    'jobs.schedule',
   ],
   entrypoints: {
     worker: './dist/worker.js',
@@ -134,6 +137,39 @@ const manifest: PaperclipPluginManifestV1 = {
   // (the shape the claude_local adapter expects). The version pin
   // 2026.512.0 matches @paperclipai/mcp-server's date-based npm version; npx
   // -y pulls it on first launch.
+  // Plan 02-04 Task 2 — D-03 configurable cadence for Situation Room.
+  // Host validates the resolved values against this JSON-schema-shaped object
+  // before the worker boots; ctx.config.get() returns them. UI reads via the
+  // 'clarity-pack/get-instance-config' worker handler (per 02-01 Check F
+  // FALLBACK — SDK 2026.512.0 does not export useInstanceConfig).
+  // Note: PaperclipPluginManifestV1 types instanceConfigSchema as JsonSchema
+  // (Record<string, unknown>). Zod is the docstring-suggested authoring tool
+  // for validation, but the manifest itself ships JSON-schema-shaped data.
+  instanceConfigSchema: {
+    type: 'object',
+    properties: {
+      situationRefreshIntervalMs: {
+        type: 'number',
+        minimum: 30_000,
+        maximum: 600_000,
+        default: 60_000,
+        description:
+          'Situation Room polling cadence in milliseconds. Mockup shows 30s; default 60s per D-03. ' +
+          'Configurable via Paperclip admin UI; the running plugin picks up changes on next configChanged.',
+      },
+    },
+  },
+  // Plan 02-04 Task 2 — recompute-situation 60s cron job. The handler in
+  // src/worker/jobs/situation-snapshot.ts no-ops when no row in
+  // plugin_clarity_pack_cdd6bda4bd.active_viewers is < 90s old, so the
+  // expensive snapshot only runs when ≥1 user has the Situation Room open.
+  jobs: [
+    {
+      jobKey: 'recompute-situation',
+      schedule: '*/1 * * * *',
+      displayName: 'Recompute Situation Room snapshot',
+    },
+  ],
   agents: [
     {
       agentKey: 'editor-agent',
