@@ -154,11 +154,23 @@ function ReaderViewWithCompany({
   companyId: string;
   userId: string | null;
 }): React.ReactElement {
-  const { data, loading } = usePluginData<ReaderViewData>('issue.reader', {
+  // DEV-15-STRUCTURAL (drill 2026-05-14): opt-in-guard wraps `issue.reader`
+  // and refuses callers whose params don't carry the viewer identity. Without
+  // userId here, the guard returned {error:'OPT_IN_REQUIRED'} for opted-in
+  // users, the UI received the error shape instead of ReaderViewData, every
+  // downstream component crashed reading `.refCards`, `.acItems`, etc.
+  // Thread the viewer identity explicitly. The guard accepts userId or the
+  // legacy viewerUserId; we prefer the canonical name here.
+  const { data, loading } = usePluginData<ReaderViewData | { error: string }>('issue.reader', {
     issueId: entityId,
     companyId,
+    userId: userId ?? '',
   });
-  if (loading || !data) {
+  if (loading || !data || 'error' in data) {
+    // Loading state OR opt-in-guard short-circuited (no userId yet, or the
+    // viewer is genuinely opted-out — in which case the surface gate above
+    // this component already routes to the CTA, so we should never get here
+    // with an OPT_IN_REQUIRED in practice).
     return (
       <ClaritySurfaceRoot name="reader">
         <p className="clarity-reader-loading">Loading Reader view…</p>

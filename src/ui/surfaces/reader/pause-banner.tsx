@@ -10,7 +10,7 @@
 // D-07 + reader-view.test.mjs; do not edit it without updating the test.
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginData, useHostContext } from '@paperclipai/plugin-sdk/ui/hooks';
 
 export type EditorPauseStatus = {
   paused: boolean;
@@ -27,9 +27,18 @@ function formatHHMM(iso: string | null): string {
 }
 
 export function PauseBanner(): React.ReactElement | null {
-  const { data } = usePluginData<EditorPauseStatus>('editor.pause-status', {});
+  // DEV-15-STRUCTURAL (drill 2026-05-14): editor.pause-status is wrapped by
+  // opt-in-guard. Without userId in params the guard returns
+  // {error:'OPT_IN_REQUIRED'} and `data.paused` is undefined — banner stays
+  // null which masks legitimate paused states from opted-in users. Thread
+  // userId from useHostContext.
+  const { userId } = useHostContext();
+  const { data } = usePluginData<EditorPauseStatus | { error: string }>(
+    'editor.pause-status',
+    { userId: userId ?? '' },
+  );
   const [dismissed, setDismissed] = React.useState(false);
-  if (!data?.paused || dismissed) return null;
+  if (!data || 'error' in data || !data.paused || dismissed) return null;
   const ts = formatHHMM(data.lastFailureAt);
   return (
     <footer

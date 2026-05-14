@@ -8,15 +8,21 @@
 // Reader view does this).
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginData, useHostContext } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { RefCardData } from '../../shared/types.ts';
 
 export function RefChip({ refId }: { refId: string }): React.ReactElement {
-  const { data, loading } = usePluginData<RefCardData[]>('resolve-refs', {
+  // DEV-15-STRUCTURAL (drill 2026-05-14): resolve-refs is wrapped by
+  // opt-in-guard. Without userId the guard returned {error:'OPT_IN_REQUIRED'}
+  // and `data?.[0]` was undefined, so every ref chip stayed in its
+  // "loading" pill state forever. Thread the host userId.
+  const { userId } = useHostContext();
+  const { data, loading } = usePluginData<RefCardData[] | { error: string }>('resolve-refs', {
     ids: [refId],
+    userId: userId ?? '',
   });
-  const card = data?.[0];
+  const card = Array.isArray(data) ? data[0] : undefined;
   if (loading || !card) {
     return (
       <span className="clarity-ref-chip clarity-ref-chip--loading">{refId}</span>

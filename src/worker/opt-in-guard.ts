@@ -94,7 +94,7 @@ export function wrapDataHandler(
     return;
   }
   ctx.data.register(key, async (params) => {
-    const userId = typeof params?.userId === 'string' && params.userId ? params.userId : null;
+    const userId = extractUserId(params);
     if (!(await isOptedIn(ctx, userId))) {
       return OPT_IN_REQUIRED;
     }
@@ -115,10 +115,29 @@ export function wrapActionHandler(
     return;
   }
   ctx.actions.register(key, async (params) => {
-    const userId = typeof params?.userId === 'string' && params.userId ? params.userId : null;
+    const userId = extractUserId(params);
     if (!(await isOptedIn(ctx, userId))) {
       return OPT_IN_REQUIRED;
     }
     return fn(params);
   });
+}
+
+/**
+ * DEV-15-STRUCTURAL (drill 2026-05-14): callers thread the viewer identity
+ * under TWO param names in the wild:
+ *   - `userId`         (modern; what set-opt-in / situation.snapshot use)
+ *   - `viewerUserId`   (02-03c legacy; what flatten-blocker-chain uses)
+ *
+ * Accepting either keeps the guard from failing-closed on legitimate
+ * opted-in users when the calling UI happens to use the legacy name. Treat
+ * empty string as missing too — usePluginData binds `userId: ''` until the
+ * resolver hook has the real value (avoids racy false-positives).
+ */
+function extractUserId(params: Record<string, unknown> | undefined): string | null {
+  const direct = params?.userId;
+  if (typeof direct === 'string' && direct.length > 0) return direct;
+  const viewer = params?.viewerUserId;
+  if (typeof viewer === 'string' && viewer.length > 0) return viewer;
+  return null;
 }
