@@ -1,0 +1,13 @@
+/* bad-unscoped-css.css — coexistence fixture for COEXIST-06 test.
+ *
+ * The unscoped `body` selector below would bleed onto the host page if shipped
+ * inside the Clarity Pack bundle. Check #6 must reject this file.
+ */
+
+body {
+  color: red;
+}
+
+* {
+  margin: 0;
+}
