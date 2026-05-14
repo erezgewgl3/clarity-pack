@@ -1,10 +1,15 @@
 // src/ui/surfaces/reader/index.tsx
 //
+// Plan 02-03c Task 2 — retrofit ReaderView to use the resolver hook so the
+// detail-tab loading window (issue query in flight → useHostContext().companyId
+// is null per 02-03c-HOST-CONTEXT.md Section 1) renders an explicit
+// "Resolving company context…" placeholder instead of silently passing
+// empty-string companyId to the worker (the 02-03b drill defect).
+//
 // Plan 02-03b Task 2 — adds the companyId param to usePluginData. The
 // worker handler at src/worker/handlers/issue-reader.ts now requires
 // companyId in params (the SDK's ctx.issues.get / listComments /
-// documents.list all take it as a positional arg). companyId comes from
-// useHostContext(); userId is passed too for the AcChecklist toggle action.
+// documents.list all take it as a positional arg).
 //
 // Plan 02-03 Task 2 (original) — ReaderView top-level layout matching
 // sketches/paperclip-fix-task-detail.html. Renders the seven mockup elements
@@ -18,6 +23,7 @@ import * as React from 'react';
 import { usePluginData, useHostContext } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
+import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 
 import { TldrStrip } from './tldr-strip.tsx';
 import { Breadcrumb, type Ancestry } from './breadcrumb.tsx';
@@ -41,10 +47,59 @@ export type ReaderViewData = {
 };
 
 export function ReaderView({ entityId }: { entityId: string }): React.ReactElement {
-  const { companyId, userId } = useHostContext();
+  const { userId } = useHostContext();
+  const { companyId, loading: companyLoading, error: companyError } = useResolvedCompanyId();
+
+  // Resolver in flight — render the explicit placeholder so users can see we
+  // know we don't have context yet (vs blank surface or a cryptic error).
+  if (companyLoading) {
+    return (
+      <ClaritySurfaceRoot name="reader">
+        <p className="clarity-reader-loading">Resolving company context…</p>
+      </ClaritySurfaceRoot>
+    );
+  }
+
+  // Resolver settled with no company — surface an explicit error rather than
+  // silently passing empty-string companyId to the worker (the 02-03b defect).
+  // The "no-company-context" literal matches the resolver hook's error code.
+  if (companyError === 'no-company-context' || !companyId) {
+    return (
+      <ClaritySurfaceRoot name="reader">
+        <p className="clarity-reader-error" data-clarity-error="no-company-context">
+          Reader view unavailable — could not identify the active company.
+          Reload the page from a company URL (e.g. /COU/issues/COU-4) to retry.
+        </p>
+      </ClaritySurfaceRoot>
+    );
+  }
+
+  // Hooks-rules-compliant call: usePluginData runs unconditionally below.
+  // Reaching this point means we have a non-null companyId UUID.
+  return (
+    <ReaderViewWithCompany
+      entityId={entityId}
+      companyId={companyId}
+      userId={userId ?? null}
+    />
+  );
+}
+
+// Inner component — renders ONLY when companyId is a real UUID. This split
+// keeps usePluginData's params shape stable across renders (issueId +
+// companyId always non-empty), so the bridge cache key stays consistent.
+function ReaderViewWithCompany({
+  entityId,
+  companyId,
+  userId,
+}: {
+  entityId: string;
+  companyId: string;
+  userId: string | null;
+}): React.ReactElement {
   const { data, loading } = usePluginData<ReaderViewData>('issue.reader', {
     issueId: entityId,
-    companyId: companyId ?? '',
+    companyId,
   });
   if (loading || !data) {
     return (
@@ -62,7 +117,7 @@ export function ReaderView({ entityId }: { entityId: string }): React.ReactEleme
           <ProseWithRefChips body={data.issueBody} />
           <AnchoredToCards cards={data.refCards} />
           <DeliverablePreview deliverable={data.deliverable} />
-          <AcChecklist issueId={entityId} items={data.acItems} userId={userId ?? null} />
+          <AcChecklist issueId={entityId} items={data.acItems} userId={userId} />
           <ActivityTimeline events={data.activity} />
         </div>
         <aside className="clarity-reader-rail">
