@@ -53,6 +53,11 @@ function makeIssueReaderCtx(overrides = {}) {
         if (/ac_checklist_items/.test(sql)) {
           return [{ id: 1, issue_id: fixtureIssue.id, label: 'item', checked: false, display_order: 0 }];
         }
+        // Plan 02-04 Task 1 — wrapDataHandler queries clarity_user_prefs first.
+        // Return an opted-in row so the wrap forwards to the inner handler.
+        if (/clarity_user_prefs/.test(sql)) {
+          return [{ opted_in_at: '2026-05-14T08:00:00Z' }];
+        }
         return [];
       },
     },
@@ -102,7 +107,8 @@ function makeIssueReaderCtx(overrides = {}) {
 async function invokeReader(ctxBag, params) {
   registerIssueReader(ctxBag.ctx);
   const handler = ctxBag.registered.get('issue.reader');
-  return handler(params);
+  // Plan 02-04 Task 1: opt-in-guard wrap requires userId; tests now thread it.
+  return handler({ userId: 'test-user', ...params });
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +179,10 @@ test('issue.reader — handler unwraps ctx.db.query result as T[] (NOT {rows: T[
   const ctxBag = makeIssueReaderCtx();
   // Override ac_checklist_items query to return a sentinel-named row.
   ctxBag.ctx.db.query = async (sql) => {
+    if (/clarity_user_prefs/.test(sql)) {
+      // Plan 02-04 Task 1: wrap queries prefs first.
+      return [{ opted_in_at: '2026-05-14T08:00:00Z' }];
+    }
     if (/ac_checklist_items/.test(sql)) {
       return [{ id: 42, issue_id: 'BEAAA-555', label: 'sentinel', checked: true, display_order: 0 }];
     }
@@ -187,7 +197,12 @@ test('issue.reader — handler throws loudly when companyId missing', async () =
   const ctxBag = makeIssueReaderCtx();
   registerIssueReader(ctxBag.ctx);
   const handler = ctxBag.registered.get('issue.reader');
-  await assert.rejects(() => handler({ issueId: 'BEAAA-555' }), /companyId required/);
+  // Plan 02-04 Task 1: opt-in-guard wrap requires userId; test passes it so the
+  // inner handler runs and we can verify it throws on the missing companyId.
+  await assert.rejects(
+    () => handler({ userId: 'test-user', issueId: 'BEAAA-555' }),
+    /companyId required/,
+  );
 });
 
 test('issue.reader — refCards resolved in single round-trip (PRIM-01)', async () => {
@@ -232,6 +247,17 @@ function makeBlockerCtx({ relationsResponses = {}, throwOn = null } = {}) {
   const ctx = {
     logger: { info() {}, warn() {}, error() {}, debug() {} },
     data: { register(k, h) { registered.set(k, h); } },
+    // Plan 02-04 Task 1: opt-in-guard wrap needs ctx.db to look up prefs.
+    db: {
+      namespace: 'plugin_clarity_pack_cdd6bda4bd',
+      async query(sql) {
+        if (/clarity_user_prefs/.test(sql)) {
+          return [{ opted_in_at: '2026-05-14T08:00:00Z' }];
+        }
+        return [];
+      },
+      async execute() { return { rowCount: 0 }; },
+    },
     issues: {
       relations: {
         async get(id, companyId) {
@@ -259,7 +285,7 @@ test('flatten-blocker-chain — handler calls ctx.issues.relations.get (NOT http
   assert.equal(typeof ctxBag.ctx.http, 'undefined');
   registerFlattenBlockerChain(ctxBag.ctx);
   const handler = ctxBag.registered.get('flatten-blocker-chain');
-  const result = await handler({ startId: 'BEAAA-1', companyId: 'co-1', viewerUserId: 'eric' });
+  const result = await handler({ userId: 'eric', startId: 'BEAAA-1', companyId: 'co-1', viewerUserId: 'eric' });
   assert.ok(result);
   assert.ok(result.pathIds.includes('BEAAA-1'));
   // The walk visited at least the start + its blocker.
@@ -280,7 +306,7 @@ test('flatten-blocker-chain — handler walks transitively up to MAX_CHAIN_DEPTH
   });
   registerFlattenBlockerChain(ctxBag.ctx);
   const handler = ctxBag.registered.get('flatten-blocker-chain');
-  await handler({ startId: 'A', companyId: 'co-1', viewerUserId: 'eric' });
+  await handler({ userId: 'eric', startId: 'A', companyId: 'co-1', viewerUserId: 'eric' });
   const ids = ctxBag.calls.map((c) => c.id);
   assert.deepEqual(ids.sort(), ['A', 'B', 'C', 'D']);
 });
@@ -289,7 +315,7 @@ test('flatten-blocker-chain — handler returns graceful terminal when chain emp
   const ctxBag = makeBlockerCtx(); // every id returns empty blockedBy
   registerFlattenBlockerChain(ctxBag.ctx);
   const handler = ctxBag.registered.get('flatten-blocker-chain');
-  const result = await handler({ startId: 'X', companyId: 'co-1', viewerUserId: 'eric' });
+  const result = await handler({ userId: 'eric', startId: 'X', companyId: 'co-1', viewerUserId: 'eric' });
   assert.equal(result.terminal.kind, 'EXTERNAL');
   assert.match(result.terminal.label, /No active blockers/);
 });
@@ -299,7 +325,7 @@ test('flatten-blocker-chain — handler returns 200 (NOT 502) even when SDK call
   registerFlattenBlockerChain(ctxBag.ctx);
   const handler = ctxBag.registered.get('flatten-blocker-chain');
   // Must NOT throw — the host bridge translates a thrown handler to 502.
-  const result = await handler({ startId: 'X', companyId: 'co-1', viewerUserId: 'eric' });
+  const result = await handler({ userId: 'eric', startId: 'X', companyId: 'co-1', viewerUserId: 'eric' });
   assert.ok(result);
   assert.equal(result.terminal.kind, 'EXTERNAL');
 });
@@ -313,7 +339,12 @@ test('editor.pause-status — handler unwraps ctx.db.query as T[] (NOT {rows: T[
   const ctx = {
     data: { register(k, h) { registered.set(k, h); } },
     db: {
-      async query(_sql, _params) {
+      // Plan 02-04 Task 1: editor.pause-status is wrapped, so query is called
+      // for both prefs lookup AND the actual failures-row read. Route by SQL.
+      async query(sql, _params) {
+        if (/clarity_user_prefs/.test(sql)) {
+          return [{ opted_in_at: '2026-05-14T08:00:00Z' }];
+        }
         return [
           {
             failed_at: '2026-05-13T22:00:00Z',
@@ -328,7 +359,7 @@ test('editor.pause-status — handler unwraps ctx.db.query as T[] (NOT {rows: T[
   };
   registerEditorPauseStatus(ctx);
   const handler = registered.get('editor.pause-status');
-  const status = await handler({});
+  const status = await handler({ userId: 'eric' });
   assert.equal(status.paused, true);
   assert.equal(status.lastFailureAt, '2026-05-13T22:00:00Z');
   assert.equal(status.reason, 'token_cap');

@@ -16,8 +16,6 @@
 
 import type {
   PluginIssuesClient,
-  PluginDataClient,
-  PluginLogger,
   PluginIssueRelationSummary,
 } from '@paperclipai/plugin-sdk';
 
@@ -26,12 +24,12 @@ import {
   flattenBlockerChain,
   type BlockerEdge,
 } from '../../shared/blocker-chain.ts';
+import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 
 const MAX_CHAIN_DEPTH = 6;
 
-export type FlattenBlockerChainCtx = {
-  logger?: PluginLogger;
-  data: PluginDataClient;
+// Plan 02-04 Task 1 — Ctx composed from OptInGuardDataCtx (real SDK shape).
+export type FlattenBlockerChainCtx = OptInGuardDataCtx & {
   issues: PluginIssuesClient;
 };
 
@@ -41,7 +39,7 @@ type WalkOutput = {
 };
 
 export function registerFlattenBlockerChain(ctx: FlattenBlockerChainCtx): void {
-  ctx.data.register('flatten-blocker-chain', async (params) => {
+  wrapDataHandler(ctx, 'flatten-blocker-chain', async (params) => {
     const startId = String(params.startId ?? '');
     const viewerUserId = String(params.viewerUserId ?? '');
     const companyId = String(params.companyId ?? '');

@@ -19,6 +19,17 @@ function makeFakeCtx() {
         registered.set(key, handler);
       },
     },
+    // Plan 02-04 Task 1: wrapDataHandler queries clarity_user_prefs first.
+    db: {
+      namespace: 'plugin_clarity_pack_cdd6bda4bd',
+      async query(sql) {
+        if (/clarity_user_prefs/.test(sql)) {
+          return [{ opted_in_at: '2026-05-14T08:00:00Z' }];
+        }
+        return [];
+      },
+      async execute() { return { rowCount: 0 }; },
+    },
     http: {
       async fetch(url, init) {
         fetchCalls.push({ url, init });
@@ -50,7 +61,7 @@ test('registerResolveRefs registers a resolve-refs handler that invokes the fetc
   assert.ok(handler, "handler 'resolve-refs' was registered");
 
   const ids = ['BEAAA-1', 'BEAAA-2', 'BEAAA-3', 'BEAAA-4', 'BEAAA-5'];
-  const result = await handler({ ids });
+  const result = await handler({ userId: 'eric', ids });
 
   assert.equal(fetchCalls.length, 1, `expected ONE fetch call; got ${fetchCalls.length}`);
   assert.match(fetchCalls[0].url, /\/api\/companies\/company-1\/issues\?ids=/);
@@ -65,7 +76,7 @@ test('registerResolveRefs handles empty input without making any fetch calls', a
   const { ctx, fetchCalls, registered } = makeFakeCtx();
   registerResolveRefs(ctx);
   const handler = registered.get('resolve-refs');
-  const result = await handler({ ids: [] });
+  const result = await handler({ userId: 'eric', ids: [] });
   assert.deepEqual(result, []);
   assert.equal(fetchCalls.length, 0);
 });
@@ -76,6 +87,16 @@ test('registerResolveRefs forwards _viewer_can_read=false as excerpt=null (PRIM-
   const ctx = {
     host: { currentCompanyId: 'company-1' },
     data: { register: (k, h) => registered.set(k, h) },
+    db: {
+      namespace: 'plugin_clarity_pack_cdd6bda4bd',
+      async query(sql) {
+        if (/clarity_user_prefs/.test(sql)) {
+          return [{ opted_in_at: '2026-05-14T08:00:00Z' }];
+        }
+        return [];
+      },
+      async execute() { return { rowCount: 0 }; },
+    },
     http: {
       async fetch(url) {
         fetchCalls.push(url);
@@ -98,7 +119,7 @@ test('registerResolveRefs forwards _viewer_can_read=false as excerpt=null (PRIM-
   };
   registerResolveRefs(ctx);
   const handler = registered.get('resolve-refs');
-  const result = await handler({ ids: ['BEAAA-7'] });
+  const result = await handler({ userId: 'eric', ids: ['BEAAA-7'] });
   assert.equal(result.length, 1);
   assert.equal(result[0].excerpt, null, 'PRIM-02: excerpt null when viewer cannot read');
 });

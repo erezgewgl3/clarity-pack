@@ -1,14 +1,12 @@
-// src/worker.ts — Plan 02-03 Task 1 worker promotion.
+// src/worker.ts — Plan 02-04 worker wiring.
 //
-// Adds Editor-Agent reconciliation (per-company at boot + on company.created)
-// and registers the heartbeat dispatcher that responds to issue.created /
-// issue.updated events. Self-loop filtering, idempotent compile, token cap,
-// and circuit breaker all live inside the agent modules — this file is just
-// the wiring.
-//
-// Plan 02-02 handlers (resolve-refs + flatten-blocker-chain) still register
-// at setup. Plan 02-04 will extend setup() with the situation-snapshot job
-// and opt-in handlers.
+// Plan 02-03 brought Editor-Agent + Reader handlers. Plan 02-04 adds:
+//   - get-opt-in + set-opt-in (boot-time exempt handlers)
+//   - get-instance-config (boot-time exempt handler, per 02-01 Check F)
+//   - opt-in-guard wrap around every 02-02/02-03 non-exempt handler
+// Plan 02-04 Task 2 adds:
+//   - situation.snapshot + situation.active-viewer-ping (wrapped)
+//   - recompute-situation 60s job
 
 import { definePlugin, runWorker } from '@paperclipai/plugin-sdk';
 
@@ -24,8 +22,6 @@ import {
   type EditorAgentReconcileCtx,
   type EditorHeartbeatCtx,
 } from './worker/agents/editor.ts';
-// Plan 02-03 Task 2 — Reader-view data + action handlers. Imported separately
-// from Task 1's Editor-Agent wiring so Task 1's commit stays minimal.
 import { registerIssueReader, type IssueReaderCtx } from './worker/handlers/issue-reader.ts';
 import {
   registerAcChecklist,
@@ -35,26 +31,41 @@ import {
   registerEditorPauseStatus,
   type EditorPauseStatusCtx,
 } from './worker/handlers/editor-pause-status.ts';
-// Plan 02-03c Task 2 — companies.resolve-prefix handler. Backs the UI's
-// useResolvedCompanyId() fallback when useHostContext().companyId is null
-// (detail-tab loading window). See 02-03c-HOST-CONTEXT.md for evidence.
 import {
   registerCompaniesResolve,
   type CompaniesResolveCtx,
 } from './worker/handlers/companies-resolve.ts';
+// Plan 02-04 Task 1 — opt-in handlers.
+import { registerGetOptIn, type GetOptInCtx } from './worker/handlers/get-opt-in.ts';
+import { registerSetOptIn, type SetOptInCtx } from './worker/handlers/set-opt-in.ts';
+import {
+  registerGetInstanceConfig,
+  type GetInstanceConfigCtx,
+} from './worker/handlers/get-instance-config.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
-    // ---- Plan 02-02 data handlers (always-on) -------------------------------
+    // ---- Plan 02-04 Task 1 — exempt-key handlers FIRST -----------------------
+    // These must register BEFORE any wrapped handler so the prefs table is
+    // wire-ready (and the exempt set is honoured at register time, not just
+    // dispatch time).
+    registerGetOptIn(ctx as unknown as GetOptInCtx);
+    registerSetOptIn(ctx as unknown as SetOptInCtx);
+    registerGetInstanceConfig(ctx as unknown as GetInstanceConfigCtx);
+
+    // ---- Plan 02-02 data handlers (now wrapped with opt-in-guard) -----------
     registerResolveRefs(ctx as unknown as ResolveRefsCtx);
     registerFlattenBlockerChain(ctx as unknown as FlattenBlockerChainCtx);
 
-    // ---- Plan 02-03 Reader-view data + action handlers ----------------------
+    // ---- Plan 02-03 Reader-view data + action handlers (now wrapped) --------
     registerIssueReader(ctx as unknown as IssueReaderCtx);
     registerAcChecklist(ctx as unknown as AcChecklistCtx);
     registerEditorPauseStatus(ctx as unknown as EditorPauseStatusCtx);
 
     // ---- Plan 02-03c companyId resolver (UI fallback path) ------------------
+    // NOTE: companies.resolve-prefix is NOT wrapped — it's also a boot-time
+    // resolver used by the UI to compute companyId BEFORE the user is even
+    // identified. Task 2 will decide if it should be added to the EXEMPT set.
     registerCompaniesResolve(ctx as unknown as CompaniesResolveCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------

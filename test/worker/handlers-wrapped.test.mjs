@@ -109,9 +109,18 @@ test('Migration 0003: creates active_viewers in fully qualified namespace (Findi
 
 test('Migration 0003: zero unqualified DDL — no bare CREATE TABLE without the namespace prefix', () => {
   const sql = readFileSync(MIGRATION_PATH, 'utf8');
-  // Match CREATE TABLE that does NOT have the plugin namespace prefix in the same statement.
-  const unqualified = sql.match(/CREATE TABLE(?: IF NOT EXISTS)? (?!plugin_clarity_pack_cdd6bda4bd\.)/g);
-  assert.equal(unqualified, null, 'all CREATE TABLE statements must use the fully qualified namespace');
+  // Every CREATE TABLE [IF NOT EXISTS] must be followed by the fully qualified
+  // namespace identifier. We split the SQL on CREATE TABLE keywords and verify
+  // each statement's table reference begins with plugin_clarity_pack_cdd6bda4bd.
+  const matches = [...sql.matchAll(/CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([^\s(]+)/gi)];
+  const unqualified = matches.filter(
+    (m) => !m[1].startsWith('plugin_clarity_pack_cdd6bda4bd.'),
+  );
+  assert.equal(
+    unqualified.length,
+    0,
+    `all CREATE TABLE statements must use the fully qualified namespace; offenders: ${unqualified.map((m) => m[1]).join(', ')}`,
+  );
 });
 
 test('Migration 0003: no DDL targets public.* tables (COEXIST-02)', () => {

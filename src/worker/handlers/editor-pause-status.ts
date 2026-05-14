@@ -10,10 +10,9 @@
 // Returns {paused, lastFailureAt, reason}. "paused" is true when the most-
 // recent editor_agent_failures row's `consecutive` >= MAX_CONSECUTIVE_FAILURES.
 
-import type { PluginDatabaseClient, PluginDataClient } from '@paperclipai/plugin-sdk';
-
 import { MAX_CONSECUTIVE_FAILURES } from '../agents/circuit-breaker.ts';
 import { EDITOR_AGENT_KEY } from '../agents/editor.ts';
+import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 
 export type EditorPauseStatus = {
   paused: boolean;
@@ -21,15 +20,13 @@ export type EditorPauseStatus = {
   reason: string | null;
 };
 
-export type EditorPauseStatusCtx = {
-  data: PluginDataClient;
-  db: PluginDatabaseClient;
-};
+// Composed from OptInGuardDataCtx — no narrow local Ctx shape.
+export type EditorPauseStatusCtx = OptInGuardDataCtx;
 
 type FailureRow = { failed_at: string; reason: string; consecutive: number };
 
 export function registerEditorPauseStatus(ctx: EditorPauseStatusCtx): void {
-  ctx.data.register('editor.pause-status', async () => {
+  wrapDataHandler(ctx, 'editor.pause-status', async () => {
     try {
       const rows = await ctx.db.query<FailureRow>(
         'SELECT failed_at, reason, consecutive FROM plugin_clarity_pack_cdd6bda4bd.editor_agent_failures WHERE agent_key = $1 ORDER BY failed_at DESC LIMIT 1',

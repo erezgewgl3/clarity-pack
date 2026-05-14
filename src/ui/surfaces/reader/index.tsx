@@ -38,6 +38,8 @@ import type { PluginDetailTabProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
+import { useOptIn } from '../../primitives/use-opt-in.ts';
+import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import { TldrStrip } from './tldr-strip.tsx';
 import { Breadcrumb, type Ancestry } from './breadcrumb.tsx';
@@ -69,6 +71,40 @@ export function ReaderView({ context }: PluginDetailTabProps): React.ReactElemen
   // undefined while the issue query is in flight (02-03c-HOST-CONTEXT.md §1).
   const entityId = context.entityId;
   const userId = context.userId;
+
+  // Plan 02-04 Task 1 — OPTIN-02 gate. useOptIn() must be called BEFORE the
+  // companyId resolver so opted-out users see the CTA even when companyId
+  // resolution is still in flight (avoids confusing "Resolving company
+  // context…" for users who shouldn't see anything Clarity-rendered).
+  const { optedIn, loading: optInLoading } = useOptIn();
+
+  if (optInLoading) {
+    return (
+      <ClaritySurfaceRoot name="reader">
+        <p className="clarity-reader-loading">Loading Clarity Pack…</p>
+      </ClaritySurfaceRoot>
+    );
+  }
+  if (!optedIn) {
+    return (
+      <ClaritySurfaceRoot name="reader">
+        <EnableClarityCta surfaceName="Reader" />
+      </ClaritySurfaceRoot>
+    );
+  }
+
+  // Plan 02-03c — companyId resolver hook gates the data fetch.
+  // Hooks-rules safety: useResolvedCompanyId is called unconditionally below.
+  return <ReaderViewOptedIn entityId={entityId} userId={userId} />;
+}
+
+function ReaderViewOptedIn({
+  entityId,
+  userId,
+}: {
+  entityId: string;
+  userId: string | null;
+}): React.ReactElement {
   const { companyId, loading: companyLoading, error: companyError } = useResolvedCompanyId();
 
   // Resolver in flight — render the explicit placeholder so users can see we

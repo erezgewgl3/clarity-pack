@@ -14,6 +14,7 @@
 
 import type { RefCardData } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
+import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 
 // Minimal Paperclip-issue shape we consume; the host returns more fields,
 // but only these are load-bearing for RefCardData.
@@ -37,13 +38,15 @@ function truncateExcerpt(body: string | undefined, max = EXCERPT_MAX): string {
   return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice) + '…';
 }
 
-export type ResolveRefsCtx = {
-  data: {
-    register(
-      key: string,
-      handler: (params: { ids: string[] }) => Promise<RefCardData[]>,
-    ): void;
-  };
+// Plan 02-04 Task 1 — Ctx composed from OptInGuardDataCtx (real SDK shape).
+// `host` is intentionally NOT typed here: PluginContext has no `host` field
+// (02-03b-API-SHAPES.md §5). Callers must pass `companyId` in the params;
+// the legacy `ctx.host?.currentCompanyId` access path is preserved at
+// runtime ONLY for back-compat (it always resolves to undefined and falls
+// through to the params-path or the unknown-fallback below).
+export type ResolveRefsCtx = OptInGuardDataCtx & {
+  // Legacy optional host (always undefined under SDK 2026.512.0). Kept for
+  // test fixtures that still set it; new callers should use params.companyId.
   host?: { currentCompanyId?: string };
   http: {
     fetch(url: string, init?: { method?: string }): Promise<{
@@ -53,9 +56,15 @@ export type ResolveRefsCtx = {
 };
 
 export function registerResolveRefs(ctx: ResolveRefsCtx): void {
-  ctx.data.register('resolve-refs', async ({ ids }) => {
-    if (!Array.isArray(ids) || ids.length === 0) return [];
-    const companyId = ctx.host?.currentCompanyId;
+  wrapDataHandler(ctx, 'resolve-refs', async (params) => {
+    const rawIds = (params as { ids?: unknown }).ids;
+    if (!Array.isArray(rawIds) || rawIds.length === 0) return [];
+    const ids = rawIds.filter((v): v is string => typeof v === 'string');
+    if (ids.length === 0) return [];
+    const paramCompanyId = typeof (params as { companyId?: unknown }).companyId === 'string'
+      ? ((params as { companyId?: string }).companyId as string)
+      : undefined;
+    const companyId = paramCompanyId || ctx.host?.currentCompanyId;
     if (!companyId) {
       // Caller must provide currentCompanyId via host context; without it
       // there is no resolvable URL. Returning the empty-input shape avoids

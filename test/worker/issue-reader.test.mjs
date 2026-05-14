@@ -50,6 +50,10 @@ function makeFakeCtx() {
       async query(sql, params) {
         dbCalls.push({ kind: 'query', sql, params });
         // SDK shape: query<T>(...) returns T[] DIRECTLY, NOT {rows: T[]}.
+        // Plan 02-04 Task 1 — wrapDataHandler queries clarity_user_prefs first.
+        if (/clarity_user_prefs/.test(sql)) {
+          return [{ opted_in_at: '2026-05-14T08:00:00Z' }];
+        }
         if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
           return [
             {
@@ -171,7 +175,7 @@ test('issue.reader handler assembles tldr + refCards + ancestry + acItems + acti
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
   assert.ok(handler, 'issue.reader handler is registered');
-  const result = await handler({ issueId: FIXTURE.issueId, companyId: 'co-1' });
+  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
   assert.ok(result.tldr, 'tldr returned from cache');
   assert.equal(result.tldr.body.length > 0, true);
   assert.equal(result.refCards.length, 3);
@@ -191,7 +195,7 @@ test('issue.reader invokes the resolveRefs fetcher EXACTLY ONCE per render (PRIM
   const { ctx, fetchCalls, registered } = makeFakeCtx();
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
-  await handler({ issueId: FIXTURE.issueId, companyId: 'co-1' });
+  await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
   const issueFetches = fetchCalls.filter((url) => /\/issues\?ids=/.test(url));
   assert.equal(issueFetches.length, 1, `expected 1 issues fetch for ref resolution; got ${issueFetches.length}`);
 });
@@ -200,7 +204,7 @@ test('issue.reader activity timeline is derived from listComments and capped at 
   const { ctx, registered } = makeFakeCtx();
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
-  const result = await handler({ issueId: FIXTURE.issueId, companyId: 'co-1' });
+  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
   assert.ok(Array.isArray(result.activity));
   assert.ok(result.activity.length <= 8, `activity must be <= 8; got ${result.activity.length}`);
   for (const e of result.activity) {
@@ -212,7 +216,7 @@ test('issue.reader ac_checklist query targets the baked namespace (Finding #4)',
   const { ctx, dbCalls, registered } = makeFakeCtx();
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
-  await handler({ issueId: FIXTURE.issueId, companyId: 'co-1' });
+  await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
   const acQuery = dbCalls.find((c) => /ac_checklist_items/.test(c.sql));
   assert.ok(acQuery, 'AC checklist SQL was issued');
   assert.match(acQuery.sql, /plugin_clarity_pack_cdd6bda4bd\.ac_checklist_items/);
@@ -223,7 +227,7 @@ test('issue.reader returns an empty refCards array when issue description has no
   ctx.issues.get = async (id) => ({ id, key: id, title: 't', description: 'no refs in here', parentId: null, projectId: null, goalId: null });
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
-  const result = await handler({ issueId: 'BEAAA-NORF', companyId: 'co-1' });
+  const result = await handler({ userId: 'test-user', issueId: 'BEAAA-NORF', companyId: 'co-1' });
   assert.deepEqual(result.refCards, []);
 });
 
@@ -232,7 +236,7 @@ test('issue.reader throws when companyId is missing (loud failure — UI bug sur
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
   await assert.rejects(
-    () => handler({ issueId: FIXTURE.issueId }),
+    () => handler({ userId: 'test-user', issueId: FIXTURE.issueId }),
     /companyId required/,
   );
 });

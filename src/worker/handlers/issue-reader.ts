@@ -26,10 +26,7 @@
 
 import type {
   PluginIssuesClient,
-  PluginDatabaseClient,
   PluginHttpClient,
-  PluginDataClient,
-  PluginLogger,
   PluginProjectsClient,
   PluginGoalsClient,
   Issue,
@@ -39,6 +36,7 @@ import type {
 import type { RefCardData, TLDR } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { getTldrByScope, type TldrCacheCtx } from '../db/tldr-cache.ts';
+import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 
 const REF_PATTERN = /\bBEAAA-\d+\b/g;
 const ACTIVITY_LIMIT = 8; // READER-09
@@ -85,10 +83,10 @@ function truncate(s: string | undefined | null, max: number): string {
   return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice) + '…';
 }
 
-export type IssueReaderCtx = {
-  logger?: PluginLogger;
-  data: PluginDataClient;
-  db: PluginDatabaseClient;
+// Composed from real SDK interface types — no narrow lying-about-the-SDK
+// Ctx shape (see 02-03b-API-SHAPES.md Summary + Plan 02-04 critical anti-
+// pattern guard). OptInGuardCtx provides `data` + `db` for wrapDataHandler.
+export type IssueReaderCtx = OptInGuardDataCtx & {
   http: PluginHttpClient;
   issues: PluginIssuesClient;
   // projects + goals are optional at the local-type level so tests can stub
@@ -111,7 +109,7 @@ function emptyResult(): IssueReaderResult {
 }
 
 export function registerIssueReader(ctx: IssueReaderCtx): void {
-  ctx.data.register('issue.reader', async (params) => {
+  wrapDataHandler(ctx, 'issue.reader', async (params) => {
     const issueId = String(params.issueId ?? '');
     const companyId = String(params.companyId ?? '');
     if (!issueId) return emptyResult();

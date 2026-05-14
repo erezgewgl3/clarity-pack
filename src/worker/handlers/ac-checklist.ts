@@ -8,16 +8,14 @@
 // READER-07 manual AC checklist. Toggles ac_checklist_items.checked + records
 // who/when. SQL targets the baked plugin namespace (Finding #4).
 
-import type { PluginDatabaseClient, PluginActionsClient, PluginLogger } from '@paperclipai/plugin-sdk';
+import { wrapActionHandler, type OptInGuardActionCtx } from '../opt-in-guard.ts';
 
-export type AcChecklistCtx = {
-  logger?: PluginLogger;
-  actions: PluginActionsClient;
-  db: PluginDatabaseClient;
-};
+// Composed from OptInGuardActionCtx — no narrow local Ctx shape (02-04
+// blocking anti-pattern guard).
+export type AcChecklistCtx = OptInGuardActionCtx;
 
 export function registerAcChecklist(ctx: AcChecklistCtx): void {
-  ctx.actions.register('ac-toggle', async (params) => {
+  wrapActionHandler(ctx, 'ac-toggle', async (params) => {
     const id = Number(params.id);
     const checked = Boolean(params.checked);
     if (!Number.isFinite(id) || id <= 0) {
