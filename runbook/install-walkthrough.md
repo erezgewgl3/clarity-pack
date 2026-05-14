@@ -92,6 +92,12 @@ first. Common causes:
 
 ## Step 3 — Run the wrapped install
 
+There are two paths depending on whether the plugin is on **npm** or you are
+installing from a **local tarball** (the typical developer-loop case while
+Clarity Pack is still in v1 / not published).
+
+### Step 3a — npm path (when clarity-pack is published)
+
 ```
 pnpm clarity-safety gate -- pnpm paperclipai plugin install clarity-pack
 ```
@@ -99,6 +105,34 @@ pnpm clarity-safety gate -- pnpm paperclipai plugin install clarity-pack
 Expected output: the inner command's stdout streams through verbatim
 (stdio is inherited). The gate is invisible on success. The exit code
 of the inner command is propagated as the exit code of the gate.
+
+### Step 3b — Local tarball path (canonical during v1 development)
+
+Plan 02-03's drill exposed that `paperclipai plugin install <local-dir>`
+does NOT symlink the host's node_modules into the extracted plugin dir —
+the worker boot then fails with `ERR_MODULE_NOT_FOUND` on
+`@paperclipai/plugin-sdk`. The wrap `scripts/install-helper.sh` materializes
+node_modules in the extracted dir before invoking the host install.
+
+On the developer machine:
+
+```
+npm pack
+scp -i ~/.ssh/<key> clarity-pack-<version>.tgz <user>@<host>:/home/<user>/
+```
+
+On the Paperclip host (under `clarity-safety gate` to keep the bookend
+guarantee):
+
+```
+pnpm clarity-safety gate -- ~/clarity-pack/scripts/install-helper.sh \
+    /home/<user>/clarity-pack-<version>.tgz
+```
+
+The helper extracts to `/tmp/clarity-pack-build/<basename>/package/`, runs
+`npm install --no-fund --no-audit --include=dev` so the SDK is on disk, and
+then invokes `paperclipai plugin install` against the prepared dir. Each step
+is idempotent; rerunning is safe.
 
 If the gate refuses, it prints the refusal reason and the remediation
 command. The most common refusal at this point is `snapshot-stale`
