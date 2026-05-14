@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T09:50:17Z"
+last_updated: "2026-05-14T15:40:00Z"
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 11
-  completed_plans: 5
+  completed_plans: 5  # 02-04 Tasks 1-3 complete; Task 4 awaiting human rehearsal — full plan-close pending
   percent: 30
   phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger Countermoves (hosted Postgres). Plan 01-05 cleanup landed 2026-05-13 — pg-dump-locator with bundled-first discovery + version pre-check + dbUrl auto-derivation + operator-gotchas.md catalog. All 3 Phase 2 spike defects now disposed: defect-1 fixed (mode-detect), defect-2 fixed (locator), defect-3 documented (version-mismatch is inherent to pg_dump; clean error path + runbook workaround shipped). Full safety CLI suite: 122 pass / 0 fail.
-  phase_2_status: EXECUTING — Plans 02-01 PARTIAL (Check B Linux-deferred), 02-02 COMPLETE 2026-05-13, 02-03 + 02-03b + 02-03c CLOSE TOGETHER 2026-05-14T09:08+ on rehearsal verdict 'approved — reader green WITH 3 polish items deferred' (drill against Countermoves COU-1; commits 1d424b2..cf3084f; suite 84→125 tests; pre-snapshot 2026-05-14T08-58-29Z, post-snapshot 2026-05-14T09-50-17Z). 3 follow-on plans filed (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date) — non-blocking polish. Plan 02-04 (Situation Room + opt-in + coexistence CI) UNBLOCKED, ready to plan/execute. Total Phase 2 progress: 4/7 by plan count (02-03b superseded by 02-03c).
+  phase_2_status: EXECUTING — Plan 02-04 Tasks 1-3 COMPLETE 2026-05-14T15:39Z (suite 141→266 tests, 6 commits 0eabd63..11d0680, opt-in gate + Situation Room + coexistence CI). Task 4 AWAITING HUMAN — checkpoint:human-verify gate; operator runs manual rehearsal against local Paperclip clone per 02-04-PLAN.md <how-to-verify> sections A-E. On 'approved — phase 2 closed', a continuation agent closes Phase 2. Prior: Plans 02-01 PARTIAL (Check B Linux-deferred), 02-02 COMPLETE 2026-05-13, 02-03+02-03b+02-03c CLOSE TOGETHER 2026-05-14T09:08+ on rehearsal verdict 'approved — reader green'. 3 follow-on plans filed (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date) — non-blocking polish.
 ---
 
 # State: Clarity Pack
@@ -25,19 +25,20 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 2 — executing. Plans 02-03 + 02-03b + 02-03c CLOSED 2026-05-14 on rehearsal verdict 'approved — reader green'. Plan 02-04 (Situation Room + opt-in gate + coexistence CI) UNBLOCKED, ready to execute.
+**Current Focus:** Phase 2 — executing. Plan 02-04 Tasks 1-3 COMPLETE 2026-05-14T15:39Z (suite 141→266; 6 commits 0eabd63..11d0680). Task 4 AWAITING HUMAN — manual rehearsal against local Paperclip clone closes Phase 2 on 'approved — phase 2 closed' verdict. Plans 02-03 + 02-03b + 02-03c CLOSED 2026-05-14 on prior rehearsal verdict 'approved — reader green'.
 
 ## Current Position
 
-Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **EXECUTING**
-**Plans (post 02-03c close):**
+Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **EXECUTING (Plan 02-04 awaiting Task 4 human rehearsal)**
+**Plans (post 02-04 Tasks 1-3 close):**
   - 02-01 PARTIAL — smoke spike (Linux Check B deferred — non-blocking, accepted)
   - 02-02 COMPLETE 2026-05-13 — scaffold + 6 primitives + trust-model hardening
   - 02-03 + 02-03b + 02-03c CLOSED TOGETHER 2026-05-14T09:08+ — Editor-Agent + Reader view + companyId resolver + drill APPROVED on Countermoves COU-1
-  - 02-04 NEXT — Situation Room + opt-in gate + coexistence CI (16 reqs: OPTIN-01..05 + ROOM-01..08 + COEXIST-06)
+  - 02-04 Tasks 1-3 COMPLETE 2026-05-14T15:39Z — opt-in gate + Situation Room + coexistence CI (16 reqs: OPTIN-01..05 + ROOM-01..08 + COEXIST-06)
+  - 02-04 Task 4 AWAITING HUMAN — manual rehearsal against local Paperclip clone closes Phase 2
   - 02-05 + 02-06 + 02-07 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date) — non-blocking, can interleave with Phase 3
-**Status:** 02-03c drill APPROVED. Suite 84→125 tests across the 02-03c arc (commits 1d424b2..cf3084f). Pre-snapshot 2026-05-14T08-58-29Z + post-snapshot 2026-05-14T09-50-17Z bookend the drill. Plan 02-04 unblocked.
-**Progress:** [###       ] 1/5 phases complete; Phase 2 ~57% by plan count (4/7 incl. 02-03c gap-closure; 02-03b superseded)
+**Status:** 02-04 Tasks 1-3 commits 0eabd63 (Task 1 RED) → 3a8a6aa (Task 1 GREEN) → 05dcb88 (Task 2 RED) → 25a4ea7 (Task 2 GREEN) → 81cf2ab (Task 3 RED) → 11d0680 (Task 3 GREEN). Suite 141→266 tests, 0 fail. Typecheck + build + coexistence run-all all clean.
+**Progress:** [###       ] 1/5 phases complete; Phase 2 ~71% by plan count (5/7 incl. 02-04 partial; 02-03b superseded)
 
 ## Performance Metrics
 
@@ -93,9 +94,9 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-14 — Plan 02-03c executed end-to-end (Tasks 1-4 + mid-drill gap fixes 2.5/2.6). Drill APPROVED against Countermoves COU-1 with verdict `approved — reader green WITH 3 polish items deferred`. Closes Plans 02-03 + 02-03b + 02-03c together. Pre-snapshot `2026-05-14T08-58-29Z` + post-snapshot `2026-05-14T09-50-17Z` bookend the drill. Suite went 84→125 tests. The mid-drill discovery: 02-03b's "useHostContext().companyId returns null" diagnosis was secondary; the PRIMARY failure was that ReaderView's prop signature was `{ entityId }` but the host invokes slot components with `{ slot, context }` per PluginSlotComponentProps — entityId at the top level was always undefined. Fixed by reading `context.entityId` per `PluginDetailTabProps` (SDK 2026.512.0 statically guarantees non-null for detail-tab slots). Captured in commit `cf3084f`.
+**Last session:** 2026-05-14T15:08-15:39 — Plan 02-04 Tasks 1-3 executed end-to-end with strict TDD discipline (RED→GREEN per task; 6 commits). Task 1 ships the opt-in gate: clarity_user_prefs migrations idempotent guard; wrapDataHandler / wrapActionHandler + EXEMPT_HANDLER_KEYS Set; get-opt-in + set-opt-in + get-instance-config handlers; useOptIn hook; EnableClarityCta + SettingsPage UI; every 02-02/02-03 handler wrapped (OPTIN-04). DEVIATION DEV-01 was the major one: SDK 2026.512.0 PluginContext has NO `host` field, so the plan's `ctx.host.currentUserId` pattern was structurally impossible — followed the 02-03b convention (UI threads userId via useHostContext + params; worker reads params). Task 2 ships the Situation Room: 60s recompute-situation cron job; situation.snapshot + active-viewer-ping handlers; useLeaderElection + usePollWithLeader + createLeaderBroadcast (the revision iteration 2 follower-postMessage-bridge contract is asserted by a two-tab test using a pure in-memory channel bus, no React); useInstanceConfig FALLBACK (per 02-01 Check F LOCKED); AgentCard + CriticalPathStrip + AwaitingYouPill + ArtifactsShippedShelf + Sparkline subcomponents matching the sketches mockup. Task 3 ships the coexistence CI: six COEXIST-01..06 scripts + run-all.mjs + .github/workflows/coexistence.yml; SQL-comment-stripping so doc-comments don't trigger false positives (DEV-02). Suite 141→266 tests. Plan 02-04 Task 4 (manual rehearsal against local Paperclip clone) is the only remaining work for Phase 2 closure.
 
-**Next session resume point:** Run `/gsd:plan-phase 2 --plan 02-04` (or just discuss 02-04) to plan Situation Room + opt-in gate + coexistence CI (16 reqs: OPTIN-01..05 + ROOM-01..08 + COEXIST-06). Plan 02-04 is the last Phase 2 plan; closes Phase 2. The 3 deferred follow-ons (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date) can interleave or defer to Phase 3 — non-blocking.
+**Next session resume point:** Operator runs Plan 02-04 Task 4 manual rehearsal — see 02-04-PLAN.md `<how-to-verify>` sections A-E. On 'approved — phase 2 closed' verdict, a continuation agent runs the closure (update STATE.md, ROADMAP.md to phase-2-complete; mark requirements complete). The 3 deferred follow-ons (02-05 React keys, 02-06 LiveBlockerPanel UX, 02-07 ActivityTimeline date) can interleave with Phase 3 — non-blocking.
 
 **Files of record:**
 
