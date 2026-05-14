@@ -350,3 +350,406 @@
   cursor: pointer;
   padding: 0 0.3rem;
 }
+
+/* ===========================================================================
+ * Plan 02-08 Task 1 — Situation Room CSS chrome (DEV-06 closure).
+ *
+ * Every clarity-* classname referenced in src/ui/surfaces/situation-room/*.tsx
+ * + src/ui/components/enable-clarity-cta.tsx gets a substantive rule. Palette
+ * extension is sourced from sketches/paperclip-fix-situation-room.html
+ * (mapped from hex to oklch so it lives alongside the existing tokens).
+ *
+ * Visual fidelity bar: "recognizable design parity" — same warm-dark palette,
+ * same 3-col grid at desktop width, same serif-italic headings, same state-pill
+ * + Awaiting-You yellow accent. NOT pixel-perfect (oklch + Google Fonts vary
+ * across host environments). Every selector starts with [data-clarity-surface]
+ * to satisfy SCAF-06 / COEXIST-01.
+ * =========================================================================== */
+
+/* Situation Room palette extension (mockup-derived). */
+[data-clarity-surface='situation-room'] {
+  --clarity-bg-2: oklch(0.16 0.01 60);
+  --clarity-bg-3: oklch(0.18 0.01 60);
+  --clarity-bg-4: oklch(0.21 0.01 60);
+  --clarity-line: oklch(0.30 0.01 60);
+  --clarity-line-bright: oklch(0.40 0.01 60);
+  --clarity-ink-2: oklch(0.78 0.01 60);
+  --clarity-ink-3: oklch(0.55 0.01 60);
+  --clarity-ink-4: oklch(0.42 0.01 60);
+  --clarity-you: oklch(0.82 0.13 85);
+  --clarity-you-soft: oklch(0.32 0.04 85);
+  --clarity-max-w: 1480px;
+
+  background: var(--clarity-bg);
+  padding: 24px 36px 64px;
+  min-height: 100vh;
+}
+
+/* ---------- CTA cluster (every Clarity surface, opted-out state) ---------- */
+
+[data-clarity-surface] .clarity-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid var(--clarity-border);
+  border-radius: 6px;
+  max-width: 480px;
+  margin: 2rem 0;
+  background: color-mix(in oklch, var(--clarity-bg), white 4%);
+}
+
+[data-clarity-surface] .clarity-cta-heading {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 1.5rem;
+  font-style: italic;
+  margin: 0;
+  line-height: 1.2;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface] .clarity-cta-body {
+  font-size: 0.95rem;
+  color: var(--clarity-fg);
+  margin: 0;
+  line-height: 1.45;
+}
+
+[data-clarity-surface] .clarity-cta-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 1.1rem;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+  background: var(--clarity-fg);
+  color: var(--clarity-bg);
+  border: 1px solid var(--clarity-fg);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+[data-clarity-surface] .clarity-cta-button:hover {
+  background: color-mix(in oklch, var(--clarity-fg), white 10%);
+}
+
+[data-clarity-surface] .clarity-cta-fine {
+  font-size: 0.8rem;
+  color: var(--clarity-muted);
+  margin: 0;
+}
+
+/* ---------- Situation Room page chrome ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-room-loading {
+  padding: 2rem;
+  font-size: 0.95rem;
+  color: var(--clarity-muted);
+  font-style: italic;
+}
+
+[data-clarity-surface='situation-room'] .clarity-room-error {
+  padding: 2rem;
+  font-size: 0.95rem;
+  color: var(--clarity-state-stuck-bg);
+  font-style: italic;
+}
+
+[data-clarity-surface='situation-room'] .clarity-room-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0.5rem 0 1rem;
+  gap: 1rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 1rem;
+}
+
+@media (max-width: 1180px) {
+  [data-clarity-surface='situation-room'] .clarity-agent-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  [data-clarity-surface='situation-room'] .clarity-agent-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Agent card ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-agent-card {
+  border: 1px solid var(--clarity-line);
+  background: var(--clarity-bg-2);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s ease;
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-card:hover {
+  border-color: var(--clarity-line-bright);
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-card-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--clarity-line);
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-role {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 1.5rem;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--clarity-fg);
+  letter-spacing: -0.005em;
+  text-transform: capitalize;
+}
+
+[data-clarity-surface='situation-room'] .clarity-now-doing {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  padding: 12px 18px;
+  color: var(--clarity-fg);
+  margin: 0;
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-terminal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  margin: 0 18px 12px;
+  border-left: 2px solid var(--clarity-state-awaiting-you-bg);
+  background: color-mix(in oklch, var(--clarity-state-awaiting-you-bg), var(--clarity-bg) 88%);
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-terminal[data-terminal-kind='HUMAN_ACTION_ON'] {
+  border-left-color: var(--clarity-you);
+  background: color-mix(in oklch, var(--clarity-you-soft), var(--clarity-bg) 60%);
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-terminal[data-terminal-kind='SELF_RESOLVING'] {
+  border-left-color: var(--clarity-state-working-bg);
+  background: color-mix(in oklch, var(--clarity-state-working-bg), var(--clarity-bg) 90%);
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-terminal-kind {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--clarity-you);
+  font-weight: 600;
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-terminal-label {
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface='situation-room'] .clarity-agent-artifact {
+  padding: 10px 18px;
+  font-size: 0.88rem;
+  color: var(--clarity-muted);
+  font-style: italic;
+  border-top: 1px dashed var(--clarity-line);
+  margin: 0;
+}
+
+/* ---------- Critical Path strip ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-critical-path {
+  border: 1px solid var(--clarity-line-bright);
+  background: linear-gradient(180deg, var(--clarity-bg-3), var(--clarity-bg-2));
+  padding: 4px;
+  margin: 1.5rem 0;
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-heading {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 1.6rem;
+  font-style: italic;
+  font-weight: 400;
+  margin: 0;
+  padding: 14px 24px 0;
+  color: var(--clarity-fg);
+  letter-spacing: -0.01em;
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-list {
+  list-style: none;
+  padding: 6px 24px 18px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-item {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: start;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--clarity-line);
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-item:last-child {
+  border-bottom: none;
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-index {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 1.6rem;
+  font-style: italic;
+  color: var(--clarity-ink-4);
+  line-height: 1;
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-text {
+  font-size: 1.05rem;
+  line-height: 1.4;
+  color: var(--clarity-fg);
+  font-weight: 300;
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-narrative {
+  padding: 12px 24px;
+  font-style: italic;
+  color: var(--clarity-ink-2);
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0;
+  border-top: 1px solid var(--clarity-line);
+}
+
+/* ---------- Awaiting You pill ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-awaiting-you-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--clarity-you);
+  background: var(--clarity-you-soft);
+  color: var(--clarity-fg);
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+[data-clarity-surface='situation-room'] .clarity-awaiting-you-pill:hover {
+  background: color-mix(in oklch, var(--clarity-you-soft), var(--clarity-you) 15%);
+}
+
+[data-clarity-surface='situation-room'] .clarity-awaiting-you-label {
+  font-weight: 500;
+}
+
+[data-clarity-surface='situation-room'] .clarity-awaiting-you-count {
+  color: var(--clarity-you);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+[data-clarity-surface='situation-room'] .clarity-awaiting-you-age {
+  color: var(--clarity-ink-3);
+}
+
+/* ---------- Artifacts shelf ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-artifacts-shelf {
+  margin: 2rem 0 1rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-artifacts-heading {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 1.5rem;
+  font-style: italic;
+  font-weight: 400;
+  margin: 0 0 1rem;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface='situation-room'] .clarity-artifacts-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+@media (max-width: 1180px) {
+  [data-clarity-surface='situation-room'] .clarity-artifacts-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  [data-clarity-surface='situation-room'] .clarity-artifacts-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-clarity-surface='situation-room'] .clarity-artifact-item {
+  border: 1px solid var(--clarity-line);
+  background: var(--clarity-bg-2);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-clarity-surface='situation-room'] .clarity-artifact-title {
+  font-size: 0.95rem;
+  color: var(--clarity-fg);
+  line-height: 1.35;
+}
+
+[data-clarity-surface='situation-room'] .clarity-artifact-author {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--clarity-ink-2);
+  font-weight: 500;
+}
+
+[data-clarity-surface='situation-room'] .clarity-artifact-preview {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--clarity-ink-2);
+  padding-left: 12px;
+  border-left: 1px solid var(--clarity-line);
+}
+
+/* ---------- Sparkline ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-sparkline {
+  color: var(--clarity-state-working-bg);
+  margin-top: 8px;
+  opacity: 0.85;
+}
