@@ -1,15 +1,16 @@
 // src/ui/surfaces/reader/live-blocker-panel.tsx
 //
-// Plan 02-03 Task 2 — READER-08 right-rail Live blocker panel. Renders
-// EXACTLY ONE typed terminal kind — never the full pathIds chain. The four
-// terminal kinds (from 02-02 blocker-chain primitive) are:
-//   - HUMAN_ACTION_ON  → "⚑ ON YOU" callout + a single one-click button label
-//   - SELF_RESOLVING   → "Self-resolving by {eta}" label, no button
-//   - EXTERNAL         → "Awaiting external" label, no button
-//   - CYCLE            → "Cycle: A → B → A" label, no button (operator must intervene)
+// Plan 02-03b Task 2 — passes companyId + viewerUserId from useHostContext so
+// the worker handler (now using ctx.issues.relations.get) has the context it
+// needs to walk the blockedBy DAG. The 502 the drill observed came from the
+// previous draft hitting a non-existent /blockers HTTP path; this version uses
+// the SDK's typed relations client.
+//
+// Plan 02-03 Task 2 (original) — READER-08 right-rail Live blocker panel.
+// Renders EXACTLY ONE typed terminal kind — never the full pathIds chain.
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginData, useHostContext } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { BlockerChainResult, Terminal } from '../../../shared/types.ts';
 import { StatePill } from '../../primitives/state-pill.tsx';
@@ -20,9 +21,11 @@ function primaryActionLabel(t: Terminal): string {
 }
 
 export function LiveBlockerPanel({ issueId }: { issueId: string }): React.ReactElement | null {
+  const { companyId, userId } = useHostContext();
   const { data } = usePluginData<BlockerChainResult>('flatten-blocker-chain', {
     startId: issueId,
-    viewerUserId: '',
+    viewerUserId: userId ?? '',
+    companyId: companyId ?? '',
   });
   if (!data) return null;
   const { terminal } = data;

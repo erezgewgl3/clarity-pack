@@ -1,18 +1,21 @@
 // src/ui/surfaces/reader/index.tsx
 //
-// Plan 02-03 Task 2 — ReaderView top-level layout matching
+// Plan 02-03b Task 2 — adds the companyId param to usePluginData. The
+// worker handler at src/worker/handlers/issue-reader.ts now requires
+// companyId in params (the SDK's ctx.issues.get / listComments /
+// documents.list all take it as a positional arg). companyId comes from
+// useHostContext(); userId is passed too for the AcChecklist toggle action.
+//
+// Plan 02-03 Task 2 (original) — ReaderView top-level layout matching
 // sketches/paperclip-fix-task-detail.html. Renders the seven mockup elements
 // + PauseBanner footer, wrapped in <ClaritySurfaceRoot name="reader"> for
-// CSS scoping (SCAF-06).
-//
-// All data flows through the single usePluginData('issue.reader', ...) call —
-// PRIM-01 single round-trip on refs is enforced by the worker handler. The
-// LiveBlockerPanel uses its own usePluginData('flatten-blocker-chain') call
-// because the blocker chain is independent of the reader payload (changes at
-// a different cadence).
+// CSS scoping (SCAF-06). All reader data flows through the single
+// usePluginData('issue.reader') call — PRIM-01 single round-trip on refs is
+// enforced by the worker handler. The LiveBlockerPanel uses its own
+// usePluginData('flatten-blocker-chain') call (independent cadence).
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginData, useHostContext } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
 
@@ -33,13 +36,15 @@ export type ReaderViewData = {
   ancestry: Ancestry | null;
   acItems: AcItem[];
   activity: ActivityEvent[];
-  deliverable: { filename: string; last_write_at: string } | null;
+  deliverable: { filename: string; last_write_at: string | null } | null;
   issueBody: string | null;
 };
 
 export function ReaderView({ entityId }: { entityId: string }): React.ReactElement {
+  const { companyId, userId } = useHostContext();
   const { data, loading } = usePluginData<ReaderViewData>('issue.reader', {
     issueId: entityId,
+    companyId: companyId ?? '',
   });
   if (loading || !data) {
     return (
@@ -57,7 +62,7 @@ export function ReaderView({ entityId }: { entityId: string }): React.ReactEleme
           <ProseWithRefChips body={data.issueBody} />
           <AnchoredToCards cards={data.refCards} />
           <DeliverablePreview deliverable={data.deliverable} />
-          <AcChecklist issueId={entityId} items={data.acItems} />
+          <AcChecklist issueId={entityId} items={data.acItems} userId={userId ?? null} />
           <ActivityTimeline events={data.activity} />
         </div>
         <aside className="clarity-reader-rail">

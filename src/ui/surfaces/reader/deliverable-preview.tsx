@@ -10,10 +10,14 @@
 import * as React from 'react';
 
 export type DeliverableProps = {
-  deliverable: { filename: string; last_write_at: string } | null | undefined;
+  // last_write_at is `string | null` because the actual SDK
+  // IssueDocumentSummary doesn't always carry an updatedAt; the handler maps
+  // it best-effort and may emit null (Plan 02-03b §3).
+  deliverable: { filename: string; last_write_at: string | null } | null | undefined;
 };
 
-function ago(iso: string): string {
+function ago(iso: string | null): string {
+  if (!iso) return 'time unknown';
   const then = new Date(iso).getTime();
   const now = Date.now();
   if (!Number.isFinite(then) || then > now) return '';

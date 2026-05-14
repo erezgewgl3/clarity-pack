@@ -18,9 +18,11 @@ export type AcItem = {
 export function AcChecklist({
   issueId,
   items,
+  userId,
 }: {
   issueId: string;
   items: AcItem[];
+  userId?: string | null;
 }): React.ReactElement {
   const toggleAc = usePluginAction('ac-toggle');
   return (
@@ -37,7 +39,7 @@ export function AcChecklist({
                   type="checkbox"
                   checked={it.checked}
                   onChange={(e) => {
-                    void toggleAc({ id: it.id, checked: e.target.checked });
+                    void toggleAc({ id: it.id, checked: e.target.checked, userId: userId ?? null });
                   }}
                   aria-label={`Toggle: ${it.label}`}
                   data-issue-id={issueId}

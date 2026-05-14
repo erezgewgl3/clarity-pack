@@ -42,6 +42,14 @@ const manifest: PaperclipPluginManifestV1 = {
     'issue.comments.read',
     'issue.documents.read',
     'issue.documents.write',
+    // Plan 02-03b Task 2 — added 2026-05-14 after API-shape diagnosis. Plan
+    // 02-03 omitted these because the original handler-draft used ctx.http.fetch
+    // for blockers and walked a fictional ctx.issues.ancestry. The rewritten
+    // handlers use the typed SDK clients: ctx.issues.relations.get +
+    // ctx.projects.get + ctx.goals.get. See 02-03b-API-SHAPES.md §§ 2, 7.
+    'issue.relations.read',
+    'projects.read',
+    'goals.read',
     'agents.managed',
     'agents.read',
     'agents.pause',
