@@ -1,0 +1,1859 @@
+=== PROBE 2 START ===
+
+--- A. paperclip version (multiple paths) ---
+/home/eric/paperclip/package.json: 
+/home/eric/paperclip/ui/package.json:   "version": "0.3.1",
+/home/eric/paperclip/server/package.json:   "version": "0.3.1",
+
+--- B. server-layout discovery (wider) ---
+total 676
+drwxrwxr-x 21 eric eric   4096 May  8 15:18 .
+drwxr-x--- 11 eric eric   4096 May 13 21:12 ..
+drwxrwxr-x  3 eric eric   4096 May  8 14:44 .agents
+drwxrwxr-x  3 eric eric   4096 May  8 14:44 .claude
+-rw-rw-r--  1 eric eric     89 May  8 14:44 .dockerignore
+-rw-rw-r--  1 eric eric    269 May  8 14:44 .env.example
+drwxrwxr-x  8 eric eric   4096 May  8 14:44 .git
+drwxrwxr-x  3 eric eric   4096 May  8 14:44 .github
+-rw-rw-r--  1 eric eric    912 May  8 14:44 .gitignore
+-rw-rw-r--  1 eric eric    202 May  8 14:44 .mailmap
+-rw-rw-r--  1 eric eric     24 May  8 14:44 .npmrc
+-rw-rw-r--  1 eric eric   8115 May  8 14:44 AGENTS.md
+-rw-rw-r--  1 eric eric   5609 May  8 14:44 CONTRIBUTING.md
+-rw-rw-r--  1 eric eric   3244 May  8 14:44 Dockerfile
+-rw-rw-r--  1 eric eric   1069 May  8 14:44 LICENSE
+-rw-rw-r--  1 eric eric  21937 May  8 14:44 README.md
+-rw-rw-r--  1 eric eric   6406 May  8 14:44 ROADMAP.md
+-rw-rw-r--  1 eric eric    322 May  8 14:44 SECURITY.md
+-rw-rw-r--  1 eric eric   4714 May  8 14:44 adapter-plugin.md
+drwxrwxr-x  5 eric eric   4096 May  9 13:23 cli
+drwxrwxr-x  7 eric eric   4096 May  8 14:44 doc
+drwxrwxr-x  5 eric eric   4096 May  8 14:44 docker
+drwxrwxr-x 14 eric eric   4096 May  8 14:44 docs
+drwxrwxr-x  3 eric eric   4096 May  8 14:44 evals
+drwxrwxr-x  6 eric eric   4096 May  9 13:18 node_modules
+-rw-rw-r--  1 eric eric   4289 May  8 14:44 package.json
+drwxrwxr-x  8 eric eric   4096 May  8 14:44 packages
+drwxrwxr-x  2 eric eric   4096 May  8 14:44 patches
+-rw-rw-r--  1 eric eric 489581 May  8 14:44 pnpm-lock.yaml
+
+--- C. server-side files referencing PluginHostContext / companyPrefix (no path filter) ---
+/home/eric/paperclip/tests/e2e/signoff-policy.spec.ts
+/home/eric/paperclip/tests/e2e/multi-user.spec.ts
+/home/eric/paperclip/tests/e2e/multi-user-authenticated.spec.ts
+/home/eric/paperclip/tests/e2e/planning-mode-visual-verification.spec.ts
+/home/eric/paperclip/packages/shared/src/types/plugin.ts
+/home/eric/paperclip/packages/shared/src/constants.ts
+
+--- D. UI Provider/Context for PluginHostContext (where the value gets PUT into context) ---
+
+--- E. FULL slots.tsx (the slot-mounting infrastructure) ---
+----- BEGIN slots.tsx -----
+/**
+ * @fileoverview Plugin UI slot system ΓÇö dynamic loading, error isolation,
+ * and rendering of plugin-contributed UI extensions.
+ *
+ * Provides:
+ * - `usePluginSlots(type, context?)` ΓÇö React hook that discovers and
+ *   filters plugin UI contributions for a given slot type.
+ * - `PluginSlotOutlet` ΓÇö renders all matching slots inline with error
+ *   boundary isolation per plugin.
+ * - `PluginBridgeScope` ΓÇö wraps each plugin's component tree to inject
+ *   the bridge context (`pluginId`, host context) needed by bridge hooks.
+ *
+ * Plugin UI modules are loaded via dynamic ESM `import()` from the host's
+ * static file server (`/_plugins/:pluginId/ui/:entryFile`). Each module
+ * exports named React components that correspond to `ui.slots[].exportName`
+ * in the manifest.
+ *
+ * @see PLUGIN_SPEC.md ┬º19 ΓÇö UI Extension Model
+ * @see PLUGIN_SPEC.md ┬º19.0.3 ΓÇö Bundle Serving
+ */
+import {
+  Component,
+  createElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+  type ComponentType,
+} from "react";
+import { useQuery } from "@tanstack/react-query";
+import type {
+  PluginLauncherDeclaration,
+  PluginUiSlotDeclaration,
+  PluginUiSlotEntityType,
+  PluginUiSlotType,
+} from "@paperclipai/shared";
+import { pluginsApi, type PluginUiContribution } from "@/api/plugins";
+import { authApi } from "@/api/auth";
+import { queryKeys } from "@/lib/queryKeys";
+import { cn } from "@/lib/utils";
+import {
+  PluginBridgeContext,
+  type PluginHostContext,
+} from "./bridge";
+
+export type PluginSlotContext = {
+  companyId?: string | null;
+  companyPrefix?: string | null;
+  projectId?: string | null;
+  entityId?: string | null;
+  entityType?: PluginUiSlotEntityType | null;
+  /** Parent entity ID for nested slots (e.g. comment annotations within an issue). */
+  parentEntityId?: string | null;
+  projectRef?: string | null;
+};
+
+export type ResolvedPluginSlot = PluginUiSlotDeclaration & {
+  pluginId: string;
+  pluginKey: string;
+  pluginDisplayName: string;
+  pluginVersion: string;
+};
+
+/**
+ * Returns the unique `routeSidebar` slot that pairs with a single `page` slot
+ * for the given route, or `null` if no unambiguous pairing exists.
+ *
+ * Used to detect when a route is taken over by a plugin's full-page sidebar so
+ * host chrome (breadcrumb, in-page Back) can be suppressed.
+ */
+export function resolveRouteSidebarSlot(
+  slots: ResolvedPluginSlot[],
+  routePath: string | null,
+): ResolvedPluginSlot | null {
+  if (!routePath) return null;
+
+  const pageMatches = slots.filter((slot) => slot.type === "page" && slot.routePath === routePath);
+  if (pageMatches.length !== 1) return null;
+
+  const [pageSlot] = pageMatches;
+  const sidebarMatches = slots.filter((slot) =>
+    slot.type === "routeSidebar"
+    && slot.routePath === routePath
+    && slot.pluginId === pageSlot.pluginId,
+  );
+
+  if (sidebarMatches.length !== 1) return null;
+  return sidebarMatches[0] ?? null;
+}
+
+type PluginSlotComponentProps = {
+  slot: ResolvedPluginSlot;
+  context: PluginSlotContext;
+};
+
+export type RegisteredPluginComponent =
+  | {
+    kind: "react";
+    component: ComponentType<PluginSlotComponentProps>;
+  }
+  | {
+    kind: "web-component";
+    tagName: string;
+  };
+
+type SlotFilters = {
+  slotTypes: PluginUiSlotType[];
+  entityType?: PluginUiSlotEntityType | null;
+  companyId?: string | null;
+  enabled?: boolean;
+};
+
+type UsePluginSlotsResult = {
+  slots: ResolvedPluginSlot[];
+  isLoading: boolean;
+  errorMessage: string | null;
+};
+
+/**
+ * In-memory registry for plugin UI exports loaded by the host page.
+ * Keys are `${pluginKey}:${exportName}` to match manifest slot declarations.
+ */
+const registry = new Map<string, RegisteredPluginComponent>();
+
+function buildRegistryKey(pluginKey: string, exportName: string): string {
+  return `${pluginKey}:${exportName}`;
+}
+
+function requiresEntityType(slotType: PluginUiSlotType): boolean {
+  return slotType === "detailTab" || slotType === "taskDetailView" || slotType === "contextMenuItem" || slotType === "commentAnnotation" || slotType === "commentContextMenuItem" || slotType === "projectSidebarItem" || slotType === "toolbarButton";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "Unknown error";
+}
+
+/**
+ * Registers a React component export for a plugin UI slot.
+ */
+export function registerPluginReactComponent(
+  pluginKey: string,
+  exportName: string,
+  component: ComponentType<PluginSlotComponentProps>,
+): void {
+  registry.set(buildRegistryKey(pluginKey, exportName), {
+    kind: "react",
+    component,
+  });
+}
+
+/**
+ * Registers a custom element tag for a plugin UI slot.
+ */
+export function registerPluginWebComponent(
+  pluginKey: string,
+  exportName: string,
+  tagName: string,
+): void {
+  registry.set(buildRegistryKey(pluginKey, exportName), {
+    kind: "web-component",
+    tagName,
+  });
+}
+
+function resolveRegisteredComponent(slot: ResolvedPluginSlot): RegisteredPluginComponent | null {
+  return registry.get(buildRegistryKey(slot.pluginKey, slot.exportName)) ?? null;
+}
+
+export function resolveRegisteredPluginComponent(
+  pluginKey: string,
+  exportName: string,
+): RegisteredPluginComponent | null {
+  return registry.get(buildRegistryKey(pluginKey, exportName)) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Plugin module dynamic import loader
+// ---------------------------------------------------------------------------
+
+type PluginLoadState = "idle" | "loading" | "loaded" | "error";
+
+/**
+ * Tracks the load state for each plugin's UI module by contribution cache key.
+ *
+ * Once a plugin module is loaded, all its named exports are inspected and
+ * registered into the component `registry` so that `resolveRegisteredComponent`
+ * can find them when slots render.
+ */
+const pluginLoadStates = new Map<string, PluginLoadState>();
+
+/**
+ * Promise cache to prevent concurrent duplicate imports for the same plugin.
+ */
+const inflightImports = new Map<string, Promise<void>>();
+
+/**
+ * Build the full URL for a plugin's UI entry module.
+ *
+ * The server serves plugin UI bundles at `/_plugins/:pluginId/ui/*`.
+ * The `uiEntryFile` from the contribution (typically `"index.js"`) is
+ * appended to form the complete import path.
+ */
+function buildPluginModuleKey(contribution: PluginUiContribution): string {
+  const cacheHint = contribution.updatedAt ?? contribution.version ?? "0";
+  return `${contribution.pluginId}:${cacheHint}`;
+}
+
+function buildPluginUiUrl(contribution: PluginUiContribution): string {
+  const cacheHint = encodeURIComponent(contribution.updatedAt ?? contribution.version ?? "0");
+  return `/_plugins/${encodeURIComponent(contribution.pluginId)}/ui/${contribution.uiEntryFile}?v=${cacheHint}`;
+}
+
+/**
+ * Import a plugin's UI entry module with bare-specifier rewriting.
+ *
+ * Plugin bundles are built with `external: ["@paperclipai/plugin-sdk/ui", "react", "react-dom"]`,
+ * so their ESM output contains bare specifier imports like:
+ *
+ * ```js
+ * import { usePluginData } from "@paperclipai/plugin-sdk/ui";
+ * import React from "react";
+ * ```
+ *
+ * Browsers cannot resolve bare specifiers without an import map. Rather than
+ * fighting import map timing constraints, we:
+ * 1. Fetch the module source text
+ * 2. Rewrite bare specifier imports to use blob URLs that re-export from the
+ *    host's global bridge registry (`globalThis.__paperclipPluginBridge__`)
+ * 3. Import the rewritten module via a blob URL
+ *
+ * This approach is compatible with all modern browsers and avoids import map
+ * ordering issues.
+ */
+const shimBlobUrls: Record<string, string> = {};
+
+function applyJsxRuntimeKey(
+  props: Record<string, unknown> | null | undefined,
+  key: string | number | undefined,
+): Record<string, unknown> {
+  if (key === undefined) return props ?? {};
+  return { ...(props ?? {}), key };
+}
+
+function getShimBlobUrl(specifier: "react" | "react-dom" | "react-dom/client" | "react/jsx-runtime" | "sdk-ui"): string {
+  if (shimBlobUrls[specifier]) return shimBlobUrls[specifier];
+
+  let source: string;
+  switch (specifier) {
+    case "react":
+      source = `
+        const R = globalThis.__paperclipPluginBridge__?.react;
+        export default R;
+        const { useState, useEffect, useCallback, useMemo, useRef, useContext,
+          createContext, createElement, Fragment, Component, forwardRef,
+          memo, lazy, Suspense, StrictMode, cloneElement, Children,
+          isValidElement, createRef } = R;
+        export { useState, useEffect, useCallback, useMemo, useRef, useContext,
+          createContext, createElement, Fragment, Component, forwardRef,
+          memo, lazy, Suspense, StrictMode, cloneElement, Children,
+          isValidElement, createRef };
+      `;
+      break;
+    case "react/jsx-runtime":
+      source = `
+        const R = globalThis.__paperclipPluginBridge__?.react;
+        const withKey = ${applyJsxRuntimeKey.toString()};
+        export const jsx = (type, props, key) => R.createElement(type, withKey(props, key));
+        export const jsxs = (type, props, key) => R.createElement(type, withKey(props, key));
+        export const Fragment = R.Fragment;
+      `;
+      break;
+    case "react-dom":
+    case "react-dom/client":
+      source = `
+        const RD = globalThis.__paperclipPluginBridge__?.reactDom;
+        export default RD;
+        const { createRoot, hydrateRoot, createPortal, flushSync } = RD ?? {};
+        export { createRoot, hydrateRoot, createPortal, flushSync };
+      `;
+      break;
+    case "sdk-ui":
+      source = `
+        const SDK = globalThis.__paperclipPluginBridge__?.sdkUi ?? {};
+        function missing(name) {
+          return function MissingPaperclipSdkUiComponent() {
+            throw new Error('Paperclip plugin UI runtime is not initialized for "' + name + '". Ensure the host loaded the plugin bridge before rendering this UI module.');
+          };
+        }
+        const { usePluginData, usePluginAction, useHostContext, useHostLocation, useHostNavigation, usePluginStream, usePluginToast } = SDK;
+        const MetricCard = SDK.MetricCard ?? missing("MetricCard");
+        const StatusBadge = SDK.StatusBadge ?? missing("StatusBadge");
+        const DataTable = SDK.DataTable ?? missing("DataTable");
+        const TimeseriesChart = SDK.TimeseriesChart ?? missing("TimeseriesChart");
+        const MarkdownBlock = SDK.MarkdownBlock ?? missing("MarkdownBlock");
+        const MarkdownEditor = SDK.MarkdownEditor ?? missing("MarkdownEditor");
+        const KeyValueList = SDK.KeyValueList ?? missing("KeyValueList");
+        const ActionBar = SDK.ActionBar ?? missing("ActionBar");
+        const LogView = SDK.LogView ?? missing("LogView");
+        const JsonTree = SDK.JsonTree ?? missing("JsonTree");
+        const Spinner = SDK.Spinner ?? missing("Spinner");
+        const ErrorBoundary = SDK.ErrorBoundary ?? missing("ErrorBoundary");
+        const FileTree = SDK.FileTree ?? missing("FileTree");
+        const IssuesList = SDK.IssuesList ?? missing("IssuesList");
+        const AssigneePicker = SDK.AssigneePicker ?? missing("AssigneePicker");
+        const ProjectPicker = SDK.ProjectPicker ?? missing("ProjectPicker");
+        const ManagedRoutinesList = SDK.ManagedRoutinesList ?? missing("ManagedRoutinesList");
+        export { usePluginData, usePluginAction, useHostContext, useHostLocation, useHostNavigation, usePluginStream, usePluginToast, MetricCard, StatusBadge, DataTable, TimeseriesChart, MarkdownBlock, MarkdownEditor, KeyValueList, ActionBar, LogView, JsonTree, Spinner, ErrorBoundary, FileTree, IssuesList, AssigneePicker, ProjectPicker, ManagedRoutinesList };
+      `;
+      break;
+  }
+
+  const blob = new Blob([source], { type: "application/javascript" });
+  const url = URL.createObjectURL(blob);
+  shimBlobUrls[specifier] = url;
+  return url;
+}
+
+/**
+ * Rewrite bare specifier imports in an ESM source string to use blob URLs.
+ *
+ * This handles the standard import patterns emitted by esbuild/rollup:
+ * - `import { ... } from "react";`
+ * - `import React from "react";`
+ * - `import * as React from "react";`
+ * - `import { ... } from "@paperclipai/plugin-sdk/ui";`
+ *
+ * Also handles re-exports:
+ * - `export { ... } from "react";`
+ */
+function rewriteBareSpecifiers(source: string): string {
+  // Build a mapping of bare specifiers to blob URLs.
+  const rewrites: Record<string, string> = {
+    '"@paperclipai/plugin-sdk/ui"': `"${getShimBlobUrl("sdk-ui")}"`,
+    "'@paperclipai/plugin-sdk/ui'": `'${getShimBlobUrl("sdk-ui")}'`,
+    '"@paperclipai/plugin-sdk/ui/hooks"': `"${getShimBlobUrl("sdk-ui")}"`,
+    "'@paperclipai/plugin-sdk/ui/hooks'": `'${getShimBlobUrl("sdk-ui")}'`,
+    '"react/jsx-runtime"': `"${getShimBlobUrl("react/jsx-runtime")}"`,
+    "'react/jsx-runtime'": `'${getShimBlobUrl("react/jsx-runtime")}'`,
+    '"react-dom/client"': `"${getShimBlobUrl("react-dom/client")}"`,
+    "'react-dom/client'": `'${getShimBlobUrl("react-dom/client")}'`,
+    '"react-dom"': `"${getShimBlobUrl("react-dom")}"`,
+    "'react-dom'": `'${getShimBlobUrl("react-dom")}'`,
+    '"react"': `"${getShimBlobUrl("react")}"`,
+    "'react'": `'${getShimBlobUrl("react")}'`,
+  };
+
+  let result = source;
+  for (const [from, to] of Object.entries(rewrites)) {
+    // Only rewrite in import/export from contexts, not in arbitrary strings.
+    // The regex matches `from "..."` or `from '...'` patterns.
+    result = result.replaceAll(` from ${from}`, ` from ${to}`);
+    // Also handle `import "..."` (side-effect imports)
+    result = result.replaceAll(`import ${from}`, `import ${to}`);
+  }
+
+  return result;
+}
+
+/**
+ * Fetch, rewrite, and import a plugin UI module.
+ *
+ * @param url - The URL to the plugin's UI entry module
+ * @returns The module's exports
+ */
+async function importPluginModule(url: string): Promise<Record<string, unknown>> {
+  // Check if the bridge registry is available. If not, fall back to direct
+  // import (which will fail on bare specifiers but won't crash the loader).
+  if (!globalThis.__paperclipPluginBridge__) {
+    console.warn("[plugin-loader] Bridge registry not initialized, falling back to direct import");
+    return import(/* @vite-ignore */ url);
+  }
+
+  // Fetch the module source text
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch plugin module: ${response.status} ${response.statusText}`);
+  }
+
+  const source = await response.text();
+
+  // Rewrite bare specifier imports to blob URLs
+  const rewritten = rewriteBareSpecifiers(source);
+
+  // Create a blob URL from the rewritten source and import it
+  const blob = new Blob([rewritten], { type: "application/javascript" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  try {
+    const mod = await import(/* @vite-ignore */ blobUrl);
+    return mod;
+  } finally {
+    // Clean up the blob URL after import (the module is already loaded)
+    URL.revokeObjectURL(blobUrl);
+  }
+}
+
+/**
+ * Dynamically import a plugin's UI entry module and register all named
+ * exports that look like React components (functions or classes) into the
+ * component registry.
+ *
+ * This replaces the previous approach where plugin bundles had to
+ * self-register via `window.paperclipPlugins.registerReactComponent()`.
+ * Now the host is responsible for importing the module and binding
+ * exports to the correct `pluginKey:exportName` registry keys.
+ *
+ * Plugin modules are loaded with bare-specifier rewriting so that imports
+ * of `@paperclipai/plugin-sdk/ui`, `react`, and `react-dom` resolve to the
+ * host-provided implementations via the bridge registry.
+ *
+ * Web-component registrations still work: if the module has a named export
+ * that matches an `exportName` declared in a slot AND that export is a
+ * string (the custom element tag name), it's registered as a web component.
+ */
+async function loadPluginModule(contribution: PluginUiContribution): Promise<void> {
+  const { pluginId, pluginKey, slots, launchers } = contribution;
+  const moduleKey = buildPluginModuleKey(contribution);
+
+  // Already loaded or loading ΓÇö return early.
+  const state = pluginLoadStates.get(moduleKey);
+  if (state === "loaded" || state === "loading") {
+    // If currently loading, wait for the inflight promise.
+    const inflight = inflightImports.get(pluginId);
+    if (inflight) await inflight;
+    return;
+  }
+
+  // If another import for this plugin ID is currently in progress, wait for it.
+  const running = inflightImports.get(pluginId);
+  if (running) {
+    await running;
+    const recheckedState = pluginLoadStates.get(moduleKey);
+    if (recheckedState === "loaded") {
+      return;
+    }
+  }
+
+  pluginLoadStates.set(moduleKey, "loading");
+
+  const url = buildPluginUiUrl(contribution);
+
+  const importPromise = (async () => {
+    try {
+      // Dynamic ESM import of the plugin's UI entry module with
+      // bare-specifier rewriting for host-provided dependencies.
+      const mod: Record<string, unknown> = await importPluginModule(url);
+
+      // Collect the set of export names declared across all UI contributions so
+      // we only register what the manifest advertises (ignore extra exports).
+      const declaredExports = new Set<string>();
+      for (const slot of slots) {
+        declaredExports.add(slot.exportName);
+      }
+      for (const launcher of launchers) {
+        if (launcher.exportName) {
+          declaredExports.add(launcher.exportName);
+        }
+        if (isLauncherComponentTarget(launcher)) {
+          declaredExports.add(launcher.action.target);
+        }
+      }
+
+      for (const exportName of declaredExports) {
+        const exported = mod[exportName];
+        if (exported === undefined) {
+          console.warn(
+            `Plugin "${pluginKey}" declares slot export "${exportName}" but the module does not export it.`,
+          );
+          continue;
+        }
+
+        if (typeof exported === "function") {
+          // React component (function component or class component).
+          registerPluginReactComponent(
+            pluginKey,
+            exportName,
+            exported as ComponentType<PluginSlotComponentProps>,
+          );
+        } else if (typeof exported === "string") {
+          // Web component tag name.
+          registerPluginWebComponent(pluginKey, exportName, exported);
+        } else {
+          console.warn(
+            `Plugin "${pluginKey}" export "${exportName}" is neither a function nor a string tag name ΓÇö skipping.`,
+          );
+        }
+      }
+
+      pluginLoadStates.set(moduleKey, "loaded");
+    } catch (err) {
+      pluginLoadStates.set(moduleKey, "error");
+      console.error(`Failed to load UI module for plugin "${pluginKey}"`, err);
+    } finally {
+      inflightImports.delete(pluginId);
+    }
+  })();
+
+  inflightImports.set(pluginId, importPromise);
+  await importPromise;
+}
+
+function isLauncherComponentTarget(launcher: PluginLauncherDeclaration): boolean {
+  return launcher.action.type === "openModal"
+    || launcher.action.type === "openDrawer"
+    || launcher.action.type === "openPopover";
+}
+
+/**
+ * Load UI modules for a set of plugin contributions.
+ *
+ * Returns a promise that resolves once all modules have been loaded (or
+ * failed). Plugins that are already loaded are skipped.
+ */
+async function ensurePluginModulesLoaded(contributions: PluginUiContribution[]): Promise<void> {
+  await Promise.all(
+    contributions.map((c) => loadPluginModule(c)),
+  );
+}
+
+export async function ensurePluginContributionLoaded(
+  contribution: PluginUiContribution,
+): Promise<void> {
+  await loadPluginModule(contribution);
+}
+
+/**
+ * Returns the aggregate load state across a set of plugin contributions.
+ * - If any plugin is still loading ΓåÆ "loading"
+ * - If all are loaded (or no contributions) ΓåÆ "loaded"
+ * - If all finished but some errored ΓåÆ "loaded" (errors are logged, not fatal)
+ */
+function aggregateLoadState(contributions: PluginUiContribution[]): "loading" | "loaded" {
+  for (const c of contributions) {
+    const state = pluginLoadStates.get(buildPluginModuleKey(c));
+    if (state === "loading" || state === "idle" || state === undefined) {
+      return "loading";
+    }
+  }
+  return "loaded";
+}
+
+// ---------------------------------------------------------------------------
+// React hooks
+// ---------------------------------------------------------------------------
+
+/**
+ * Trigger dynamic loading of plugin UI modules when contributions change.
+ *
+ * This hook is intentionally decoupled from usePluginSlots so that callers
+ * who consume slots via `usePluginSlots()` automatically get module loading
+ * without extra wiring.
+ */
+function usePluginModuleLoader(contributions: PluginUiContribution[] | undefined) {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!contributions || contributions.length === 0) return;
+
+    // Filter to contributions that haven't been loaded yet.
+    const unloaded = contributions.filter((c) => {
+      const state = pluginLoadStates.get(buildPluginModuleKey(c));
+      return state !== "loaded" && state !== "loading";
+    });
+
+    if (unloaded.length === 0) return;
+
+    let cancelled = false;
+    void ensurePluginModulesLoaded(unloaded).then(() => {
+      // Re-render so the slot mount can resolve the newly-registered components.
+      if (!cancelled) setTick((t) => t + 1);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contributions]);
+}
+
+/**
+ * Resolves and sorts slots across all ready plugin contributions.
+ *
+ * Filtering rules:
+ * - `slotTypes` must match one of the caller-requested host slot types.
+ * - Entity-scoped slot types (`detailTab`, `taskDetailView`, `contextMenuItem`)
+ *   require `entityType` and must include it in `slot.entityTypes`.
+ *
+ * Automatically triggers dynamic import of plugin UI modules for any
+ * newly-discovered contributions. Components render once loading completes.
+ */
+export function usePluginSlots(filters: SlotFilters): UsePluginSlotsResult {
+  const queryEnabled = filters.enabled ?? true;
+  const { data, isLoading: isQueryLoading, error } = useQuery({
+    queryKey: queryKeys.plugins.uiContributions,
+    queryFn: () => pluginsApi.listUiContributions(),
+    enabled: queryEnabled,
+  });
+
+  // Kick off dynamic imports for any new plugin contributions.
+  usePluginModuleLoader(data);
+
+  const slotTypesKey = useMemo(() => [...filters.slotTypes].sort().join("|"), [filters.slotTypes]);
+
+  const slots = useMemo(() => {
+    const allowedTypes = new Set(slotTypesKey.split("|").filter(Boolean) as PluginUiSlotType[]);
+    const rows: ResolvedPluginSlot[] = [];
+    for (const contribution of data ?? []) {
+      for (const slot of contribution.slots) {
+        if (!allowedTypes.has(slot.type)) continue;
+        if (requiresEntityType(slot.type)) {
+          if (!filters.entityType) continue;
+          if (!slot.entityTypes?.includes(filters.entityType)) continue;
+        }
+        rows.push({
+          ...slot,
+          pluginId: contribution.pluginId,
+          pluginKey: contribution.pluginKey,
+          pluginDisplayName: contribution.displayName,
+          pluginVersion: contribution.version,
+        });
+      }
+    }
+    rows.sort((a, b) => {
+      const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+      const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+      if (ao !== bo) return ao - bo;
+      const pluginCmp = a.pluginDisplayName.localeCompare(b.pluginDisplayName);
+      if (pluginCmp !== 0) return pluginCmp;
+      return a.displayName.localeCompare(b.displayName);
+    });
+    return rows;
+  }, [data, filters.entityType, slotTypesKey]);
+
+  // Consider loading until both query and module imports are done.
+  const modulesLoaded = data ? aggregateLoadState(data) === "loaded" : true;
+  const isLoading = queryEnabled && (isQueryLoading || !modulesLoaded);
+
+  return {
+    slots,
+    isLoading,
+    errorMessage: error ? getErrorMessage(error) : null,
+  };
+}
+
+type PluginSlotErrorBoundaryProps = {
+  slot: ResolvedPluginSlot;
+  className?: string;
+  children: ReactNode;
+};
+
+type PluginSlotErrorBoundaryState = {
+  hasError: boolean;
+};
+
+class PluginSlotErrorBoundary extends Component<PluginSlotErrorBoundaryProps, PluginSlotErrorBoundaryState> {
+  override state: PluginSlotErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): PluginSlotErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  override componentDidCatch(error: unknown, info: ErrorInfo): void {
+    // Keep plugin failures isolated while preserving actionable diagnostics.
+    console.error("Plugin slot render failed", {
+      pluginKey: this.props.slot.pluginKey,
+      slotId: this.props.slot.id,
+      error,
+      info: info.componentStack,
+    });
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <div className={cn("rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive", this.props.className)}>
+          {this.props.slot.pluginDisplayName}: failed to render
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function PluginWebComponentMount({
+  tagName,
+  slot,
+  context,
+  className,
+}: {
+  tagName: string;
+  slot: ResolvedPluginSlot;
+  context: PluginSlotContext;
+  className?: string;
+}) {
+  const ref = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    // Bridge manifest slot/context metadata onto the custom element instance.
+    const el = ref.current as HTMLElement & {
+      pluginSlot?: ResolvedPluginSlot;
+      pluginContext?: PluginSlotContext;
+    };
+    el.pluginSlot = slot;
+    el.pluginContext = context;
+  }, [context, slot]);
+
+  return createElement(tagName, { ref, className });
+}
+
+type PluginSlotMountProps = {
+  slot: ResolvedPluginSlot;
+  context: PluginSlotContext;
+  className?: string;
+  missingBehavior?: "hidden" | "placeholder";
+};
+
+/**
+ * Maps the slot's `PluginSlotContext` to a `PluginHostContext` for the bridge.
+ *
+ * The bridge hooks need the full host context shape; the slot context carries
+ * the subset available from the rendering location.
+ */
+function slotContextToHostContext(
+  pluginSlotContext: PluginSlotContext,
+  userId: string | null,
+): PluginHostContext {
+  return {
+    companyId: pluginSlotContext.companyId ?? null,
+    companyPrefix: pluginSlotContext.companyPrefix ?? null,
+    projectId: pluginSlotContext.projectId ?? (pluginSlotContext.entityType === "project" ? pluginSlotContext.entityId ?? null : null),
+    entityId: pluginSlotContext.entityId ?? null,
+    entityType: pluginSlotContext.entityType ?? null,
+    parentEntityId: pluginSlotContext.parentEntityId ?? null,
+    userId,
+    renderEnvironment: null,
+  };
+}
+
+/**
+ * Wrapper component that sets the active bridge context around plugin renders.
+ *
+ * This ensures that `usePluginData()`, `usePluginAction()`, and `useHostContext()`
+ * have access to the current plugin ID and host context during the render phase.
+ */
+function PluginBridgeScope({
+  pluginId,
+  context,
+  children,
+}: {
+  pluginId: string;
+  context: PluginSlotContext;
+  children: ReactNode;
+}) {
+  const { data: session } = useQuery({
+    queryKey: queryKeys.auth.session,
+    queryFn: () => authApi.getSession(),
+  });
+  const userId = session?.user?.id ?? session?.session?.userId ?? null;
+  const hostContext = useMemo(() => slotContextToHostContext(context, userId), [context, userId]);
+  const value = useMemo(() => ({ pluginId, hostContext }), [pluginId, hostContext]);
+
+  return (
+    <PluginBridgeContext.Provider value={value}>
+      {children}
+    </PluginBridgeContext.Provider>
+  );
+}
+
+export function PluginSlotMount({
+  slot,
+  context,
+  className,
+  missingBehavior = "hidden",
+}: PluginSlotMountProps) {
+  const [, forceRerender] = useState(0);
+  const component = resolveRegisteredComponent(slot);
+
+  useEffect(() => {
+    if (component) return;
+    const inflight = inflightImports.get(slot.pluginId);
+    if (!inflight) return;
+
+    let cancelled = false;
+    void inflight.finally(() => {
+      if (!cancelled) {
+        forceRerender((tick) => tick + 1);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [component, slot.pluginId]);
+
+  if (!component) {
+    if (missingBehavior === "hidden") return null;
+    return (
+      <div className={cn("rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted-foreground", className)}>
+        {slot.pluginDisplayName}: {slot.displayName}
+      </div>
+    );
+  }
+
+  if (component.kind === "react") {
+    const node = createElement(component.component, { slot, context });
+    return (
+      <PluginSlotErrorBoundary slot={slot} className={className}>
+        <PluginBridgeScope pluginId={slot.pluginId} context={context}>
+          {className ? <div className={className}>{node}</div> : node}
+        </PluginBridgeScope>
+      </PluginSlotErrorBoundary>
+    );
+  }
+
+  return (
+    <PluginSlotErrorBoundary slot={slot} className={className}>
+      <PluginWebComponentMount
+        tagName={component.tagName}
+        slot={slot}
+        context={context}
+        className={className}
+      />
+    </PluginSlotErrorBoundary>
+  );
+}
+
+type PluginSlotOutletProps = {
+  slotTypes: PluginUiSlotType[];
+  context: PluginSlotContext;
+  entityType?: PluginUiSlotEntityType | null;
+  className?: string;
+  itemClassName?: string;
+  errorClassName?: string;
+  missingBehavior?: "hidden" | "placeholder";
+};
+
+export function PluginSlotOutlet({
+  slotTypes,
+  context,
+  entityType,
+  className,
+  itemClassName,
+  errorClassName,
+  missingBehavior = "hidden",
+}: PluginSlotOutletProps) {
+  const { slots, errorMessage } = usePluginSlots({
+    slotTypes,
+    entityType,
+    companyId: context.companyId,
+  });
+
+  if (errorMessage) {
+    return (
+      <div className={cn("rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive", errorClassName)}>
+        Plugin extensions unavailable: {errorMessage}
+      </div>
+    );
+  }
+
+  if (slots.length === 0) return null;
+
+  return (
+    <div className={className}>
+      {slots.map((slot) => (
+        <PluginSlotMount
+          key={`${slot.pluginKey}:${slot.id}`}
+          slot={slot}
+          context={context}
+          className={itemClassName}
+          missingBehavior={missingBehavior}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Test helpers ΓÇö exported for use in test suites only.
+// ---------------------------------------------------------------------------
+
+/**
+ * Reset the module loader state. Only use in tests.
+ * @internal
+ */
+export function _resetPluginModuleLoader(): void {
+  pluginLoadStates.clear();
+  inflightImports.clear();
+  registry.clear();
+  if (typeof URL.revokeObjectURL === "function") {
+    for (const url of Object.values(shimBlobUrls)) {
+      URL.revokeObjectURL(url);
+    }
+  }
+  for (const key of Object.keys(shimBlobUrls)) {
+    delete shimBlobUrls[key];
+  }
+}
+
+export const _applyJsxRuntimeKeyForTests = applyJsxRuntimeKey;
+export const _rewriteBareSpecifiersForTests = rewriteBareSpecifiers;
+----- END slots.tsx -----
+
+--- F. FULL launchers.tsx ---
+----- BEGIN launchers.tsx -----
+import {
+  Component,
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ErrorInfo,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
+import { useQuery } from "@tanstack/react-query";
+import { PLUGIN_LAUNCHER_BOUNDS } from "@paperclipai/shared";
+import type {
+  PluginLauncherBounds,
+  PluginLauncherDeclaration,
+  PluginLauncherPlacementZone,
+  PluginUiSlotEntityType,
+} from "@paperclipai/shared";
+import { pluginsApi, type PluginUiContribution } from "@/api/plugins";
+import { authApi } from "@/api/auth";
+import { Button } from "@/components/ui/button";
+import { useNavigate, useLocation } from "@/lib/router";
+import { queryKeys } from "@/lib/queryKeys";
+import { cn } from "@/lib/utils";
+import {
+  PluginBridgeContext,
+  type PluginHostContext,
+  type PluginModalBoundsRequest,
+  type PluginRenderCloseEvent,
+  type PluginRenderCloseHandler,
+  type PluginRenderEnvironmentContext,
+} from "./bridge";
+import {
+  ensurePluginContributionLoaded,
+  resolveRegisteredPluginComponent,
+  type RegisteredPluginComponent,
+} from "./slots";
+
+export type PluginLauncherContext = {
+  companyId?: string | null;
+  companyPrefix?: string | null;
+  projectId?: string | null;
+  projectRef?: string | null;
+  entityId?: string | null;
+  entityType?: PluginUiSlotEntityType | null;
+};
+
+export type ResolvedPluginLauncher = PluginLauncherDeclaration & {
+  pluginId: string;
+  pluginKey: string;
+  pluginDisplayName: string;
+  pluginVersion: string;
+  uiEntryFile: string;
+};
+
+type UsePluginLaunchersFilters = {
+  placementZones: PluginLauncherPlacementZone[];
+  entityType?: PluginUiSlotEntityType | null;
+  companyId?: string | null;
+  enabled?: boolean;
+};
+
+type UsePluginLaunchersResult = {
+  launchers: ResolvedPluginLauncher[];
+  contributionsByPluginId: Map<string, PluginUiContribution>;
+  isLoading: boolean;
+  errorMessage: string | null;
+};
+
+type PluginLauncherRuntimeContextValue = {
+  /**
+   * Open a launcher using already-discovered contribution metadata.
+   *
+   * The runtime accepts the normalized `PluginUiContribution` so callers can
+   * reuse the `/api/plugins/ui-contributions` payload they already fetched
+   * instead of issuing another request for each launcher activation.
+   */
+  activateLauncher(
+    launcher: ResolvedPluginLauncher,
+    hostContext: PluginLauncherContext,
+    contribution: PluginUiContribution,
+    sourceEl?: HTMLElement | null,
+  ): Promise<void>;
+};
+
+type LauncherInstance = {
+  key: string;
+  launcher: ResolvedPluginLauncher;
+  hostContext: PluginLauncherContext;
+  contribution: PluginUiContribution;
+  component: RegisteredPluginComponent | null;
+  sourceElement: HTMLElement | null;
+  sourceRect: DOMRect | null;
+  bounds: PluginLauncherBounds | null;
+  beforeCloseHandlers: Set<PluginRenderCloseHandler>;
+  closeHandlers: Set<PluginRenderCloseHandler>;
+};
+
+const entityScopedZones = new Set<PluginLauncherPlacementZone>([
+  "detailTab",
+  "taskDetailView",
+  "contextMenuItem",
+  "commentAnnotation",
+  "commentContextMenuItem",
+  "projectSidebarItem",
+  "toolbarButton",
+]);
+const focusableElementSelector = [
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+const launcherOverlayBaseZIndex = 1000;
+const supportedLauncherBounds = new Set<PluginLauncherBounds>(
+  PLUGIN_LAUNCHER_BOUNDS,
+);
+
+const PluginLauncherRuntimeContext = createContext<PluginLauncherRuntimeContextValue | null>(null);
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "Unknown error";
+}
+
+function buildLauncherHostContext(
+  context: PluginLauncherContext,
+  renderEnvironment: PluginRenderEnvironmentContext | null,
+  userId: string | null,
+): PluginHostContext {
+  return {
+    companyId: context.companyId ?? null,
+    companyPrefix: context.companyPrefix ?? null,
+    projectId: context.projectId ?? (context.entityType === "project" ? context.entityId ?? null : null),
+    entityId: context.entityId ?? null,
+    entityType: context.entityType ?? null,
+    userId,
+    renderEnvironment,
+  };
+}
+
+function focusFirstElement(container: HTMLElement | null): void {
+  if (!container) return;
+  const firstFocusable = container.querySelector<HTMLElement>(focusableElementSelector);
+  if (firstFocusable) {
+    firstFocusable.focus();
+    return;
+  }
+  container.focus();
+}
+
+function trapFocus(container: HTMLElement, event: KeyboardEvent): void {
+  if (event.key !== "Tab") return;
+  const focusable = Array.from(
+    container.querySelectorAll<HTMLElement>(focusableElementSelector),
+  ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1);
+
+  if (focusable.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+    return;
+  }
+
+  if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function launcherTriggerClassName(placementZone: PluginLauncherPlacementZone): string {
+  switch (placementZone) {
+    case "projectSidebarItem":
+      return "justify-start h-auto px-3 py-1 text-[12px] font-normal text-muted-foreground hover:text-foreground";
+    case "contextMenuItem":
+    case "commentContextMenuItem":
+      return "justify-start h-7 w-full px-2 text-xs font-normal";
+    case "sidebar":
+    case "sidebarPanel":
+      return "justify-start h-8 w-full";
+    case "toolbarButton":
+    case "globalToolbarButton":
+      return "h-8";
+    default:
+      return "h-8";
+  }
+}
+
+function launcherShellBoundsStyle(bounds: PluginLauncherBounds | null): CSSProperties {
+  switch (bounds) {
+    case "compact":
+      return { width: "min(28rem, calc(100vw - 2rem))" };
+    case "wide":
+      return { width: "min(64rem, calc(100vw - 2rem))" };
+    case "full":
+      return { width: "calc(100vw - 2rem)", height: "calc(100vh - 2rem)" };
+    case "inline":
+      return { width: "min(24rem, calc(100vw - 2rem))" };
+    case "default":
+    default:
+      return { width: "min(40rem, calc(100vw - 2rem))" };
+  }
+}
+
+function launcherPopoverStyle(instance: LauncherInstance): CSSProperties {
+  const rect = instance.sourceRect;
+  const baseWidth = launcherShellBoundsStyle(instance.bounds).width ?? "min(24rem, calc(100vw - 2rem))";
+  if (!rect) {
+    return {
+      width: baseWidth,
+      maxHeight: "min(70vh, 36rem)",
+      top: "4rem",
+      left: "50%",
+      transform: "translateX(-50%)",
+    };
+  }
+
+  const top = Math.min(rect.bottom + 8, window.innerHeight - 32);
+  const left = Math.min(
+    Math.max(rect.left, 16),
+    Math.max(16, window.innerWidth - 360),
+  );
+
+  return {
+    width: baseWidth,
+    maxHeight: "min(70vh, 36rem)",
+    top,
+    left,
+  };
+}
+
+function isPluginLauncherBounds(value: unknown): value is PluginLauncherBounds {
+  return typeof value === "string" && supportedLauncherBounds.has(value as PluginLauncherBounds);
+}
+
+/**
+ * Discover launchers for the requested host placement zones from the normalized
+ * `/api/plugins/ui-contributions` response.
+ *
+ * This is the shared discovery path for toolbar, sidebar, detail-view, and
+ * context-menu launchers. The hook applies host-side entity filtering and
+ * returns both the sorted launcher list and a contribution map so activation
+ * can stay on cached metadata.
+ */
+export function usePluginLaunchers(
+  filters: UsePluginLaunchersFilters,
+): UsePluginLaunchersResult {
+  const queryEnabled = filters.enabled ?? true;
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.plugins.uiContributions,
+    queryFn: () => pluginsApi.listUiContributions(),
+    enabled: queryEnabled,
+  });
+
+  const placementZonesKey = useMemo(
+    () => [...filters.placementZones].sort().join("|"),
+    [filters.placementZones],
+  );
+
+  const contributionsByPluginId = useMemo(() => {
+    const byPluginId = new Map<string, PluginUiContribution>();
+    for (const contribution of data ?? []) {
+      byPluginId.set(contribution.pluginId, contribution);
+    }
+    return byPluginId;
+  }, [data]);
+
+  const launchers = useMemo(() => {
+    const placementZones = new Set(
+      placementZonesKey.split("|").filter(Boolean) as PluginLauncherPlacementZone[],
+    );
+    const rows: ResolvedPluginLauncher[] = [];
+    for (const contribution of data ?? []) {
+      for (const launcher of contribution.launchers) {
+        if (!placementZones.has(launcher.placementZone)) continue;
+        if (entityScopedZones.has(launcher.placementZone)) {
+          if (!filters.entityType) continue;
+          if (!launcher.entityTypes?.includes(filters.entityType)) continue;
+        }
+        rows.push({
+          ...launcher,
+          pluginId: contribution.pluginId,
+          pluginKey: contribution.pluginKey,
+          pluginDisplayName: contribution.displayName,
+          pluginVersion: contribution.version,
+          uiEntryFile: contribution.uiEntryFile,
+        });
+      }
+    }
+
+    rows.sort((a, b) => {
+      const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+      const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+      if (ao !== bo) return ao - bo;
+      const pluginCmp = a.pluginDisplayName.localeCompare(b.pluginDisplayName);
+      if (pluginCmp !== 0) return pluginCmp;
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    return rows;
+  }, [data, filters.entityType, placementZonesKey]);
+
+  return {
+    launchers,
+    contributionsByPluginId,
+    isLoading: queryEnabled && isLoading,
+    errorMessage: error ? getErrorMessage(error) : null,
+  };
+}
+
+async function resolveLauncherComponent(
+  contribution: PluginUiContribution,
+  launcher: ResolvedPluginLauncher,
+): Promise<RegisteredPluginComponent | null> {
+  const exportName = launcher.action.target;
+  const existing = resolveRegisteredPluginComponent(launcher.pluginKey, exportName);
+  if (existing) return existing;
+  await ensurePluginContributionLoaded(contribution);
+  return resolveRegisteredPluginComponent(launcher.pluginKey, exportName);
+}
+
+/**
+ * Scope bridge calls to the currently rendered launcher host context.
+ *
+ * Hooks such as `useHostContext()`, `usePluginData()`, and `usePluginAction()`
+ * consume this ambient context so the bridge can forward company/entity scope
+ * and render-environment metadata to the plugin worker.
+ */
+function PluginLauncherBridgeScope({
+  pluginId,
+  hostContext,
+  children,
+}: {
+  pluginId: string;
+  hostContext: PluginHostContext;
+  children: ReactNode;
+}) {
+  const value = useMemo(() => ({ pluginId, hostContext }), [pluginId, hostContext]);
+
+  return (
+    <PluginBridgeContext.Provider value={value}>
+      {children}
+    </PluginBridgeContext.Provider>
+  );
+}
+
+type LauncherErrorBoundaryProps = {
+  launcher: ResolvedPluginLauncher;
+  children: ReactNode;
+};
+
+type LauncherErrorBoundaryState = {
+  hasError: boolean;
+};
+
+class LauncherErrorBoundary extends Component<LauncherErrorBoundaryProps, LauncherErrorBoundaryState> {
+  override state: LauncherErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): LauncherErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  override componentDidCatch(error: unknown, info: ErrorInfo): void {
+    console.error("Plugin launcher render failed", {
+      pluginKey: this.props.launcher.pluginKey,
+      launcherId: this.props.launcher.id,
+      error,
+      info: info.componentStack,
+    });
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {this.props.launcher.pluginDisplayName}: failed to render
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function LauncherRenderContent({
+  instance,
+  renderEnvironment,
+}: {
+  instance: LauncherInstance;
+  renderEnvironment: PluginRenderEnvironmentContext;
+}) {
+  const component = instance.component;
+  const { data: session } = useQuery({
+    queryKey: queryKeys.auth.session,
+    queryFn: () => authApi.getSession(),
+  });
+  const userId = session?.user?.id ?? session?.session?.userId ?? null;
+  const hostContext = useMemo(
+    () => buildLauncherHostContext(instance.hostContext, renderEnvironment, userId),
+    [instance.hostContext, renderEnvironment, userId],
+  );
+
+  if (!component) {
+    if (renderEnvironment.environment === "iframe") {
+      return (
+        <iframe
+          src={`/_plugins/${encodeURIComponent(instance.launcher.pluginId)}/ui/${instance.launcher.action.target}`}
+          title={`${instance.launcher.pluginDisplayName} ${instance.launcher.displayName}`}
+          className="h-full min-h-[24rem] w-full rounded-md border border-border bg-background"
+        />
+      );
+    }
+
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+        {instance.launcher.pluginDisplayName}: could not resolve launcher target "{instance.launcher.action.target}".
+      </div>
+    );
+  }
+
+  if (component.kind === "web-component") {
+    return createElement(component.tagName, {
+      className: "block w-full",
+      pluginLauncher: instance.launcher,
+      pluginContext: hostContext,
+    });
+  }
+
+  const node = createElement(component.component as never, {
+    launcher: instance.launcher,
+    context: hostContext,
+  } as never);
+
+  return (
+    <LauncherErrorBoundary launcher={instance.launcher}>
+      <PluginLauncherBridgeScope pluginId={instance.launcher.pluginId} hostContext={hostContext}>
+        {node}
+      </PluginLauncherBridgeScope>
+    </LauncherErrorBoundary>
+  );
+}
+
+function LauncherModalShell({
+  instance,
+  stackIndex,
+  isTopmost,
+  requestBounds,
+  closeLauncher,
+}: {
+  instance: LauncherInstance;
+  stackIndex: number;
+  isTopmost: boolean;
+  requestBounds: (key: string, request: PluginModalBoundsRequest) => Promise<void>;
+  closeLauncher: (key: string, event: PluginRenderCloseEvent) => Promise<void>;
+}) {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!isTopmost) return;
+    const frame = requestAnimationFrame(() => {
+      focusFirstElement(contentRef.current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isTopmost]);
+
+  useEffect(() => {
+    if (!isTopmost) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!contentRef.current) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        void closeLauncher(instance.key, { reason: "escapeKey", nativeEvent: event });
+        return;
+      }
+      trapFocus(contentRef.current, event);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [closeLauncher, instance.key, isTopmost]);
+
+  const renderEnvironment = useMemo<PluginRenderEnvironmentContext>(() => ({
+    environment: instance.launcher.render?.environment ?? "hostOverlay",
+    launcherId: instance.launcher.id,
+    bounds: instance.bounds,
+    requestModalBounds: (request) => requestBounds(instance.key, request),
+    closeLifecycle: {
+      onBeforeClose: (handler) => {
+        instance.beforeCloseHandlers.add(handler);
+        return () => instance.beforeCloseHandlers.delete(handler);
+      },
+      onClose: (handler) => {
+        instance.closeHandlers.add(handler);
+        return () => instance.closeHandlers.delete(handler);
+      },
+    },
+  }), [instance, requestBounds]);
+
+  const baseZ = launcherOverlayBaseZIndex + stackIndex * 20;
+  // Keep each launcher in a deterministic z-index band so every stacked modal,
+  // drawer, or popover retains its own backdrop/panel pairing.
+  const shellType = instance.launcher.action.type;
+  const containerStyle = shellType === "openPopover"
+    ? launcherPopoverStyle(instance)
+    : launcherShellBoundsStyle(instance.bounds);
+
+  const panelClassName = shellType === "openDrawer"
+    ? "fixed right-0 top-0 h-full max-w-[min(44rem,100vw)] overflow-hidden border-l border-border bg-background shadow-2xl"
+    : shellType === "openPopover"
+      ? "fixed overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
+      : "fixed left-1/2 top-1/2 max-h-[calc(100vh-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-background shadow-2xl";
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 bg-black/45"
+        style={{ zIndex: baseZ }}
+        aria-hidden="true"
+        onMouseDown={(event) => {
+          if (!isTopmost) return;
+          if (event.target !== event.currentTarget) return;
+          void closeLauncher(instance.key, { reason: "backdrop", nativeEvent: event });
+        }}
+      />
+      <div
+        ref={contentRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={panelClassName}
+        style={{
+          zIndex: baseZ + 1,
+          ...(shellType === "openDrawer"
+            ? { width: containerStyle.width ?? "min(44rem, 100vw)" }
+            : containerStyle),
+        }}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <h2 id={titleId} className="truncate text-sm font-semibold">
+              {instance.launcher.displayName}
+            </h2>
+            <p className="truncate text-xs text-muted-foreground">
+              {instance.launcher.pluginDisplayName}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            onClick={() => void closeLauncher(instance.key, { reason: "programmatic" })}
+          >
+            Close
+          </Button>
+        </div>
+        <div
+          className={cn(
+            "overflow-auto p-4",
+            shellType === "openDrawer" ? "h-[calc(100%-3.5rem)]" : "max-h-[calc(100vh-7rem)]",
+          )}
+        >
+          <LauncherRenderContent instance={instance} renderEnvironment={renderEnvironment} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function PluginLauncherProvider({ children }: { children: ReactNode }) {
+  const [stack, setStack] = useState<LauncherInstance[]>([]);
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const closeLauncher = useCallback(
+    async (key: string, event: PluginRenderCloseEvent) => {
+      const instance = stackRef.current.find((entry) => entry.key === key);
+      if (!instance) return;
+
+      for (const handler of [...instance.beforeCloseHandlers]) {
+        await handler(event);
+      }
+
+      setStack((current) => current.filter((entry) => entry.key !== key));
+
+      queueMicrotask(() => {
+        for (const handler of [...instance.closeHandlers]) {
+          void handler(event);
+        }
+        if (instance.sourceElement && document.contains(instance.sourceElement)) {
+          instance.sourceElement.focus();
+        }
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (stack.length === 0) return;
+    void Promise.all(
+      stack.map((entry) => closeLauncher(entry.key, { reason: "hostNavigation" })),
+    );
+    // Only react to navigation changes, not stack churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
+
+  const requestBounds = useCallback(
+    async (key: string, request: PluginModalBoundsRequest) => {
+      // Bounds changes are host-validated. Unsupported presets are ignored so
+      // plugin UI cannot push the shell into an undefined layout state.
+      if (!isPluginLauncherBounds(request.bounds)) {
+        return;
+      }
+      setStack((current) =>
+        current.map((entry) =>
+          entry.key === key
+            ? { ...entry, bounds: request.bounds }
+            : entry,
+        ),
+      );
+    },
+    [],
+  );
+
+  const activateLauncher = useCallback(
+    async (
+      launcher: ResolvedPluginLauncher,
+      hostContext: PluginLauncherContext,
+      contribution: PluginUiContribution,
+      sourceEl?: HTMLElement | null,
+    ) => {
+      switch (launcher.action.type) {
+        case "navigate":
+          navigate(launcher.action.target);
+          return;
+        case "deepLink":
+          if (/^https?:\/\//.test(launcher.action.target)) {
+            window.open(launcher.action.target, "_blank", "noopener,noreferrer");
+          } else {
+            navigate(launcher.action.target);
+          }
+          return;
+        case "performAction":
+          await pluginsApi.bridgePerformAction(
+            launcher.pluginId,
+            launcher.action.target,
+            launcher.action.params,
+            hostContext.companyId ?? null,
+          );
+          return;
+        case "openModal":
+        case "openDrawer":
+        case "openPopover": {
+          const component = await resolveLauncherComponent(contribution, launcher);
+          const sourceRect = sourceEl?.getBoundingClientRect() ?? null;
+          const nextEntry: LauncherInstance = {
+            key: `${launcher.pluginId}:${launcher.id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+            launcher,
+            hostContext,
+            contribution,
+            component,
+            sourceElement: sourceEl ?? null,
+            sourceRect,
+            bounds: launcher.render?.bounds ?? "default",
+            beforeCloseHandlers: new Set(),
+            closeHandlers: new Set(),
+          };
+          setStack((current) => [...current, nextEntry]);
+          return;
+        }
+      }
+    },
+    [navigate],
+  );
+
+  const value = useMemo<PluginLauncherRuntimeContextValue>(
+    () => ({ activateLauncher }),
+    [activateLauncher],
+  );
+
+  return (
+    <PluginLauncherRuntimeContext.Provider value={value}>
+      {children}
+      {stack.map((instance, index) => (
+        <LauncherModalShell
+          key={instance.key}
+          instance={instance}
+          stackIndex={index}
+          isTopmost={index === stack.length - 1}
+          requestBounds={requestBounds}
+          closeLauncher={closeLauncher}
+        />
+      ))}
+    </PluginLauncherRuntimeContext.Provider>
+  );
+}
+
+export function usePluginLauncherRuntime(): PluginLauncherRuntimeContextValue {
+  const value = useContext(PluginLauncherRuntimeContext);
+  if (!value) {
+    throw new Error("usePluginLauncherRuntime must be used within PluginLauncherProvider");
+  }
+  return value;
+}
+
+function DefaultLauncherTrigger({
+  launcher,
+  placementZone,
+  onClick,
+}: {
+  launcher: ResolvedPluginLauncher;
+  placementZone: PluginLauncherPlacementZone;
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant={placementZone === "toolbarButton" || placementZone === "globalToolbarButton" ? "outline" : "ghost"}
+      size="sm"
+      className={launcherTriggerClassName(placementZone)}
+      onClick={onClick}
+    >
+      {launcher.displayName}
+    </Button>
+  );
+}
+
+type PluginLauncherOutletProps = {
+  placementZones: PluginLauncherPlacementZone[];
+  context: PluginLauncherContext;
+  entityType?: PluginUiSlotEntityType | null;
+  className?: string;
+  itemClassName?: string;
+  errorClassName?: string;
+};
+
+export function PluginLauncherOutlet({
+  placementZones,
+  context,
+  entityType,
+  className,
+  itemClassName,
+  errorClassName,
+}: PluginLauncherOutletProps) {
+  const { activateLauncher } = usePluginLauncherRuntime();
+  const { launchers, contributionsByPluginId, errorMessage } = usePluginLaunchers({
+    placementZones,
+    entityType,
+    companyId: context.companyId,
+    enabled: !!context.companyId,
+  });
+
+  if (errorMessage) {
+    return (
+      <div className={cn("rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive", errorClassName)}>
+        Plugin launchers unavailable: {errorMessage}
+      </div>
+    );
+  }
+
+  if (launchers.length === 0) return null;
+
+  return (
+    <div className={className}>
+      {launchers.map((launcher) => (
+        <div key={`${launcher.pluginKey}:${launcher.id}`} className={itemClassName}>
+          <DefaultLauncherTrigger
+            launcher={launcher}
+            placementZone={launcher.placementZone}
+            onClick={(event) => {
+              const contribution = contributionsByPluginId.get(launcher.pluginId);
+              if (!contribution) return;
+              void activateLauncher(launcher, context, contribution, event.currentTarget);
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type PluginLauncherButtonProps = {
+  launcher: ResolvedPluginLauncher;
+  context: PluginLauncherContext;
+  contribution: PluginUiContribution;
+  className?: string;
+  onActivated?: () => void;
+};
+
+export function PluginLauncherButton({
+  launcher,
+  context,
+  contribution,
+  className,
+  onActivated,
+}: PluginLauncherButtonProps) {
+  const { activateLauncher } = usePluginLauncherRuntime();
+
+  return (
+    <div className={className}>
+      <DefaultLauncherTrigger
+        launcher={launcher}
+        placementZone={launcher.placementZone}
+        onClick={(event) => {
+          event.preventDefault();
+          onActivated?.();
+          void activateLauncher(launcher, context, contribution, event.currentTarget);
+        }}
+      />
+    </div>
+  );
+}
+----- END launchers.tsx -----
+
+--- G. IssueDetail.tsx ΓÇö only PluginHostContext / companyPrefix / detailTab / context= related lines ---
+335:      companyId: "",
+593:  companyId: string;
+656:  companyId,
+870:        companyId={companyId}
+923:  companyId: string;
+940:  companyId,
+1126:          companyId={companyId}
+1199:  const [detailTab, setDetailTab] = useState("chat");
+1240:  const resolvedCompanyId = issue?.companyId ?? selectedCompanyId;
+1276:        activeDetailTab: detailTab,
+1283:    [comments.length, commentsLoading, commentsLoadingOlder, detailTab, hasOlderComments],
+1375:    && boardAccess?.companyIds?.includes(selectedCompanyId),
+1392:    companyId: selectedCompanyId,
+1396:    slotTypes: ["detailTab"],
+1398:    companyId: resolvedCompanyId,
+1409:  const activePluginTab = issuePluginTabItems.find((item) => item.value === detailTab) ?? null;
+1922:            companyId: issue.companyId,
+2144:            companyId: issue.companyId,
+2719:    if (detailTab !== "chat") return;
+2721:  }, [detailTab, pendingCommentComposerFocusKey]);
+3513:        context={{
+3514:          companyId: issue.companyId,
+3527:        context={{
+3528:          companyId: issue.companyId,
+3540:        context={{
+3541:          companyId: issue.companyId,
+3757:      <Tabs value={detailTab} onValueChange={setDetailTab} className="space-y-3">
+3779:          {detailTab === "chat" ? (
+3782:              companyId={issue.companyId}
+3844:          {detailTab === "activity" ? (
+3848:              companyId={issue.companyId}
+3874:              context={{
+3875:                companyId: issue.companyId,
+
+--- H. App.tsx route tree around :companyPrefix (lines 300-360) ---
+          <Route path="projects" element={<UnprefixedBoardRedirect />} />
+          <Route path="projects/:projectId" element={<UnprefixedBoardRedirect />} />
+          <Route path="projects/:projectId/overview" element={<UnprefixedBoardRedirect />} />
+          <Route path="projects/:projectId/issues" element={<UnprefixedBoardRedirect />} />
+          <Route path="projects/:projectId/issues/:filter" element={<UnprefixedBoardRedirect />} />
+          <Route path="projects/:projectId/workspaces" element={<UnprefixedBoardRedirect />} />
+          <Route path="projects/:projectId/workspaces/:workspaceId" element={<UnprefixedBoardRedirect />} />
+          <Route path="projects/:projectId/configuration" element={<UnprefixedBoardRedirect />} />
+          <Route path="workspaces" element={<UnprefixedBoardRedirect />} />
+          <Route path="execution-workspaces/:workspaceId" element={<UnprefixedBoardRedirect />} />
+          <Route path="execution-workspaces/:workspaceId/services" element={<UnprefixedBoardRedirect />} />
+          <Route path="execution-workspaces/:workspaceId/configuration" element={<UnprefixedBoardRedirect />} />
+          <Route path="execution-workspaces/:workspaceId/runtime-logs" element={<UnprefixedBoardRedirect />} />
+          <Route path="execution-workspaces/:workspaceId/issues" element={<UnprefixedBoardRedirect />} />
+          <Route path="execution-workspaces/:workspaceId/routines" element={<UnprefixedBoardRedirect />} />
+          <Route path=":companyPrefix" element={<Layout />}>
+            {boardRoutes()}
+          </Route>
+          <Route path="*" element={<NotFoundPage scope="global" />} />
+        </Route>
+      </Routes>
+      <OnboardingWizard />
+    </>
+  );
+}
+
+--- I. plugin-installed clarity-pack manifest snapshot from DB ---
+(no DBURL captured ΓÇö sudo prompt may be cached or denied)
+
+=== PROBE 2 END ===
