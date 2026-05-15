@@ -227,8 +227,8 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | ROOM-06 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | ROOM-07 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | ROOM-08 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
-| BULL-01 | Phase 3 | Pending |
-| BULL-02 | Phase 3 | Pending |
+| BULL-01 | Phase 3 | In Progress — DST kernel (computeNextDueAt + 4 DST CI fixtures) delivered by Plan 03-01 2026-05-15; end-to-end DST CI matrix completes in Plan 03-04 |
+| BULL-02 | Phase 3 | In Progress — idempotency foundation (UNIQUE(next_due_at,content_hash), no-op compile gate, self-loop bulletin-tag filter) delivered by Plan 03-01 2026-05-15; publish atomicity completes in Plan 03-02 |
 | BULL-03 | Phase 3 | Pending |
 | BULL-04 | Phase 3 | Pending |
 | BULL-05 | Phase 3 | Pending |
