@@ -60,6 +60,19 @@ import {
   registerCompileBulletinJob,
   type CompileBulletinCtx,
 } from './worker/jobs/compile-bulletin.ts';
+// Plan 03-03 — Bulletin UI data + action handlers.
+import {
+  registerBulletinByCycle,
+  type BulletinByCycleCtx,
+} from './worker/handlers/bulletin-by-cycle.ts';
+import {
+  registerBulletinActionApprove,
+  type BulletinActionApproveCtx,
+} from './worker/handlers/bulletin-action-approve.ts';
+import {
+  registerBulletinActionDecline,
+  type BulletinActionDeclineCtx,
+} from './worker/handlers/bulletin-action-decline.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -98,6 +111,14 @@ const plugin = definePlugin({
     // job itself runs the two-pass compile pipeline in Plan 03-02; the Wave-1
     // skeleton only reads next_due_at and no-ops when not yet due.
     registerCompileBulletinJob(ctx as unknown as CompileBulletinCtx);
+
+    // ---- Plan 03-03 — Bulletin UI + Action Inbox handlers -------------------
+    // bulletin.byCycle is the page's data handler; bulletin.action.approve /
+    // bulletin.action.decline are the Action Inbox card bridge actions. All
+    // three are opt-in-guard wrapped.
+    registerBulletinByCycle(ctx as unknown as BulletinByCycleCtx);
+    registerBulletinActionApprove(ctx as unknown as BulletinActionApproveCtx);
+    registerBulletinActionDecline(ctx as unknown as BulletinActionDeclineCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
