@@ -11,20 +11,25 @@
 // single <style data-clarity-pack-styles> element on first module load.
 
 import themeCss from './primitives/theme.css';
+// Plan 03-03 — bulletin surface stylesheet. Same DEV-14 runtime-inject path:
+// the host does NOT auto-load sibling CSS, so the bundle injects its own
+// <style>. bulletin.css is fully scoped to [data-clarity-surface="bulletin"].
+import bulletinCss from './styles/bulletin.css';
 
-function injectClarityStyles(css: string): void {
+function injectClarityStyles(css: string, marker: string): void {
   if (typeof document === 'undefined') return;
-  if (document.querySelector('style[data-clarity-pack-styles]')) return;
+  if (document.querySelector(`style[${marker}]`)) return;
   const style = document.createElement('style');
-  style.setAttribute('data-clarity-pack-styles', '');
+  style.setAttribute(marker, '');
   style.textContent = css;
   document.head.appendChild(style);
 }
 
-injectClarityStyles(themeCss);
+injectClarityStyles(themeCss, 'data-clarity-pack-styles');
+injectClarityStyles(bulletinCss, 'data-clarity-pack-bulletin-styles');
 
 export { ReaderView } from './surfaces/reader/index.tsx';
 export { SituationRoom } from './surfaces/situation-room/index.tsx';
-export { BulletinPage } from './surfaces/bulletin-stub.tsx';
+export { BulletinPage } from './surfaces/bulletin/index.tsx';
 export { ChatPage } from './surfaces/chat-stub.tsx';
 export { SettingsPage } from './surfaces/settings/index.tsx';

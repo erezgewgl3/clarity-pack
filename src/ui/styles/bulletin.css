@@ -1,0 +1,502 @@
+/* src/ui/styles/bulletin.css
+ *
+ * Plan 03-03 — Daily Bulletin surface stylesheet (SCAF-06 / COEXIST-01).
+ *
+ * EVERY rule selector is prefixed [data-clarity-surface="bulletin"] so plugin
+ * CSS cannot bleed onto the host page. Warm-paper editorial palette + Fraunces
+ * (display) / Newsreader (body) / JetBrains Mono (meta) fonts. Visual contract:
+ * sketches/paperclip-fix-bulletin.html.
+ *
+ * The leading @import pulls the three font families from Google Fonts —
+ * matches sketch line 9. This is a font load, NOT a host-CSS coupling.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Newsreader:opsz,wght,ital@6..72,200..800,0;6..72,200..800,1&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+/* ---- Scope root: warm-paper palette + base typography ---- */
+[data-clarity-surface="bulletin"] {
+  --paper: #f4efe3;
+  --paper-2: #ede6d4;
+  --ink: #15120d;
+  --ink-2: #3a332a;
+  --muted: #7e7363;
+  --rule: #c7bca3;
+  --rule-soft: #d9cfb7;
+  --terracotta: #a33d2a;
+  --terracotta-soft: #e9cfc2;
+  --moss: #3f5a3a;
+  --gold: #9b7b2d;
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--paper);
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 36px 56px 80px;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-clarity-surface="bulletin"] * {
+  box-sizing: border-box;
+}
+
+/* ---- Loading / error / first-edition states ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-loading,
+[data-clarity-surface="bulletin"] .clarity-bulletin-error {
+  padding: 28px 4px;
+  font-family: "Newsreader", Georgia, serif;
+  font-style: italic;
+  color: var(--muted);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-error {
+  color: var(--terracotta);
+  border-left: 3px solid var(--terracotta);
+  padding-left: 14px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-first-edition {
+  padding: 40px 0;
+}
+
+/* ---- Masthead ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-masthead {
+  border-top: 3px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  padding: 14px 0 18px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 24px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-masthead-left,
+[data-clarity-surface="bulletin"] .clarity-bulletin-masthead-right {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-masthead-right {
+  text-align: right;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-masthead-title {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 78px;
+  letter-spacing: -0.02em;
+  line-height: 0.92;
+  text-align: center;
+  margin: 0;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-masthead-title-em {
+  font-style: italic;
+  font-weight: 400;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-sub-mast {
+  border-bottom: 3px double var(--ink);
+  padding: 8px 0 10px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-sub-mast-cycle {
+  text-align: right;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-sub-mast-editor em {
+  font-family: "Newsreader", serif;
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+/* ---- Action Inbox ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-inbox {
+  margin: 6px 0 30px;
+  border: 1px solid var(--ink);
+  background: linear-gradient(180deg, #f8f2e0 0%, #f4efe3 100%);
+  box-shadow: 0 1px 0 var(--ink), 4px 4px 0 var(--ink);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-head-h2 {
+  font-family: "Fraunces", serif;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  margin: 0;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: #d8cdb4;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-card {
+  padding: 24px 26px;
+  border-right: 1px solid var(--rule);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-card:last-child {
+  border-right: none;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-dept-tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--terracotta);
+  font-weight: 600;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-time {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-action-card-h3 {
+  font-family: "Fraunces", serif;
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1.18;
+  margin: 4px 0 10px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-summary {
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin-bottom: 18px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-btn {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+  padding: 10px 16px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-btn-secondary {
+  background: transparent;
+  color: var(--ink);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-btn-ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  padding: 10px 4px;
+}
+
+/* ---- Main two-column layout ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-main {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 48px;
+  align-items: start;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-department-section {
+  margin-bottom: 36px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-ops-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-ops-head-h2 {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 22px;
+  margin: 0;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-ops-meta {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-editorial {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 16px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-dropcap::first-letter {
+  font-family: "Fraunces", serif;
+  font-weight: 700;
+  float: left;
+  font-size: 54px;
+  line-height: 0.85;
+  padding: 6px 8px 0 0;
+  color: var(--terracotta);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-item {
+  padding: 14px 0 18px;
+  border-bottom: 1px dotted var(--rule);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 24px;
+  align-items: start;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-item:last-child {
+  border-bottom: none;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-item-title {
+  font-family: "Fraunces", serif;
+  font-weight: 500;
+  font-size: 19px;
+  line-height: 1.25;
+  grid-column: 1 / 2;
+  margin: 0;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-item-ts {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+  grid-column: 2 / 3;
+  text-align: right;
+  white-space: nowrap;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-item-by {
+  grid-column: 1 / 3;
+  font-family: "Newsreader", serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-item-lineage {
+  grid-column: 1 / 3;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-item-note {
+  grid-column: 1 / 3;
+  font-size: 14.5px;
+  color: var(--ink-2);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-quiet {
+  padding: 18px 0;
+  text-align: center;
+  font-family: "Newsreader", serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ---- Right rail — Standing Numbers panel ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-rail {
+  position: sticky;
+  top: 24px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-panel {
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+  padding: 18px 20px 22px;
+  margin-bottom: 20px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-panel-h2 {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 8px;
+  margin: 0 0 14px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-stat {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px dotted var(--rule);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-stat:last-child {
+  border-bottom: none;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-stat-k {
+  font-family: "Newsreader", serif;
+  font-size: 14px;
+  color: var(--ink-2);
+  font-style: italic;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-stat-v {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Lineage footer — 8-column thread grid ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-lineage-foot {
+  margin-top: 48px;
+  border-top: 3px double var(--ink);
+  padding-top: 22px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-lineage-foot-h2 {
+  font-family: "Fraunces", serif;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0 0 18px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 14px;
+  align-items: start;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  margin-bottom: 20px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  position: relative;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node + .clarity-bulletin-node::before {
+  content: "→";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-2);
+  font-weight: 700;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node-time {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node-name {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+  margin: 4px 0 2px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node-detail {
+  font-size: 10px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node-terminal {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node-terminal .clarity-bulletin-node-time,
+[data-clarity-surface="bulletin"] .clarity-bulletin-node-terminal .clarity-bulletin-node-detail {
+  color: #c9bfa8;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node-terminal .clarity-bulletin-node-name {
+  color: var(--paper);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-node-more {
+  background: transparent;
+  border-style: dashed;
+}
+
+/* ---- Colophon ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-colophon {
+  margin-top: 42px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-colophon em {
+  font-family: "Newsreader", serif;
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+/* ---- Responsive — collapse to single column (mirrors sketch ll. 223-231) ---- */
+@media (max-width: 1100px) {
+  [data-clarity-surface="bulletin"] {
+    padding: 24px 20px 60px;
+  }
+  [data-clarity-surface="bulletin"] .clarity-bulletin-main {
+    grid-template-columns: 1fr;
+  }
+  [data-clarity-surface="bulletin"] .clarity-bulletin-rail {
+    position: static;
+  }
+  [data-clarity-surface="bulletin"] .clarity-bulletin-action-grid {
+    grid-template-columns: 1fr;
+  }
+  [data-clarity-surface="bulletin"] .clarity-bulletin-action-card {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+  [data-clarity-surface="bulletin"] .clarity-bulletin-action-card:last-child {
+    border-bottom: none;
+  }
+  [data-clarity-surface="bulletin"] .clarity-bulletin-thread {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  [data-clarity-surface="bulletin"] .clarity-bulletin-masthead-title {
+    font-size: 54px;
+  }
+}

@@ -43,6 +43,9 @@ import { verifyDraft } from '../bulletin/bulletin-verifier.ts';
 import { publishBulletin } from '../bulletin/publish.ts';
 import { recordFailure, recordSuccess, BULLETIN_COMPILE_AGENT_KEY } from '../agents/circuit-breaker.ts';
 import { EDITOR_AGENT_ID_TAG } from '../agents/compile-tldr.ts';
+// Plan 03-03 — cycle-start department reconcile + deterministic lineage build.
+import { reconcileDepartments } from '../bulletin/department-reconcile.ts';
+import { groupLineageThreads, type ActivityEvent } from '../bulletin/lineage-grouper.ts';
 import type { BulletinDraft, StandingNumberRow } from '../../shared/types.ts';
 
 /** Editor-Agent manifest key — used for ctx.agents.managed.reconcile. */
@@ -150,6 +153,60 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         );
         const cycleNumber = (maxRows[0]?.max_cycle ?? 0) + 1;
 
+        // ---- Plan 03-03 — Cycle-start reconcile + lineage build ----
+        // 1a. Reconcile department membership (idempotent — ON CONFLICT DO
+        //     NOTHING keeps manual overrides). Best-effort; a failure here is
+        //     warned inside reconcileDepartments and never aborts the compile.
+        await reconcileDepartments(ctx, company.id);
+
+        // 1b. Build deterministic lineage threads from recent activity. The SDK
+        //     has no list-activities-by-time-window tool and no
+        //     `caused_by_activity_id` field (03-RESEARCH.md Q3/Q4), so v1
+        //     derives activity events from issues updated in the cycle window
+        //     (last 24h).
+        //
+        //     W5 (deviation_protocol #7, RESOLVED): `Issue.lastActorId` /
+        //     `lastActorName` are NOT fields on the SDK `Issue` type — a grep of
+        //     node_modules/@paperclipai/plugin-sdk/dist/types.d.ts finds zero
+        //     matches. Relying on a cast to `lastActorId` would collapse every
+        //     activity to a single 'unknown' actor and produce one giant
+        //     cluster. The documented fallback is the confirmed `assigneeUserId`
+        //     field as the actor key (and the issue title as the display name).
+        const lineageActivities: ActivityEvent[] = [];
+        try {
+          const cycleWindowMs = 24 * 60 * 60 * 1000;
+          const recentIssues = (await ctx.issues.list({
+            companyId: company.id,
+          })) as unknown as Array<{
+            id: string;
+            title?: string;
+            updatedAt?: string | Date;
+            assigneeUserId?: string | null;
+          }>;
+          for (const i of recentIssues ?? []) {
+            if (!i.updatedAt) continue;
+            const updatedIso =
+              i.updatedAt instanceof Date ? i.updatedAt.toISOString() : String(i.updatedAt);
+            if (now.getTime() - new Date(updatedIso).getTime() > cycleWindowMs) continue;
+            lineageActivities.push({
+              id: `${i.id}-${updatedIso}`,
+              entityId: i.id,
+              // W5: confirmed field — assigneeUserId — as the actor key.
+              actorId: i.assigneeUserId ?? 'unassigned',
+              timestamp: updatedIso,
+              message: i.title ?? '(untitled issue)',
+              name: i.title ?? 'Agent',
+              detail: i.title ?? '',
+            });
+          }
+        } catch (e) {
+          ctx.logger?.warn?.('compile-bulletin: lineage activities fetch failed', {
+            companyId: company.id,
+            err: (e as Error).message,
+          });
+        }
+        const lineageThreads = groupLineageThreads(lineageActivities, { maxDeltaSec: 300 });
+
         // 2. Compute standing numbers (verified-numerics pre-LLM).
         let standingValues: Record<string, number>;
         try {
@@ -222,13 +279,23 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           continue;
         }
 
+        // Plan 03-03 — override the draft's lineageThreads with the
+        // deterministically-grouped threads. The LLM may emit an empty
+        // lineageThreads array; the verified, pure-code threads are the
+        // authoritative source (BULL-04 / D-21).
+        const draftWithLineage: BulletinDraft = {
+          ...draft,
+          lineageThreads:
+            lineageThreads.length > 0 ? lineageThreads : draft.lineageThreads ?? [],
+        };
+
         // 6. Publish — two-phase write.
         const publishResult = await publishBulletin(ctx, {
           companyId: company.id,
           cycleNumber,
           nextDueAtIso,
           editorAgentId,
-          draft,
+          draft: draftWithLineage,
           compiledAt: now,
         });
 
