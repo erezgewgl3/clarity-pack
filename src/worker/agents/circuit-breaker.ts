@@ -24,6 +24,14 @@
 /** D-06 locked: 3 consecutive failures trigger pause. */
 export const MAX_CONSECUTIVE_FAILURES = 3;
 
+/**
+ * Plan 03-02 — Separate counter key so bulletin-compile failures track
+ * independently from compile-tldr's. A bulletin LLM outage must NOT pause
+ * TL;DR compiles (governance parity per D-06): each agentKey owns its own
+ * consecutive-failure counter in the per-process map.
+ */
+export const BULLETIN_COMPILE_AGENT_KEY = 'bulletin-compile';
+
 // Per-worker-process counter. Test code calls resetCircuitBreakerState() to
 // isolate tests. Production code lets the map grow naturally — keys are
 // short (agentKey strings) so memory pressure is nil.
