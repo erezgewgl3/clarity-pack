@@ -8,6 +8,7 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
 import { publishBulletin } from '../../../src/worker/bulletin/publish.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 function wellFormedDraft() {
   return {
@@ -51,6 +52,7 @@ function makeCtx({ issuesCreateThrows = false, issuesCreateNull = false, duplica
       },
     },
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
   return { ctx, callOrder, issuesArgs };
 }
 

@@ -13,6 +13,7 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
 import { registerBulletinByCycle } from '../../../src/worker/handlers/bulletin-by-cycle.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 function stubDraft() {
   return {
@@ -33,7 +34,7 @@ function makeCtx({
   inboxIssues = [],
 } = {}) {
   const handlers = new Map();
-  return {
+  const ctx = {
     logger: { warn() {}, info() {} },
     data: {
       register(key, fn) {
@@ -71,6 +72,8 @@ function makeCtx({
     },
     _handlers: handlers,
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
+  return ctx;
 }
 
 function publishedRow(over = {}) {

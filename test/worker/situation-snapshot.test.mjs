@@ -14,6 +14,7 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
 import { registerSituationSnapshotJob } from '../../src/worker/jobs/situation-snapshot.ts';
+import { wrapHostFaithfulDb } from '../helpers/host-faithful-db.mjs';
 
 function makeJobCtx({ activeViewerCount = 1, companies = [], employees = {} } = {}) {
   const dbCalls = [];
@@ -60,6 +61,7 @@ function makeJobCtx({ activeViewerCount = 1, companies = [], employees = {} } = 
       },
     },
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
   return { ctx, dbCalls, jobs };
 }
 

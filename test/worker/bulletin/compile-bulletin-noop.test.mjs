@@ -18,6 +18,7 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
 import { registerCompileBulletinJob } from '../../../src/worker/jobs/compile-bulletin.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 // Build a fake job ctx. `nextDueByCompany` maps companyId -> ISO string (or
 // null). `query` returns next_due_at rows for getNextDueAtForCompany;
@@ -71,6 +72,7 @@ function makeCtx({ companies = [], nextDueByCompany = {}, throwForCompany = null
       async createComment() { return { id: 'comment-x' }; },
     },
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
   return { ctx, dbCalls, jobs, issuesCreated };
 }
 

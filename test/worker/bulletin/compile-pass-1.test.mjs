@@ -14,6 +14,7 @@ import {
   MAX_BULLETIN_TOKENS,
 } from '../../../src/worker/bulletin/compile-pass-1.ts';
 import { resetCircuitBreakerState } from '../../../src/worker/agents/circuit-breaker.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 function makeCtx() {
   const failures = [];
@@ -29,6 +30,7 @@ function makeCtx() {
       },
     },
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
   return { ctx, failures };
 }
 

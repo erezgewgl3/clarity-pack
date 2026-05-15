@@ -11,6 +11,7 @@ import {
   STANDING_NUMBER_SLOTS,
   computeStandingNumbers,
 } from '../../../src/worker/bulletin/standing-numbers.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 test('standing-numbers: registry has exactly 5 slots', () => {
   assert.equal(STANDING_NUMBER_SLOTS.length, 5);
@@ -49,12 +50,12 @@ test('standing-numbers: every slot format is one of the four NumberFormat values
 test('standing-numbers: computeStandingNumbers calls db.query once per slot with companyId as $1', async () => {
   const calls = [];
   const ctx = {
-    db: {
+    db: wrapHostFaithfulDb({
       async query(sql, params) {
         calls.push({ sql, params });
         return [{ value: 7 }];
       },
-    },
+    }),
   };
   await computeStandingNumbers(ctx, 'company-1');
   assert.equal(calls.length, 5);
@@ -65,11 +66,11 @@ test('standing-numbers: computeStandingNumbers calls db.query once per slot with
 
 test('standing-numbers: computeStandingNumbers returns a Record with all 5 keys from each query first row', async () => {
   const ctx = {
-    db: {
+    db: wrapHostFaithfulDb({
       async query() {
         return [{ value: 42 }];
       },
-    },
+    }),
   };
   const out = await computeStandingNumbers(ctx, 'company-1');
   assert.deepEqual(

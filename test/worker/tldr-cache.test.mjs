@@ -15,6 +15,7 @@ import {
   upsertTldr,
   getTldrByScope,
 } from '../../src/worker/db/tldr-cache.ts';
+import { wrapHostFaithfulDb } from '../helpers/host-faithful-db.mjs';
 
 function makeFakeDbCtx(initialRows = []) {
   const calls = [];
@@ -51,6 +52,7 @@ function makeFakeDbCtx(initialRows = []) {
       },
     },
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
   return { ctx, calls, rows };
 }
 

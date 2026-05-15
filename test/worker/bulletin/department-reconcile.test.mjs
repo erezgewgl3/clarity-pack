@@ -15,6 +15,7 @@ import {
   reconcileDepartments,
   deriveDepartmentForAgent,
 } from '../../../src/worker/bulletin/department-reconcile.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 test('deriveDepartmentForAgent: Sales role → Sales', () => {
   assert.equal(deriveDepartmentForAgent({ role: 'Sales Cold Email' }), 'Sales');
@@ -48,7 +49,7 @@ function makeCtx({ agents = [], existing = {}, listThrows = false } = {}) {
   const table = new Map(Object.entries(existing)); // key `${company}:${user}` -> row
   const upserts = [];
   let listCalls = 0;
-  return {
+  const ctx = {
     logger: { warn() {} },
     agents: {
       async list() {
@@ -82,6 +83,8 @@ function makeCtx({ agents = [], existing = {}, listThrows = false } = {}) {
       return listCalls;
     },
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
+  return ctx;
 }
 
 test('reconcileDepartments: calls agents.list once and UPSERTs each agent with source=reconcile', async () => {

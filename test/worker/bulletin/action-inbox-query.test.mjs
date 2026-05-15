@@ -14,6 +14,7 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
 import { queryActionInbox } from '../../../src/worker/bulletin/action-inbox-query.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -22,7 +23,7 @@ const DAY = 24 * HOUR;
 // is the clarity_department_membership rows; `listThrows` makes issues.list reject.
 function makeCtx({ issues = [], memberships = [], listThrows = false } = {}) {
   const warnCalls = [];
-  return {
+  const ctx = {
     logger: { warn: (...a) => warnCalls.push(a) },
     issues: {
       async list() {
@@ -38,6 +39,8 @@ function makeCtx({ issues = [], memberships = [], listThrows = false } = {}) {
     },
     _warnCalls: warnCalls,
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
+  return ctx;
 }
 
 const NOW = new Date('2026-05-15T12:00:00.000Z');

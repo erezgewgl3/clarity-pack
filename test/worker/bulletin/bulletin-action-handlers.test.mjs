@@ -18,6 +18,7 @@ import test from 'node:test';
 
 import { registerBulletinActionApprove } from '../../../src/worker/handlers/bulletin-action-approve.ts';
 import { registerBulletinActionDecline } from '../../../src/worker/handlers/bulletin-action-decline.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 // makeCtx registers action handlers into a map. `assignee` is the
 // assigneeUserId of the issue ctx.issues.get returns; `issueExists` controls
@@ -25,7 +26,7 @@ import { registerBulletinActionDecline } from '../../../src/worker/handlers/bull
 function makeCtx({ optedIn = true, assignee = 'user-eric', issueExists = true } = {}) {
   const handlers = new Map();
   const updateCalls = [];
-  return {
+  const ctx = {
     logger: { warn() {}, info() {} },
     actions: {
       register(key, fn) {
@@ -55,6 +56,8 @@ function makeCtx({ optedIn = true, assignee = 'user-eric', issueExists = true } 
     _handlers: handlers,
     _updateCalls: updateCalls,
   };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
+  return ctx;
 }
 
 test('action handlers: keys are bulletin.action.approve and bulletin.action.decline', () => {

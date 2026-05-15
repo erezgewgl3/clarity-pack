@@ -10,6 +10,7 @@ import test from 'node:test';
 
 import { registerCompileBulletinJob } from '../../../src/worker/jobs/compile-bulletin.ts';
 import { resetCircuitBreakerState } from '../../../src/worker/agents/circuit-breaker.ts';
+import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 const JOB_EVENT = {
   jobKey: 'compile-bulletin',
@@ -184,6 +185,11 @@ function makeFakeCtx({
       async createComment() { return { id: 'comment-x' }; },
     },
   };
+  // Enforce the real host's query/execute contract: a write-via-query (or a
+  // select-via-execute / DDL-via-execute) now throws in `node --test`, exactly
+  // as the live Paperclip host would. The 2026-05-15 drill's INSERT-via-query
+  // bug would have failed `pnpm test` here instead of on a VPS reinstall.
+  ctx.db = wrapHostFaithfulDb(ctx.db);
   return { ctx, bulletins, issuesCreated, failures, jobs, resumeCalls };
 }
 

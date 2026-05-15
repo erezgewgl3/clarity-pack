@@ -13,34 +13,37 @@ import test from 'node:test';
 
 import { registerSituationRoomHandlers } from '../../src/worker/handlers/situation-room.ts';
 import { registerActiveViewerPing } from '../../src/worker/handlers/active-viewer-ping.ts';
+import { wrapHostFaithfulDb } from '../helpers/host-faithful-db.mjs';
 
 function makeCtx({ snapshotRow = null, optedIn = true } = {}) {
   const dataRegistry = new Map();
   const actionRegistry = new Map();
   const dbCalls = [];
-  return {
-    ctx: {
-      logger: { info() {}, warn() {}, error() {}, debug() {} },
-      data: { register(k, fn) { dataRegistry.set(k, fn); } },
-      actions: { register(k, fn) { actionRegistry.set(k, fn); } },
-      db: {
-        namespace: 'plugin_clarity_pack_cdd6bda4bd',
-        async query(sql, params) {
-          dbCalls.push({ kind: 'query', sql, params });
-          if (/clarity_user_prefs/.test(sql)) {
-            return optedIn ? [{ opted_in_at: '2026-05-14T08:00:00Z' }] : [];
-          }
-          if (/situation_snapshots/.test(sql)) {
-            return snapshotRow ? [snapshotRow] : [];
-          }
-          return [];
-        },
-        async execute(sql, params) {
-          dbCalls.push({ kind: 'execute', sql, params });
-          return { rowCount: 1 };
-        },
+  const ctx = {
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    data: { register(k, fn) { dataRegistry.set(k, fn); } },
+    actions: { register(k, fn) { actionRegistry.set(k, fn); } },
+    db: {
+      namespace: 'plugin_clarity_pack_cdd6bda4bd',
+      async query(sql, params) {
+        dbCalls.push({ kind: 'query', sql, params });
+        if (/clarity_user_prefs/.test(sql)) {
+          return optedIn ? [{ opted_in_at: '2026-05-14T08:00:00Z' }] : [];
+        }
+        if (/situation_snapshots/.test(sql)) {
+          return snapshotRow ? [snapshotRow] : [];
+        }
+        return [];
+      },
+      async execute(sql, params) {
+        dbCalls.push({ kind: 'execute', sql, params });
+        return { rowCount: 1 };
       },
     },
+  };
+  ctx.db = wrapHostFaithfulDb(ctx.db);
+  return {
+    ctx,
     dataRegistry,
     actionRegistry,
     dbCalls,
