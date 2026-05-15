@@ -38,9 +38,10 @@ Behind the scenes:
 
 ### Scheduling
 
-- **D-12: Worker-managed `next_due_at` is the source of truth**, not Paperclip's `routines[]` cron. Manifest declares a `routines[]` entry as a documentation/hint (e.g. `0 30 6 * * *`) but the worker job ignores the cron string and uses its own `next_due_at` row in plugin state. On every heartbeat tick: read `next_due_at`; if `now >= next_due_at`, run compile, then recompute the NEXT `next_due_at` via `luxon` (or `date-fns-tz`) in `America/New_York`. **Library choice = `luxon`** — slightly larger than `date-fns-tz` but has explicit `setZone("America/New_York")` semantics that round-trip cleanly across both DST transitions; no ambiguity for the 1am–2am fall-back hour.
+- **D-12: Worker-managed `next_due_at` is the source of truth**, not Paperclip's cron field. **Scheduling mechanism = manifest `jobs[]`** entry (NOT `routines[]` — see RESEARCH.md Q2: `routines[]` is a Paperclip-domain Routine-entity declaration, not a scheduling primitive). The `jobs[]` handler runs in the worker on the host scheduler's cron tick; on every fire: read `next_due_at`; if `now >= next_due_at`, run compile, then recompute the NEXT `next_due_at` in `America/New_York`. **Library choice = `date-fns-tz` `^3.2.0`** (peer-dep `date-fns@^4.1.0`) — tree-shakes to ~6-8 KB gz vs luxon's ~23 KB gz fixed (luxon is CJS-only, no tree-shaking). Worker bundle is 38.9 KB now; +6 KB tolerable. Used as `toZonedTime`, `fromZonedTime`, `formatInTimeZone` only. (Research overrode the initial luxon recommendation — see RESEARCH.md §Standard Stack.)
   - **Why:** PITFALLS.md #9 (DST drift) — bare cron strings interpreted as UTC fire at the wrong wall-clock time on DST boundaries.
   - **Verification gate (must be a plan task):** CI tests fake the system clock to 2026-03-08 (day before spring-forward), 2026-03-09 (day of), 2026-11-01 (day before fall-back), 2026-11-02 (day of). Assert: exactly one bulletin compiles per calendar day, at 06:30 wall-clock. The fall-back fixture must include the duplicated 01:00–02:00 hour without triggering a second compile.
+  - **Test-time strategy:** Inject `now()` as a parameter to the schedule helper (pure-function pattern matching Phase 2's `decideResolvedUserId` resolver) — `node:test` `mock.timers.setTime` for Date requires Node 21.2+ and is experimental. No time-mocking library needed.
 
 - **D-13: Idempotency key for compile = `(next_due_at_iso, content_hash)`.** Re-firing the same `next_due_at` with the same input hash is a no-op; re-firing with the same `next_due_at` but different input hash (e.g. retry after a transient failure with new data) produces a NEW compile attempt, NOT a republish (errata is the only way to amend a published bulletin).
 
@@ -64,7 +65,7 @@ Behind the scenes:
 
 ### Action Inbox
 
-- **D-19: "Requires Your Decision" cards source = Paperclip issues with state `awaiting_human` AND `assignee.user_id === viewer.user_id`**, scoped to the last 30 days. Each card's Approve / Decline / Open buttons are bridge actions:
+- **D-19: "Requires Your Decision" cards source = Paperclip issues with `status='blocked'` AND `blockerAttention.state ∈ {'needs_attention', 'stalled'}` AND `assigneeUserId === viewer.user_id`**, scoped to the last 30 days. (RESEARCH.md Q3: there is no `awaiting_human` IssueStatus — `blockerAttention.state` is the existing SDK signal for "human input wanted." Plan 03-03 must eyeball-verify on a Countermoves COU-{N} that `'stalled'` issues belong in the inbox alongside `'needs_attention'`.) Each card's Approve / Decline / Open buttons are bridge actions:
   - **Approve** = action handler that calls Paperclip's existing issue-resolution endpoint with `resolution: "approved"`; revalidates the bulletin's action-inbox query.
   - **Decline** = same, with `resolution: "declined"`.
   - **Open** = SPA navigation via `useHostNavigation().linkProps()` to the issue detail page (the same page Reader view tabs into).
@@ -76,7 +77,7 @@ Behind the scenes:
 
 ### Lineage threads
 
-- **D-21: Lineage thread data source = Paperclip activity log filtered by `cycle_window` (yesterday 06:30 ET → today 06:30 ET) AND `actor_type=agent`.** The compile job collects all agent activity rows in that window, groups by "trace" (a connected sub-graph in the agent-handoff DAG — using activity rows where `caused_by_activity_id` is set), and produces one lineage_thread per terminal node. Threads are rendered in the bulletin's footer (matches sketch ll. 195–230). Empty days render the "quiet day" prose ("· no items ·") per sketch ll. 151–156.
+- **D-21: Lineage thread data source = Paperclip activity log filtered by `cycle_window` (yesterday 06:30 ET → today 06:30 ET) AND `actor_type=agent`.** The compile job collects all agent activity rows in that window and groups them by **temporal+actor heuristic** (RESEARCH.md Q3: no `caused_by_activity_id` field exists on `PluginActivityLogEntry`): cluster rows by `(entityId, actorChain, time-proximity ≤ 5 min)` to approximate the agent-handoff DAG. Produce one lineage_thread per terminal cluster. Threads are rendered in the bulletin's footer (matches sketch ll. 195–230). Empty days render the "quiet day" prose ("· no items ·") per sketch ll. 151–156. The 5-min proximity threshold is a planner-tunable constant; if it produces too-fragmented threads in Plan 03-03 Countermoves dry-run, lift to 15-min.
 
 ### Failed-compile banner
 
