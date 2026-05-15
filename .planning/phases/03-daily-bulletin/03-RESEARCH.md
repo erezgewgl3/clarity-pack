@@ -671,6 +671,7 @@ CREATE TABLE IF NOT EXISTS plugin_clarity_pack_cdd6bda4bd.bulletins (
   compile_status        text NOT NULL CHECK (compile_status IN ('pending','attempting','verified','published','failed')),
   content_hash          text NOT NULL,
   lineage_thread_json   jsonb NOT NULL DEFAULT '[]'::jsonb,
+  draft_json            jsonb NOT NULL DEFAULT '{}'::jsonb,    -- W3/W4: verified structured BulletinDraft (masthead + departments + standing_numbers + lineage_threads); the bulletin UI reads typed props from this, NOT a markdown re-parser
   UNIQUE (next_due_at, content_hash)                          -- D-13 idempotency key
 );
 
@@ -866,22 +867,25 @@ Top 5 Phase-3-specific risks. Each ties to a specific plan task.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED — spike-deferred to named tasks)
 
 1. **Q3 follow-up: Does `IssueBlockerAttention.state='needs_attention'` actually correspond to the user-facing "awaiting Eric's decision" state?**
    - What we know: enum is `none | covered | stalled | needs_attention`; Phase 2 awaiting-you-count uses this exact field.
    - What's unclear: whether some `stalled` issues also belong in Action Inbox.
    - Recommendation: Plan 03-03 Task 1 fixture against Countermoves COU-{N} confirms which `state` values map to user-visible Action Inbox cards.
+   - **RESOLVED:** Spike owned by **Plan 03-03 Task 4** (Countermoves drill) — the operator confirms whether `'stalled'` issues genuinely await Eric's decision. The `blockerAttention.state` set in the `action-inbox.ts` query filter is a planner-tunable constant. Until the drill says otherwise, the working contract is D-19's corrected mapping (`state ∈ {'needs_attention','stalled'}`); if the drill shows `'stalled'` does not belong, the filter narrows to `state==='needs_attention'` only.
 
 2. **Q4 follow-up: Does the activity log expose enough fields to group lineage threads without a `caused_by_activity_id` column?**
    - What we know: SDK exposes `ctx.activity.log()` (write-only). MCP server lists comments + issues but NOT an activities-by-time endpoint.
    - What's unclear: whether the temporal heuristic produces useful clusters for a real day on Countermoves.
    - Recommendation: Plan 03-03 includes a spike task — render a sample lineage thread from Countermoves data, eyeball quality before locking the algorithm.
+   - **RESOLVED:** Spike owned by **Plan 03-03 Task 3** (lineage derivation) and verified in **Task 4** (Countermoves drill). The 5-minute temporal-proximity threshold and the actor-derivation fallback are planner-tunable constants. Until the drill says otherwise, the working contract is D-21's corrected mapping (`(entityId, actorChain, Δt ≤ 5 min)` clustering); if Countermoves data fragments threads, lift the threshold to 15 min.
 
 3. **Q-NEW: Should the `routines.managed` capability be added so the bulletin compile can also be visible in the host's Routines panel?**
    - What we know: `ctx.routines.managed.reconcile(routineKey, companyId)` exists; if we declared `routines: [{routineKey:'daily-bulletin', triggers:[...cron]}]`, the host would create a Routine entity owned by the Editor-Agent. Eric could see "Daily Bulletin" alongside other routines in the classic UI.
    - What's unclear: whether double-declaring (job for actual compile + routine for visibility) creates surprising semantics (e.g., Eric pauses the routine in classic UI; does the job stop?).
    - Recommendation: Plan 03-01 Task 3 spike — declare the routine alongside the job, test pause-routine-in-classic-UI behavior. If it pauses cleanly, ship both. If confusing, drop the routine declaration.
+   - **RESOLVED:** Decision recorded in **Plan 03-01 Task 3**: the `routines[]` visibility-declaration is **deferred — not planned for Phase 3**. `jobs[]` is the sole scheduling primitive per D-12; a `routines[]` entry purely for host-panel visibility is a v2 nice-to-have. No spike runs in Phase 3; the `jobs[]`-only mechanism is the working contract.
 
 ---
 
