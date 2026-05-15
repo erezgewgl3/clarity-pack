@@ -98,8 +98,8 @@ Auto-compiled morning editorial digest.
 - [ ] **BULL-02**: Compile is idempotent — re-firing the same `next_due_at` is a no-op; partial compiles never produce a partially-published Bulletin.
 - [ ] **BULL-03**: "Requires Your Decision" inbox at the top with one card per outstanding decision, each showing dept tag + age + summary + Approve/Open/Decline affordances.
 - [ ] **BULL-04**: Department sections (Production, Sales, Customer, Builder for v1; configurable later) with item rows + lineage threads (the agent-by-agent compile graph).
-- [ ] **BULL-05**: "Standing Numbers" panel populated from SQL queries against Paperclip core tables — every number in the bulletin is grep-able to a query, never LLM-generated.
-- [ ] **BULL-06**: Two-pass compile — pass 1 produces a draft; pass 2 is a verifier that cross-checks numbers against SQL and rejects on mismatch; only verified output publishes.
+- [x] **BULL-05**: "Standing Numbers" panel populated from SQL queries against Paperclip core tables — every number in the bulletin is grep-able to a query, never LLM-generated.
+- [x] **BULL-06**: Two-pass compile — pass 1 produces a draft; pass 2 is a verifier that cross-checks numbers against SQL and rejects on mismatch; only verified output publishes.
 - [ ] **BULL-07**: Errata is a first-class item type — adding an erratum to a published bulletin appends rather than rewrites; subscribers see the errata footer on the next view.
 - [ ] **BULL-08**: A failed compile renders an explicit "Bulletin compile failed at HH:MM — retrying at NN" banner; no silent failures.
 - [ ] **BULL-09**: Bulletin renders inside Paperclip via the plugin's page slot AND persists as a Paperclip issue ("Bulletin No. N") so it survives plugin disable and is searchable in classic Paperclip.
@@ -231,11 +231,11 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | BULL-02 | Phase 3 | In Progress — idempotency foundation (UNIQUE(next_due_at,content_hash), no-op compile gate, self-loop bulletin-tag filter) delivered by Plan 03-01 2026-05-15; publish atomicity completes in Plan 03-02 |
 | BULL-03 | Phase 3 | Pending |
 | BULL-04 | Phase 3 | Pending |
-| BULL-05 | Phase 3 | Pending |
-| BULL-06 | Phase 3 | Pending |
+| BULL-05 | Phase 3 | Implemented (Plan 03-02) |
+| BULL-06 | Phase 3 | Implemented (Plan 03-02) |
 | BULL-07 | Phase 3 | Pending |
 | BULL-08 | Phase 3 | Pending |
-| BULL-09 | Phase 3 | Pending |
+| BULL-09 | Phase 3 | Partial (Plan 03-02 — persists as Paperclip issue + survives disable; page-slot rendering pending Plan 03-03) |
 | CHAT-01 | Phase 4 | Pending |
 | CHAT-02 | Phase 4 | Pending |
 | CHAT-03 | Phase 4 | Pending |

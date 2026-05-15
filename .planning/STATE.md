@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: "Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB."
-last_updated: "2026-05-15T09:46:12.293Z"
+status: "Phase 3 Plan 03-02 (Compile Pipeline) COMPLETE 2026-05-15 — 4 TDD commits 9fe85b2..85c84fb. Two-pass bulletin compile pipeline shipped: facts-table + STANDING_NUMBER_SLOTS registry + LLM pass-1 + deterministic verifier + two-phase publish. Suite 504 tests / 502 pass / 0 fail / 2 skip. Typecheck + build clean. dist/worker.js 136 KB unminified (63.4 KB min / 19.76 KB gz)."
+last_updated: "2026-05-15T10:20:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 21
-  completed_plans: 13
-  percent: 62
+  completed_plans: 14
+  percent: 67
 ---
 
 # State: Clarity Pack
@@ -23,15 +23,15 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 3 (Daily Bulletin) — **IN PROGRESS** — Plan 03-01 (Foundation) COMPLETE 2026-05-15; 03-02..03-04 pending. Phase 2 COMPLETE; all 14 verifiable Phase 2 reqs Implemented. Deferred polish plans (02-05/02-06/02-07/02-10) remain non-blocking and can interleave with Phase 3 execution.
+**Current Focus:** Phase 3 (Daily Bulletin) — **IN PROGRESS** — Plans 03-01 (Foundation) + 03-02 (Compile Pipeline) COMPLETE 2026-05-15; 03-03..03-04 pending. Phase 2 COMPLETE; all 14 verifiable Phase 2 reqs Implemented. Deferred polish plans (02-05/02-06/02-07/02-10) remain non-blocking and can interleave with Phase 3 execution.
 
 ## Current Position
 
-Phase: 3 (Daily Bulletin) — **IN PROGRESS** — 1/4 plans complete (03-01); 03-02 (Compile Pipeline) is next.
+Phase: 3 (Daily Bulletin) — **IN PROGRESS** — 2/4 plans complete (03-01, 03-02); 03-03 (UI + Action Inbox + Dept Reconcile + Lineage) is next.
 **Phase 3 plans:**
 
   - 03-01 — Foundation: **COMPLETE 2026-05-15** — `0004_bulletin.sql` migration (bulletins incl. `draft_json jsonb` + UNIQUE(next_due_at,content_hash) + bulletin_errata + clarity_department_membership + bulletin_compile_failures) + DST-safe `computeNextDueAt` (date-fns-tz) + bulletins repo (8 fns) + manifest `jobs[]`+capabilities+config + self-loop-filter `BULLETIN_TAG_PREFIX` extension + compile-bulletin no-op job. 3 TDD commits ab217b0..e059d8b; suite 455/453-pass/0-fail/2-skip; typecheck+build green. BULL-01, BULL-02 foundation delivered. SUMMARY: `03-01-SUMMARY.md`.
-  - 03-02 — Compile Pipeline: facts-table + standing-numbers SQL runner + pass-1 LLM draft + pass-2 deterministic verifier + two-phase publish (`bulletins` row → `ctx.issues.create` canonical issue). Wave 2, autonomous. BULL-05, BULL-06, BULL-09.
+  - 03-02 — Compile Pipeline: **COMPLETE 2026-05-15** — facts-table.ts (computeFactsTable + replaceSlots) + standing-numbers.ts (STANDING_NUMBER_SLOTS 5-slot registry + computeStandingNumbers) + bulletin-verifier.ts (pure-async verifyDraft, typed mismatch/UNKNOWN_SLOT) + compile-pass-1.ts (cap-then-call LLM + validateDraftSchema, MAX_BULLETIN_TOKENS=6000) + bulletin-rendering.ts (renderBulletinIssueBody) + publish.ts (two-phase write, draft_json W3/W4, UNIQUE idempotency) + compile-bulletin.ts real pipeline (Wave-1 stub replaced) + circuit-breaker BULLETIN_COMPILE_AGENT_KEY. 4 TDD commits 9fe85b2..85c84fb; suite 455→504 (+49; 502 pass/0 fail/2 skip); typecheck+build green. BULL-05/06/09 delivered. 2 Rule-1 auto-fixes (pass-1 recordSuccess counter-reset bug; e2e test-fixture INSERT-index + multiline-regex). SUMMARY: `03-02-SUMMARY.md`.
   - 03-03 — UI + Action Inbox + Dept Reconcile + Lineage: bulletin page + 6 sketch-matched components + scoped `bulletin.css` + action-inbox query (`blockerAttention.state`) + dept reconcile + temporal+actor lineage grouper. Wave 3, manual checkpoint (Countermoves visual + Standing-Numbers SQL drill). BULL-03, BULL-04.
   - 03-04 — Errata + Failed-Compile Banner + DST CI + Coexistence: errata first-class (append-only) + banner state machine + 4-date DST CI matrix + plugin-disable coexistence test. Wave 4, manual checkpoint (Eric closure drill). BULL-01, BULL-02, BULL-07, BULL-08.
 
@@ -51,7 +51,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.
-**Progress:** [###       ] 1/5 phases complete; Phase 2 ~85% by plan count (6/7 incl. 02-04+02-08 partial pairing)
+**Progress:** [###       ] 2/5 phases complete; Phase 3 ~50% by plan count (2/4 — Foundation + Compile Pipeline done)
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 | Phase 1 tests | 103 (Plan 01: 48, Plan 02: 33, Plan 03: 22) — 103/103 passing |
 | Phase 1 commits | 11 (RED + GREEN + docs across 3 plans) |
 | Plan 03-01 | ~38 min, 3 TDD commits, 13 files (8 created), suite 422→455 (+33; 453 pass / 0 fail / 2 skip) |
+| Plan 03-02 | ~42 min, 4 TDD commits, 15 files (13 created), suite 455→504 (+49; 502 pass / 0 fail / 2 skip) |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 9. **Paperclip default branch is `master`, not `main`** - all doc URLs and CI references must use `/blob/master/...`.
 10. **Plugin UI runs as same-origin trusted JS** (not iframed) - manifest capabilities gate worker RPC but NOT UI HTTP fetch. Day-1 mitigations (bridge-only, ESLint rule on raw fetch, pinned lockfile, no postinstall scripts) ship in Phase 2.
 11. **Bulletin scheduling = worker-managed `next_due_at`, not the manifest cron** (Plan 03-01 / D-12) - the `jobs[]` cron string `*/1 * * * *` is a heartbeat hint only; `bulletins.next_due_at` (computed via `date-fns-tz` `computeNextDueAt` in `America/New_York`) is the DST-safe source of truth. The compile-bulletin job fires only when `now >= next_due_at`. date-fns-tz@3.2.0 chosen over luxon (tree-shakeable ESM; 10.34 KB gz worker bundle).
+12. **Bulletin-compile circuit-breaker `recordSuccess` is pipeline-scoped, not pass-scoped** (Plan 03-02) - `recordSuccess(BULLETIN_COMPILE_AGENT_KEY)` fires exactly once after a *verified publish*, never after pass-1's parse. A draft that pass-1 accepts but the pass-2 verifier rejects must accumulate toward the 3-rejection circuit-breaker trip; resetting the shared counter on pass-1 success would let verifier-rejected drafts escape the trip wire. `BULLETIN_COMPILE_AGENT_KEY = 'bulletin-compile'` keeps bulletin failures isolated from compile-tldr's counter.
 
 ### Open Todos
 
@@ -117,7 +119,9 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 **Current session (Phase 3 start):** 2026-05-15 — Plan 03-01 (Daily Bulletin Foundation) executed end-to-end, 3 TDD commits ab217b0..e059d8b. Task 1 RED: 4 new test files (next-due-at 8 DST/determinism tests, self-loop-filter-bulletin 8 tests, 0004-bulletin-schema 11 DDL-contract tests, compile-bulletin-noop 5 tests). Task 2 GREEN: installed date-fns-tz@3.2.0 + date-fns@4.1.0; shipped `src/worker/bulletin/next-due-at.ts` (pure `computeNextDueAt` via toZonedTime/fromZonedTime), `migrations/0004_bulletin.sql` (4 namespace-qualified tables incl. bulletins.draft_json jsonb + UNIQUE(next_due_at,content_hash)), `src/worker/db/bulletins-repo.ts` (8 typed CRUD fns), extended self-loop-filter with `BULLETIN_TAG_PREFIX`, extended `src/shared/types.ts` with 10 bulletin type contracts. Task 3: `src/worker/jobs/compile-bulletin.ts` Wave-1 no-op skeleton + manifest extension (issues.create + issue.comments.create caps, compile-bulletin jobs[] entry, bulletinDepartments + bulletinTimezone config) + worker.ts wiring. 2 Rule-1 auto-fixes (both CI-tooling regex false positives — schema test comment-stripping; COEXIST-02 string-literal reword). Suite 422→455 (+33; 453 pass / 0 fail / 2 skip). Typecheck + build green. Worker bundle 30.6 KB min / 10.34 KB gz (date-fns-tz within budget). SUMMARY: `03-01-SUMMARY.md`.
 
-**Next session resume point:** Plan 03-02 — Compile Pipeline (Wave 2, autonomous). Build the two-pass compile on the 03-01 foundation: facts-table extractor + STANDING_NUMBER_SLOTS registry + LLM pass-1 (structured `BulletinDraft`) + deterministic pass-2 verifier + two-phase publish (`upsertBulletin` status `attempting` → `ctx.issues.create` → status `published`) + markdown renderer + circuit-breaker isolation. Replace the Wave-1 stub block in `compile-bulletin.ts` (the `cycle due, awaiting Plan 03-02 pipeline` log line) with the real pipeline. All contracts (`BulletinDraft`/`VerifierResult`/`BulletinPublished` types, bulletins-repo, `issues.create`+`issue.comments.create` caps, registered compile job) are in place. Note for executor environment: pnpm is NOT on PATH — use `corepack pnpm` for installs; run build steps directly via `node scripts/build-*.mjs`; Node 24 `--test` needs an explicit `test/**/*.test.mjs` glob. BULL-05/06/09 are 03-02's reqs.
+**Current session (Phase 3 Plan 03-02):** 2026-05-15 — Plan 03-02 (Compile Pipeline) executed end-to-end, 4 TDD commits 9fe85b2..85c84fb. Task 1 RED: 7 new test files / ~49 tests (facts-table 6, standing-numbers 7, verifier 8, compile-pass-1 8, publish 9, end-to-end 6, bulletin-rendering 5). Task 2 GREEN: 3 pure helpers — facts-table.ts (computeFactsTable + format-aware replaceSlots, throws tagged UNKNOWN_SLOT), standing-numbers.ts (STANDING_NUMBER_SLOTS readonly 5-slot registry, static parameterized SQL $1=companyId only, computeStandingNumbers per-slot catch-and-default-0), bulletin-verifier.ts (pure-async verifyDraft, ±0.01 pct/ratio tolerance, typed VerifierResult). Task 3 GREEN: compile-pass-1.ts (cap-then-call LLM kernel mirroring compile-tldr.ts, MAX_BULLETIN_TOKENS=6000, validateDraftSchema), bulletin-rendering.ts (pure renderBulletinIssueBody markdown), publish.ts (two-phase write INSERT attempting → ctx.issues.create → UPDATE published, draft_json persists verified BulletinDraft per W3/W4, UNIQUE(next_due_at,content_hash) idempotency, orphan-safe), circuit-breaker.ts +BULLETIN_COMPILE_AGENT_KEY. Task 4: compile-bulletin.ts Wave-1 stub replaced with the real pipeline (reconcile → cycle number → computeStandingNumbers → computeFactsTable → compilePass1 → verifyDraft → publishBulletin → advance next_due_at; per-company isolation; 3-verifier-rejection circuit-breaker trip). 2 Rule-1 auto-fixes: (a) pass-1 recordSuccess was resetting the shared bulletin-compile counter so verifier rejections couldn't accumulate — moved recordSuccess to the job's post-publish path; (b) e2e test fixture had a wrong INSERT param index + `.`-based UPDATE regex that missed multiline SQL. Suite 455→504 (+49; 502 pass / 0 fail / 2 skip). Typecheck + build green. Worker bundle 136 KB unminified / 63.4 KB min / 19.76 KB gz (gz within RESEARCH.md budget; the `du -k ≤ 60` criterion measures the unminified artifact — measurement-basis note carried from 03-01). BULL-05/06/09 delivered. SUMMARY: `03-02-SUMMARY.md`.
+
+**Next session resume point:** Plan 03-03 — Bulletin UI page + Action Inbox + Department reconcile + Lineage grouper (Wave 3, manual checkpoint — Eric Countermoves visual + Standing-Numbers SQL drill). 6 React components matching `sketches/paperclip-fix-bulletin.html` line-by-line + scoped `bulletin.css` + action-inbox-query (`blockerAttention.state` D-19 mapping) + department-reconcile role-regex heuristic + temporal+actor lineage grouper (Δt≤300sec). Contracts ready: `BulletinDraft` type, `renderBulletinIssueBody`, `validateDraftSchema`, `STANDING_NUMBER_SLOTS`; `bulletins.draft_json` holds the verified draft so the bulletin-by-cycle handler returns typed props with no markdown re-parser. Plan 03-03 also refines the STANDING_NUMBER_SLOTS SQL column references against the real Paperclip schema during the Countermoves dry-run. Note for executor environment: pnpm is NOT on PATH — run build steps directly via `node scripts/build-*.mjs`; Node 24 `--test` needs an explicit `test/**/*.test.mjs` glob. BULL-03/04 are 03-03's reqs.
 
 **Phase 2 prior-session note:** Plan 02-09 closed Phase 2 (Countermoves COU-4 re-drill APPROVED 2026-05-15). 14 of 14 verifiable Phase 2 reqs Implemented. Deferred polish plans 02-05/02-06/02-07/02-10 remain non-blocking and can interleave with Phase 3.
 
