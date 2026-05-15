@@ -66,8 +66,14 @@ Plans:
   3. Re-firing the same `next_due_at` is a no-op (no partially-published bulletins), and a failed compile renders an explicit "Bulletin compile failed at HH:MM - retrying at NN" banner with no silent failures.
   4. Pass-1 generates a draft and pass-2 cross-checks every numeric claim against SQL; only verified output publishes, and adding an erratum to a published bulletin appends rather than rewrites (errata footer visible on next view).
   5. Each bulletin persists as a Paperclip issue named "Bulletin No. N" - disabling the plugin leaves every prior bulletin searchable in classic Paperclip.
-**Plans**: TBD
+**Plans**: 4 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 03-01-PLAN.md — Foundation: 0004_bulletin.sql migration + computeNextDueAt pure-fn (date-fns-tz) + bulletins-repo + extend self-loop-filter for BULLETIN_TAG_PREFIX + manifest extensions (jobs[] compile-bulletin + capabilities issues.create + issue.comments.create + instanceConfigSchema bulletinDepartments+bulletinTimezone) + worker.ts registration + 4 DST CI fixture tests (kernel) + compile-bulletin job no-op skeleton. Wave 1, autonomous. (BULL-01, BULL-02)
+- [ ] 03-02-PLAN.md — Compile pipeline: facts-table extractor + STANDING_NUMBER_SLOTS registry + LLM pass-1 (structured BulletinDraft) + deterministic pass-2 verifier + two-phase publish (bulletins INSERT attempting → ctx.issues.create → UPDATE published) + shared/bulletin-rendering markdown renderer + circuit-breaker BULLETIN_COMPILE_AGENT_KEY isolation. Wave 2, autonomous. (BULL-05, BULL-06, BULL-09)
+- [ ] 03-03-PLAN.md — Bulletin UI page + Action Inbox + Department reconcile + Lineage grouper: 6 React components (Masthead + ActionInbox + DepartmentSection + StandingNumbersPanel + LineageFooter + index page) matching sketches/paperclip-fix-bulletin.html line-by-line; scoped bulletin.css (warm-paper palette, Fraunces+Newsreader+JetBrains Mono fonts); action-inbox-query with D-19 corrected mapping; bulletin.action.approve/decline handlers with viewer-ownership re-verification; department-reconcile role-regex heuristic; lineage-grouper temporal+actor proximity (Δt≤300sec). Wave 3, mixed (Eric drill on Countermoves). (BULL-03, BULL-04)
+- [ ] 03-04-PLAN.md — Errata + Failed-compile banner + DST CI matrix + Coexistence: bulletin-errata combined data+action handler with  server-side gate (T-03-22); bulletin-latest-status handler + FailedCompileBanner UI + 3-retry × 15-min spacing + circuit-breaker integration; ErrataFooter UI + settings-page errata composer form; full 4-fixture DST CI matrix (end-to-end pipeline simulation, not just pure-helper); idempotency tests (UNIQUE constraint, content_hash dedup, concurrent fires); new scripts/coexistence-checks/07-bulletin-disable.mjs + extension of Phase 2 coexistence-checklist test. Wave 4, mixed (Eric closure drill on Countermoves). (BULL-01 matrix completion, BULL-02 idempotency completion, BULL-07, BULL-08)
 
 ### Phase 4: Employee Chat
 **Goal**: A hybrid real-time chat surface where Eric talks per-employee on per-topic threads, every message persists immediately as an ordinary `public.issue_comments` row (canonical) with attachments stored as Paperclip work-products, real-time updates flow via `usePluginStream`, edits are append-with-supersedes, sends are optimistic with rollback-on-failure (idempotent by client `message_uuid`), and disabling the plugin leaves every chat message visible as ordinary threaded comments in classic Paperclip.
@@ -101,7 +107,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Pre-Install Safety | 4/4 | COMPLETE ✓ — rehearsal PASS landed | 2026-05-13 |
 | 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 4/5 (02-04+02-08 PARTIAL paired) | Plan 02-08 Tasks 1-3 complete 2026-05-14T23:00Z; Task 4 re-drill awaiting Eric on Countermoves | - |
-| 3. Daily Bulletin | 0/0 | Not started | - |
+| 3. Daily Bulletin | 0/4 | Planned 2026-05-15 — 4 plans across 4 waves (03-01..03-04); BULL-01..09 mapped | - |
 | 4. Employee Chat | 0/0 | Not started | - |
 | 5. Distribution & Polish | 0/0 | Not started | - |
 
