@@ -3,14 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-15T12:30:00Z"
+last_updated: "2026-05-15T16:00:00Z"
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 14  # added 02-10 polish bundle (deferred, non-blocking)
+  total_plans: 18  # 14 prior + 4 Phase 3 plans (03-01..03-04) planned 2026-05-15
   completed_plans: 8  # 02-01..02-04 + 02-08 + 02-09 closed; 02-05/02-06/02-07/02-10 deferred polish
   percent: 40
   phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger Countermoves (hosted Postgres). Plan 01-05 cleanup landed 2026-05-13 — pg-dump-locator with bundled-first discovery + version pre-check + dbUrl auto-derivation + operator-gotchas.md catalog. All 3 Phase 2 spike defects now disposed: defect-1 fixed (mode-detect), defect-2 fixed (locator), defect-3 documented (version-mismatch is inherent to pg_dump; clean error path + runbook workaround shipped). Full safety CLI suite: 122 pass / 0 fail.
+  phase_3_status: PLANNED 2026-05-15 — 4 plans (03-01 Foundation / 03-02 Compile Pipeline / 03-03 UI+Inbox+Lineage / 03-04 Errata+Banner+DST) across 4 strictly-sequential waves. Research + pattern-mapping + plan-check all passed; revision 1 resolved 1 blocker + 7 warnings (draft_json column threaded end-to-end, all-zero Standing Numbers drill task added, lastActorId SDK-verify, routines[] deferral recorded). plan-checker VERIFICATION PASSED on re-verify. CONTEXT.md synthesized without /gsd:discuss-phase (yolo mode); 3 research corrections folded in (jobs[] not routines[], date-fns-tz not luxon, blockerAttention status mapping, temporal+actor lineage heuristic). BULL-01..09 all covered. Ready for `/gsd:execute-phase 3`.
   phase_2_status: COMPLETE 2026-05-15 — Plan 02-09 Countermoves re-drill PASSED on /COU/issues/COU-4 (`approved — phase 2 closed`). 14 of 14 verifiable Phase 2 reqs Implemented (OPTIN-01..05 + ROOM-01..08 + COEXIST-06). Reader renders fully on detail-tab slot; /api/auth/get-session resolver returns Eric's user.id=E8TMB44X20gwBYvFz3Qf4jUO71bc8k1B; useResolvedUserId threads it through all 4 wrapped handlers (issue.reader / flatten-blocker-chain / editor.pause-status / resolve-refs). Situation Room visual fidelity preserved (no regression). Plan 02-09 STRUCTURAL DEVIATION accepted — worker `get-viewer` infeasible per SDK (no caller-identity accessor); UI-side Better-Auth fetch is the correct architectural fit under the same-origin trust model. Test suite 269→422 (+153 across Phase 2; 420 pass / 0 fail / 2 skip). dist/ui/index.js 67.8 KB (+59.6 KB cumulative across Phase 2). Plan close-out chain: 02-01 PARTIAL (Linux Check B deferred) + 02-02 COMPLETE + 02-03/03b/03c CLOSED + 02-04 APPROVED + 02-08 APPROVED + 02-09 APPROVED. Plan 02-10 FILED for non-blocking polish (DEV-07 React keys + DEV-08 Vite WS console noise) — can interleave with Phase 3.
 ---
 
@@ -25,9 +26,19 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 2 — **COMPLETE 2026-05-15**. All 14 verifiable Phase 2 reqs Implemented; Reader + Situation Room visually confirmed on Countermoves COU-4 + /COU/situation-room. Next: Phase 3 (Daily Bulletin) — depends only on Phase 2. Deferred polish plans (02-05/02-06/02-07/02-10) remain non-blocking and can interleave with Phase 3 planning/execution.
+**Current Focus:** Phase 3 (Daily Bulletin) — **PLANNED 2026-05-15**, 4 plans ready for `/gsd:execute-phase 3`. Phase 2 COMPLETE; all 14 verifiable Phase 2 reqs Implemented. Deferred polish plans (02-05/02-06/02-07/02-10) remain non-blocking and can interleave with Phase 3 execution.
 
 ## Current Position
+
+Phase: 3 (Daily Bulletin) — **PLANNED 2026-05-15** — 4 plans, ready to execute.
+**Phase 3 plans:**
+  - 03-01 — Foundation: `0004_bulletin.sql` migration (bulletins + bulletin_errata + clarity_department_membership + bulletin_compile_failures + bulletin_schedule_state, incl. `draft_json jsonb`) + DST-safe `computeNextDueAt` (date-fns-tz) + bulletins repo + manifest `jobs[]` + self-loop-filter `clarity:bulletin-*` extension. Wave 1, autonomous. BULL-01, BULL-02.
+  - 03-02 — Compile Pipeline: facts-table + standing-numbers SQL runner + pass-1 LLM draft + pass-2 deterministic verifier + two-phase publish (`bulletins` row → `ctx.issues.create` canonical issue). Wave 2, autonomous. BULL-05, BULL-06, BULL-09.
+  - 03-03 — UI + Action Inbox + Dept Reconcile + Lineage: bulletin page + 6 sketch-matched components + scoped `bulletin.css` + action-inbox query (`blockerAttention.state`) + dept reconcile + temporal+actor lineage grouper. Wave 3, manual checkpoint (Countermoves visual + Standing-Numbers SQL drill). BULL-03, BULL-04.
+  - 03-04 — Errata + Failed-Compile Banner + DST CI + Coexistence: errata first-class (append-only) + banner state machine + 4-date DST CI matrix + plugin-disable coexistence test. Wave 4, manual checkpoint (Eric closure drill). BULL-01, BULL-02, BULL-07, BULL-08.
+**Phase 3 artifacts:** `03-CONTEXT.md` (synthesized — no discuss-phase, yolo mode), `03-RESEARCH.md`, `03-PATTERNS.md` (30/30 Phase 2 analog coverage), 4 PLAN.md files. plan-checker VERIFICATION PASSED after revision 1.
+
+---
 
 Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **COMPLETE 2026-05-15 ✓**
 **Plans:**
