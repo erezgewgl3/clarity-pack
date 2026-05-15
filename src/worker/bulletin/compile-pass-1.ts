@@ -17,7 +17,6 @@
 
 import {
   recordFailure,
-  recordSuccess,
   BULLETIN_COMPILE_AGENT_KEY,
   type CircuitBreakerCtx,
 } from '../agents/circuit-breaker.ts';
@@ -130,7 +129,13 @@ function buildPrompt(args: CompilePass1Args): string {
  * Pass-1 compile. Enforces the token cap, invokes the injected LLM adapter,
  * parses + schema-validates the output. Every failure path
  * (cap breach, LLM throw, bad JSON, schema invalid) calls recordFailure with
- * agentKey='bulletin-compile' and re-throws; a clean parse calls recordSuccess.
+ * agentKey='bulletin-compile' and re-throws.
+ *
+ * NOTE: pass-1 does NOT call recordSuccess. The bulletin-compile circuit
+ * breaker counter tracks the WHOLE two-pass pipeline — recordSuccess is the
+ * compile-bulletin job's responsibility, called only after a verified publish.
+ * Resetting the counter here would let a draft that pass-1 accepts but the
+ * pass-2 verifier rejects escape the "3 consecutive rejections" trip wire.
  */
 export async function compilePass1(
   ctx: CompilePass1Ctx,
@@ -193,6 +198,5 @@ export async function compilePass1(
     throw err;
   }
 
-  recordSuccess(BULLETIN_COMPILE_AGENT_KEY);
   return parsed as BulletinDraft;
 }

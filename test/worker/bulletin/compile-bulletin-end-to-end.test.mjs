@@ -73,9 +73,12 @@ function makeFakeCtx({ companies = [], nextDue = {}, sqlMrr = 2475, llm } = {}) 
           return { rowCount: 1 };
         }
         if (/INSERT INTO .*bulletins/i.test(sql)) {
-          // params: cycle_number, company_id, next_due_at, compiled_at, status, content_hash, ...
+          // publish.ts INSERT params:
+          //   0 cycle_number, 1 company_id, 2 next_due_at, 3 compiled_at,
+          //   4 content_hash, 5 lineage_thread_json, 6 draft_json
+          // (compile_status is the SQL literal 'attempting' — not a param).
           const nextDueAt = params[2];
-          const contentHash = params[5];
+          const contentHash = params[4];
           const dup = bulletins.find((b) => b.next_due_at === nextDueAt && b.content_hash === contentHash);
           if (dup) return { rowCount: 0 }; // ON CONFLICT DO NOTHING
           bulletins.push({
@@ -89,7 +92,9 @@ function makeFakeCtx({ companies = [], nextDue = {}, sqlMrr = 2475, llm } = {}) 
           });
           return { rowCount: 1 };
         }
-        if (/UPDATE .*bulletins SET published_issue_id/i.test(sql)) {
+        // Note: [\s\S] (not `.`) so the matcher tolerates the multi-line SQL
+        // publish.ts emits — `.` does not cross newlines.
+        if (/UPDATE[\s\S]*bulletins[\s\S]*published_issue_id/i.test(sql)) {
           // params: issue_id, published_at, next_due_at, content_hash
           const row = bulletins.find((b) => b.next_due_at === params[2] && b.content_hash === params[3]);
           if (row) {
@@ -98,7 +103,7 @@ function makeFakeCtx({ companies = [], nextDue = {}, sqlMrr = 2475, llm } = {}) 
           }
           return { rowCount: row ? 1 : 0 };
         }
-        if (/UPDATE .*bulletins SET next_due_at/i.test(sql)) {
+        if (/UPDATE[\s\S]*bulletins[\s\S]*SET next_due_at/i.test(sql)) {
           // params: new_next_due_at, cycle_number, company_id
           const row = bulletins.find((b) => b.cycle_number === params[1] && b.company_id === params[2]);
           if (row) row.next_due_at = params[0];
