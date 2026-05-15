@@ -11,12 +11,20 @@
 -- names -- there is NO template substitution. COMMENT ON statements may be
 -- unqualified; all other DDL must be qualified.
 --
--- Paperclip's plugin-SQL validator rejects anonymous procedural blocks
+-- The Paperclip plugin-SQL validator rejects anonymous procedural blocks
 -- (case-insensitive match on `DO $$ ... $$` patterns), discovered during
 -- the Plan 02-04 install on Countermoves 2026-05-14. No procedural blocks
 -- are used here; CREATE TABLE IF NOT EXISTS provides idempotency.
+--
+-- APOSTROPHE HAZARD: the host validator strips SQL string literals with a
+-- greedy regex before classifying each statement. An odd apostrophe inside
+-- a `--` comment pairs with the opening quote of the first real string
+-- literal and swallows the leading CREATE keyword, so the statement is
+-- rejected as non-DDL. Keep migration comments apostrophe-free. Surfaced by
+-- the Plan 03-03 Countermoves drill 2026-05-15.
 -- Regression test: test/migrations/0004-bulletin-schema.test.mjs +
--- test/migrations/no-procedural-blocks.test.mjs.
+-- test/migrations/no-procedural-blocks.test.mjs +
+-- test/migrations/ddl-prefix-validator.test.mjs.
 
 -- ---------------------------------------------------------------------------
 -- bulletins — D-17 bulletin metadata.
@@ -53,9 +61,9 @@ COMMENT ON TABLE plugin_clarity_pack_cdd6bda4bd.bulletins IS
 -- ---------------------------------------------------------------------------
 -- bulletin_errata — D-18 first-class append-only errata.
 -- ---------------------------------------------------------------------------
--- Errata never rewrite a published bulletin's issue body. They are stored
--- here and rendered as a footer block; on the NEXT cycle's compile, the prior
--- cycle's errata are appended to the prior issue as a comment (the
+-- Errata never rewrite a published bulletin issue body. They are stored
+-- here and rendered as a footer block; on the NEXT cycle compile, the prior
+-- cycle errata are appended to the prior issue as a comment (the
 -- applied_to_issue_comment_id back-reference is set at that point).
 
 CREATE TABLE IF NOT EXISTS plugin_clarity_pack_cdd6bda4bd.bulletin_errata (
@@ -75,7 +83,7 @@ COMMENT ON TABLE plugin_clarity_pack_cdd6bda4bd.bulletin_errata IS
 -- ---------------------------------------------------------------------------
 -- Maps a Paperclip employee to a Daily Bulletin department section. Populated
 -- by an idempotent reconcile pass on the first compile of each cycle (role-
--- label regex; 'Builder' fallback). The source column lets manual overrides
+-- label regex; Builder fallback). The source column lets manual overrides
 -- survive a reconcile re-run -- the reconcile path UPSERTs with
 -- ON CONFLICT DO NOTHING so a manual-source row is never clobbered.
 
