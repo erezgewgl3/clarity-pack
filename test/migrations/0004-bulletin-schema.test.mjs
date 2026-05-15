@@ -22,7 +22,24 @@ const REPO_ROOT = path.resolve(HERE, '..', '..');
 const MIGRATION = path.join(REPO_ROOT, 'migrations', '0004_bulletin.sql');
 const NS = 'plugin_clarity_pack_cdd6bda4bd';
 
-const sql = existsSync(MIGRATION) ? readFileSync(MIGRATION, 'utf8') : '';
+// Strip `--` line comments and `/* */` block comments before scanning, so
+// prose in the migration header (which legitimately discusses DDL patterns
+// and the validator's `DO $$` rejection) does not produce false positives.
+// Matches test/migrations/no-procedural-blocks.test.mjs.
+function stripSqlComments(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => line.replace(/--.*$/, ''))
+    .join('\n');
+}
+
+const rawSql = existsSync(MIGRATION) ? readFileSync(MIGRATION, 'utf8') : '';
+// Full text — used by string-presence asserts (CREATE TABLE etc. live in DDL,
+// not comments, so the raw text is fine and keeps assert messages readable).
+const sql = rawSql;
+// Comment-stripped text — used by the "must NOT match" negative asserts.
+const code = stripSqlComments(rawSql);
 
 test('0004_bulletin.sql exists', () => {
   assert.ok(existsSync(MIGRATION), 'migrations/0004_bulletin.sql must exist');
@@ -73,22 +90,22 @@ test('0004 bulletins table carries a draft_json jsonb column (W3/W4 structured-d
 });
 
 test('0004 — every CREATE TABLE is namespace-qualified (no bare CREATE TABLE)', () => {
-  const bare = sql.match(/CREATE TABLE IF NOT EXISTS (?!plugin_clarity_pack_cdd6bda4bd\.)/i);
+  const bare = code.match(/CREATE TABLE IF NOT EXISTS (?!plugin_clarity_pack_cdd6bda4bd\.)/i);
   assert.equal(bare, null, `found an unqualified CREATE TABLE: ${bare?.[0] ?? ''}`);
 });
 
 test('0004 contains zero DROP TABLE statements (additive-only invariant)', () => {
-  assert.equal(/drop\s+table/i.test(sql), false, 'migration must be additive-only');
+  assert.equal(/drop\s+table/i.test(code), false, 'migration must be additive-only');
 });
 
 test('0004 contains zero ALTER TABLE ... DROP COLUMN statements (additive-only invariant)', () => {
   assert.equal(
-    /alter\s+table[\s\S]*?drop\s+column/i.test(sql),
+    /alter\s+table[\s\S]*?drop\s+column/i.test(code),
     false,
     'migration must not drop columns',
   );
 });
 
 test('0004 contains zero procedural blocks (Paperclip plugin-SQL validator rejects DO $$)', () => {
-  assert.equal(/\bdo\s+\$\$/i.test(sql), false, 'no anonymous procedural blocks allowed');
+  assert.equal(/\bdo\s+\$\$/i.test(code), false, 'no anonymous procedural blocks allowed');
 });

@@ -21,6 +21,19 @@
 export const EDITOR_WRITE_TAG = 'clarity:editor-write';
 
 /**
+ * Bulletin self-loop tag PREFIX (Plan 03-01 — BULL-02). The Daily Bulletin
+ * compile persists a Paperclip issue tagged `clarity:bulletin` and
+ * `clarity:bulletin-issue` (plus `cycle:{N}`). Any event whose tag starts
+ * with this prefix is filtered — without it, day-N+1's compile would read
+ * day-N's bulletin issue/comments as fresh agent activity and recurse
+ * forever. Note this is a PREFIX match (not equality): it catches
+ * `clarity:bulletin`, `clarity:bulletin-issue`, and any future
+ * `clarity:bulletin-*` tag, while `cycle:{N}` tags are deliberately NOT
+ * matched (a `cycle:` tag alone does not indicate a self-authored row).
+ */
+export const BULLETIN_TAG_PREFIX = 'clarity:bulletin';
+
+/**
  * Minimal event shape we care about. The host's heartbeat-context payload is
  * richer; we only need author_id + tags for the filter decision.
  */
@@ -34,7 +47,12 @@ export type SelfLoopEvent = {
 
 /**
  * Drop any event matching (author_id === editorAgentId) OR
- * (tags includes EDITOR_WRITE_TAG). Input order preserved for passing events.
+ * (tags includes EDITOR_WRITE_TAG) OR (any tag starts with
+ * BULLETIN_TAG_PREFIX). Input order preserved for passing events.
+ *
+ * The bulletin-tag clause (Plan 03-01 — BULL-02) runs AFTER the
+ * EDITOR_WRITE_TAG check so Phase 2's short-circuit ordering is unchanged;
+ * it is a strictly-additive new exclusion.
  */
 export function filterSelfLoopEvents<E extends SelfLoopEvent>(
   events: E[],
@@ -45,6 +63,10 @@ export function filterSelfLoopEvents<E extends SelfLoopEvent>(
     if (e?.author_id && e.author_id === editorAgentId) return false;
     const tags = Array.isArray(e?.tags) ? e.tags : [];
     if (tags.includes(EDITOR_WRITE_TAG)) return false;
+    // Plan 03-01 — BULL-02: drop day-N's bulletin issue/comments so day-N+1's
+    // compile does not treat them as fresh agent activity.
+    if (tags.some((t) => typeof t === 'string' && t.startsWith(BULLETIN_TAG_PREFIX)))
+      return false;
     return true;
   });
 }
