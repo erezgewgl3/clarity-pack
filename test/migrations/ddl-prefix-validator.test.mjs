@@ -19,6 +19,16 @@
 // every migrations/*.sql, so any future migration that trips the same
 // greedy-strip hazard fails `pnpm test` BEFORE an install attempt.
 //
+// It also ports `extractQualifiedRefs` and the "must use fully qualified
+// schema names" gate. That gate has a second teeth: the host's ref patterns
+// cover only the create/alter/drop-table + from/join/references/into/update
+// keyword families -- there is NO pattern for `CREATE INDEX ... ON
+// schema.table`, so a standalone CREATE INDEX is rejected at install with
+// `Plugin migration objects must use fully qualified schema names`.
+// Surfaced by the Plan 03-03 Countermoves drill, 2026-05-15 (0004 originally
+// shipped 4 CREATE INDEX statements; they were removed -- PK/UNIQUE
+// constraints inside CREATE TABLE cover the access paths that matter).
+//
 // If the host validator is ever fixed upstream, this test stays correct --
 // it only asserts what the host asserts today.
 
@@ -107,6 +117,22 @@ function normaliseSql(input) {
   return stripSqlForKeywordScan(input).replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+// extractQualifiedRefs: finds `schema.table` refs the host recognizes.
+// Verbatim port -- note the absence of any `create index` / `on` pattern.
+function extractQualifiedRefs(statement) {
+  const refs = [];
+  const patterns = [
+    /\b(from|join|references|into|update)\s+"?([A-Za-z_][A-Za-z0-9_]*)"?\."?([A-Za-z_][A-Za-z0-9_]*)"?/gi,
+    /\b(alter\s+table|create\s+table|create\s+view|drop\s+table|truncate\s+table)\s+(?:if\s+(?:not\s+)?exists\s+)?"?([A-Za-z_][A-Za-z0-9_]*)"?\."?([A-Za-z_][A-Za-z0-9_]*)"?/gi,
+  ];
+  for (const pattern of patterns) {
+    for (const match of statement.matchAll(pattern)) {
+      refs.push({ keyword: match[1].toLowerCase(), schema: match[2], table: match[3] });
+    }
+  }
+  return refs;
+}
+
 // The host's DDL gate: validatePluginMigrationStatement line ~185.
 const DDL_PREFIX = /^(create|alter|comment)\b/;
 
@@ -133,6 +159,23 @@ for (const f of files) {
           `Most common cause: an apostrophe inside a -- comment. ` +
           `Keep migration comments apostrophe-free.`,
       );
+
+      // Qualified-refs gate: every non-COMMENT statement must yield at least
+      // one schema.table ref the host can see. A standalone CREATE INDEX
+      // yields none and is rejected with
+      // "Plugin migration objects must use fully qualified schema names".
+      if (!normalized.startsWith('comment ')) {
+        assert.ok(
+          extractQualifiedRefs(statement).length > 0,
+          `migration ${f} has a statement the host rejects with ` +
+            `"Plugin migration objects must use fully qualified schema names".\n` +
+            `Statement normalizes to:\n  ${normalized.slice(0, 160)}\n` +
+            `The host's extractQualifiedRefs only recognizes refs for ` +
+            `create/alter/drop-table + from/join/references/into/update. ` +
+            `CREATE INDEX is not supported in plugin migrations -- rely on ` +
+            `PRIMARY KEY / UNIQUE constraints inside CREATE TABLE instead.`,
+        );
+      }
     }
   });
 }

@@ -20,8 +20,23 @@
 -- greedy regex before classifying each statement. An odd apostrophe inside
 -- a `--` comment pairs with the opening quote of the first real string
 -- literal and swallows the leading CREATE keyword, so the statement is
--- rejected as non-DDL. Keep migration comments apostrophe-free. Surfaced by
--- the Plan 03-03 Countermoves drill 2026-05-15.
+-- rejected as non-DDL. Keep migration comments apostrophe-free.
+--
+-- NO STANDALONE CREATE INDEX: the host extractQualifiedRefs has no pattern
+-- for `CREATE INDEX ... ON schema.table`, so a standalone CREATE INDEX
+-- yields zero qualified refs and is rejected with `Plugin migration objects
+-- must use fully qualified schema names`. The access paths that matter are
+-- indexed by the inline PRIMARY KEY / UNIQUE constraints (validator-supported
+-- inside CREATE TABLE); at Daily Bulletin scale (~365 bulletins rows a year)
+-- no extra indexes are needed.
+--
+-- NO TRAILING COMMENTS: the host splitSqlStatements treats any non-empty
+-- text after the final `;` as a statement; a comment-only trailing block
+-- normalizes to empty and is rejected. The file must end on a `;`-terminated
+-- statement.
+--
+-- Both CREATE INDEX removal + the apostrophe fix surfaced in the Plan 03-03
+-- Countermoves drill 2026-05-15.
 -- Regression test: test/migrations/0004-bulletin-schema.test.mjs +
 -- test/migrations/no-procedural-blocks.test.mjs +
 -- test/migrations/ddl-prefix-validator.test.mjs.
@@ -118,19 +133,3 @@ CREATE TABLE IF NOT EXISTS plugin_clarity_pack_cdd6bda4bd.bulletin_compile_failu
 
 COMMENT ON TABLE plugin_clarity_pack_cdd6bda4bd.bulletin_compile_failures IS
   'D-22 failed-compile banner state. UI reads the latest row; banner shows while next_retry_at > now.';
-
--- ---------------------------------------------------------------------------
--- Indexes for common query paths.
--- ---------------------------------------------------------------------------
-
-CREATE INDEX IF NOT EXISTS bulletins_company_cycle_idx
-  ON plugin_clarity_pack_cdd6bda4bd.bulletins (company_id, cycle_number DESC);
-
-CREATE INDEX IF NOT EXISTS bulletins_next_due_idx
-  ON plugin_clarity_pack_cdd6bda4bd.bulletins (next_due_at);
-
-CREATE INDEX IF NOT EXISTS bulletin_errata_cycle_idx
-  ON plugin_clarity_pack_cdd6bda4bd.bulletin_errata (bulletin_cycle_number);
-
-CREATE INDEX IF NOT EXISTS bulletin_compile_failures_cycle_idx
-  ON plugin_clarity_pack_cdd6bda4bd.bulletin_compile_failures (cycle_number, failed_at DESC);
