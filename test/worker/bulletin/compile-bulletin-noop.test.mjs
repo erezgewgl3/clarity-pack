@@ -7,7 +7,9 @@
 // 03-02. These tests lock the gating + bootstrap behavior:
 //   - registration happens exactly once under the 'compile-bulletin' key
 //   - now < next_due_at  -> no INSERT, no ctx.issues.create
-//   - next_due_at null   -> bootstrap a 'pending' row, do NOT compile
+//   - next_due_at null   -> bootstrap a 'pending' row at sentinel cycle 0,
+//     do NOT compile (cycle 0 must not collide with the first real cycle 1 —
+//     see the Plan 03-03 drill PK-collision fix)
 //   - empty company list -> clean no-op
 //   - per-company try/catch isolates a thrown company (matches
 //     situation-snapshot.ts:127 warn-not-throw style)
@@ -111,6 +113,13 @@ test('compile-bulletin: bootstraps a pending row when next_due_at is null (first
   const inserts = dbCalls.filter((c) => /INSERT INTO/i.test(c.sql ?? ''));
   assert.equal(inserts.length, 1, 'must write exactly one bootstrap row');
   assert.match(inserts[0].sql, /bulletins/i, 'bootstrap row targets the bulletins table');
+  assert.equal(
+    inserts[0].params?.[0],
+    0,
+    'bootstrap row must use sentinel cycle_number 0 — the first real compile ' +
+      'publishes cycle 1, so a bootstrap row at cycle 1 would collide on the ' +
+      'bulletins primary key and the first bulletin could never publish',
+  );
   assert.equal(issuesCreated.length, 0, 'bootstrap must NOT compile/publish');
 });
 

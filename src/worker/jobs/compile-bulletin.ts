@@ -97,9 +97,20 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         // Bootstrap: first ever compile for this company. Write a 'pending'
         // row carrying the freshly-computed next_due_at and return without
         // compiling — the next fire compiles only once now >= next_due_at.
+        //
+        // cycle_number 0 is a SENTINEL: the bootstrap row is a schedule
+        // carrier, not a real bulletin. Real bulletins start at cycle 1
+        // (MAX(published cycle) + 1 with no published rows = 1). Letting
+        // upsertBulletin auto-assign here would make the bootstrap row cycle 1
+        // too, and the first real compile's publishBulletin INSERT (cycle 1)
+        // would then collide on the bulletins primary key — its
+        // `ON CONFLICT (next_due_at, content_hash)` clause does NOT catch a PK
+        // conflict, so the INSERT throws and the first bulletin can never
+        // publish. Surfaced by the Plan 03-03 Countermoves drill 2026-05-15.
         if (!nextDueAtIso) {
           const nextDueAt = computeNextDueAt(now);
           await upsertBulletin(ctx, {
+            cycle_number: 0,
             company_id: company.id,
             next_due_at: nextDueAt.toISOString(),
             compiled_at: null,
