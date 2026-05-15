@@ -55,6 +55,11 @@ import {
   registerSituationSnapshotJob,
   type SituationSnapshotCtx,
 } from './worker/jobs/situation-snapshot.ts';
+// Plan 03-01 — Daily Bulletin compile job (Wave 1 skeleton).
+import {
+  registerCompileBulletinJob,
+  type CompileBulletinCtx,
+} from './worker/jobs/compile-bulletin.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -85,6 +90,14 @@ const plugin = definePlugin({
     registerSituationRoomHandlers(ctx as unknown as SituationRoomCtx);
     registerActiveViewerPing(ctx as unknown as ActiveViewerPingCtx);
     registerSituationSnapshotJob(ctx as unknown as SituationSnapshotCtx);
+
+    // ---- Plan 03-01 — Daily Bulletin compile job (Wave 1 skeleton) ----------
+    // Plans 03-02 + 03-03 + 03-04 will register additional bulletin handlers
+    // (bulletin.byCycle, bulletin.latestCompileStatus, bulletin.errata.*,
+    // bulletin.action.approve, bulletin.action.decline). The compile-bulletin
+    // job itself runs the two-pass compile pipeline in Plan 03-02; the Wave-1
+    // skeleton only reads next_due_at and no-ops when not yet due.
+    registerCompileBulletinJob(ctx as unknown as CompileBulletinCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.

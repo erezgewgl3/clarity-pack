@@ -59,6 +59,12 @@ const manifest: PaperclipPluginManifestV1 = {
     // Plan 02-04 Task 2 — required for the recompute-situation 60s job
     // declared in jobs[] below (PLUGIN_SPEC §17).
     'jobs.schedule',
+    // Plan 03-01 — Daily Bulletin. issues.create lets the compile pipeline
+    // (Plan 03-02) persist each bulletin as a canonical Paperclip issue
+    // (D-16); issue.comments.create lets Plan 03-04 append errata as a
+    // comment on the prior cycle's issue (D-18).
+    'issues.create',
+    'issue.comments.create',
   ],
   entrypoints: {
     worker: './dist/worker.js',
@@ -157,6 +163,19 @@ const manifest: PaperclipPluginManifestV1 = {
           'Situation Room polling cadence in milliseconds. Mockup shows 30s; default 60s per D-03. ' +
           'Configurable via Paperclip admin UI; the running plugin picks up changes on next configChanged.',
       },
+      // Plan 03-01 — Daily Bulletin config (D-20 departments, BULL-01 timezone).
+      bulletinDepartments: {
+        type: 'array',
+        items: { type: 'string' },
+        default: ['Production', 'Sales', 'Customer', 'Builder'],
+        description: 'D-20: department sections rendered in the Daily Bulletin.',
+      },
+      bulletinTimezone: {
+        type: 'string',
+        default: 'America/New_York',
+        description:
+          'BULL-01: timezone for the 06:30 daily compile. Locked to ET for v1.',
+      },
     },
   },
   // Plan 02-04 Task 2 — recompute-situation 60s cron job. The handler in
@@ -168,6 +187,16 @@ const manifest: PaperclipPluginManifestV1 = {
       jobKey: 'recompute-situation',
       schedule: '*/1 * * * *',
       displayName: 'Recompute Situation Room snapshot',
+    },
+    // Plan 03-01 — fires every minute; the handler in
+    // src/worker/jobs/compile-bulletin.ts reads bulletins.next_due_at and
+    // only compiles when `now >= next_due_at`. The cron string is a
+    // heartbeat HINT per D-12 — the worker-managed next_due_at (computed via
+    // date-fns-tz in America/New_York) is the DST-safe source of truth.
+    {
+      jobKey: 'compile-bulletin',
+      schedule: '*/1 * * * *',
+      displayName: 'Compile Daily Bulletin (DST-safe; worker-managed next_due_at)',
     },
   ],
   agents: [

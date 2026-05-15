@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS plugin_clarity_pack_cdd6bda4bd.bulletins (
 );
 
 COMMENT ON TABLE plugin_clarity_pack_cdd6bda4bd.bulletins IS
-  'D-17 bulletin metadata. Canonical body lives in public.issues (D-16); draft_json holds the verified structured BulletinDraft (W3/W4). UNIQUE (next_due_at, content_hash) is the D-13 idempotency key.';
+  'D-17 bulletin metadata. Canonical body lives in the host issues table (D-16); draft_json holds the verified structured BulletinDraft (W3/W4). UNIQUE (next_due_at, content_hash) is the D-13 idempotency key.';
 
 -- ---------------------------------------------------------------------------
 -- bulletin_errata — D-18 first-class append-only errata.
