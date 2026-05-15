@@ -43,15 +43,19 @@ import { verifyDraft } from '../bulletin/bulletin-verifier.ts';
 import { publishBulletin } from '../bulletin/publish.ts';
 import { recordFailure, recordSuccess, BULLETIN_COMPILE_AGENT_KEY } from '../agents/circuit-breaker.ts';
 import { EDITOR_AGENT_ID_TAG } from '../agents/compile-tldr.ts';
+// EDITOR_AGENT_KEY is the manifest agents[] key — the SINGLE source of truth
+// lives in editor.ts and MUST equal manifest.agents[].agentKey ('editor-agent').
+// Do NOT redefine it here: a local copy with the wrong string ('clarity-pack-
+// editor-agent', the value of the unrelated EDITOR_AGENT_ID_TAG) made every
+// ctx.agents.managed.reconcile() throw "reconcile failed" — the compile-bulletin
+// job silently bailed before compiling. Surfaced by the Plan 03-05 drill.
+import { EDITOR_AGENT_KEY } from '../agents/editor.ts';
 // Plan 03-05 — production LLM invocation via ctx.agents.sessions.
 import { sessionLlmAdapter } from '../agents/session-llm-adapter.ts';
 // Plan 03-03 — cycle-start department reconcile + deterministic lineage build.
 import { reconcileDepartments } from '../bulletin/department-reconcile.ts';
 import { groupLineageThreads, type ActivityEvent } from '../bulletin/lineage-grouper.ts';
 import type { BulletinDraft, StandingNumberRow } from '../../shared/types.ts';
-
-/** Editor-Agent manifest key — used for ctx.agents.managed.reconcile. */
-const EDITOR_AGENT_KEY = 'clarity-pack-editor-agent';
 
 /** Retry spacing for a failed compile cycle (D-22 — 15 minutes). */
 const RETRY_INTERVAL_MS = 15 * 60 * 1000;
