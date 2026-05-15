@@ -53,7 +53,6 @@ export type CompilePass1Ctx = CircuitBreakerCtx & {
     warn?(...a: unknown[]): void;
     error?(...a: unknown[]): void;
   };
-  llm?: LlmAdapter;
 };
 
 export type CompilePass1Args = {
@@ -62,8 +61,15 @@ export type CompilePass1Args = {
   factsTable: FactsTable;
   standingNumbers: StandingNumberRow[];
   departments: string[];
-  /** Optional adapter override; absent → ctx.llm. Tests pass a stub. */
-  llm?: LlmAdapter;
+  /**
+   * The LLM adapter. Plan 03-05: this is the REAL `sessionLlmAdapter`
+   * (agent-chat-session backed) built per-company by the compile-bulletin job;
+   * tests pass a stub. There is no `ctx.llm` fallback — `ctx.llm` never existed
+   * on the SDK `PluginContext` (03-LLM-INVOCATION-RESEARCH.md). Keeping a
+   * `?? ctx.llm` fallback was a type-level fiction; the adapter is always
+   * supplied by the caller, so `llm` is required here.
+   */
+  llm: LlmAdapter;
 };
 
 /**
@@ -155,9 +161,12 @@ export async function compilePass1(
     );
   }
 
-  const llm = args.llm ?? ctx.llm;
+  // Plan 03-05: the LLM adapter is always supplied by the caller (the
+  // compile-bulletin job builds a real session-backed adapter per company).
+  // There is no `ctx.llm` — it never existed on the SDK PluginContext.
+  const { llm } = args;
   if (!llm) {
-    throw new Error('compilePass1 called without an LLM adapter wired into ctx.llm');
+    throw new Error('compilePass1 called without an LLM adapter (args.llm is required)');
   }
 
   let raw: string;
