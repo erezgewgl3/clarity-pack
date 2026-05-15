@@ -60,6 +60,17 @@ import type { BulletinDraft, StandingNumberRow } from '../../shared/types.ts';
 /** Retry spacing for a failed compile cycle (D-22 — 15 minutes). */
 const RETRY_INTERVAL_MS = 15 * 60 * 1000;
 
+/**
+ * Render a thrown value as a string for a log MESSAGE (not metadata).
+ * The Paperclip host forwards only a fixed set of plugin-log fields and drops
+ * arbitrary metadata keys like `err`, so the error must live in the message
+ * string itself to survive into `~/paperclip-run.log`. Surfaced Plan 03-05.
+ */
+function errText(e: unknown): string {
+  if (e instanceof Error) return e.stack ?? `${e.name}: ${e.message}`;
+  return typeof e === 'string' ? e : JSON.stringify(e);
+}
+
 /** v1 default departments — Plan 03-03 reads these from instanceConfig. */
 const DEFAULT_DEPARTMENTS = ['Production', 'Sales', 'Customer', 'Builder'];
 
@@ -154,9 +165,8 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           const resolution = await ctx.agents.managed.reconcile(EDITOR_AGENT_KEY, company.id);
           editorAgentId = resolution.agentId;
         } catch (e) {
-          ctx.logger?.warn?.('compile-bulletin: editor-agent reconcile failed', {
+          ctx.logger?.warn?.(`compile-bulletin: editor-agent reconcile failed: ${errText(e)}`, {
             companyId: company.id,
-            err: (e as Error).message,
           });
           continue;
         }
@@ -192,9 +202,8 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             });
           }
         } catch (e) {
-          ctx.logger?.warn?.('compile-bulletin: editor-agent resume failed', {
+          ctx.logger?.warn?.(`compile-bulletin: editor-agent resume failed: ${errText(e)}`, {
             companyId: company.id,
-            err: (e as Error).message,
           });
           continue;
         }
@@ -255,9 +264,8 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             });
           }
         } catch (e) {
-          ctx.logger?.warn?.('compile-bulletin: lineage activities fetch failed', {
+          ctx.logger?.warn?.(`compile-bulletin: lineage activities fetch failed: ${errText(e)}`, {
             companyId: company.id,
-            err: (e as Error).message,
           });
         }
         const lineageThreads = groupLineageThreads(lineageActivities, { maxDeltaSec: 300 });
@@ -267,9 +275,8 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         try {
           standingValues = await computeStandingNumbers(ctx, company.id);
         } catch (e) {
-          ctx.logger?.warn?.('compile-bulletin: standing-numbers failed', {
+          ctx.logger?.warn?.(`compile-bulletin: standing-numbers failed: ${errText(e)}`, {
             companyId: company.id,
-            err: (e as Error).message,
           });
           continue;
         }
@@ -399,9 +406,8 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           [newNextDueAt.toISOString(), cycleNumber, company.id],
         );
       } catch (e) {
-        ctx.logger?.warn?.('compile-bulletin: per-company iteration failed', {
+        ctx.logger?.warn?.(`compile-bulletin: per-company iteration failed: ${errText(e)}`, {
           companyId: company.id,
-          err: (e as Error).message,
         });
       }
     }
