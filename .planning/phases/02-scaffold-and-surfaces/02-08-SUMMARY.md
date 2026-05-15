@@ -2,8 +2,9 @@
 phase: 2
 plan: 02-08
 plan_name: situation-room-gap-closure
-status: TASKS_1_2_3_COMPLETE — Task 4 (Countermoves re-drill) AWAITING_HUMAN
+status: APPROVED — Plan 02-09 Countermoves re-drill 2026-05-15 PASS (`approved — phase 2 closed`); 02-08 polish (CSS chrome + UUID-narration humanization + useOptIn refresh + production esbuild + awaiting-you semantics) all visually confirmed on Countermoves Situation Room (Critical Path renders "CEO has no owner assigned" / "Editor has no owner assigned" humanized; both agent cards show Standby `<1m` state pill + idle prose + HUMAN ACTION ON typed terminal). DEV-08 (Vite WS leak) deferred to Plan 02-10 (console noise only, non-blocking).
 completed_date_partial: 2026-05-14T23:00Z
+approved_date: 2026-05-15T12:30Z
 wave: 6
 type: execute
 depends_on: ["02-04"]

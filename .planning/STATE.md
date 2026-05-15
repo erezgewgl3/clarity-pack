@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-15T12:00:00Z"
+last_updated: "2026-05-15T12:30:00Z"
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 13
-  completed_plans: 5  # 02-04 + 02-08 still PARTIAL pending Plan 02-09 re-drill closure
-  percent: 32
+  completed_phases: 2
+  total_plans: 14  # added 02-10 polish bundle (deferred, non-blocking)
+  completed_plans: 8  # 02-01..02-04 + 02-08 + 02-09 closed; 02-05/02-06/02-07/02-10 deferred polish
+  percent: 40
   phase_1_status: COMPLETE — SAFE-01..05 all green; rehearsal PASS 2026-05-13 against Hostinger Countermoves (hosted Postgres). Plan 01-05 cleanup landed 2026-05-13 — pg-dump-locator with bundled-first discovery + version pre-check + dbUrl auto-derivation + operator-gotchas.md catalog. All 3 Phase 2 spike defects now disposed: defect-1 fixed (mode-detect), defect-2 fixed (locator), defect-3 documented (version-mismatch is inherent to pg_dump; clean error path + runbook workaround shipped). Full safety CLI suite: 122 pass / 0 fail.
-  phase_2_status: EXECUTING (Plan 02-09 Tasks 1-3 COMPLETE 2026-05-15; awaiting Task 4 Countermoves re-drill) — Plan 02-09 Tasks 1-3 landed in 6 atomic RED→GREEN commits a49e720..7b5f1be. STRUCTURAL DEVIATION FROM PLAN TEXT — Task 1 implemented as UI-side `useResolvedUserId` resolver (Better Auth fetch to `/api/auth/get-session`, credentials:'include') instead of the plan's proposed worker `get-viewer` handler; SDK has no caller-identity accessor (PluginContext lacks user/users/session; GetDataParams has no envelope userId; ctx.http.fetch is outbound Node without browser cookies). EXEMPT_HANDLER_KEYS unchanged. Plan's escape hatch ("TBD by handler author"; "STOP if neither path works") authorized. Threaded through 4 wrapped-handler UI call sites (reader/index + pause-banner + live-blocker-panel + ref-chip). DEV-16 issue-reader degradation contract locked with 8 per-sub-step tests. Suite 365→422 tests (+57; 420 pass / 0 fail / 2 skip). Typecheck clean. dist/worker.js 38.9 KB (unchanged), dist/ui/index.js 64.3→67.8 KB (+3.5 KB). Prior drill context (carry-forward): Countermoves drill 2026-05-14/15 proved 12 of 14 Phase 2 reqs. On Plan 02-09 Task 4 re-drill approval 'approved — phase 2 closed': Plans 02-04 + 02-08 + 02-09 flip PARTIAL→APPROVED, Phase 2 closes COMPLETE, completed_phases 1→2, percent 32→40. Three Phase 3-interleave follow-ons remain non-blocking (02-05/02-06/02-07).
+  phase_2_status: COMPLETE 2026-05-15 — Plan 02-09 Countermoves re-drill PASSED on /COU/issues/COU-4 (`approved — phase 2 closed`). 14 of 14 verifiable Phase 2 reqs Implemented (OPTIN-01..05 + ROOM-01..08 + COEXIST-06). Reader renders fully on detail-tab slot; /api/auth/get-session resolver returns Eric's user.id=E8TMB44X20gwBYvFz3Qf4jUO71bc8k1B; useResolvedUserId threads it through all 4 wrapped handlers (issue.reader / flatten-blocker-chain / editor.pause-status / resolve-refs). Situation Room visual fidelity preserved (no regression). Plan 02-09 STRUCTURAL DEVIATION accepted — worker `get-viewer` infeasible per SDK (no caller-identity accessor); UI-side Better-Auth fetch is the correct architectural fit under the same-origin trust model. Test suite 269→422 (+153 across Phase 2; 420 pass / 0 fail / 2 skip). dist/ui/index.js 67.8 KB (+59.6 KB cumulative across Phase 2). Plan close-out chain: 02-01 PARTIAL (Linux Check B deferred) + 02-02 COMPLETE + 02-03/03b/03c CLOSED + 02-04 APPROVED + 02-08 APPROVED + 02-09 APPROVED. Plan 02-10 FILED for non-blocking polish (DEV-07 React keys + DEV-08 Vite WS console noise) — can interleave with Phase 3.
 ---
 
 # State: Clarity Pack
@@ -25,21 +25,20 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 2 — executing. Plan 02-09 Tasks 1-3 COMPLETE 2026-05-15 (suite 365→422; 6 commits a49e720..7b5f1be) — gap-closure for Plans 02-04 + 02-08 PARTIAL. Task 4 AWAITING HUMAN — Eric re-drills against Countermoves per 02-09-PLAN.md <how-to-verify>. On 'approved — phase 2 closed' verdict, Plans 02-04 + 02-08 + 02-09 flip PARTIAL→APPROVED and Phase 2 closes.
+**Current Focus:** Phase 2 — **COMPLETE 2026-05-15**. All 14 verifiable Phase 2 reqs Implemented; Reader + Situation Room visually confirmed on Countermoves COU-4 + /COU/situation-room. Next: Phase 3 (Daily Bulletin) — depends only on Phase 2. Deferred polish plans (02-05/02-06/02-07/02-10) remain non-blocking and can interleave with Phase 3 planning/execution.
 
 ## Current Position
 
-Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **EXECUTING (Plan 02-09 awaiting Task 4 Countermoves re-drill)**
+Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **COMPLETE 2026-05-15 ✓**
 **Plans:**
   - 02-01 PARTIAL — smoke spike (Linux Check B deferred — non-blocking, accepted)
   - 02-02 COMPLETE 2026-05-13 — scaffold + 6 primitives + trust-model hardening
   - 02-03 + 02-03b + 02-03c CLOSED TOGETHER 2026-05-14T09:08+ — Editor-Agent + Reader view + companyId resolver + drill APPROVED on Countermoves COU-1
-  - 02-04 PARTIAL — Tasks 1-3 COMPLETE 2026-05-14T15:39Z, Task 4 drill 2026-05-14T19:15Z found 8 gap defects DEV-06..DEV-13 → spawned 02-08
-  - 02-08 PARTIAL — Tasks 1-3 COMPLETE 2026-05-14T23:00Z (CSS chrome + UUID-narration + useOptIn refresh + prod esbuild + awaiting-you semantics); Task 4 drill 2026-05-15T00:00+ found DEV-14 (CSS load) FIXED in-session + DEV-15-STRUCTURAL (detail-tab userId null) → spawned 02-09
-  - 02-09 Tasks 1-3 COMPLETE 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
-  - 02-09 Task 4 AWAITING HUMAN — Countermoves re-drill closes Plans 02-04 + 02-08 + 02-09 + Phase 2 on 'approved — phase 2 closed' verdict
-  - 02-05 + 02-06 + 02-07 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date) — non-blocking, can interleave with Phase 3
-**Status:** 02-09 commits a49e720 (Task 1 RED) → e8ea853 (Task 1 GREEN) → c1c3930 (Task 2 RED) → a00371d (Task 2 GREEN) → 21473fd (Task 3 RED+GREEN combined per audit pattern) → 7b5f1be (docs: SUMMARY + Finding #11). Suite 365→422 pass / 0 fail / 2 skip (+57 tests). Typecheck + build clean. dist/ui/index.js 64.3→67.8 KB (+3.5 KB resolver + 4 call-site rewires); dist/worker.js 38.9 KB unchanged.
+  - 02-04 APPROVED 2026-05-15 — Situation Room + Opt-In + Coexistence CI (via 02-08 → 02-09 closure chain)
+  - 02-08 APPROVED 2026-05-15 — Situation Room gap-closure polish (CSS chrome + UUID-narration humanization + useOptIn refresh + prod esbuild + awaiting-you semantics)
+  - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
+  - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
+**Status:** Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.
 **Progress:** [###       ] 1/5 phases complete; Phase 2 ~85% by plan count (6/7 incl. 02-04+02-08 partial pairing)
 
 ## Performance Metrics

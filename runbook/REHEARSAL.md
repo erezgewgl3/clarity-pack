@@ -292,6 +292,90 @@ The Reader surface itself is structurally correct; it works on issues without un
 
 ---
 
+### 2026-05-15 — Plan 02-09 re-drill (Countermoves) — **`approved — phase 2 closed`** ✓
+
+Re-drill of Plan 02-04 + 02-08 + 02-09 chain against Countermoves Hostinger (`https://countermoves.gl3group.com`). Same instance, same test issue `/COU/issues/COU-4`, same test user `EG` (`E8TMB44X20gwBYvFz3Qf4jUO71bc8k1B`).
+
+**Verdict: PASS — Phase 2 closes COMPLETE.**
+
+#### Deployed artifact
+
+- Tarball: `clarity-pack-0.1.0-smoke.tgz`, 31.5 KB (npm pack), remote sha256 `8e72ceafcc6ea2a7c883865163419bfc5aa7fa28b7972b903d5f890919fc68bf`
+- Manifest version: `0.2.0`
+- Plugin UUID: `0d4fc40a-0541-4b67-8979-9d346cb9c07b` (same as prior drills — COEXIST-#6 reconfirmed)
+- Deploy chain: `npm pack` (local) → `scp` (PowerShell OpenSSH) → `pnpm paperclipai plugin uninstall clarity-pack` → `bash ~/install-helper.sh ~/clarity-pack-0.1.0-smoke.tgz` (94 npm deps in 4s) → `pnpm paperclipai plugin list` showed `status=ready`
+- Local commits closing Plan 02-09 Tasks 1-3: `a49e720` (Task 1 RED), `e8ea853` (Task 1 GREEN), `c1c3930` (Task 2 RED), `a00371d` (Task 2 GREEN), `21473fd` (Task 3), `7b5f1be` (SUMMARY + Finding #11)
+- Test suite delta across Plan 02-09: 365 → 422 (+57; 420 pass / 0 fail / 2 skip)
+
+#### Section A — Reader on detail-tab (the gap from 2026-05-15)
+
+Hard-refresh `/COU/issues/COU-4`. **Reader tab renders fully.**
+
+| Region | Verified | Notes |
+|---|---|---|
+| Breadcrumb / Issue header | ✓ | "Issues > test issue" parent route preserved |
+| TL;DR pill | ✓ | "Compiling TL;DR…" — expected; Editor-Agent hasn't compiled this issue yet |
+| Issue body with linkified ref-chips | ✓ | `BEAAA-141 · unknown`, `BEAAA-203 · unknown`, `BEAAA-417 · unknown` — graceful loading pills as plan 02-09 anticipated (these BEAAA-* refs don't exist on Countermoves; failure mode is `unknown` placeholder, not error boundary) |
+| LiveBlockerPanel (right rail) | ✓ | `EXTERNAL — No active blockers` — typed terminal rendered gracefully |
+| AnchoredToCards | ✓ | "No upstream references in this task." — empty-state copy |
+| AcChecklist | ✓ | "No acceptance criteria recorded yet." — empty-state copy |
+| ActivityTimeline | ✓ | "No relevant activity yet." — empty-state copy |
+| Error boundaries | ✓ | No "Clarity Pack failed to render" red banner; no stuck "Loading Reader view…" |
+
+#### Section B — DevTools Network payload verification
+
+`GET /api/auth/get-session` (new — proof the UI-side resolver works):
+
+```json
+{
+  "session": { "id": "paperclip:session:E8TMB44X20gw…", "userId": "E8TMB44X20gwBYvFz3Qf4jUO71bc8k1B" },
+  "user":    { "id": "E8TMB44X20gwBYvFz3Qf4jUO71bc8k1B", "email": "ericg@gl3group.com", "name": "EG" }
+}
+```
+
+Because all four wrapped handlers (`issue.reader`, `flatten-blocker-chain`, `editor.pause-status`, `resolve-refs`) returned data (proven by the rendered regions above), opt-in-guard received non-null `userId` in `params` — proving useResolvedUserId threaded the resolved id correctly. The 2026-05-15 failure mode (`{error: OPT_IN_REQUIRED}` for opted-in user) is gone.
+
+#### Section C — Console (filtered for clarity-pack origin)
+
+- ✓ No `TypeError: Cannot read properties of undefined` from clarity-pack
+- ✓ No `Plugin slot render failed` originating from `clarity-reader`
+- ⚠ DEV-07 (React key warnings) — `ClaritySurfaceRoot` + `AnchoredToCards` still emit "Each child in a list should have a unique 'key' prop". Plan 02-09 Task 4 verification step 5 **explicitly** routed this case ("document as 02-09's own deferred polish for a Plan 02-10") — routed to Plan 02-10.
+- ⚠ DEV-08 (Vite HMR WebSocket noise) — `WebSocket connection to wss://127.0.0.1:13100/?token=… failed`. Plan 02-08 Task 3 added defense-in-depth `define` block but the host-side bundle is still leaking. Routed to Plan 02-10.
+- 404s on `/api/issues/BEAAA-{141,203,417}` are **host-side Paperclip linkifier behavior** on text matching the issue-key pattern — not a clarity-pack defect (same as the 2026-05-14 row noted).
+
+#### Section D — Situation Room visual revisit (no regression check)
+
+Navigate to `/COU/situation-room` and hard-refresh. **Pass — fidelity preserved from 2026-05-15.**
+
+- Critical Path: numbered list renders "Awaiting action: CEO has no owner assigned." / "Awaiting action: Editor has no owner assigned." — humanized labels, **zero raw UUIDs visible** (DEV-11 humanizeChain still working)
+- Two agent cards (Ceo / Editor): both show `Standby · <1m` state pill, "Standby — idle <1m" prose (DEV-12 fallback), HUMAN ACTION ON terminals with role names
+
+#### Section E — Bookend snapshot
+
+**INTENTIONALLY SKIPPED** — Countermoves is staging, not BEAAA; CLAUDE.md bookended-by-snapshots rule scopes to BEAAA only. Documented previously, restated here.
+
+#### Routed to Plan 02-10 (non-blocking polish)
+
+| Defect | Symptom | Investigation hint |
+|---|---|---|
+| DEV-07 | React key warnings on `ClaritySurfaceRoot` + `AnchoredToCards` | Likely array-prop pattern without Fragment keys — components now actually render so the warning is reachable |
+| DEV-08 | `wss://127.0.0.1:13100/?token=…` connect-failed in console on every page load | Vite client bundled somewhere despite 02-08 esbuild define block — needs source-grep on dist/ui for `vite` / `import.meta.hot` |
+
+#### Phase 2 close-out write-back chain
+
+- Plan 02-04 SUMMARY status: PARTIAL → APPROVED ✓
+- Plan 02-08 SUMMARY status: PARTIAL → APPROVED ✓
+- Plan 02-09 SUMMARY status: AWAITING → APPROVED ✓
+- REQUIREMENTS.md: 14 Phase 2 reqs (OPTIN-01..05 + ROOM-01..08 + COEXIST-06) marked Implemented ✓
+- STATE.md: `phase_2_status: COMPLETE`, `completed_phases: 1→2`, `percent: 32→40` ✓
+- ROADMAP.md: Phase 2 checkbox `[x]` 2026-05-15 ✓
+- Plan 02-10 FILED for deferred polish ✓
+- MemPalace decision drawer FILED in `clarity_pack/decisions` ✓
+
+**SAFE-02 grep:** continues to MATCH (this row is dated `2026-05-15`).
+
+---
+
 ## Bypass Audit Log
 
 Every honored `--gate-bypass` invocation appends a `[BYPASS]` line

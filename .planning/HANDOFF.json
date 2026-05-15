@@ -1,35 +1,54 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-15T12:00:00.000Z",
-  "source": "execute-phase",
+  "timestamp": "2026-05-15T06:41:04.852Z",
+  "source": "auto-postool",
   "partial": false,
-  "phase": 2,
-  "phase_name": "2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **EXECUTING (Plan 02-09 awaiting Task 4 Countermoves re-drill)**",
-  "phase_dir": ".planning/phases/02-scaffold-and-surfaces",
-  "plan": "02-09",
-  "task": "4 (checkpoint:human-verify)",
-  "total_tasks": 4,
-  "status": "auto-tasks-complete-awaiting-human-checkpoint",
-  "completed_tasks": [
-    "02-09 Task 1: useResolvedUserId UI-side resolver (Better-Auth fetch fallback) — commits a49e720 RED, e8ea853 GREEN",
-    "02-09 Task 2: thread useResolvedUserId through ref-chip + reader/index + pause-banner + live-blocker-panel — commits c1c3930 RED, a00371d GREEN",
-    "02-09 Task 3: DEV-16 issue-reader degradation contract locked with 8 per-sub-step tests — commit 21473fd",
-    "02-09 docs: SUMMARY + Finding #11 appended to 02-03b-API-SHAPES.md — commit 7b5f1be"
-  ],
-  "remaining_tasks": [
-    "02-09 Task 4: Eric's Countermoves re-drill against /COU/issues/COU-4 — see 02-09-PLAN.md <how-to-verify>"
-  ],
+  "phase": null,
+  "phase_name": "2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **COMPLETE 2026-05-15 ✓**",
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "auto-checkpoint",
+  "completed_tasks": [],
+  "remaining_tasks": [],
   "blockers": [],
-  "human_actions_pending": [
-    "Eric: SSH to Countermoves Hostinger (ssh -i $HOME\\.ssh\\countermoves_vps_ed25519 eric@82.29.197.74), deploy via npm pack + scp + install-helper.sh, hard-refresh /COU/issues/COU-4, verify Reader renders fully, DevTools Network shows real UUIDs in userId/viewerUserId for all 4 wrapped handlers, Console clean. Resume signal: 'approved — phase 2 closed'."
-  ],
-  "decisions": [
-    "STRUCTURAL DEVIATION from Plan 02-09 Task 1 plan text: implemented as UI-side useResolvedUserId resolver (Better-Auth fetch to /api/auth/get-session, credentials:'include') instead of the worker get-viewer handler the plan proposed. SDK pre-flight verification showed PluginContext has no caller-identity accessor (no users/user/session/identity); GetDataParams has no envelope-level userId; ctx.http.fetch is outbound Node fetch without browser cookies; UI cannot bootstrap a worker get-viewer call without already knowing userId (circular dependency). Plan's explicit escape hatch ('TBD by handler author'; 'STOP if neither path works') authorized. EXEMPT_HANDLER_KEYS unchanged (no new worker handler shipped). Documented in src/ui/primitives/use-resolved-user-id.ts header + 02-09-SUMMARY.md + 02-03b-API-SHAPES.md Finding #11."
-  ],
+  "human_actions_pending": [],
+  "decisions": [],
   "uncommitted_files": [
-    ".planning/STATE.md (orchestrator-updated for 02-09 close)",
-    ".planning/HANDOFF.json (this file)"
+    {
+      "status": "M",
+      "path": ".planning/HANDOFF.json"
+    },
+    {
+      "status": "M",
+      "path": ".planning/REQUIREMENTS.md"
+    },
+    {
+      "status": "M",
+      "path": ".planning/ROADMAP.md"
+    },
+    {
+      "status": "M",
+      "path": ".planning/STATE.md"
+    },
+    {
+      "status": "M",
+      "path": ".planning/phases/02-scaffold-and-surfaces/02-04-SUMMARY.md"
+    },
+    {
+      "status": "M",
+      "path": ".planning/phases/02-scaffold-and-surfaces/02-08-SUMMARY.md"
+    },
+    {
+      "status": "M",
+      "path": ".planning/phases/02-scaffold-and-surfaces/02-09-SUMMARY.md"
+    },
+    {
+      "status": "M",
+      "path": "runbook/REHEARSAL.md"
+    }
   ],
-  "next_action": "Awaiting Eric's Countermoves COU-4 re-drill per 02-09-PLAN.md Task 4 <how-to-verify>. On 'approved — phase 2 closed' verdict: continuation agent flips Plans 02-04 + 02-08 + 02-09 SUMMARY statuses APPROVED, marks 14 Phase 2 reqs Implemented, updates STATE.md (phase_2_status: COMPLETE, completed_phases: 1→2, percent: 32→40), updates ROADMAP.md, files MemPalace drawer in clarity_pack/decisions.",
-  "context_notes": "Plan 02-09 Tasks 1-3 closed in 6 atomic RED→GREEN commits a49e720..7b5f1be. Suite 365→422 tests (+57; 420 pass / 0 fail / 2 skip). Typecheck clean. dist/ui/index.js 64.3→67.8 KB (+3.5 KB); dist/worker.js 38.9 KB unchanged. Finding #11 appended to 02-03b-API-SHAPES.md documenting detail-tab userId-null semantics + UI-side resolver pattern. The architectural deviation (UI fetch vs worker handler) was forced by SDK gaps and approved by the plan's own STOP escape hatch — NOT a freestyle choice.\n\nRecent commits:\n7b5f1be docs(02-09): SUMMARY (Tasks 1-3 complete) + Finding #11 (userId-null detail-tab gap)\n21473fd test(02-09): Task 3 - lock issue-reader DEV-16 degradation contract\na00371d feat(02-09): Task 2 GREEN - thread useResolvedUserId through all wrapped-handler UI call sites\nc1c3930 test(02-09): Task 2 RED - useResolvedUserId threading contract at all wrapped-handler call sites\ne8ea853 feat(02-09): Task 1 GREEN - useResolvedUserId hook with Better-Auth fallback\na49e720 test(02-09): Task 1 RED - useResolvedUserId UI-side resolver contract"
+  "next_action": "Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.",
+  "context_notes": "Status: Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.\n\nRecent commits:\nf4df6e2 docs(02-09): close Tasks 1-3 in STATE.md + HANDOFF.json; Plan 02-09 Task 4 awaiting Eric's Countermoves re-drill\n7b5f1be docs(02-09): SUMMARY (Tasks 1-3 complete) + Finding #11 (userId-null detail-tab gap)\n21473fd test(02-09): Task 3 - lock issue-reader DEV-16 degradation contract\na00371d feat(02-09): Task 2 GREEN - thread useResolvedUserId through all wrapped-handler UI call sites\nc1c3930 test(02-09): Task 2 RED - useResolvedUserId threading contract at all wrapped-handler call sites"
 }

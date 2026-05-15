@@ -2,8 +2,9 @@
 phase: 2
 plan: 02-04
 plan_name: situation-room-optin-coexistence-ci
-status: TASKS_1_2_3_COMPLETE — Task 4 (manual rehearsal) AWAITING_HUMAN
+status: APPROVED — Plan 02-09 Countermoves re-drill 2026-05-15 PASS (`approved — phase 2 closed`); routed via 02-08 → 02-09 closure chain. DEV-15-STRUCTURAL closed by useResolvedUserId UI-side resolver; opt-in-guard now receives real userId; Reader renders fully on /COU/issues/COU-4 (incl. graceful "unknown" ref-chips for cross-project BEAAA-* placeholders). DEV-07 (React keys) + DEV-08 (Vite WS console noise) deferred to Plan 02-10 (non-blocking polish).
 completed_date_partial: 2026-05-14T15:39Z
+approved_date: 2026-05-15T12:30Z
 wave: 4
 type: execute
 depends_on: ["02-03"]

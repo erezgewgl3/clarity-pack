@@ -193,11 +193,11 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | SCAF-07 | Phase 2 | Pending |
 | SCAF-08 | Phase 2 | Pending |
 | SCAF-09 | Phase 2 | Pending |
-| OPTIN-01 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| OPTIN-02 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| OPTIN-03 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| OPTIN-04 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| OPTIN-05 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
+| OPTIN-01 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| OPTIN-02 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| OPTIN-03 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| OPTIN-04 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| OPTIN-05 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | PRIM-01 | Phase 2 | Pending |
 | PRIM-02 | Phase 2 | Pending |
 | PRIM-03 | Phase 2 | Pending |
@@ -219,14 +219,14 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | READER-07 | Phase 2 | Pending |
 | READER-08 | Phase 2 | Pending |
 | READER-09 | Phase 2 | Pending |
-| ROOM-01 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| ROOM-02 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| ROOM-03 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| ROOM-04 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| ROOM-05 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| ROOM-06 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| ROOM-07 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
-| ROOM-08 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
+| ROOM-01 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| ROOM-02 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| ROOM-03 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| ROOM-04 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| ROOM-05 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| ROOM-06 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| ROOM-07 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| ROOM-08 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | BULL-01 | Phase 3 | Pending |
 | BULL-02 | Phase 3 | Pending |
 | BULL-03 | Phase 3 | Pending |
@@ -252,7 +252,7 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | COEXIST-03 | Phase 2 | Pending |
 | COEXIST-04 | Phase 2 | Pending |
 | COEXIST-05 | Phase 5 | Pending |
-| COEXIST-06 | Phase 2 | Implemented (pending Phase 2 rehearsal — Plan 02-04) |
+| COEXIST-06 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | DIST-01 | Phase 5 | Pending |
 | DIST-02 | Phase 5 | Pending |
 | DIST-03 | Phase 5 | Pending |

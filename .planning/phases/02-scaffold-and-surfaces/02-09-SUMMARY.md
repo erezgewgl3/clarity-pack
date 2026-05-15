@@ -2,7 +2,8 @@
 phase: 2
 plan: 02-09
 plan_type: execute + gap-closure
-status: AUTO TASKS COMPLETE; awaiting Countermoves re-drill (Task 4 checkpoint)
+status: APPROVED — Countermoves re-drill 2026-05-15 PASS (`approved — phase 2 closed`). DEV-15-STRUCTURAL fully closed: /api/auth/get-session returns user.id=E8TMB44X20gwBYvFz3Qf4jUO71bc8k1B and useResolvedUserId threads it through all 4 wrapped-handler call sites; Reader renders fully on detail-tab slot COU-4; no `Clarity Pack failed to render`; no `Plugin slot render failed`; no `TypeError: Cannot read properties of undefined` from clarity-pack. Situation Room visual fidelity preserved (no regression). Two pre-existing polish items routed to Plan 02-10: DEV-07 (React key warnings — plan's explicit "document as 02-10 if any remain" pathway) + DEV-08 (Vite HMR WS console noise — 02-08 Task 3 defense-in-depth didn't fully close on host side).
+approved_date: 2026-05-15T12:30Z
 parent_plan: 02-08
 input_source: .planning/phases/02-scaffold-and-surfaces/02-04-DRILL-FINDINGS.md (DEV-15-STRUCTURAL + DEV-16)
 requirements: [ROOM-01, ROOM-02, ROOM-03, ROOM-04, ROOM-08]
