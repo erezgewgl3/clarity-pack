@@ -101,12 +101,16 @@ export async function upsertBulletin(
     cycleNumber = (maxRows[0]?.max_cycle ?? 0) + 1;
   }
 
-  const inserted = await ctx.db.query<BulletinRow>(
+  // HOST CONTRACT (SDK PluginDatabaseClient): ctx.db.query is SELECT-only and
+  // ctx.db.execute returns only { rowCount } — no rows, so RETURNING is
+  // unavailable. The write therefore goes through execute (no RETURNING) and
+  // the row is read back via a SELECT. This is the same shape whether the
+  // INSERT landed a new row or hit ON CONFLICT DO NOTHING.
+  await ctx.db.execute(
     `INSERT INTO plugin_clarity_pack_cdd6bda4bd.bulletins
        (${BULLETIN_COLS})
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb)
-     ON CONFLICT (next_due_at, content_hash) DO NOTHING
-     RETURNING ${BULLETIN_COLS}`,
+     ON CONFLICT (next_due_at, content_hash) DO NOTHING`,
     [
       cycleNumber,
       row.company_id,
@@ -121,9 +125,9 @@ export async function upsertBulletin(
       JSON.stringify(row.draft_json ?? {}),
     ],
   );
-  if (inserted[0]) return inserted[0];
 
-  // ON CONFLICT swallowed the insert — return the pre-existing row.
+  // Read the row back (the freshly-inserted row, or the pre-existing one if
+  // ON CONFLICT swallowed the insert) so callers always get a row.
   const existing = await ctx.db.query<BulletinRow>(
     `SELECT ${BULLETIN_COLS}
      FROM plugin_clarity_pack_cdd6bda4bd.bulletins
@@ -193,22 +197,36 @@ export async function getNextDueAtForCompany(
 /**
  * Append an erratum. bulletin_errata is append-only (D-18) — there is no
  * update path. `id` and `added_at` are assigned by Postgres.
+ *
+ * HOST CONTRACT: the INSERT runs through ctx.db.execute (RETURNING is
+ * unavailable through execute). The inserted row is then read back via a
+ * SELECT scoped to the just-written (cycle, user, body) — bulletin_errata is
+ * append-only so the most-recent matching row IS this insert.
  */
 export async function appendErratum(
   ctx: BulletinsRepoCtx,
   row: Omit<ErratumRow, 'id' | 'added_at'>,
 ): Promise<ErratumRow> {
-  const rows = await ctx.db.query<ErratumRow>(
+  await ctx.db.execute(
     `INSERT INTO plugin_clarity_pack_cdd6bda4bd.bulletin_errata
        (bulletin_cycle_number, added_by_user_id, body_md, applied_to_issue_comment_id)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, bulletin_cycle_number, added_at, added_by_user_id, body_md, applied_to_issue_comment_id`,
+     VALUES ($1, $2, $3, $4)`,
     [
       row.bulletin_cycle_number,
       row.added_by_user_id,
       row.body_md,
       row.applied_to_issue_comment_id,
     ],
+  );
+
+  const rows = await ctx.db.query<ErratumRow>(
+    `SELECT id, bulletin_cycle_number, added_at, added_by_user_id, body_md,
+            applied_to_issue_comment_id
+     FROM plugin_clarity_pack_cdd6bda4bd.bulletin_errata
+     WHERE bulletin_cycle_number = $1 AND added_by_user_id = $2 AND body_md = $3
+     ORDER BY added_at DESC, id DESC
+     LIMIT 1`,
+    [row.bulletin_cycle_number, row.added_by_user_id, row.body_md],
   );
   return rows[0];
 }
@@ -238,20 +256,24 @@ export async function listErrataByCycle(
 
 /**
  * Record a compile failure. Append-only — `id` and `failed_at` are assigned
- * by Postgres. The failed-compile banner (D-22) reads the latest row.
+ * by Postgres. The failed-compile banner (D-22) reads the latest row via
+ * getLatestCompileFailure, so this writer does not need to return the row.
+ *
+ * HOST CONTRACT: the INSERT runs through ctx.db.execute (a non-SELECT through
+ * ctx.db.query is rejected by the real host). The sole caller
+ * (compile-bulletin.ts) only `await`s this for its side effect, so it returns
+ * void rather than reading the row back.
  */
 export async function recordCompileFailure(
   ctx: BulletinsRepoCtx,
   row: Omit<CompileFailureRow, 'id' | 'failed_at'>,
-): Promise<CompileFailureRow> {
-  const rows = await ctx.db.query<CompileFailureRow>(
+): Promise<void> {
+  await ctx.db.execute(
     `INSERT INTO plugin_clarity_pack_cdd6bda4bd.bulletin_compile_failures
        (cycle_number, reason, attempt_n, next_retry_at)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, cycle_number, failed_at, reason, attempt_n, next_retry_at`,
+     VALUES ($1, $2, $3, $4)`,
     [row.cycle_number, row.reason, row.attempt_n, row.next_retry_at],
   );
-  return rows[0];
 }
 
 /**
