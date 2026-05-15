@@ -58,6 +58,41 @@ export const AGENT_NOT_INVOKABLE = 'AGENT_NOT_INVOKABLE';
 const NON_INVOKABLE_STATUSES = new Set(['paused', 'terminated', 'pending_approval']);
 
 /**
+ * Bounded retry budget for a transient "Session not found" rejection from
+ * `sendMessage`.
+ *
+ * The 2026-05-15 Countermoves drill failed exactly here: `sendMessage` rejected
+ * `Session not found: <sessionId>` on a session `create()` had resolved with
+ * moments earlier (a well-formed UUID). A session the host just minted and
+ * handed back cannot be *permanently* unknown — a not-found this soon after
+ * `create` is a create→sendMessage visibility race: the host's `AgentTaskSession`
+ * is not yet messageable on the worker's RPC channel. The reference plugin,
+ * `plugin-llm-wiki/startWikiQuerySession`, never observes it because it does
+ * host round-trips — a `ctx.db.execute` INSERT plus two `ctx.streams` calls —
+ * between `create` and `sendMessage`, which incidentally let the session
+ * settle. Clarity Pack's adapter goes create→sendMessage with zero intervening
+ * round-trips, so it must absorb the race itself.
+ *
+ * `SEND_RETRY_ATTEMPTS` is the TOTAL sendMessage attempt budget (1 initial +
+ * retries). Backoff is exponential from `SEND_RETRY_BASE_DELAY_MS`; the worst
+ * case (100+200+400ms ≈ 0.7s of cumulative backoff) sits comfortably inside
+ * `SESSION_TIMEOUT_MS`.
+ */
+export const SEND_RETRY_ATTEMPTS = 4;
+export const SEND_RETRY_BASE_DELAY_MS = 100;
+
+/**
+ * True when a thrown value is a "Session not found" rejection — the only
+ * `sendMessage` failure the adapter retries. A budget/capability/terminated
+ * rejection is permanent and must fail fast. Matches both the bare
+ * `Session not found` and the `Session not found or closed` host variants.
+ */
+function isTransientSessionNotFound(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /session not found/i.test(msg);
+}
+
+/**
  * The narrow ctx slice this adapter needs. Kept deliberately minimal so BOTH
  * the compile-bulletin job ctx and the editor heartbeat ctx structurally
  * satisfy it without a cast.
@@ -120,6 +155,16 @@ export function sessionLlmAdapter(
         reason: 'Clarity Pack compile',
       });
 
+      // Instrumentation (Plan 03-05 drill): log the created session INLINE in
+      // the message string. The Paperclip host forwards only a fixed set of
+      // plugin-log fields and drops arbitrary metadata keys, so any evidence
+      // for the next Countermoves drill must live in the message itself.
+      ctx.logger?.info?.(
+        `sessionLlmAdapter: created session=${session.sessionId} ` +
+          `agentId=${session.agentId} companyId=${session.companyId} ` +
+          `status=${session.status} createdAt=${session.createdAt}`,
+      );
+
       try {
         // 3. Wrap the streaming completion in a Promise. Resolution/rejection
         //    is driven by the TERMINAL onEvent (done/error) or the timeout —
@@ -164,17 +209,59 @@ export function sessionLlmAdapter(
             }
           };
 
-          ctx.agents.sessions
-            .sendMessage(session.sessionId, opts.companyId, {
-              prompt,
-              reason: 'compile pass',
-              onEvent,
-            })
-            .catch((err: unknown) => {
-              // `sendMessage` itself rejecting (send was NOT accepted) is a
-              // hard failure — no terminal event will ever arrive.
-              finish(() => reject(err instanceof Error ? err : new Error(String(err))));
-            });
+          // Send the prompt, retrying a transient "Session not found" with
+          // bounded exponential backoff (see SEND_RETRY_ATTEMPTS). `sendMessage`
+          // RESOLVING only means the send was accepted — the terminal event
+          // still drives resolve/reject. `sendMessage` REJECTING means the send
+          // was NOT accepted: a "Session not found" this soon after `create` is
+          // the create→sendMessage visibility race and is retried; any other
+          // rejection is permanent and fails fast.
+          const attemptSend = (attempt: number): void => {
+            ctx.agents.sessions
+              .sendMessage(session.sessionId, opts.companyId, {
+                prompt,
+                reason: 'compile pass',
+                onEvent,
+              })
+              .catch((err: unknown) => {
+                if (settled) return;
+                const msg = err instanceof Error ? err.message : String(err);
+
+                if (isTransientSessionNotFound(err)) {
+                  if (attempt < SEND_RETRY_ATTEMPTS) {
+                    const delay = SEND_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+                    ctx.logger?.warn?.(
+                      `sessionLlmAdapter: sendMessage attempt ${attempt}/${SEND_RETRY_ATTEMPTS} ` +
+                        `rejected "${msg}" for session=${session.sessionId} — ` +
+                        `retrying in ${delay}ms (create→sendMessage race)`,
+                    );
+                    setTimeout(() => {
+                      if (!settled) attemptSend(attempt + 1);
+                    }, delay);
+                    return;
+                  }
+                  // Retries exhausted — surface a message that proves the retry
+                  // ran, so the bulletin_compile_failures row is decisive
+                  // evidence for the next drill.
+                  finish(() =>
+                    reject(
+                      new Error(
+                        `sendMessage rejected "${msg}" on all ${SEND_RETRY_ATTEMPTS} attempts ` +
+                          `for session=${session.sessionId} (created ${session.createdAt}) — ` +
+                          `create→sendMessage visibility race did not clear`,
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
+                // A non-transient send failure (the send was rejected outright
+                // — capability, budget, terminated agent) will never produce a
+                // terminal event. Fail fast, no retry.
+                finish(() => reject(err instanceof Error ? err : new Error(msg)));
+              });
+          };
+          attemptSend(1);
         });
       } finally {
         // 4. Always close the session. A close failure must not mask the real
