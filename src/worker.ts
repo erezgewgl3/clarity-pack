@@ -104,13 +104,14 @@ const plugin = definePlugin({
     registerActiveViewerPing(ctx as unknown as ActiveViewerPingCtx);
     registerSituationSnapshotJob(ctx as unknown as SituationSnapshotCtx);
 
-    // ---- Plan 03-01 — Daily Bulletin compile job (Wave 1 skeleton) ----------
-    // Plans 03-02 + 03-03 + 03-04 will register additional bulletin handlers
-    // (bulletin.byCycle, bulletin.latestCompileStatus, bulletin.errata.*,
-    // bulletin.action.approve, bulletin.action.decline). The compile-bulletin
-    // job itself runs the two-pass compile pipeline in Plan 03-02; the Wave-1
-    // skeleton only reads next_due_at and no-ops when not yet due.
-    registerCompileBulletinJob(ctx as unknown as CompileBulletinCtx);
+    // ---- Plan 03-01/03-02/03-05 — Daily Bulletin compile job ----------------
+    // The compile-bulletin job runs the two-pass compile pipeline; Plan 03-05
+    // wired a real session-backed LlmAdapter into it. Every member of
+    // CompileBulletinCtx is now a genuine PluginContext field (the synthetic
+    // `llm` member is gone) — so the `as unknown as` cast that previously
+    // manufactured the missing `llm` is no longer needed. A plain
+    // structural-narrowing cast is all that remains.
+    registerCompileBulletinJob(ctx as CompileBulletinCtx);
 
     // ---- Plan 03-03 — Bulletin UI + Action Inbox handlers -------------------
     // bulletin.byCycle is the page's data handler; bulletin.action.approve /

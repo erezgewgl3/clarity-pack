@@ -54,6 +54,17 @@ const manifest: PaperclipPluginManifestV1 = {
     'agents.read',
     'agents.pause',
     'agents.resume',
+    // Plan 03-05 — production LLM invocation via ctx.agents.sessions
+    // (03-LLM-INVOCATION-RESEARCH.md). The compile-bulletin job and the
+    // Editor-Agent heartbeat TL;DR path open an agent chat session, send the
+    // compile prompt, accumulate the streamed chunk events, and close — the
+    // real LlmAdapter that replaces the impossible `ctx.llm` seam. Exact
+    // members of PLUGIN_CAPABILITIES. `agents.resume` (above) lets the
+    // compile job resume the manifest's status:'paused' Editor-Agent.
+    'agent.sessions.create',
+    'agent.sessions.list',
+    'agent.sessions.send',
+    'agent.sessions.close',
     'events.subscribe',
     'companies.read',
     // Plan 02-04 Task 2 — required for the recompute-situation 60s job

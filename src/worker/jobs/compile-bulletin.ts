@@ -38,11 +38,13 @@ import {
 } from '../db/bulletins-repo.ts';
 import { computeStandingNumbers, STANDING_NUMBER_SLOTS } from '../bulletin/standing-numbers.ts';
 import { computeFactsTable } from '../bulletin/facts-table.ts';
-import { compilePass1, type LlmAdapter } from '../bulletin/compile-pass-1.ts';
+import { compilePass1 } from '../bulletin/compile-pass-1.ts';
 import { verifyDraft } from '../bulletin/bulletin-verifier.ts';
 import { publishBulletin } from '../bulletin/publish.ts';
 import { recordFailure, recordSuccess, BULLETIN_COMPILE_AGENT_KEY } from '../agents/circuit-breaker.ts';
 import { EDITOR_AGENT_ID_TAG } from '../agents/compile-tldr.ts';
+// Plan 03-05 — production LLM invocation via ctx.agents.sessions.
+import { sessionLlmAdapter } from '../agents/session-llm-adapter.ts';
 // Plan 03-03 — cycle-start department reconcile + deterministic lineage build.
 import { reconcileDepartments } from '../bulletin/department-reconcile.ts';
 import { groupLineageThreads, type ActivityEvent } from '../bulletin/lineage-grouper.ts';
@@ -59,8 +61,15 @@ const DEFAULT_DEPARTMENTS = ['Production', 'Sales', 'Customer', 'Builder'];
 
 /**
  * Context shape the compile-bulletin job needs. Extends BulletinsRepoCtx so
- * the repo functions accept it directly. `llm` is optional so tests can inject
- * a stub LlmAdapter; production wires it through the Editor-Agent adapter.
+ * the repo functions accept it directly.
+ *
+ * Plan 03-05: the synthetic `llm?: LlmAdapter` member is GONE. There is no
+ * single ctx-wide LLM independent of an agent — the job builds a real
+ * `sessionLlmAdapter` per company from `ctx.agents` + the resolved
+ * `editorAgentId` and passes it into `compilePass1` as an argument. Every
+ * member below is now a real `PluginContext` field, so `worker.ts` registers
+ * this job without the `as unknown as` cast that previously manufactured the
+ * missing `llm`.
  */
 export type CompileBulletinCtx = BulletinsRepoCtx & {
   logger?: PluginLogger;
@@ -69,7 +78,6 @@ export type CompileBulletinCtx = BulletinsRepoCtx & {
   companies: PluginCompaniesClient;
   agents: PluginAgentsClient;
   issues: PluginIssuesClient;
-  llm?: LlmAdapter;
 };
 
 /**
@@ -151,6 +159,38 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         if (!editorAgentId) {
           ctx.logger?.warn?.('compile-bulletin: no editor-agent id', {
             companyId: company.id,
+          });
+          continue;
+        }
+
+        // Plan 03-05 — resume the Editor-Agent if it ships paused.
+        //
+        // The manifest declares the Editor-Agent `status: 'paused'` (a
+        // coexistence-friendly default — Eric reviews the agent before
+        // anything runs). On a fresh install the first compile WILL hit a
+        // paused agent, and sessionLlmAdapter would reject AGENT_NOT_INVOKABLE
+        // before it can ever produce a bulletin. The fix (research
+        // Open-Follow-up #1): resume the agent here, immediately before the
+        // first session. `resume` flips `paused → idle` only; a
+        // `terminated`/`pending_approval` agent rejects resume (host-enforced)
+        // — that is a real operator-action failure, so we warn and skip the
+        // company rather than treat it as a compile bug. The bulletin job owns
+        // this resume because the bulletin is the scheduled, must-succeed
+        // surface (the heartbeat TL;DR path is best-effort and does NOT
+        // resume).
+        try {
+          const agent = await ctx.agents.get(editorAgentId, company.id);
+          if (agent?.status === 'paused') {
+            await ctx.agents.resume(editorAgentId, company.id);
+            ctx.logger?.info?.('compile-bulletin: resumed paused Editor-Agent', {
+              companyId: company.id,
+              agentId: editorAgentId,
+            });
+          }
+        } catch (e) {
+          ctx.logger?.warn?.('compile-bulletin: editor-agent resume failed', {
+            companyId: company.id,
+            err: (e as Error).message,
           });
           continue;
         }
@@ -248,6 +288,19 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         const factsTable = computeFactsTable({ rows: standingValues, slotDefs });
 
         // 4. Pass 1 — LLM produces a structured BulletinDraft.
+        //
+        // Plan 03-05: build the REAL session-backed LlmAdapter from
+        // `ctx.agents` + the resolved `editorAgentId`. `compilePass1` does
+        // `args.llm ?? ctx.llm` — supplying `args.llm` makes the (now-removed)
+        // `ctx.llm` fiction dead on this path. An AGENT_NOT_INVOKABLE
+        // rejection, a session error, or a session timeout all surface as a
+        // pass-1 throw routed through the existing catch → recordCompileFailure
+        // block below — no new failure machinery.
+        const llm = sessionLlmAdapter(ctx, {
+          agentId: editorAgentId,
+          companyId: company.id,
+          taskKeyPrefix: `clarity-pack:bulletin:cycle-${cycleNumber}`,
+        });
         let draft: BulletinDraft;
         try {
           draft = await compilePass1(ctx, {
@@ -256,6 +309,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             factsTable,
             standingNumbers: standingNumberRows,
             departments: DEFAULT_DEPARTMENTS,
+            llm,
           });
         } catch (e) {
           // recordFailure already invoked inside compilePass1.

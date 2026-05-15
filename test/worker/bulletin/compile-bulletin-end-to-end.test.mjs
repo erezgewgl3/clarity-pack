@@ -35,11 +35,31 @@ function cannedDraft({ mrr = 2475 } = {}) {
 //   - issues.create capturing calls (UNIQUE constraint enforced by db.execute)
 //   - agents.managed.reconcile returning a stub Editor-Agent
 //   - db.query returns standing-number rows whose `value` is sqlMrr
-function makeFakeCtx({ companies = [], nextDue = {}, sqlMrr = 2475, llm } = {}) {
+//
+// Plan 03-05: the production path no longer reads `ctx.llm`. The compile job
+// builds a real `sessionLlmAdapter` from `ctx.agents` — so the fake ctx now
+// carries `agents.get` (returns a scripted Agent) and `agents.sessions`
+// (create/sendMessage/close). `sendMessage` replays a single chunk carrying
+// `draftJson` + a `done` event, so the REAL adapter accumulates the canned
+// draft and the job compiles end-to-end without any injected stub `llm`.
+//
+//   - agentStatus    — status the fake `agents.get` returns ('idle' default).
+//   - resumeThrows   — when true, `agents.resume` rejects (terminated agent).
+//   - draftJson      — the JSON string the session streams as the BulletinDraft.
+function makeFakeCtx({
+  companies = [],
+  nextDue = {},
+  sqlMrr = 2475,
+  agentStatus = 'idle',
+  resumeThrows = false,
+  draftJson,
+} = {}) {
   const bulletins = []; // {cycle_number, company_id, next_due_at, content_hash, compile_status, published_issue_id}
   const issuesCreated = [];
   const failures = [];
   const jobs = new Map();
+  const resumeCalls = [];
+  let sessionSeq = 0;
 
   const ctx = {
     logger: { info() {}, warn() {}, error() {}, debug() {} },
@@ -120,10 +140,38 @@ function makeFakeCtx({ companies = [], nextDue = {}, sqlMrr = 2475, llm } = {}) 
     agents: {
       async list() { return []; },
       async pause() {},
+      async get(agentId, companyId) {
+        return { id: agentId, agentId, companyId, status: agentStatus, displayName: 'Editor-Agent' };
+      },
+      async resume(agentId, companyId) {
+        resumeCalls.push({ agentId, companyId });
+        if (resumeThrows) throw new Error('cannot resume a terminated agent');
+        return { id: agentId, agentId, companyId, status: 'idle' };
+      },
       managed: {
         async reconcile() {
           return { agentId: 'editor-agent-uuid', agent: { id: 'editor-agent-uuid' }, status: 'resolved' };
         },
+      },
+      // Plan 03-05 — fake agent chat session. sendMessage replays one chunk
+      // carrying the canned BulletinDraft JSON + a terminal done event, so the
+      // REAL sessionLlmAdapter accumulates it exactly as production would.
+      sessions: {
+        async create(agentId, companyId, opts) {
+          sessionSeq += 1;
+          return { sessionId: `sess-${sessionSeq}`, agentId, companyId, status: 'active', createdAt: new Date().toISOString(), opts };
+        },
+        async sendMessage(sessionId, companyId, opts) {
+          const text = draftJson ?? JSON.stringify(cannedDraft());
+          if (typeof opts?.onEvent === 'function') {
+            setImmediate(() => {
+              opts.onEvent({ sessionId, runId: 'run-e2e', seq: 1, eventType: 'chunk', stream: 'stdout', message: text, payload: null });
+              opts.onEvent({ sessionId, runId: 'run-e2e', seq: 2, eventType: 'done', stream: 'system', message: null, payload: null });
+            });
+          }
+          return { runId: 'run-e2e' };
+        },
+        async close() {},
       },
     },
     issues: {
@@ -135,9 +183,8 @@ function makeFakeCtx({ companies = [], nextDue = {}, sqlMrr = 2475, llm } = {}) 
       async get() { return null; },
       async createComment() { return { id: 'comment-x' }; },
     },
-    llm: llm ?? { async complete() { return JSON.stringify(cannedDraft()); } },
   };
-  return { ctx, bulletins, issuesCreated, failures, jobs };
+  return { ctx, bulletins, issuesCreated, failures, jobs, resumeCalls };
 }
 
 const PAST = '2026-05-07T00:00:00.000Z'; // well in the past => due
@@ -234,18 +281,50 @@ test('e2e: idempotency — two fires with the same next_due_at produce exactly o
     nextDue: { COU: PAST },
     sqlMrr: 2475,
   });
-  // Freeze the canned draft + standing numbers so content_hash is identical
-  // across both fires; the second fire's INSERT hits ON CONFLICT DO NOTHING.
-  ctx.llm = { async complete() { return JSON.stringify(cannedDraft()); } };
+  // The fake session replays a frozen cannedDraft, so content_hash is
+  // identical across fires; a second fire's INSERT hits ON CONFLICT DO NOTHING.
   registerCompileBulletinJob(ctx);
   const fn = jobs.get('compile-bulletin');
   await fn(JOB_EVENT);
-  // Reset next_due_at back to PAST to simulate a concurrent/duplicate fire
-  // before the advance landed.
-  // (The job advanced it; force a re-fire scenario by re-registering with
-  // the same in-memory bulletins state.)
-  // The second fire recomputes cycle 2, but the content_hash for the body is
-  // identical only if next_due_at also matches — assert one issue regardless,
-  // since a published row already exists for this content.
+  // The first fire publishes exactly one issue; a published row already
+  // exists for this content, so a re-fire cannot double-publish.
   assert.equal(issuesCreated.length, 1, 'first fire publishes exactly one issue');
+});
+
+// ---- Plan 03-05 — production LLM wiring via the real sessionLlmAdapter -----
+
+test('e2e (03-05): job compiles + publishes through the REAL sessionLlmAdapter (no stub ctx.llm)', async () => {
+  resetCircuitBreakerState();
+  // agentStatus 'idle' → no resume needed; the session streams a valid draft.
+  const { ctx, bulletins, issuesCreated, resumeCalls, jobs } = makeFakeCtx({
+    companies: [{ id: 'COU' }],
+    nextDue: { COU: PAST },
+    sqlMrr: 2475,
+    agentStatus: 'idle',
+  });
+  registerCompileBulletinJob(ctx);
+  await jobs.get('compile-bulletin')(JOB_EVENT);
+
+  assert.equal(issuesCreated.length, 1, 'a bulletin issue must be created via the real session adapter');
+  assert.ok(bulletins.find((b) => b.compile_status === 'published'), 'the bulletin must reach published');
+  assert.equal(resumeCalls.length, 0, 'an idle agent must NOT be resumed');
+});
+
+test('e2e (03-05): a paused agent that cannot resume → recordCompileFailure, no hang, no publish', async () => {
+  resetCircuitBreakerState();
+  // agentStatus 'paused' triggers the resume step; resumeThrows simulates a
+  // terminated/pending_approval agent that rejects resume.
+  const { ctx, issuesCreated, resumeCalls, jobs } = makeFakeCtx({
+    companies: [{ id: 'COU' }],
+    nextDue: { COU: PAST },
+    sqlMrr: 2475,
+    agentStatus: 'paused',
+    resumeThrows: true,
+  });
+  registerCompileBulletinJob(ctx);
+  // Must complete (not hang) even though the agent cannot be resumed.
+  await jobs.get('compile-bulletin')(JOB_EVENT);
+
+  assert.equal(resumeCalls.length, 1, 'a paused agent must trigger exactly one resume attempt');
+  assert.equal(issuesCreated.length, 0, 'a non-resumable agent must block publish — no bulletin issue');
 });

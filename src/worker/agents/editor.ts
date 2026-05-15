@@ -20,7 +20,11 @@
 // routine/jobs.schedule path, not this dispatcher).
 
 import { filterSelfLoopEvents, EDITOR_WRITE_TAG } from './self-loop-filter.ts';
-import { compileTldr, EDITOR_AGENT_ID_TAG, type LlmAdapter } from './compile-tldr.ts';
+import { compileTldr, EDITOR_AGENT_ID_TAG } from './compile-tldr.ts';
+// Plan 03-05 — production LLM invocation via ctx.agents.sessions (the same
+// adapter the bulletin compile uses; closes research Open-Follow-up #3 — the
+// Reader's stuck "Compiling TL;DR…" was the identical ctx.llm fiction).
+import { sessionLlmAdapter, type SessionLlmAdapterCtx } from './session-llm-adapter.ts';
 
 // Stable agent key — referenced by manifest agents[] AND every reconcile call.
 export const EDITOR_AGENT_KEY = 'editor-agent';
@@ -72,15 +76,20 @@ export type EditorHeartbeatPayload = {
   }>;
 };
 
-export type EditorHeartbeatCtx = Parameters<typeof compileTldr>[0] & {
-  issues: {
-    get(issueId: string): Promise<{ id: string; body: string }>;
+// Plan 03-05: the synthetic `llm?: LlmAdapter` member is GONE — the heartbeat
+// path builds a real `sessionLlmAdapter` from the resolved `payload.agentId`
+// and passes it to `compileTldr` as an argument. `SessionLlmAdapterCtx`
+// (the {agents.get, agents.sessions} slice) is intersected in so the ctx
+// structurally satisfies the adapter factory without a cast.
+export type EditorHeartbeatCtx = Parameters<typeof compileTldr>[0] &
+  SessionLlmAdapterCtx & {
+    issues: {
+      get(issueId: string): Promise<{ id: string; body: string }>;
+    };
+    issue: {
+      comments: { read(issueId: string): Promise<Array<{ body: string }>> };
+    };
   };
-  issue: {
-    comments: { read(issueId: string): Promise<Array<{ body: string }>> };
-  };
-  llm?: LlmAdapter;
-};
 
 /**
  * Extract BEAAA-NNN references from an issue body. Used to build the prompt
@@ -109,6 +118,19 @@ export async function handleEditorHeartbeat(
   const issueIds = Array.from(
     new Set(filtered.filter((e) => e.entity_type === 'issue' && e.entity_id).map((e) => e.entity_id as string)),
   );
+
+  // Plan 03-05 — build the real session-backed LlmAdapter once per heartbeat
+  // from the resolved agentId. Heartbeat compiles are best-effort: we do NOT
+  // resume a paused agent here (the bulletin job owns the resume because the
+  // bulletin is the scheduled, must-succeed surface). A paused agent simply
+  // yields an AGENT_NOT_INVOKABLE throw from compileTldr that the per-issue
+  // catch below logs and skips.
+  const llm = sessionLlmAdapter(ctx, {
+    agentId: payload.agentId,
+    companyId: payload.companyId,
+    taskKeyPrefix: 'clarity-pack:tldr',
+  });
+
   for (const issueId of issueIds) {
     try {
       const issue = await ctx.issues.get(issueId);
@@ -121,6 +143,7 @@ export async function handleEditorHeartbeat(
         agentKey: EDITOR_AGENT_KEY,
         agentId: payload.agentId,
         companyId: payload.companyId,
+        llm,
       });
     } catch (err) {
       // recordFailure already fired inside compileTldr; log + continue so one
