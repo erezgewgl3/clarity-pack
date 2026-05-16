@@ -56,6 +56,18 @@ export const SESSION_TASKKEY_PREFIX = 'plugin:clarity-pack:session:';
  *                                                message — for asserting the
  *                                                adapter does NOT retry a
  *                                                non-"not found" failure.
+ * @param {boolean} opts.heartbeatPolicySkip     — catalogue item 4: when true,
+ *                                                EVERY sendMessage throws the
+ *                                                verbatim host string
+ *                                                'Agent wakeup was skipped by
+ *                                                heartbeat policy' — a
+ *                                                DISTINCT, non-transient
+ *                                                failure (≠ "Session not
+ *                                                found") the host raises when
+ *                                                the agent is not invokable.
+ *                                                isTransientSessionNotFound
+ *                                                returns false for it, so the
+ *                                                adapter must NOT retry it.
  * @param {Array}   opts.events                 — AgentSessionEvents replayed via
  *                                                onEvent once a send is accepted.
  * @param {boolean} opts.replayNone             — when true, an accepted send
@@ -67,6 +79,7 @@ export function makeHostFaithfulAgents({
   agentNull = false,
   notFoundForFirstNSends = 0,
   sendMessageRejection = null,
+  heartbeatPolicySkip = false,
   events = [],
   replayNone = false,
 } = {}) {
@@ -137,6 +150,15 @@ export function makeHostFaithfulAgents({
         const attempt = (sendAttempts.get(sessionId) ?? 0) + 1;
         sendAttempts.set(sessionId, attempt);
         calls.sendMessage.push({ sessionId, companyId, attempt, opts: sendOpts });
+
+        // Catalogue item 4 — heartbeat-policy rejection. The host raises this
+        // verbatim string when the agent is not invokable at wakeup time. It
+        // is a DISTINCT failure from 'Session not found': isTransientSessionNot
+        // Found in session-llm-adapter.ts matches only /session not found/i, so
+        // this is non-transient and the adapter must NOT retry it.
+        if (heartbeatPolicySkip) {
+          throw new Error('Agent wakeup was skipped by heartbeat policy');
+        }
 
         // Permanent, non-transient rejection — must NOT be retried.
         if (sendMessageRejection) {
