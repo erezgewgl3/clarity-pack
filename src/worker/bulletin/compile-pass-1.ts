@@ -20,7 +20,6 @@ import {
   BULLETIN_COMPILE_AGENT_KEY,
   type CircuitBreakerCtx,
 } from '../agents/circuit-breaker.ts';
-import { EDITOR_AGENT_ID_TAG } from '../agents/compile-tldr.ts';
 import { replaceSlots } from './facts-table.ts';
 import type {
   BulletinDraft,
@@ -61,6 +60,15 @@ export type CompilePass1Args = {
   factsTable: FactsTable;
   standingNumbers: StandingNumberRow[];
   departments: string[];
+  /**
+   * The RESOLVED Editor-Agent UUID for this company (from
+   * `ctx.agents.managed.reconcile`). Used as the `agentId` on every
+   * `recordFailure` call so that, when the D-06 circuit breaker trips, it
+   * pauses the real agent. Passing the non-UUID `EDITOR_AGENT_ID_TAG` name tag
+   * here is rejected host-side as `invalid input syntax for type uuid` and
+   * masks the real failure — the 2026-05-16 Countermoves drill defect.
+   */
+  editorAgentId: string;
   /**
    * The LLM adapter. Plan 03-05: this is the REAL `sessionLlmAdapter`
    * (agent-chat-session backed) built per-company by the compile-bulletin job;
@@ -152,7 +160,7 @@ export async function compilePass1(
   if (inputTokens > MAX_BULLETIN_TOKENS) {
     await recordFailure(ctx, {
       agentKey: BULLETIN_COMPILE_AGENT_KEY,
-      agentId: EDITOR_AGENT_ID_TAG,
+      agentId: args.editorAgentId,
       companyId: args.companyId,
       reason: `input_tokens=${inputTokens} exceeds MAX_BULLETIN_TOKENS=${MAX_BULLETIN_TOKENS}`,
     });
@@ -175,7 +183,7 @@ export async function compilePass1(
   } catch (err) {
     await recordFailure(ctx, {
       agentKey: BULLETIN_COMPILE_AGENT_KEY,
-      agentId: EDITOR_AGENT_ID_TAG,
+      agentId: args.editorAgentId,
       companyId: args.companyId,
       reason: `llm_error: ${(err as Error).message}`,
     });
@@ -188,7 +196,7 @@ export async function compilePass1(
   } catch (err) {
     await recordFailure(ctx, {
       agentKey: BULLETIN_COMPILE_AGENT_KEY,
-      agentId: EDITOR_AGENT_ID_TAG,
+      agentId: args.editorAgentId,
       companyId: args.companyId,
       reason: `llm_output_not_json: ${(err as Error).message}`,
     });
@@ -200,7 +208,7 @@ export async function compilePass1(
   } catch (err) {
     await recordFailure(ctx, {
       agentKey: BULLETIN_COMPILE_AGENT_KEY,
-      agentId: EDITOR_AGENT_ID_TAG,
+      agentId: args.editorAgentId,
       companyId: args.companyId,
       reason: `draft_schema_invalid: ${(err as Error).message}`,
     });

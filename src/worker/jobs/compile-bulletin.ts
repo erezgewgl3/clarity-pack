@@ -42,7 +42,6 @@ import { compilePass1 } from '../bulletin/compile-pass-1.ts';
 import { verifyDraft } from '../bulletin/bulletin-verifier.ts';
 import { publishBulletin } from '../bulletin/publish.ts';
 import { recordFailure, recordSuccess, BULLETIN_COMPILE_AGENT_KEY } from '../agents/circuit-breaker.ts';
-import { EDITOR_AGENT_ID_TAG } from '../agents/compile-tldr.ts';
 // EDITOR_AGENT_KEY is the manifest agents[] key — the SINGLE source of truth
 // lives in editor.ts and MUST equal manifest.agents[].agentKey ('editor-agent').
 // Do NOT redefine it here: a local copy with the wrong string ('clarity-pack-
@@ -319,6 +318,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             factsTable,
             standingNumbers: standingNumberRows,
             departments: DEFAULT_DEPARTMENTS,
+            editorAgentId,
             llm,
           });
         } catch (e) {
@@ -341,7 +341,11 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
               : `verifier rejected: ${verdict.kind}:${verdict.slot}`;
           await recordFailure(ctx, {
             agentKey: BULLETIN_COMPILE_AGENT_KEY,
-            agentId: editorAgentId ?? EDITOR_AGENT_ID_TAG,
+            // editorAgentId is the resolved UUID — guaranteed non-null here by
+            // the `if (!editorAgentId) continue` guard earlier in the loop. It
+            // must be a real UUID: recordFailure's breaker-trip path calls
+            // ctx.agents.pause(agentId), which the host rejects if it is not.
+            agentId: editorAgentId,
             companyId: company.id,
             reason,
           });

@@ -18,9 +18,14 @@ import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 function makeCtx() {
   const failures = [];
+  const pauseCalls = [];
   const ctx = {
     logger: { info() {}, warn() {}, error() {} },
-    agents: { async pause() {} },
+    agents: {
+      async pause(agentId, companyId) {
+        pauseCalls.push({ agentId, companyId });
+      },
+    },
     db: {
       async execute(sql, params) {
         if (/editor_agent_failures/i.test(sql)) {
@@ -31,7 +36,7 @@ function makeCtx() {
     },
   };
   ctx.db = wrapHostFaithfulDb(ctx.db);
-  return { ctx, failures };
+  return { ctx, failures, pauseCalls };
 }
 
 function wellFormedDraft() {
@@ -44,12 +49,16 @@ function wellFormedDraft() {
   };
 }
 
+/** A real UUID — the shape the host's `agents.pause` requires. */
+const EDITOR_UUID = '11111111-1111-4111-8111-111111111111';
+
 const BASE_ARGS = {
   companyId: 'company-1',
   cycleNumber: 1,
   factsTable: {},
   standingNumbers: [],
   departments: ['Production', 'Sales'],
+  editorAgentId: EDITOR_UUID,
 };
 
 test('compile-pass-1: BULLETIN_COMPILE_AGENT_KEY is the locked literal', () => {
@@ -109,4 +118,29 @@ test('compile-pass-1: valid LLM output parses + validates into a BulletinDraft',
   });
   assert.ok(draft.masthead);
   assert.ok(Array.isArray(draft.departments));
+});
+
+test('compile-pass-1: a tripped circuit breaker pauses the RESOLVED agent UUID, not the name tag', async () => {
+  // 2026-05-16 Countermoves drill defect A: compilePass1 hardcoded
+  // `agentId: EDITOR_AGENT_ID_TAG` ('clarity-pack-editor-agent') in its
+  // recordFailure calls. On the 3rd consecutive failure the D-06 breaker
+  // calls ctx.agents.pause(agentId, …) — the host then rejects the non-UUID
+  // with `invalid input syntax for type uuid`, masking the real failure.
+  // compilePass1 must pass the resolved Editor-Agent UUID instead.
+  resetCircuitBreakerState();
+  const { ctx, pauseCalls } = makeCtx();
+  const failingArgs = {
+    ...BASE_ARGS,
+    llm: { async complete() { throw new Error('llm-down'); } },
+  };
+  // MAX_CONSECUTIVE_FAILURES = 3 — three failures trip the breaker.
+  for (let i = 0; i < 3; i += 1) {
+    await assert.rejects(compilePass1(ctx, failingArgs), /llm-down/);
+  }
+  assert.equal(pauseCalls.length, 1, 'the breaker must pause exactly once, on the 3rd failure');
+  assert.equal(
+    pauseCalls[0].agentId,
+    EDITOR_UUID,
+    'pause must receive the resolved Editor-Agent UUID — the non-UUID tag "clarity-pack-editor-agent" is rejected host-side as invalid uuid syntax',
+  );
 });
