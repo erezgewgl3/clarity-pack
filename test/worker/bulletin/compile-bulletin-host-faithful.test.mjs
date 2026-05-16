@@ -32,9 +32,15 @@ const JOB_EVENT = {
 
 const PAST = '2026-05-07T00:00:00.000Z'; // well in the past => due
 
+// Plan 03-06 — a successful compile creates TWO issues: the OPERATION issue
+// (the compile-prompt handoff to the Editor-Agent) + the published BULLETIN
+// issue. `bulletinIssuesOf` filters issuesCreated down to the bulletin issue.
+const bulletinIssuesOf = (created) =>
+  created.filter((i) => /^Bulletin No\. /.test(i.title ?? ''));
+
 // ---- Case 1 — happy path against the fully host-faithful ctx ---------------
 
-test('host-faithful: due company + scripted valid session -> one issues.create, status published, cycle 1', async () => {
+test('host-faithful: due company + scripted valid agent result -> one bulletin issue, status published, cycle 1', async () => {
   resetCircuitBreakerState();
   const h = makeHostFaithfulCompileCtx({
     companies: [{ id: 'COU' }],
@@ -44,7 +50,7 @@ test('host-faithful: due company + scripted valid session -> one issues.create, 
   registerCompileBulletinJob(h.ctx);
   await h.jobs.get('compile-bulletin')(JOB_EVENT);
 
-  assert.equal(h.issuesCreated.length, 1, 'exactly one bulletin issue created');
+  assert.equal(bulletinIssuesOf(h.issuesCreated).length, 1, 'exactly one bulletin issue created');
   const published = h.bulletins.find((b) => b.compile_status === 'published');
   assert.ok(published, 'a bulletins row must end at compile_status=published');
   assert.equal(published.cycle_number, 1, 'first real publish is cycle 1');
@@ -130,30 +136,32 @@ test('host-faithful: 3 verifier rejections trip the breaker; pause receives a re
   );
 });
 
-// ---- Case 4 — heartbeat-policy trap (catalogue item 4) ---------------------
+// ---- Case 4 — operation-issue handoff shape (Plan 03-06, B-1) --------------
+//
+// Plan 03-06 replaced the session task-delivery with the operation-issue
+// handoff. The host-contract trap is no longer "sendMessage heartbeat policy"
+// (catalogue item 4, sessions path — now off the production path); it is the
+// B-1 contract: the operation issue MUST be created off the human board
+// (`surfaceVisibility: 'plugin_operation'`) and assigned to the resolved
+// Editor-Agent UUID, or it pollutes Eric's classic board (coexistence #2) and
+// the idempotency search misses it.
 
-test('host-faithful: sendMessage heartbeat-policy skip -> recordCompileFailure, no publish, no hang', async () => {
+test('host-faithful: the compile prompt rides an operation issue assigned to the Editor-Agent, off the human board', async () => {
   resetCircuitBreakerState();
   const h = makeHostFaithfulCompileCtx({
     companies: [{ id: 'COU' }],
     nextDue: { COU: PAST },
     sqlMrr: 2475,
-    sessionOpts: { heartbeatPolicySkip: true },
   });
   registerCompileBulletinJob(h.ctx);
-  // Must COMPLETE — a heartbeat-policy rejection is non-transient, the adapter
-  // must fail fast, not retry into a timeout/hang.
   await h.jobs.get('compile-bulletin')(JOB_EVENT);
 
-  assert.equal(h.issuesCreated.length, 0, 'a heartbeat-policy skip must block publish');
-  assert.ok(
-    h.compileFailures.length >= 1,
-    'a bulletin_compile_failures row must be recorded',
-  );
-  assert.ok(
-    h.compileFailures.some((f) => /heartbeat policy/i.test(f.reason)),
-    'the recorded failure reason must carry the heartbeat-policy message',
-  );
+  assert.equal(h.operationIssues.length, 1, 'exactly one bulletin-compile operation issue created');
+  const op = h.operationIssues[0];
+  assert.equal(op.originKind, 'plugin:clarity-pack:operation:bulletin-compile', 'operation originKind');
+  assert.equal(op.surfaceVisibility, 'plugin_operation', 'operation issue is off the classic human board');
+  assert.equal(op.assigneeAgentId, h.resolvedAgentId, 'operation issue assigned to the resolved Editor-Agent UUID');
+  assert.ok(h.wakeups.length >= 1, 'the Editor-Agent was woken via requestWakeup');
 });
 
 // ---- Case 5 — logger-metadata drop (catalogue item 5) ----------------------
@@ -191,7 +199,7 @@ test('host-faithful: verifier-rejection failure reason is recorded as a string (
   registerCompileBulletinJob(h.ctx);
   await h.jobs.get('compile-bulletin')(JOB_EVENT);
 
-  assert.equal(h.issuesCreated.length, 0, 'verifier rejection blocks publish');
+  assert.equal(bulletinIssuesOf(h.issuesCreated).length, 0, 'verifier rejection blocks publish');
   assert.ok(h.compileFailures.length >= 1, 'a compile-failure row is recorded');
   assert.ok(
     typeof h.compileFailures[0].reason === 'string' && h.compileFailures[0].reason.length > 0,
@@ -216,5 +224,5 @@ test('host-faithful: every bulletins write goes through ctx.db.execute (no INSER
     h.jobs.get('compile-bulletin')(JOB_EVENT),
     'no host-contract db violation during a clean compile',
   );
-  assert.equal(h.issuesCreated.length, 1);
+  assert.equal(bulletinIssuesOf(h.issuesCreated).length, 1);
 });

@@ -1,5 +1,14 @@
 // src/worker/agents/session-llm-adapter.ts
 //
+// DEPRECATED (Plan 03-06) — the session `prompt` is discarded by the host
+// before it reaches the agent (upstream PR #3106, open/unmerged). The
+// Editor-Agent only ever sees the `reason` wake label, runs its ordinary
+// org-chart heartbeat, and emits prose. Task delivery moved to the
+// operation-issue handoff in `agent-task-delivery.ts` (Path (d) — the compile
+// prompt becomes the body of an assigned operation issue). This file is kept
+// for reference and for a possible future re-enable if PR #3106 merges. It is
+// NOT imported by any production path. See 03-AGENT-INVOCATION-GAP-RESEARCH.md.
+//
 // Plan 03-05 — the REAL production LlmAdapter, backed by an agent chat session.
 //
 // Plan 03-02's bulletin compile (and Phase 2's TL;DR compile) were built

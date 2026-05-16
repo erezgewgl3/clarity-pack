@@ -43,7 +43,12 @@ import { computeFactsTable } from '../bulletin/facts-table.ts';
 import { compilePass1 } from '../bulletin/compile-pass-1.ts';
 import { verifyDraft } from '../bulletin/bulletin-verifier.ts';
 import { publishBulletin, type PublishBulletinArgs } from '../bulletin/publish.ts';
-import { recordFailure, recordSuccess, BULLETIN_COMPILE_AGENT_KEY } from '../agents/circuit-breaker.ts';
+import {
+  recordFailure,
+  recordSuccess,
+  isCircuitOpenDurable,
+  BULLETIN_COMPILE_AGENT_KEY,
+} from '../agents/circuit-breaker.ts';
 // EDITOR_AGENT_KEY is the manifest agents[] key — the SINGLE source of truth
 // lives in editor.ts and MUST equal manifest.agents[].agentKey ('editor-agent').
 // Do NOT redefine it here: a local copy with the wrong string ('clarity-pack-
@@ -51,8 +56,13 @@ import { recordFailure, recordSuccess, BULLETIN_COMPILE_AGENT_KEY } from '../age
 // ctx.agents.managed.reconcile() throw "reconcile failed" — the compile-bulletin
 // job silently bailed before compiling. Surfaced by the Plan 03-05 drill.
 import { EDITOR_AGENT_KEY } from '../agents/editor.ts';
-// Plan 03-05 — production LLM invocation via ctx.agents.sessions.
-import { sessionLlmAdapter } from '../agents/session-llm-adapter.ts';
+// Plan 03-06 — production LLM invocation via the operation-issue handoff
+// (Path (d)). Plan 03-05's sessionLlmAdapter is superseded: the host discards
+// the session prompt before it reaches the agent (PR #3106). The compile
+// prompt is now delivered as the body of an operation issue ASSIGNED to the
+// Editor-Agent; the agent's heartbeat reads it and posts the BulletinDraft
+// JSON as a comment. See 03-AGENT-INVOCATION-GAP-RESEARCH.md.
+import { deliveryLlmAdapter } from '../agents/agent-task-delivery.ts';
 // Plan 03-03 — cycle-start department reconcile + deterministic lineage build.
 import { reconcileDepartments } from '../bulletin/department-reconcile.ts';
 import { groupLineageThreads, type ActivityEvent } from '../bulletin/lineage-grouper.ts';
@@ -142,13 +152,12 @@ const DEFAULT_DEPARTMENTS = ['Production', 'Sales', 'Customer', 'Builder'];
  * Context shape the compile-bulletin job needs. Extends BulletinsRepoCtx so
  * the repo functions accept it directly.
  *
- * Plan 03-05: the synthetic `llm?: LlmAdapter` member is GONE. There is no
- * single ctx-wide LLM independent of an agent — the job builds a real
- * `sessionLlmAdapter` per company from `ctx.agents` + the resolved
- * `editorAgentId` and passes it into `compilePass1` as an argument. Every
- * member below is now a real `PluginContext` field, so `worker.ts` registers
- * this job without the `as unknown as` cast that previously manufactured the
- * missing `llm`.
+ * There is no synthetic `llm` member. The job builds a real
+ * `deliveryLlmAdapter` per company from `ctx.issues` + the resolved
+ * `editorAgentId` (Plan 03-06 — the operation-issue handoff) and passes it
+ * into `compilePass1` as an argument. Every member below is a real
+ * `PluginContext` field; `ctx.issues` carries `create`/`list`/`requestWakeup`/
+ * `listComments` for the handoff.
  */
 export type CompileBulletinCtx = BulletinsRepoCtx & {
   logger?: PluginLogger;
@@ -241,24 +250,40 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           continue;
         }
 
-        // Plan 03-05 — resume the Editor-Agent if it ships paused.
+        // Plan 03-06 — breaker-aware resume of the Editor-Agent.
         //
         // The manifest declares the Editor-Agent `status: 'paused'` (a
         // coexistence-friendly default — Eric reviews the agent before
-        // anything runs). On a fresh install the first compile WILL hit a
-        // paused agent, and sessionLlmAdapter would reject AGENT_NOT_INVOKABLE
-        // before it can ever produce a bulletin. The fix (research
-        // Open-Follow-up #1): resume the agent here, immediately before the
-        // first session. `resume` flips `paused → idle` only; a
-        // `terminated`/`pending_approval` agent rejects resume (host-enforced)
-        // — that is a real operator-action failure, so we warn and skip the
-        // company rather than treat it as a compile bug. The bulletin job owns
-        // this resume because the bulletin is the scheduled, must-succeed
-        // surface (the heartbeat TL;DR path is best-effort and does NOT
-        // resume).
+        // anything runs). On a FRESH install the first compile hits a paused
+        // agent that no one has ever run, and resuming it is legitimate.
+        //
+        // BUT a paused agent whose circuit breaker is OPEN was paused BY the
+        // breaker (D-06 — recordFailure pauses after MAX_CONSECUTIVE_FAILURES).
+        // Auto-resuming it is the resume-defeats-breaker loop: the live Plan
+        // 03-04 drill saw `attempt_n` run from 466 → 470 because the job
+        // resumed the agent on every fire (03-AGENT-INVOCATION-GAP-RESEARCH.md
+        // "Secondary Bug"). So resume ONLY when the breaker is NOT open.
+        //
+        // `isCircuitOpenDurable` reads the durable `editor_agent_failures`
+        // table, so the breaker latches across worker restarts — the
+        // in-memory counter alone would forget the trip on reboot. When the
+        // breaker IS open we leave the agent paused, warn, and `continue` the
+        // company: the operator must click Resume (D-06 — no auto-resume).
+        //
+        // `resume` flips `paused → idle` only; a `terminated`/
+        // `pending_approval` agent rejects resume (host-enforced) — a real
+        // operator-action failure, warned + skipped, not a compile bug.
         try {
           const agent = await ctx.agents.get(editorAgentId, company.id);
           if (agent?.status === 'paused') {
+            if (await isCircuitOpenDurable(ctx, BULLETIN_COMPILE_AGENT_KEY)) {
+              ctx.logger?.warn?.(
+                `compile-bulletin: Editor-Agent is paused AND the bulletin-compile ` +
+                  `circuit breaker is open — not resuming (D-06: operator must click ` +
+                  `Resume). companyId=${company.id} agentId=${editorAgentId}`,
+              );
+              continue;
+            }
             await ctx.agents.resume(editorAgentId, company.id);
             ctx.logger?.info?.('compile-bulletin: resumed paused Editor-Agent', {
               companyId: company.id,
@@ -364,16 +389,21 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
 
         // 4. Pass 1 — LLM produces a structured BulletinDraft.
         //
-        // Plan 03-05: build the REAL session-backed LlmAdapter from
-        // `ctx.agents` + the resolved `editorAgentId`. `compilePass1` does
-        // `args.llm ?? ctx.llm` — supplying `args.llm` makes the (now-removed)
-        // `ctx.llm` fiction dead on this path. An AGENT_NOT_INVOKABLE
-        // rejection, a session error, or a session timeout all surface as a
-        // pass-1 throw routed through the existing catch → recordCompileFailure
-        // block below — no new failure machinery.
-        const llm = sessionLlmAdapter(ctx, {
+        // Plan 03-06: build the REAL operation-issue-backed LlmAdapter. Its
+        // `complete()` creates an operation issue assigned to the Editor-Agent
+        // (originKind `plugin:clarity-pack:operation:bulletin-compile`,
+        // operationId `cycle-N`), wakes the agent, and polls for the agent's
+        // BulletinDraft-JSON result comment — the discarded-session-prompt
+        // path is gone. A delivery timeout, a create failure, or an
+        // unparseable result all surface as a pass-1 throw routed through the
+        // existing catch → recordCompileFailure block below — no new failure
+        // machinery.
+        const llm = deliveryLlmAdapter(ctx, {
           agentId: editorAgentId,
           companyId: company.id,
+          operationKind: 'bulletin-compile',
+          operationId: `cycle-${cycleNumber}`,
+          title: `Compile Daily Bulletin — cycle ${cycleNumber}`,
         });
         let draft: BulletinDraft;
         try {

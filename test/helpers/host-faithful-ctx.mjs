@@ -38,6 +38,19 @@
 // The in-memory bulletins/issues SQL model is lifted from the proven
 // `makeFakeCtx` in compile-bulletin-end-to-end.test.mjs (which already models
 // the bulletins/issues SQL faithfully) so there is ONE shared model.
+//
+// Plan 03-06 — the `issues` fake additionally models the OPERATION-ISSUE
+// HANDOFF host CONSTRAINT: `requestWakeup` (record + resolve) and
+// `listComments` (return a scripted agent result comment), and `list` honours
+// `includePluginOperations` (a `plugin_operation`-visibility issue is returned
+// only when the flag is set, mirroring the host — the B-1 contract).
+//
+// IMPORTANT — this fake models the HOST CONSTRAINT (the issues-API shape), NOT
+// the agent's real BEHAVIOUR. The "agent" is simulated by the helper
+// pre-seeding the result comment. The research's explicit lesson: a fake
+// cannot model "the agent ignores the prompt" — only the live Countermoves
+// drill (Plan 03-06 Task 5) can prove the agent actually processes the
+// assigned operation issue.
 
 import { wrapHostFaithfulDb } from './host-faithful-db.mjs';
 import { makeHostFaithfulAgents as makeHostFaithfulSessions } from './host-faithful-sessions.mjs';
@@ -85,6 +98,13 @@ function cannedDraft({ mrr = 2475 } = {}) {
  * @param {Array}  opts.issues      — Issue rows `ctx.issues.list` returns
  *                                    (item 9: carry `assigneeUserId`, never
  *                                    `lastActorId`).
+ * @param {Array}  opts.operationIssues — pre-seeded operation issues (Plan
+ *                                    03-06). Returned by `list` ONLY when the
+ *                                    caller passes `includePluginOperations:
+ *                                    true` (the B-1 host contract).
+ * @param {boolean} opts.noResultComment — when true, `listComments` returns
+ *                                    NO agent result comment (the
+ *                                    delivery-timeout path).
  */
 export function makeHostFaithfulCompileCtx({
   companies = [],
@@ -94,11 +114,14 @@ export function makeHostFaithfulCompileCtx({
   agentStatus = 'idle',
   sessionOpts = {},
   issues = [],
+  operationIssues = [],
+  noResultComment = false,
 } = {}) {
   // {cycle_number, company_id, next_due_at, compiled_at, content_hash,
   //  compile_status, published_issue_id}
   const bulletins = [];
   const issuesCreated = [];
+  const wakeups = []; // Plan 03-06 — ctx.issues.requestWakeup calls
   const failures = []; // editor_agent_failures audit rows (circuit breaker)
   const compileFailures = []; // bulletin_compile_failures rows
   const loggedMessages = []; // item 5 — message STRINGS only, never metadata
@@ -136,6 +159,18 @@ export function makeHostFaithfulCompileCtx({
           (b) => b.next_due_at === params?.[0] && b.content_hash === params?.[1],
         );
         return row ? [{ compile_status: row.compile_status }] : [];
+      }
+      // Plan 03-06 — isCircuitOpenDurable reads the last N editor_agent_failures
+      // rows for an agent_key, ORDER BY id DESC. Replay the in-memory `failures`
+      // array (recordFailure appends to it) newest-first, capped at LIMIT $2.
+      if (/SELECT consecutive[\s\S]*editor_agent_failures/i.test(sql)) {
+        const agentKey = params?.[0];
+        const limit = Number(params?.[1] ?? 3);
+        return failures
+          .filter((f) => f.agentKey === agentKey)
+          .slice(-limit)
+          .reverse()
+          .map((f) => ({ consecutive: f.consecutive }));
       }
       // standing-numbers + verifier SQL — every slot returns sqlMrr.
       return [{ value: sqlMrr }];
@@ -270,19 +305,67 @@ export function makeHostFaithfulCompileCtx({
     issues: {
       async create(args) {
         issuesCreated.push(args);
-        return {
+        const created = {
           id: `issue-${issuesCreated.length}`,
           identifier: `COU-${issuesCreated.length}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
           ...args,
         };
+        // Plan 03-06 — a freshly-created operation issue becomes visible to a
+        // subsequent idempotency `list` (mirroring the host).
+        if (
+          typeof args.originKind === 'string' &&
+          args.originKind.startsWith('plugin:clarity-pack:operation:')
+        ) {
+          operationIssues.push(created);
+        }
+        return created;
       },
       // Item 9 — Issue rows carry `assigneeUserId`, never `lastActorId` /
       // `lastActorName`. The lineage path keys on assigneeUserId.
-      async list() {
+      //
+      // Plan 03-06 (B-1) — an operation-issue idempotency search
+      // (`originKindPrefix` + `includePluginOperations`) returns seeded
+      // operation issues ONLY when the flag is set; the lineage `list`
+      // (companyId only) returns the regular issue rows.
+      async list(input = {}) {
+        if (input.originKindPrefix) {
+          if (!input.includePluginOperations) return [];
+          return operationIssues.filter(
+            (oi) =>
+              oi.originKind &&
+              oi.originKind.startsWith(input.originKindPrefix) &&
+              (input.originId === undefined || oi.originId === input.originId),
+          );
+        }
         return issues;
       },
       async get() {
         return null;
+      },
+      async requestWakeup(issueId, companyId, options) {
+        wakeups.push({ issueId, companyId, options });
+        return { queued: true, runId: 'run-op' };
+      },
+      // The simulated agent's result comment. By default a single comment whose
+      // body is the canned BulletinDraft JSON, authored by the resolved Editor-
+      // Agent id, with real Date objects to match the SDK IssueComment shape.
+      async listComments(issueId, companyId) {
+        if (noResultComment) return [];
+        return [
+          {
+            id: `op-comment-${issueId}`,
+            companyId,
+            issueId,
+            authorType: 'agent',
+            authorAgentId: agentsFake.resolvedAgentId,
+            authorUserId: null,
+            body: draftText,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ];
       },
       async createComment() {
         return { id: 'comment-x' };
@@ -294,6 +377,8 @@ export function makeHostFaithfulCompileCtx({
     ctx,
     bulletins,
     issuesCreated,
+    operationIssues,
+    wakeups,
     failures,
     compileFailures,
     loggedMessages,

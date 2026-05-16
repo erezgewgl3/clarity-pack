@@ -19,12 +19,17 @@
 // 02-04 + Phase 3 (Bulletin's 06:30 ET cron will use a separate
 // routine/jobs.schedule path, not this dispatcher).
 
+import type { PluginIssuesClient } from '@paperclipai/plugin-sdk';
+
 import { filterSelfLoopEvents, EDITOR_WRITE_TAG } from './self-loop-filter.ts';
 import { compileTldr, EDITOR_AGENT_ID_TAG } from './compile-tldr.ts';
-// Plan 03-05 — production LLM invocation via ctx.agents.sessions (the same
-// adapter the bulletin compile uses; closes research Open-Follow-up #3 — the
-// Reader's stuck "Compiling TL;DR…" was the identical ctx.llm fiction).
-import { sessionLlmAdapter, type SessionLlmAdapterCtx } from './session-llm-adapter.ts';
+// Plan 03-06 — production LLM invocation via the operation-issue handoff (the
+// same delivery layer the bulletin compile uses). Plan 03-05's session-backed
+// adapter is superseded: the host discards the session prompt (PR #3106), so
+// the Reader's stuck "Compiling TL;DR…" was the same broken path. The TL;DR
+// compile prompt is now delivered as an operation issue
+// (originKind plugin:clarity-pack:operation:tldr-compile).
+import { deliveryLlmAdapter, type AgentTaskDeliveryCtx } from './agent-task-delivery.ts';
 
 // Stable agent key — referenced by manifest agents[] AND every reconcile call.
 export const EDITOR_AGENT_KEY = 'editor-agent';
@@ -76,16 +81,16 @@ export type EditorHeartbeatPayload = {
   }>;
 };
 
-// Plan 03-05: the synthetic `llm?: LlmAdapter` member is GONE — the heartbeat
-// path builds a real `sessionLlmAdapter` from the resolved `payload.agentId`
-// and passes it to `compileTldr` as an argument. `SessionLlmAdapterCtx`
-// (the {agents.get, agents.sessions} slice) is intersected in so the ctx
-// structurally satisfies the adapter factory without a cast.
+// Plan 03-06: the heartbeat path builds a real `deliveryLlmAdapter` from the
+// resolved `payload.agentId` and passes it to `compileTldr` as an argument.
+// `AgentTaskDeliveryCtx` (the `{issues: list/create/requestWakeup/listComments,
+// logger}` slice) is intersected in so the ctx structurally satisfies the
+// adapter factory without a cast. The `issues` member is widened to the full
+// `PluginIssuesClient` so it satisfies BOTH the adapter slice AND this
+// handler's own `ctx.issues.get` reads.
 export type EditorHeartbeatCtx = Parameters<typeof compileTldr>[0] &
-  SessionLlmAdapterCtx & {
-    issues: {
-      get(issueId: string): Promise<{ id: string; body: string }>;
-    };
+  AgentTaskDeliveryCtx & {
+    issues: PluginIssuesClient;
     issue: {
       comments: { read(issueId: string): Promise<Array<{ body: string }>> };
     };
@@ -119,26 +124,34 @@ export async function handleEditorHeartbeat(
     new Set(filtered.filter((e) => e.entity_type === 'issue' && e.entity_id).map((e) => e.entity_id as string)),
   );
 
-  // Plan 03-05 — build the real session-backed LlmAdapter once per heartbeat
-  // from the resolved agentId. Heartbeat compiles are best-effort: we do NOT
-  // resume a paused agent here (the bulletin job owns the resume because the
-  // bulletin is the scheduled, must-succeed surface). A paused agent simply
-  // yields an AGENT_NOT_INVOKABLE throw from compileTldr that the per-issue
-  // catch below logs and skips.
-  const llm = sessionLlmAdapter(ctx, {
-    agentId: payload.agentId,
-    companyId: payload.companyId,
-  });
-
+  // Plan 03-06 — heartbeat compiles are best-effort: we do NOT resume a paused
+  // agent here (the bulletin job owns the resume because the bulletin is the
+  // scheduled, must-succeed surface). A paused agent simply yields a delivery
+  // timeout from compileTldr that the per-issue catch below logs and skips.
   for (const issueId of issueIds) {
     try {
-      const issue = await ctx.issues.get(issueId);
+      const issue = await ctx.issues.get(issueId, payload.companyId);
+      if (!issue) continue;
       const comments = await ctx.issue.comments.read(issueId);
-      const refs = extractRefsFromBody(issue.body);
+      const refs = extractRefsFromBody(issue.description ?? undefined);
+      // Plan 03-06 — build the operation-issue-backed adapter PER ISSUE: the
+      // operationId must be unique per TL;DR scope so the idempotency search
+      // never collapses two different issues' compiles onto one operation issue.
+      const llm = deliveryLlmAdapter(ctx, {
+        agentId: payload.agentId,
+        companyId: payload.companyId,
+        operationKind: 'tldr-compile',
+        operationId: `tldr-${issueId}`,
+        title: `Compile TL;DR — ${issueId}`,
+      });
       await compileTldr(ctx, {
         surface: 'issue',
         scopeId: issueId,
-        inputs: { body: issue.body, comments: comments.map((c) => c.body), refs },
+        inputs: {
+          body: issue.description ?? '',
+          comments: comments.map((c) => c.body),
+          refs,
+        },
         agentKey: EDITOR_AGENT_KEY,
         agentId: payload.agentId,
         companyId: payload.companyId,

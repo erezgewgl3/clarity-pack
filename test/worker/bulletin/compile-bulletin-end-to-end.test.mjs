@@ -37,16 +37,22 @@ function cannedDraft({ mrr = 2475 } = {}) {
 //   - agents.managed.reconcile returning a stub Editor-Agent
 //   - db.query returns standing-number rows whose `value` is sqlMrr
 //
-// Plan 03-05: the production path no longer reads `ctx.llm`. The compile job
-// builds a real `sessionLlmAdapter` from `ctx.agents` — so the fake ctx now
-// carries `agents.get` (returns a scripted Agent) and `agents.sessions`
-// (create/sendMessage/close). `sendMessage` replays a single chunk carrying
-// `draftJson` + a `done` event, so the REAL adapter accumulates the canned
-// draft and the job compiles end-to-end without any injected stub `llm`.
+// Plan 03-06: the production path delivers the compile prompt as an OPERATION
+// ISSUE assigned to the Editor-Agent (Path (d)). The fake ctx now models the
+// issues-API host CONSTRAINT: `ctx.issues.create` records the operation issue,
+// `requestWakeup` resolves, `listComments` returns a scripted agent result
+// comment carrying the canned BulletinDraft JSON, and `list` honours
+// `includePluginOperations` (B-1). The "agent" is simulated by the helper
+// pre-seeding the result comment — a fake cannot model the agent ignoring the
+// prompt; only the Task-5 live drill can.
 //
 //   - agentStatus    — status the fake `agents.get` returns ('idle' default).
 //   - resumeThrows   — when true, `agents.resume` rejects (terminated agent).
-//   - draftJson      — the JSON string the session streams as the BulletinDraft.
+//   - draftJson      — the JSON string the agent posts as the result comment.
+//   - noResultComment — when true, `listComments` returns no result comment
+//                       (the delivery-timeout path).
+//   - durableBreakerOpen — when true, the editor_agent_failures SELECT reports
+//                       an open durable circuit (resume-gate test).
 function makeFakeCtx({
   companies = [],
   nextDue = {},
@@ -54,13 +60,16 @@ function makeFakeCtx({
   agentStatus = 'idle',
   resumeThrows = false,
   draftJson,
+  noResultComment = false,
+  durableBreakerOpen = false,
 } = {}) {
   const bulletins = []; // {cycle_number, company_id, next_due_at, content_hash, compile_status, published_issue_id}
   const issuesCreated = [];
+  const operationIssues = [];
+  const wakeups = [];
   const failures = [];
   const jobs = new Map();
   const resumeCalls = [];
-  let sessionSeq = 0;
 
   const ctx = {
     logger: { info() {}, warn() {}, error() {}, debug() {} },
@@ -84,6 +93,13 @@ function makeFakeCtx({
         if (/SELECT compile_status/i.test(sql)) {
           const row = bulletins.find((b) => b.next_due_at === params?.[0] && b.content_hash === params?.[1]);
           return row ? [{ compile_status: row.compile_status }] : [];
+        }
+        // Plan 03-06 — isCircuitOpenDurable reads the last N
+        // editor_agent_failures rows. When durableBreakerOpen is set, report
+        // MAX_CONSECUTIVE_FAILURES (3) rows whose newest `consecutive` is 3.
+        if (/SELECT consecutive[\s\S]*editor_agent_failures/i.test(sql)) {
+          if (!durableBreakerOpen) return [];
+          return [{ consecutive: 3 }, { consecutive: 2 }, { consecutive: 1 }];
         }
         // standing-numbers + verifier SQL — every slot returns sqlMrr-ish value
         return [{ value: sqlMrr }];
@@ -154,34 +170,60 @@ function makeFakeCtx({
           return { agentId: 'editor-agent-uuid', agent: { id: 'editor-agent-uuid' }, status: 'resolved' };
         },
       },
-      // Plan 03-05 — fake agent chat session. sendMessage replays one chunk
-      // carrying the canned BulletinDraft JSON + a terminal done event, so the
-      // REAL sessionLlmAdapter accumulates it exactly as production would.
-      sessions: {
-        async create(agentId, companyId, opts) {
-          sessionSeq += 1;
-          return { sessionId: `sess-${sessionSeq}`, agentId, companyId, status: 'active', createdAt: new Date().toISOString(), opts };
-        },
-        async sendMessage(sessionId, companyId, opts) {
-          const text = draftJson ?? JSON.stringify(cannedDraft());
-          if (typeof opts?.onEvent === 'function') {
-            setImmediate(() => {
-              opts.onEvent({ sessionId, runId: 'run-e2e', seq: 1, eventType: 'chunk', stream: 'stdout', message: text, payload: null });
-              opts.onEvent({ sessionId, runId: 'run-e2e', seq: 2, eventType: 'done', stream: 'system', message: null, payload: null });
-            });
-          }
-          return { runId: 'run-e2e' };
-        },
-        async close() {},
-      },
     },
+    // Plan 03-06 — the operation-issue handoff. `create` records the operation
+    // issue; `list` honours `includePluginOperations` (B-1); `requestWakeup`
+    // resolves; `listComments` returns a scripted agent result comment carrying
+    // the canned BulletinDraft JSON — so the REAL deliveryLlmAdapter resolves
+    // the result exactly as production would.
     issues: {
       async create(args) {
         issuesCreated.push(args);
-        return { id: `issue-${issuesCreated.length}`, identifier: `COU-${issuesCreated.length}`, ...args };
+        const created = {
+          id: `issue-${issuesCreated.length}`,
+          identifier: `COU-${issuesCreated.length}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...args,
+        };
+        if (typeof args.originKind === 'string' && args.originKind.startsWith('plugin:clarity-pack:operation:')) {
+          operationIssues.push(created);
+        }
+        return created;
       },
-      async list() { return []; },
+      async list(input = {}) {
+        if (input.originKindPrefix) {
+          if (!input.includePluginOperations) return [];
+          return operationIssues.filter(
+            (oi) =>
+              oi.originKind &&
+              oi.originKind.startsWith(input.originKindPrefix) &&
+              (input.originId === undefined || oi.originId === input.originId),
+          );
+        }
+        return [];
+      },
       async get() { return null; },
+      async requestWakeup(issueId, companyId, options) {
+        wakeups.push({ issueId, companyId, options });
+        return { queued: true, runId: 'run-op' };
+      },
+      async listComments(issueId, companyId) {
+        if (noResultComment) return [];
+        return [
+          {
+            id: `op-comment-${issueId}`,
+            companyId,
+            issueId,
+            authorType: 'agent',
+            authorAgentId: 'editor-agent-uuid',
+            authorUserId: null,
+            body: draftJson ?? JSON.stringify(cannedDraft()),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ];
+      },
       async createComment() { return { id: 'comment-x' }; },
     },
   };
@@ -190,12 +232,22 @@ function makeFakeCtx({
   // as the live Paperclip host would. The 2026-05-15 drill's INSERT-via-query
   // bug would have failed `pnpm test` here instead of on a VPS reinstall.
   ctx.db = wrapHostFaithfulDb(ctx.db);
-  return { ctx, bulletins, issuesCreated, failures, jobs, resumeCalls };
+  return { ctx, bulletins, issuesCreated, operationIssues, wakeups, failures, jobs, resumeCalls };
 }
 
 const PAST = '2026-05-07T00:00:00.000Z'; // well in the past => due
 
-test('e2e: due company + valid draft + verifier passes -> one issues.create, status published', async () => {
+// Plan 03-06 — a successful compile creates TWO issues: the OPERATION issue
+// (the compile-prompt handoff to the agent) + the published BULLETIN issue.
+// `bulletinIssues` filters issuesCreated down to the bulletin issue(s).
+const bulletinIssuesOf = (created) =>
+  created.filter((i) => /^Bulletin No\. /.test(i.title ?? ''));
+const operationIssuesOf = (created) =>
+  created.filter(
+    (i) => typeof i.originKind === 'string' && i.originKind.startsWith('plugin:clarity-pack:operation:'),
+  );
+
+test('e2e: due company + valid draft + verifier passes -> one bulletin issue, status published', async () => {
   resetCircuitBreakerState();
   const { ctx, bulletins, issuesCreated, jobs } = makeFakeCtx({
     companies: [{ id: 'COU' }],
@@ -205,9 +257,12 @@ test('e2e: due company + valid draft + verifier passes -> one issues.create, sta
   registerCompileBulletinJob(ctx);
   await jobs.get('compile-bulletin')(JOB_EVENT);
 
-  assert.equal(issuesCreated.length, 1, 'exactly one bulletin issue created');
-  assert.match(issuesCreated[0].title, /^Bulletin No\. \d+ — /);
-  assert.deepEqual(issuesCreated[0].tags, ['clarity:bulletin', 'clarity:bulletin-issue', 'cycle:1']);
+  const bulletinIssues = bulletinIssuesOf(issuesCreated);
+  assert.equal(bulletinIssues.length, 1, 'exactly one bulletin issue created');
+  assert.match(bulletinIssues[0].title, /^Bulletin No\. \d+ — /);
+  assert.deepEqual(bulletinIssues[0].tags, ['clarity:bulletin', 'clarity:bulletin-issue', 'cycle:1']);
+  // Plan 03-06 — the compile prompt was delivered as an operation issue.
+  assert.equal(operationIssuesOf(issuesCreated).length, 1, 'one bulletin-compile operation issue created');
   const published = bulletins.find((b) => b.compile_status === 'published');
   assert.ok(published, 'a bulletins row must end at compile_status=published');
 });
@@ -227,7 +282,7 @@ test('e2e: after publish, next_due_at advances to a future instant', async () =>
   assert.ok(new Date(row.next_due_at).getTime() > Date.now(), 'next_due_at advanced to the future');
 });
 
-test('e2e: verifier rejection (mismatched MRR) -> no issues.create, recordFailure called', async () => {
+test('e2e: verifier rejection (mismatched MRR) -> no bulletin issue, recordFailure called', async () => {
   resetCircuitBreakerState();
   // canned draft claims mrr=2475 but SQL returns 9999 => mismatch
   const { ctx, issuesCreated, failures, jobs } = makeFakeCtx({
@@ -238,7 +293,9 @@ test('e2e: verifier rejection (mismatched MRR) -> no issues.create, recordFailur
   registerCompileBulletinJob(ctx);
   await jobs.get('compile-bulletin')(JOB_EVENT);
 
-  assert.equal(issuesCreated.length, 0, 'verifier rejection must block publish');
+  // The compile prompt is still delivered as an operation issue, but the
+  // verifier rejection blocks the BULLETIN issue from being published.
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 0, 'verifier rejection must block publish');
   assert.ok(failures.length >= 1, 'recordFailure must append an audit row');
 });
 
@@ -292,17 +349,18 @@ test('e2e: idempotency — two fires with the same next_due_at produce exactly o
   registerCompileBulletinJob(ctx);
   const fn = jobs.get('compile-bulletin');
   await fn(JOB_EVENT);
-  // The first fire publishes exactly one issue; a published row already
-  // exists for this content, so a re-fire cannot double-publish.
-  assert.equal(issuesCreated.length, 1, 'first fire publishes exactly one issue');
+  // The first fire publishes exactly one bulletin issue; a published row
+  // already exists for this content, so a re-fire cannot double-publish.
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 1, 'first fire publishes exactly one bulletin issue');
 });
 
-// ---- Plan 03-05 — production LLM wiring via the real sessionLlmAdapter -----
+// ---- Plan 03-06 — production LLM wiring via the operation-issue handoff ----
 
-test('e2e (03-05): job compiles + publishes through the REAL sessionLlmAdapter (no stub ctx.llm)', async () => {
+test('e2e (03-06): job compiles + publishes through the REAL deliveryLlmAdapter', async () => {
   resetCircuitBreakerState();
-  // agentStatus 'idle' → no resume needed; the session streams a valid draft.
-  const { ctx, bulletins, issuesCreated, resumeCalls, jobs } = makeFakeCtx({
+  // agentStatus 'idle' → no resume needed; the operation issue's result comment
+  // carries a valid draft.
+  const { ctx, bulletins, issuesCreated, operationIssues, wakeups, resumeCalls, jobs } = makeFakeCtx({
     companies: [{ id: 'COU' }],
     nextDue: { COU: PAST },
     sqlMrr: 2475,
@@ -311,12 +369,17 @@ test('e2e (03-05): job compiles + publishes through the REAL sessionLlmAdapter (
   registerCompileBulletinJob(ctx);
   await jobs.get('compile-bulletin')(JOB_EVENT);
 
-  assert.equal(issuesCreated.length, 1, 'a bulletin issue must be created via the real session adapter');
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 1, 'a bulletin issue must be published via the delivery adapter');
   assert.ok(bulletins.find((b) => b.compile_status === 'published'), 'the bulletin must reach published');
   assert.equal(resumeCalls.length, 0, 'an idle agent must NOT be resumed');
+  // The compile prompt rode an operation issue assigned to the Editor-Agent.
+  assert.equal(operationIssues.length, 1, 'exactly one bulletin-compile operation issue created');
+  assert.equal(operationIssues[0].assigneeAgentId, 'editor-agent-uuid', 'operation issue assigned to the Editor-Agent');
+  assert.equal(operationIssues[0].surfaceVisibility, 'plugin_operation', 'operation issue is off the human board');
+  assert.ok(wakeups.length >= 1, 'the agent was woken via requestWakeup');
 });
 
-test('e2e (03-05): a paused agent that cannot resume → recordCompileFailure, no hang, no publish', async () => {
+test('e2e (03-06): a paused agent that cannot resume → no hang, no publish', async () => {
   resetCircuitBreakerState();
   // agentStatus 'paused' triggers the resume step; resumeThrows simulates a
   // terminated/pending_approval agent that rejects resume.
@@ -332,5 +395,26 @@ test('e2e (03-05): a paused agent that cannot resume → recordCompileFailure, n
   await jobs.get('compile-bulletin')(JOB_EVENT);
 
   assert.equal(resumeCalls.length, 1, 'a paused agent must trigger exactly one resume attempt');
-  assert.equal(issuesCreated.length, 0, 'a non-resumable agent must block publish — no bulletin issue');
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 0, 'a non-resumable agent must block publish');
+});
+
+test('e2e (03-06): durable breaker OPEN + paused agent → no resume, no publish (loop closed)', async () => {
+  resetCircuitBreakerState();
+  // The editor_agent_failures SELECT reports an open durable circuit AND the
+  // agent is paused. The breaker-aware resume gate must leave the agent paused
+  // and skip the company — the resume-defeats-breaker loop (live attempt_n
+  // 466→470) is closed.
+  const { ctx, issuesCreated, resumeCalls, operationIssues, jobs } = makeFakeCtx({
+    companies: [{ id: 'COU' }],
+    nextDue: { COU: PAST },
+    sqlMrr: 2475,
+    agentStatus: 'paused',
+    durableBreakerOpen: true,
+  });
+  registerCompileBulletinJob(ctx);
+  await jobs.get('compile-bulletin')(JOB_EVENT);
+
+  assert.equal(resumeCalls.length, 0, 'a breaker-tripped paused agent must NOT be auto-resumed');
+  assert.equal(operationIssues.length, 0, 'no compile is attempted when the breaker is open');
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 0, 'no bulletin is published when the breaker is open');
 });
