@@ -79,3 +79,39 @@ could be. Paperclip marks the run **succeeded** — from the host's view the age
 
 Plugin uninstalled on Countermoves (`pnpm paperclipai plugin uninstall clarity-pack`) to stop the
 retry loop. Data preserved (no `--purge`). Reinstall once Plan 03-06 ships.
+
+---
+
+## Plan 03-06 closure re-drill — 2026-05-16 (Countermoves)
+
+Plan 03-06 (scoped-issue task delivery) was built and installed (v0.2.0, the 03-06 build). The
+re-drill outcome:
+
+**The architecture fix WORKS — primary-risk gate PASSED.** `deliverAgentTask` created an
+off-board operation issue (`Compile Daily Bulletin — cycle 1`,
+`origin_kind = plugin:clarity-pack:operation:bulletin-compile`, assigned to the Editor-Agent
+UUID). The Editor-Agent's heartbeat picked it up **scoped to that issue**, read the compile
+prompt from the issue body, produced a flawless `BulletinDraft` (all 5 keys, verified-numerics
+contract perfectly honored — `{{NUMBER:key}}` placeholders, standing numbers as-is), and marked
+the operation issue `done`. `PAPERCLIP_TASK_ID` run-scoping — the plan's stated primary risk — is
+confirmed working. The original heartbeat-blind defect is closed.
+
+**One contained gap remains — output-channel mismatch.** The agent stored the `BulletinDraft`
+JSON in a Paperclip **issue document** ("bulletin", rev 1) and posted a **prose summary** as the
+issue comment. `deliverAgentTask`'s readback polls `listComments` for a comment that parses as
+JSON + schema-validates — it finds only prose, so no bulletin publishes. The 03-06 manifest
+instruction ("output the requested JSON") was ambiguous; the agent reasonably put a multi-KB
+structured artifact in a versioned document rather than a chat comment.
+
+**Two pre-drill setup notes (operability findings, not the defect):**
+- The new `isCircuitOpenDurable` read the old build's 518 stale `editor_agent_failures` rows as
+  an open circuit and silently suppressed the compile on a fresh install. Cleared the stale rows
+  by hand (`DELETE` 518 + 482) to drill. A fresh post-fix install should not be DOA on pre-fix
+  failure history — a durable-breaker reset-on-install (or version-scoped failure counting) is a
+  follow-up worth filing.
+- The `public.issues` table has no `surface_visibility` column — the host does not persist
+  `surfaceVisibility` as a queryable column (the off-board behaviour works regardless).
+
+**Routing:** the output-channel mismatch → `03-RESULT-READBACK-RESEARCH.md` (research the SDK
+document-read surface — Option A: instruct agent to comment raw JSON; Option B: worker reads the
+document) → a small follow-up plan → re-drill. This is a contained fix, not a re-architecture.
