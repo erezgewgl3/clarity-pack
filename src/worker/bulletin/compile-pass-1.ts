@@ -119,6 +119,74 @@ export function validateDraftSchema(
   }
 }
 
+/**
+ * Peel a JSON object out of raw LLM output (Defect B — 2026-05-16 Countermoves
+ * re-drill).
+ *
+ * The Editor-Agent session does respond, but it may wrap the BulletinDraft
+ * JSON in a ```json fence or a prose preamble ("Here is the bulletin: {...}").
+ * `JSON.parse` on that wrapped string throws — so `compilePass1` used to reject
+ * a perfectly good draft as 'LLM output was not valid JSON'.
+ *
+ * Extraction order:
+ *   1. If a ```json (or bare ```) fence is present, take the content between
+ *      the FIRST fence pair — a fenced block wins over any surrounding prose.
+ *   2. Otherwise (or if the fenced content still carries prose), scan for the
+ *      first `{`, walk forward counting brace depth — respecting `"`-delimited
+ *      strings and `\"` escapes so braces inside string values do not miscount
+ *      — and return the substring through the matching `}`.
+ *   3. If no `{` exists at all, THROW — genuinely non-JSON output must still
+ *      hit compilePass1's recordFailure path and the 'LLM output was not valid
+ *      JSON' rejection.
+ *
+ * This is a pure function: same input → same output, no side effects.
+ */
+export function extractJsonObject(raw: string): string {
+  // Step 1 — a fenced block, if any. ```json\n...\n``` or ```\n...\n```.
+  // The capture is the content between the first fence pair.
+  const fence = /```(?:json)?\s*\n?([\s\S]*?)\n?```/i.exec(raw);
+  const candidate = fence ? fence[1] : raw;
+
+  // Step 2 — brace-balanced, quote-aware scan for the first complete object.
+  const start = candidate.indexOf('{');
+  if (start === -1) {
+    throw new Error('no JSON object found in LLM output');
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < candidate.length; i += 1) {
+    const ch = candidate[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '{') {
+      depth += 1;
+    } else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return candidate.slice(start, i + 1);
+      }
+    }
+  }
+
+  // An unbalanced `{` with no matching `}` — not a usable object. Throw so the
+  // caller's recordFailure path treats it as non-JSON output.
+  throw new Error('no balanced JSON object found in LLM output');
+}
+
 /** Build the pass-1 prompt — factsTable as DATA, never as instruction. */
 function buildPrompt(args: CompilePass1Args): string {
   return [
@@ -192,7 +260,13 @@ export async function compilePass1(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    // Defect B: the agent may wrap the draft in a ```json fence or a prose
+    // preamble. extractJsonObject peels it down to the bare object; an
+    // extraction throw (no JSON object at all) and a JSON.parse throw both land
+    // in this catch → recordFailure → the 'LLM output was not valid JSON'
+    // rejection, byte-identical for genuinely non-JSON output.
+    const extracted = extractJsonObject(raw);
+    parsed = JSON.parse(extracted);
   } catch (err) {
     await recordFailure(ctx, {
       agentKey: BULLETIN_COMPILE_AGENT_KEY,
