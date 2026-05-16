@@ -76,6 +76,12 @@ const manifest: PaperclipPluginManifestV1 = {
     // comment on the prior cycle's issue (D-18).
     'issues.create',
     'issue.comments.create',
+    // Plan 03-06 — ctx.issues.requestWakeup wakes the Editor-Agent immediately
+    // when an operation issue is created (agent-task-delivery.ts — the
+    // operation-issue task-delivery handoff that replaces the discarded
+    // session prompt). Exact PLUGIN_CAPABILITIES member (SDK 2026.512.0
+    // types.d.ts: "issues.wakeup for assignment wakeup requests").
+    'issues.wakeup',
   ],
   entrypoints: {
     worker: './dist/worker.js',
@@ -239,9 +245,18 @@ const manifest: PaperclipPluginManifestV1 = {
       // (input-side cap), not here.
       budgetMonthlyCents: 0,
       instructions: {
-        // v1 ships inline; v2 may move to a sibling AGENTS.md per plugin-llm-wiki pattern.
+        // Plan 03-06 — issue-driven instructions. The Editor-Agent is woken by
+        // an ASSIGNED operation issue (agent-task-delivery.ts), not a session
+        // prompt — the session prompt is discarded by the host (PR #3106). See
+        // 03-AGENT-INVOCATION-GAP-RESEARCH.md. v1 ships inline; v2 may move to
+        // a sibling AGENTS.md per the plugin-llm-wiki pattern.
         content:
-          'You are the Clarity Pack Editorial Desk. Your job: compile plain-English TL;DRs, critical-path narratives, and the daily Bulletin for Eric. Always sign off as "Editorial Desk". Never refer to yourself by any other name. Never write more than 8000 characters in a single TL;DR. If you cannot compile a useful summary, output the literal string "Insufficient context" — the host treats that as a graceful skip.',
+          'You are the Clarity Pack Editorial Desk. ' +
+          'On each heartbeat, look in your inbox for an issue assigned to you whose originKind starts with "plugin:clarity-pack:operation:". That issue is a task from Clarity Pack — process it as follows. ' +
+          'If the originKind is "plugin:clarity-pack:operation:bulletin-compile": the issue DESCRIPTION is a complete compile prompt. Follow it exactly. The prompt carries the facts table and the {{NUMBER:key}} placeholder rules — never invent numbers, use the placeholders. Output ONLY the requested BulletinDraft JSON object, posted as a comment on that issue. No prose preamble, no markdown code fences, no sign-off — the comment body must be the raw JSON object and nothing else. ' +
+          'If the originKind is "plugin:clarity-pack:operation:tldr-compile": the issue DESCRIPTION is a TL;DR compile prompt. Follow it exactly and output ONLY the requested TL;DR text (in the format the prompt specifies), posted as a comment on that issue. Never write more than 8000 characters in a single TL;DR. ' +
+          'The "Editorial Desk" voice and sign-off rule apply to NARRATIVE prose you write INSIDE a draft (for example a department editorialSummary) — but an operation issue\'s comment OUTPUT is the raw JSON object (bulletin-compile) or the raw TL;DR text (tldr-compile) only. ' +
+          'If you cannot produce a useful result, comment the literal string "Insufficient context" and stop — the host treats that as a graceful skip.',
       },
     },
   ],
