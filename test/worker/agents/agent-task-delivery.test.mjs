@@ -32,7 +32,11 @@ import {
   OPERATION_ORIGIN_KIND_PREFIX,
   operationOriginKind,
 } from '../../../src/worker/agents/agent-task-delivery.ts';
-import { PENDING_DELIVERIES } from '../../../src/worker/agents/compile-result-tool.ts';
+import {
+  PENDING_DELIVERIES,
+  registerCompileResultTool,
+} from '../../../src/worker/agents/compile-result-tool.ts';
+import { makeHostFaithfulCompileCtx } from '../../helpers/host-faithful-ctx.mjs';
 import manifest from '../../../src/manifest.ts';
 
 const AGENT_ID = 'editor-agent-uuid';
@@ -426,6 +430,55 @@ test('deliverAgentTask: Test D — timeout rejects AND cleans up the PENDING_DEL
     false,
     'the finally cleanup deleted the Map entry — no leak',
   );
+});
+
+// ===========================================================================
+// Plan 03-07 Task 4 — host-faithful e2e: the tool channel end-to-end.
+// `deliverAgentTask` resolves when the SIMULATED agent calls
+// submit-compile-result via the host-faithful ctx's `callTool` helper — with
+// no comment and no document posted (the tool channel wins, not the fallback).
+// ===========================================================================
+
+test('e2e (host-faithful): deliverAgentTask resolves via the submit-compile-result tool channel', async () => {
+  PENDING_DELIVERIES.clear();
+  const draft = validDraftJson();
+  const harness = makeHostFaithfulCompileCtx({
+    companies: [{ id: COMPANY_ID }],
+    // listComments returns the canned draft by default — to PROVE the tool
+    // channel won (not the fallback comment scan), suppress the result comment.
+    noResultComment: true,
+  });
+  const { ctx, callTool, issuesCreated } = harness;
+
+  // Register the real submit-compile-result tool against the host-faithful ctx.
+  registerCompileResultTool(ctx);
+
+  const pending = deliverAgentTask(ctx, {
+    ...BASE_OPTS,
+    timeoutMs: 4000,
+    fallbackPollIntervalMs: 2000,
+  });
+
+  // Wait a tick so deliverAgentTask creates the operation issue and registers
+  // its PENDING_DELIVERIES entry.
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(issuesCreated.length, 1, 'one operation issue was created');
+  // The host-faithful issues.create assigns ids `issue-${n}`.
+  const operationIssueId = 'issue-1';
+  assert.ok(
+    PENDING_DELIVERIES.has(operationIssueId),
+    'deliverAgentTask registered a PENDING_DELIVERIES entry for the created operation issue',
+  );
+
+  // SIMULATE the agent calling the tool.
+  const toolResult = await callTool('submit-compile-result', {
+    operationIssueId,
+    result: draft,
+  });
+  assert.deepEqual(toolResult, { content: 'received' }, 'the tool handler returned {content:"received"}');
+
+  const result = await pending;
+  assert.equal(result, draft, 'deliverAgentTask resolves the tool-delivered result string');
 });
 
 // ---- Task 4 — manifest contract test (drift guard) ------------------------
