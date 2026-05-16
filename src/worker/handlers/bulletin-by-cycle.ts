@@ -24,13 +24,25 @@ import {
 } from '../db/bulletins-repo.ts';
 import { queryActionInbox, type ActionInboxCtx } from '../bulletin/action-inbox-query.ts';
 import type { PluginIssuesClient } from '@paperclipai/plugin-sdk';
-import type { BulletinDraft } from '../../shared/types.ts';
+import type { BulletinDraft, ErratumEntry } from '../../shared/types.ts';
+import type { ErratumRow } from '../db/bulletins-repo.ts';
 
 export type BulletinByCycleCtx = OptInGuardDataCtx &
   BulletinsRepoCtx &
   ActionInboxCtx & {
     issues: PluginIssuesClient;
   };
+
+function mapErratum(row: ErratumRow): ErratumEntry {
+  return {
+    id: row.id,
+    bulletinCycleNumber: row.bulletin_cycle_number,
+    addedAt: row.added_at,
+    addedByUserId: row.added_by_user_id,
+    bodyMd: row.body_md,
+    appliedToIssueCommentId: row.applied_to_issue_comment_id,
+  };
+}
 
 export function registerBulletinByCycle(ctx: BulletinByCycleCtx): void {
   wrapDataHandler(ctx, 'bulletin.byCycle', async (params) => {
@@ -83,9 +95,9 @@ export function registerBulletinByCycle(ctx: BulletinByCycleCtx): void {
 
     // Errata for this cycle (Plan 03-04 surfaces the UI; the read path is
     // already final here).
-    let errata: unknown[] = [];
+    let errata: ErratumEntry[] = [];
     try {
-      errata = await listErrataByCycle(ctx, companyId, row.cycle_number);
+      errata = (await listErrataByCycle(ctx, companyId, row.cycle_number)).map(mapErratum);
     } catch {
       errata = [];
     }

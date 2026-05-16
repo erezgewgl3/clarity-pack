@@ -151,6 +151,7 @@ export type ErratumEntry = {
   addedAt: string;
   addedByUserId: string;
   bodyMd: string;
+  appliedToIssueCommentId: string | null;
 };
 
 /** Failed-compile banner state machine (D-22). */

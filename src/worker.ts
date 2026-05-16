@@ -73,6 +73,14 @@ import {
   registerBulletinActionDecline,
   type BulletinActionDeclineCtx,
 } from './worker/handlers/bulletin-action-decline.ts';
+import {
+  registerBulletinErrata,
+  type BulletinErrataCtx,
+} from './worker/handlers/bulletin-errata.ts';
+import {
+  registerBulletinLatestStatus,
+  type BulletinLatestStatusCtx,
+} from './worker/handlers/bulletin-latest-status.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -120,6 +128,8 @@ const plugin = definePlugin({
     registerBulletinByCycle(ctx as unknown as BulletinByCycleCtx);
     registerBulletinActionApprove(ctx as unknown as BulletinActionApproveCtx);
     registerBulletinActionDecline(ctx as unknown as BulletinActionDeclineCtx);
+    registerBulletinErrata(ctx as unknown as BulletinErrataCtx);
+    registerBulletinLatestStatus(ctx as unknown as BulletinLatestStatusCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.

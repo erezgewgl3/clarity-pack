@@ -32,6 +32,8 @@ const REQUIRED_FILES = [
   'department-section.tsx',
   'standing-numbers-panel.tsx',
   'lineage-footer.tsx',
+  'failed-compile-banner.tsx',
+  'errata-footer.tsx',
 ];
 
 for (const f of REQUIRED_FILES) {
@@ -60,9 +62,22 @@ test('Bulletin UI: index.tsx calls usePluginData for bulletin.byCycle', () => {
 
 test('Bulletin UI: index.tsx renders all 6 child components', () => {
   const src = readSrc('index.tsx');
-  for (const tag of ['<Masthead', '<ActionInbox', '<DepartmentSection', '<StandingNumbersPanel', '<LineageFooter']) {
+  for (const tag of ['<Masthead', '<ActionInbox', '<DepartmentSection', '<StandingNumbersPanel', '<LineageFooter', '<FailedCompileBanner', '<ErrataFooter']) {
     assert.ok(src.includes(tag), `index.tsx missing ${tag}`);
   }
+});
+
+test('Bulletin UI: failed-compile-banner.tsx calls usePluginData for bulletin.latestCompileStatus', () => {
+  const src = readSrc('failed-compile-banner.tsx');
+  assert.match(src, /usePluginData[\s\S]*['"]bulletin\.latestCompileStatus['"]/);
+  assert.ok(src.includes('Bulletin compile failed at'));
+  assert.ok(src.includes('retrying at'));
+});
+
+test('Bulletin UI: errata-footer.tsx renders the errata footer region', () => {
+  const src = readSrc('errata-footer.tsx');
+  assert.match(src, /data-clarity-region=["']errata-footer["']/);
+  assert.match(src, /return null/);
 });
 
 test('Bulletin UI: masthead.tsx contains literal "The Bulletin"', () => {

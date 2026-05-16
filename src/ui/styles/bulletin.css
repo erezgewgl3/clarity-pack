@@ -57,6 +57,29 @@
   padding: 40px 0;
 }
 
+/* ---- Failed compile banner ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-failed-compile-banner {
+  border: 1px solid var(--terracotta);
+  border-left: 5px solid var(--terracotta);
+  background: var(--terracotta-soft);
+  color: var(--ink);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-banner-reason {
+  margin: 6px 0 0;
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 14px;
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+
 /* ---- Masthead ---- */
 [data-clarity-surface="bulletin"] .clarity-bulletin-masthead {
   border-top: 3px solid var(--ink);
@@ -447,6 +470,47 @@
 [data-clarity-surface="bulletin"] .clarity-bulletin-node-more {
   background: transparent;
   border-style: dashed;
+}
+
+/* ---- Errata footer ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-errata-footer {
+  margin-top: 34px;
+  border-top: 1px solid var(--ink);
+  padding-top: 18px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-errata-h2 {
+  font-family: "Fraunces", serif;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0 0 14px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-errata-list {
+  margin: 0;
+  padding-left: 22px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-errata-item {
+  padding: 10px 0;
+  border-bottom: 1px dotted var(--rule);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-errata-item:last-child {
+  border-bottom: none;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-errata-meta {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-errata-body {
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 14.5px;
+  color: var(--ink-2);
+  white-space: pre-wrap;
 }
 
 /* ---- Colophon ---- */

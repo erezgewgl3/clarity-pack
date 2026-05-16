@@ -18,6 +18,7 @@ const CHECKS = [
   { id: 'COEXIST-04', script: '04-editor-agent-no-special-privs.mjs' },
   { id: 'COEXIST-05', script: '05-chat-comment-coexistence-stub.mjs' },
   { id: 'COEXIST-06', script: '06-css-bleed-through.mjs' },
+  { id: 'COEXIST-07', script: '07-bulletin-disable.mjs' },
 ];
 
 const results = [];

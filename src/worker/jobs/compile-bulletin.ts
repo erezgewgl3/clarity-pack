@@ -31,7 +31,9 @@ import type {
 
 import { computeNextDueAt } from '../bulletin/next-due-at.ts';
 import {
+  getBulletinByCycle,
   getNextDueAtForCompany,
+  listErrataByCycle,
   upsertBulletin,
   recordCompileFailure,
   type BulletinsRepoCtx,
@@ -40,7 +42,7 @@ import { computeStandingNumbers, STANDING_NUMBER_SLOTS } from '../bulletin/stand
 import { computeFactsTable } from '../bulletin/facts-table.ts';
 import { compilePass1 } from '../bulletin/compile-pass-1.ts';
 import { verifyDraft } from '../bulletin/bulletin-verifier.ts';
-import { publishBulletin } from '../bulletin/publish.ts';
+import { publishBulletin, type PublishBulletinArgs } from '../bulletin/publish.ts';
 import { recordFailure, recordSuccess, BULLETIN_COMPILE_AGENT_KEY } from '../agents/circuit-breaker.ts';
 // EDITOR_AGENT_KEY is the manifest agents[] key — the SINGLE source of truth
 // lives in editor.ts and MUST equal manifest.agents[].agentKey ('editor-agent').
@@ -58,6 +60,69 @@ import type { BulletinDraft, StandingNumberRow } from '../../shared/types.ts';
 
 /** Retry spacing for a failed compile cycle (D-22 — 15 minutes). */
 const RETRY_INTERVAL_MS = 15 * 60 * 1000;
+
+export function computeCompileRetry(
+  priorFailureCount: number,
+  now: Date,
+): { attemptN: number; nextRetryAt: string } {
+  return {
+    attemptN: Math.max(0, priorFailureCount) + 1,
+    nextRetryAt: new Date(now.getTime() + RETRY_INTERVAL_MS).toISOString(),
+  };
+}
+
+async function countCompileFailuresForCycle(
+  ctx: BulletinsRepoCtx,
+  cycleNumber: number,
+): Promise<number> {
+  try {
+    const rows = await ctx.db.query<{ failure_count?: number; count?: number; n?: number }>(
+      `SELECT COUNT(*)::int AS failure_count
+       FROM plugin_clarity_pack_cdd6bda4bd.bulletin_compile_failures
+       WHERE cycle_number = $1`,
+      [cycleNumber],
+    );
+    const raw = rows[0]?.failure_count ?? rows[0]?.count ?? rows[0]?.n ?? 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function recordCycleCompileFailure(
+  ctx: BulletinsRepoCtx,
+  args: { cycleNumber: number; reason: string; now: Date },
+): Promise<void> {
+  const priorFailureCount = await countCompileFailuresForCycle(ctx, args.cycleNumber);
+  const retry = computeCompileRetry(priorFailureCount, args.now);
+  await recordCompileFailure(ctx, {
+    cycle_number: args.cycleNumber,
+    reason: args.reason,
+    attempt_n: retry.attemptN,
+    next_retry_at: retry.nextRetryAt,
+  });
+}
+
+async function buildPriorCycleErratumSnapshot(
+  ctx: BulletinsRepoCtx,
+  companyId: string,
+  cycleNumber: number,
+): Promise<PublishBulletinArgs['priorCycleErratumSnapshot']> {
+  if (cycleNumber <= 1) return undefined;
+  const priorCycle = cycleNumber - 1;
+  const priorBulletin = await getBulletinByCycle(ctx, companyId, priorCycle);
+  if (!priorBulletin?.published_issue_id) return undefined;
+  const errata = (await listErrataByCycle(ctx, companyId, priorCycle)).filter(
+    (row) => !row.applied_to_issue_comment_id,
+  );
+  if (errata.length === 0) return undefined;
+  return {
+    priorIssueId: priorBulletin.published_issue_id,
+    erratumIds: errata.map((row) => row.id),
+    erratumBodies: errata.map((row) => row.body_md),
+  };
+}
 
 /**
  * Render a thrown value as a string for a log MESSAGE (not metadata).
@@ -323,11 +388,10 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           });
         } catch (e) {
           // recordFailure already invoked inside compilePass1.
-          await recordCompileFailure(ctx, {
-            cycle_number: cycleNumber,
+          await recordCycleCompileFailure(ctx, {
+            cycleNumber,
             reason: `pass-1 failed: ${(e as Error).message}`,
-            attempt_n: 1,
-            next_retry_at: new Date(now.getTime() + RETRY_INTERVAL_MS).toISOString(),
+            now,
           });
           continue;
         }
@@ -349,11 +413,10 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             companyId: company.id,
             reason,
           });
-          await recordCompileFailure(ctx, {
-            cycle_number: cycleNumber,
+          await recordCycleCompileFailure(ctx, {
+            cycleNumber,
             reason,
-            attempt_n: 1,
-            next_retry_at: new Date(now.getTime() + RETRY_INTERVAL_MS).toISOString(),
+            now,
           });
           continue;
         }
@@ -367,6 +430,11 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           lineageThreads:
             lineageThreads.length > 0 ? lineageThreads : draft.lineageThreads ?? [],
         };
+        const priorCycleErratumSnapshot = await buildPriorCycleErratumSnapshot(
+          ctx,
+          company.id,
+          cycleNumber,
+        );
 
         // 6. Publish — two-phase write.
         const publishResult = await publishBulletin(ctx, {
@@ -376,14 +444,14 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           editorAgentId,
           draft: draftWithLineage,
           compiledAt: now,
+          priorCycleErratumSnapshot,
         });
 
         if (publishResult.kind === 'failed') {
-          await recordCompileFailure(ctx, {
-            cycle_number: cycleNumber,
+          await recordCycleCompileFailure(ctx, {
+            cycleNumber,
             reason: publishResult.reason,
-            attempt_n: 1,
-            next_retry_at: new Date(now.getTime() + RETRY_INTERVAL_MS).toISOString(),
+            now,
           });
           continue;
         }

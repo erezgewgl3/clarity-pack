@@ -27,7 +27,7 @@ import type { BulletinDraft } from '../../shared/types.ts';
 
 export type PublishBulletinCtx = {
   db: Pick<PluginDatabaseClient, 'query' | 'execute'>;
-  issues: Pick<PluginIssuesClient, 'create'>;
+  issues: Pick<PluginIssuesClient, 'create'> & Partial<Pick<PluginIssuesClient, 'createComment'>>;
   logger?: { info?(...a: unknown[]): void; warn?(...a: unknown[]): void };
 };
 
@@ -38,6 +38,11 @@ export type PublishBulletinArgs = {
   editorAgentId: string;
   draft: BulletinDraft;
   compiledAt: Date;
+  priorCycleErratumSnapshot?: {
+    priorIssueId: string;
+    erratumIds: number[];
+    erratumBodies: string[];
+  };
 };
 
 export type PublishResult =
@@ -51,6 +56,52 @@ function syncHash(s: string): string {
 }
 
 const BULLETINS_TABLE = 'plugin_clarity_pack_cdd6bda4bd.bulletins';
+const ERRATA_TABLE = 'plugin_clarity_pack_cdd6bda4bd.bulletin_errata';
+
+function renderErrataSnapshotBody(erratumBodies: string[]): string {
+  const items = erratumBodies.map((body) => `- ${body}`);
+  return ['**Errata appended after publish:**', '', ...items].join('\n');
+}
+
+async function appendPriorCycleErrataSnapshot(
+  ctx: PublishBulletinCtx,
+  args: PublishBulletinArgs,
+): Promise<void> {
+  const snapshot = args.priorCycleErratumSnapshot;
+  if (!snapshot || snapshot.erratumIds.length === 0 || snapshot.erratumBodies.length === 0) {
+    return;
+  }
+  if (!ctx.issues.createComment) {
+    ctx.logger?.warn?.('publishBulletin: errata snapshot skipped; createComment unavailable', {
+      priorIssueId: snapshot.priorIssueId,
+    });
+    return;
+  }
+
+  try {
+    const comment = await ctx.issues.createComment(
+      snapshot.priorIssueId,
+      renderErrataSnapshotBody(snapshot.erratumBodies),
+      args.companyId,
+      {},
+    );
+    const commentId = (comment as { id?: string } | null)?.id ?? null;
+    if (!commentId) return;
+    for (const erratumId of snapshot.erratumIds) {
+      await ctx.db.execute(
+        `UPDATE ${ERRATA_TABLE}
+           SET applied_to_issue_comment_id = $1
+         WHERE id = $2 AND applied_to_issue_comment_id IS NULL`,
+        [commentId, erratumId],
+      );
+    }
+  } catch (e) {
+    ctx.logger?.warn?.('publishBulletin: errata snapshot comment failed', {
+      priorIssueId: snapshot.priorIssueId,
+      err: (e as Error).message,
+    });
+  }
+}
 
 /**
  * Publish a verified bulletin draft via the two-phase write. Returns a typed
@@ -65,6 +116,24 @@ export async function publishBulletin(
   const weekday = formatInTimeZone(args.compiledAt, BULLETIN_TZ, 'EEEE');
   const dateText = formatInTimeZone(args.compiledAt, BULLETIN_TZ, 'yyyy-MM-dd');
   const title = `Bulletin No. ${args.cycleNumber} — ${weekday}, ${dateText}`;
+
+  const existingForDue = await ctx.db.query<{ compile_status: string; content_hash?: string }>(
+    `SELECT compile_status, content_hash
+     FROM ${BULLETINS_TABLE}
+     WHERE next_due_at = $1 AND compile_status = 'published'
+     LIMIT 1`,
+    [args.nextDueAtIso],
+  );
+  if (existingForDue[0]?.compile_status === 'published') {
+    const existingHash = existingForDue[0].content_hash;
+    if (existingHash && existingHash !== contentHash) {
+      return {
+        kind: 'failed',
+        reason: 'published bulletin already exists for next_due_at with a different content_hash',
+      };
+    }
+    return { kind: 'duplicate', cycleNumber: args.cycleNumber };
+  }
 
   // ---- Phase 1: INSERT attempting (idempotency via UNIQUE constraint) ----
   try {
@@ -143,6 +212,8 @@ export async function publishBulletin(
     // Issue exists but metadata didn't flip — next cycle's compile resolves the orphan.
     return { kind: 'failed', reason: `UPDATE published failed: ${(e as Error).message}` };
   }
+
+  await appendPriorCycleErrataSnapshot(ctx, args);
 
   return {
     kind: 'published',

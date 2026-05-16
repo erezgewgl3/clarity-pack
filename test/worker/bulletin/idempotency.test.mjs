@@ -64,6 +64,10 @@ function makeCtx() {
           return { rowCount: 1 };
         },
         async query(sql, params) {
+          if (/WHERE next_due_at = \$1 AND compile_status = 'published'/i.test(sql)) {
+            const row = rows.find((r) => r.next_due_at === params[0] && r.compile_status === 'published');
+            return row ? [{ compile_status: row.compile_status, content_hash: row.content_hash }] : [];
+          }
           if (/SELECT compile_status/i.test(sql)) {
             const row = rows.find((r) => r.next_due_at === params[0] && r.content_hash === params[1]);
             return row ? [{ compile_status: row.compile_status }] : [];
@@ -103,12 +107,15 @@ test('same next_due_at and same content hash publishes exactly once', async () =
   assert.equal(rows.filter((r) => r.compile_status === 'published').length, 1);
 });
 
-test('same next_due_at with different content hash creates a separate attempting/publish path', async () => {
+test('same next_due_at with different content hash is rejected as a new attempt, not a republish', async () => {
   const { ctx, issuesCreated, rows } = makeCtx();
-  await publishBulletin(ctx, { ...BASE, draft: draft(1, 'First body') });
-  await publishBulletin(ctx, { ...BASE, draft: draft(1, 'Changed body') });
-  assert.equal(issuesCreated.length, 2);
-  assert.equal(rows.length, 2);
+  const first = await publishBulletin(ctx, { ...BASE, draft: draft(1, 'First body') });
+  const second = await publishBulletin(ctx, { ...BASE, draft: draft(1, 'Changed body') });
+  assert.equal(first.kind, 'published');
+  assert.equal(second.kind, 'failed');
+  assert.match(second.reason, /different content_hash/);
+  assert.equal(issuesCreated.length, 1);
+  assert.equal(rows.length, 1);
 });
 
 test('errata snapshot idempotency is driven by erratum ids marked after comment creation', async () => {
@@ -127,4 +134,3 @@ test('errata snapshot idempotency is driven by erratum ids marked after comment 
   assert.equal(comments.length, 1);
   assert.match(comments[0].body, /One correction/);
 });
-

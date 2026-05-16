@@ -29,6 +29,7 @@ const CHECK_FILES = [
   '04-editor-agent-no-special-privs.mjs',
   '05-chat-comment-coexistence-stub.mjs',
   '06-css-bleed-through.mjs',
+  '07-bulletin-disable.mjs',
 ];
 
 // ---------------------------------------------------------------------------

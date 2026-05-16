@@ -32,9 +32,12 @@ import { ActionInbox } from './action-inbox.tsx';
 import { DepartmentSection, type DepartmentItem } from './department-section.tsx';
 import { StandingNumbersPanel } from './standing-numbers-panel.tsx';
 import { LineageFooter } from './lineage-footer.tsx';
+import { FailedCompileBanner } from './failed-compile-banner.tsx';
+import { ErrataFooter } from './errata-footer.tsx';
 
 import type {
   ActionInboxCard,
+  ErratumEntry,
   LineageThread,
   StandingNumberRow,
 } from '../../../shared/types.ts';
@@ -68,7 +71,7 @@ type BulletinByCycleResult =
       standingNumbers: StandingNumberRow[];
       lineageThreads: LineageThread[];
       actionInbox: ActionInboxCard[];
-      errata: unknown[];
+      errata: ErratumEntry[];
     }
   | null;
 
@@ -144,7 +147,12 @@ function BulletinPageBody({
   });
 
   if (loading && !data) {
-    return <p className="clarity-bulletin-loading">Loading the morning bulletin…</p>;
+    return (
+      <>
+        <FailedCompileBanner />
+        <p className="clarity-bulletin-loading">Loading the morning bulletin…</p>
+      </>
+    );
   }
 
   // Belt-and-suspenders: opt-in error from the worker.
@@ -154,12 +162,15 @@ function BulletinPageBody({
 
   if (!data || ('kind' in data && data.kind === 'not-yet-published')) {
     return (
-      <div className="clarity-bulletin-first-edition">
-        <p className="clarity-bulletin-quiet">
-          First Edition — the Editorial Desk has not compiled a bulletin yet. The next cycle
-          runs at 06:30 ET.
-        </p>
-      </div>
+      <>
+        <FailedCompileBanner />
+        <div className="clarity-bulletin-first-edition">
+          <p className="clarity-bulletin-quiet">
+            First Edition — the Editorial Desk has not compiled a bulletin yet. The next cycle
+            runs at 06:30 ET.
+          </p>
+        </div>
+      </>
     );
   }
 
@@ -182,6 +193,7 @@ function BulletinPageBody({
 
   return (
     <>
+      <FailedCompileBanner />
       <Masthead
         volume={masthead.volume}
         number={masthead.number}
@@ -208,6 +220,7 @@ function BulletinPageBody({
         </aside>
       </div>
       <LineageFooter threads={data.lineageThreads ?? []} />
+      <ErrataFooter errata={data.errata ?? []} />
       <div className="clarity-bulletin-colophon">
         <div>End of Bulletin · No. {data.cycleNumber}</div>
         <em>Compiled by the Editorial Desk · Auto-compiled</em>

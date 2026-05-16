@@ -14,9 +14,12 @@
 // reachable for opted-out users (so they can opt IN).
 
 import * as React from 'react';
+import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
 import { useOptIn } from '../../primitives/use-opt-in.ts';
+import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
+import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 
 export function SettingsPage(): React.ReactElement {
   const { optedIn, toggle, loading } = useOptIn();
@@ -46,7 +49,84 @@ export function SettingsPage(): React.ReactElement {
           surfaces (Reader, Situation Room, Daily Bulletin, Employee Chat) become available as
           opt-in clicks; this toggle never redirects the default landing.
         </p>
+        <ErrataComposer />
       </div>
     </ClaritySurfaceRoot>
+  );
+}
+
+function ErrataComposer(): React.ReactElement {
+  const addErratum = usePluginAction('bulletin.errata.add');
+  const { companyId } = useResolvedCompanyId();
+  const { userId } = useResolvedUserId();
+  const [cycle, setCycle] = React.useState('');
+  const [body, setBody] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const submit = React.useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setBusy(true);
+      setMessage(null);
+      setError(null);
+      try {
+        const result = (await addErratum({
+          companyId: companyId ?? '',
+          userId: userId ?? '',
+          cycle: Number(cycle),
+          body,
+        })) as { ok?: boolean; error?: string };
+        if (result?.ok) {
+          setBody('');
+          setMessage('Erratum added.');
+        } else {
+          setError(result?.error ?? 'Unable to add erratum.');
+        }
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [addErratum, body, companyId, cycle, userId],
+  );
+
+  return (
+    <section className="clarity-settings-errata" data-clarity-region="settings-errata">
+      <h2 className="clarity-settings-subheading">Add Erratum</h2>
+      <form onSubmit={submit}>
+        <label className="clarity-settings-field">
+          <span>Bulletin cycle</span>
+          <input
+            type="number"
+            min="1"
+            value={cycle}
+            onChange={(event) => setCycle(event.currentTarget.value)}
+            required
+          />
+        </label>
+        <label className="clarity-settings-field">
+          <span>Erratum body</span>
+          <textarea
+            value={body}
+            maxLength={2000}
+            rows={5}
+            onChange={(event) => setBody(event.currentTarget.value)}
+            required
+          />
+        </label>
+        <button
+          type="submit"
+          className="clarity-settings-button"
+          disabled={busy || !companyId || !userId}
+        >
+          Add Erratum
+        </button>
+      </form>
+      {message ? <p className="clarity-settings-success">{message}</p> : null}
+      {error ? <p className="clarity-settings-error">{error}</p> : null}
+    </section>
   );
 }

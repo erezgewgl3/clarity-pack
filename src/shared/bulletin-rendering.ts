@@ -77,14 +77,14 @@ export function renderBulletinIssueBody(draft: BulletinDraft): string {
   for (const dept of draft.departments) {
     parts.push(`### ${dept.name}`);
     parts.push('');
+    if (dept.editorialSummary) {
+      parts.push(dept.editorialSummary);
+      parts.push('');
+    }
     if (dept.items.length === 0) {
       parts.push('*· no items ·*');
       parts.push('');
       continue;
-    }
-    if (dept.editorialSummary) {
-      parts.push(dept.editorialSummary);
-      parts.push('');
     }
     for (const item of dept.items) {
       parts.push(`- **${item.title}** — ${item.timeText}`);
