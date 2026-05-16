@@ -96,3 +96,64 @@ export async function recordFailure(
 export function recordSuccess(agentKey: string): void {
   counters.set(agentKey, 0);
 }
+
+/**
+ * Plan 03-06 — in-memory breaker predicate. True when the per-process
+ * consecutive-failure counter for `agentKey` has reached
+ * MAX_CONSECUTIVE_FAILURES (i.e. the breaker has tripped this worker process).
+ *
+ * This is the PRIMARY gate for the breaker-aware resume (compile-bulletin.ts):
+ * a paused agent whose breaker is open was paused BY the breaker, so
+ * auto-resuming it is the resume-defeats-breaker loop. `isCircuitOpenDurable`
+ * below is the cross-restart backstop when this in-memory counter was lost.
+ */
+export function isCircuitOpen(agentKey: string): boolean {
+  return (counters.get(agentKey) ?? 0) >= MAX_CONSECUTIVE_FAILURES;
+}
+
+/**
+ * Plan 03-06 — DURABLE breaker predicate. Pulls forward the v2 behaviour the
+ * file header (circuit-breaker.ts:13-15) deferred: "read the last
+ * MAX_CONSECUTIVE_FAILURES rows from the DB ... to rebuild state".
+ *
+ * The in-memory `counters` map is lost on a worker restart, so a process that
+ * boots after a breaker trip would forget the breaker is open — and the
+ * compile-bulletin job would auto-resume the agent, re-arming the
+ * resume-defeats-breaker infinite loop (live `attempt_n` ran to 470 before this
+ * fix). This predicate reads the durable `editor_agent_failures` audit table:
+ *
+ *   SELECT consecutive ... ORDER BY id DESC LIMIT MAX_CONSECUTIVE_FAILURES
+ *
+ * `recordFailure` appends a row per failure carrying the in-memory counter
+ * value AT THAT TIME (1, 2, 3, ...). `recordSuccess` writes NO row — it only
+ * zeroes the in-memory counter. So the durable signal that the breaker tripped
+ * and was never reset is: exactly MAX_CONSECUTIVE_FAILURES rows came back AND
+ * the most recent (`rows[0]`, ORDER BY id DESC) carries
+ * `consecutive >= MAX_CONSECUTIVE_FAILURES`. After a reset, the *next* failure
+ * carries `consecutive = 1`, which fails this check — so a post-reset re-fail
+ * correctly reads as a closed (not open) circuit.
+ *
+ * Fail-open: a query error returns `false`. The in-memory `isCircuitOpen` is
+ * the primary gate; this is the restart backstop, and a transient DB error
+ * must not permanently wedge the bulletin pipeline.
+ */
+export async function isCircuitOpenDurable(
+  ctx: { db: { query<T>(sql: string, params: unknown[]): Promise<T[]> } },
+  agentKey: string,
+): Promise<boolean> {
+  try {
+    const rows = await ctx.db.query<{ consecutive: number }>(
+      `SELECT consecutive
+         FROM plugin_clarity_pack_cdd6bda4bd.editor_agent_failures
+        WHERE agent_key = $1
+        ORDER BY id DESC
+        LIMIT $2`,
+      [agentKey, MAX_CONSECUTIVE_FAILURES],
+    );
+    if (rows.length !== MAX_CONSECUTIVE_FAILURES) return false;
+    return Number(rows[0]?.consecutive ?? 0) >= MAX_CONSECUTIVE_FAILURES;
+  } catch {
+    // Fail-open — see the rationale block above.
+    return false;
+  }
+}
