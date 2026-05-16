@@ -139,3 +139,22 @@ test('session race: happy path with no race issues exactly one sendMessage (no s
   assert.equal(out, 'clean');
   assert.equal(calls.sendMessage.length, 1, 'a clean send must not trigger any retry');
 });
+
+// ---- Test 6 — the 2026-05-16 root cause, locked: the adapter must NOT pass a
+//      taskKey. The host stores a caller taskKey verbatim but only FINDS
+//      sessions whose taskKey matches `plugin:<pluginKey>:session:%`; a
+//      non-conforming one makes every session a phantom. The adapter omits it
+//      so the host generates a conforming key itself. ----
+test('session race: complete() omits taskKey so the host-generated session is reachable', async () => {
+  const { agents, calls } = makeHostFaithfulAgents({ events: [chunk('ok'), DONE] });
+  const llm = sessionLlmAdapter({ agents }, { ...BASE_OPTS, timeoutMs: 5000 });
+
+  const out = await llm.complete({ maxTokens: 6000, prompt: 'p' });
+
+  assert.equal(out, 'ok', 'the session must be reachable end-to-end');
+  assert.equal(
+    calls.create[0].opts?.taskKey,
+    undefined,
+    'adapter must not supply a taskKey — the host-faithful fake (like the real host) only finds sessions whose taskKey it generated itself',
+  );
+});

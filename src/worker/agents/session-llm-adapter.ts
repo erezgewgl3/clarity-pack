@@ -59,19 +59,21 @@ const NON_INVOKABLE_STATUSES = new Set(['paused', 'terminated', 'pending_approva
 
 /**
  * Bounded retry budget for a transient "Session not found" rejection from
- * `sendMessage`.
+ * `sendMessage` — DEFENSE-IN-DEPTH ONLY.
  *
- * The 2026-05-15 Countermoves drill failed exactly here: `sendMessage` rejected
- * `Session not found: <sessionId>` on a session `create()` had resolved with
- * moments earlier (a well-formed UUID). A session the host just minted and
- * handed back cannot be *permanently* unknown — a not-found this soon after
- * `create` is a create→sendMessage visibility race: the host's `AgentTaskSession`
- * is not yet messageable on the worker's RPC channel. The reference plugin,
- * `plugin-llm-wiki/startWikiQuerySession`, never observes it because it does
- * host round-trips — a `ctx.db.execute` INSERT plus two `ctx.streams` calls —
- * between `create` and `sendMessage`, which incidentally let the session
- * settle. Clarity Pack's adapter goes create→sendMessage with zero intervening
- * round-trips, so it must absorb the race itself.
+ * History: the 2026-05-15/16 Countermoves "Session not found" defect was first
+ * mis-diagnosed as a create→sendMessage timing race and a retry was added to
+ * absorb it. The re-drill disproved that — 4 attempts over 720ms ALL rejected.
+ * The real cause was the host `taskKey` contract (see the `create()` call
+ * below): a session created with a non-conforming taskKey is permanently
+ * invisible to `sendMessage`. That is now fixed at the source by letting the
+ * host generate the taskKey, so a "Session not found" is no longer expected in
+ * normal operation.
+ *
+ * This retry is kept as cheap cover for a GENUINE transient — e.g. a host
+ * restart landing between `create` and the first `sendMessage` — which a short
+ * bounded backoff loop absorbs. A permanent not-found (now structurally
+ * prevented) merely exhausts the budget and surfaces like any compile failure.
  *
  * `SEND_RETRY_ATTEMPTS` is the TOTAL sendMessage attempt budget (1 initial +
  * retries). Backoff is exponential from `SEND_RETRY_BASE_DELAY_MS`; the worst
@@ -108,8 +110,6 @@ export type SessionLlmAdapterOpts = {
   agentId: string;
   /** Company the session runs under. */
   companyId: string;
-  /** Prefix for the session taskKey (idempotency/dedupe). Default 'clarity-pack:compile'. */
-  taskKeyPrefix?: string;
   /** Override the terminal-event timeout. Default SESSION_TIMEOUT_MS. */
   timeoutMs?: number;
 };
@@ -128,7 +128,6 @@ export function sessionLlmAdapter(
   opts: SessionLlmAdapterOpts,
 ): LlmAdapter {
   const timeoutMs = opts.timeoutMs ?? SESSION_TIMEOUT_MS;
-  const taskKeyPrefix = opts.taskKeyPrefix ?? 'clarity-pack:compile';
 
   return {
     async complete({ maxTokens, prompt }: { maxTokens: number; prompt: string }): Promise<string> {
@@ -150,8 +149,22 @@ export function sessionLlmAdapter(
       }
 
       // 2. Open the session.
+      //
+      // CRITICAL — do NOT pass `taskKey`. Paperclip's host session service
+      // enforces a taskKey namespace contract that is checked on READ but not
+      // on WRITE (host `server/src/services/plugin-host-services.ts`,
+      // `agentSessions`): `create` (L1949) stores a caller-supplied `taskKey`
+      // VERBATIM, but `sendMessage` (L2015), `close` (L2115) and `list` (L1985)
+      // only ever match rows whose taskKey is `LIKE 'plugin:<pluginKey>:session:%'`.
+      // A session created with any other taskKey is inserted, returns
+      // status:'active', and is then PERMANENTLY unfindable — the root cause of
+      // the 2026-05-15/16 "Session not found" defect (the adapter used to pass
+      // `taskKey: 'clarity-pack:bulletin:cycle-N:<ts>'`, which fails the LIKE).
+      // Omitting `taskKey` makes the host generate a conforming
+      // `plugin:<pluginKey>:session:<uuid>` itself — the only safe option: the
+      // host's own pluginKey is definitionally correct and is not duplicated
+      // into plugin code where it could drift.
       const session = await ctx.agents.sessions.create(opts.agentId, opts.companyId, {
-        taskKey: `${taskKeyPrefix}:${Date.now()}`,
         reason: 'Clarity Pack compile',
       });
 

@@ -194,10 +194,10 @@ test('session-llm-adapter: session.close called exactly once on the timeout path
   assert.equal(calls.close[0].sessionId, calls.create[0].sessionId);
 });
 
-// ---- Test 7 — prompt forwarded to sendMessage; create gets a non-empty taskKey ----
-test('session-llm-adapter: prompt forwarded to sendMessage; create gets a non-empty taskKey', async () => {
+// ---- Test 7 — prompt forwarded to sendMessage; create must NOT pass a taskKey ----
+test('session-llm-adapter: prompt forwarded to sendMessage; create omits taskKey (host generates a conforming one)', async () => {
   const { ctx, calls } = makeFakeCtx({ events: [chunk('ok'), DONE] });
-  const llm = sessionLlmAdapter(ctx, { ...BASE_OPTS, taskKeyPrefix: 'clarity-pack:bulletin:cycle-7' });
+  const llm = sessionLlmAdapter(ctx, BASE_OPTS);
   const PROMPT = 'compile cycle 7 — facts: {...}';
   await llm.complete({ maxTokens: 6000, prompt: PROMPT });
 
@@ -205,8 +205,13 @@ test('session-llm-adapter: prompt forwarded to sendMessage; create gets a non-em
   assert.equal(calls.sendMessage[0].opts.prompt, PROMPT, 'the prompt must be forwarded verbatim to sendMessage');
 
   assert.equal(calls.create.length, 1);
-  const taskKey = calls.create[0].opts?.taskKey;
-  assert.equal(typeof taskKey, 'string');
-  assert.ok(taskKey.length > 0, 'create must receive a non-empty taskKey (idempotency/dedupe key)');
-  assert.match(taskKey, /clarity-pack:bulletin:cycle-7/, 'taskKey must carry the supplied prefix');
+  // The host enforces a `plugin:<pluginKey>:session:%` taskKey contract on
+  // READ only — a caller-supplied taskKey is stored verbatim and, if it does
+  // not match, makes the session permanently unfindable. The adapter MUST NOT
+  // pass a taskKey; the host generates a conforming one itself.
+  assert.equal(
+    calls.create[0].opts?.taskKey,
+    undefined,
+    'create must NOT receive a taskKey — a non-conforming one is the 2026-05-16 "Session not found" root cause',
+  );
 });

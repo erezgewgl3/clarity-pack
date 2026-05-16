@@ -2,32 +2,43 @@
 //
 // Host-faithful `ctx.agents` fake for agent-chat-session tests.
 //
-// The 2026-05-15 Countermoves drill failed at the bulletin compile's LLM step:
-// `ctx.agents.sessions.sendMessage(session.sessionId, …)` rejected with
-// `Session not found: <sessionId>` *immediately* after a `create()` that had
-// resolved with that exact, well-formed sessionId.
+// Models the ONE contract that the 2026-05-15/16 Countermoves "Session not
+// found" defect turned on — and that the SDK's own permissive testing fake
+// does NOT enforce.
 //
-// Permissive inline fakes (test/worker/agents/session-llm-adapter.test.mjs's
-// `makeFakeCtx`) never caught it — their `sendMessage` always succeeds, so the
-// adapter was only ever exercised against a host that has no create→sendMessage
-// gap. This helper is the `ctx.agents.sessions` analogue of
-// test/helpers/host-faithful-db.mjs: it models the live host's session
-// lifecycle faithfully AND can reproduce the drill failure deterministically.
+// THE HOST taskKey CONTRACT (verified against Paperclip host source
+// `server/src/services/plugin-host-services.ts`, `agentSessions` service):
 //
-// Faithfulness is verified against:
-//   - @paperclipai/plugin-sdk@2026.512.0 `dist/testing.js` session fake
-//     (create mints an `active` session; sendMessage/list/close reject an
-//     unknown or company-mismatched session with `Session not found: <id>`);
-//   - the canonical `plugin-llm-wiki/startWikiQuerySession` reference, which
-//     performs host round-trips (`ctx.db.execute` + `ctx.streams`) between
-//     `create` and `sendMessage` and therefore never observes the gap.
+//   - `create(agentId, companyId, { taskKey?, reason? })` (host L1944-1973):
+//       taskKey = params.taskKey ?? `plugin:<pluginKey>:session:<randomUUID()>`
+//     A caller-supplied taskKey is stored VERBATIM — no prefix added, no
+//     validation. `create` always returns a real, persisted, status:"active"
+//     session.
+//   - `sendMessage` (L2008-2019), `list` (L1985), `close` (L2115) all look the
+//     session up with `... AND taskKey LIKE 'plugin:<pluginKey>:session:%'`.
 //
-// The `notFoundForFirstNSends` knob reproduces the create→sendMessage
-// visibility race: the first N `sendMessage` calls for a freshly-created
-// session reject `Session not found: <id>` before the host makes the session
-// messageable — exactly the live 2026-05-15 symptom.
+// So a session created with a taskKey that does NOT start with
+// `plugin:<pluginKey>:session:` is inserted, hands back an "active" session,
+// and is then PERMANENTLY invisible to sendMessage/close/list — a phantom.
+// That is exactly the live defect: the adapter passed
+// `taskKey: "clarity-pack:bulletin:cycle-1:<ts>"`, every lookup filtered it
+// out, and 4 retries over 720ms could not change a static taskKey string.
+//
+// The fix is to OMIT taskKey so the host generates a conforming one. This fake
+// models the contract so that bug reproduces locally (RED) — the SDK's
+// `testing.js` fake looks sessions up by id alone and never catches it.
+//
+// `notFoundForFirstNSends` additionally simulates a GENUINE transient (host
+// hiccup) for exercising the adapter's defensive retry.
 
 import { randomUUID } from 'node:crypto';
+
+/**
+ * The host's installed pluginKey for Clarity Pack is the manifest `id`
+ * (`src/manifest.ts` → `id: 'clarity-pack'`). The host generates and filters
+ * session taskKeys against this exact prefix.
+ */
+export const SESSION_TASKKEY_PREFIX = 'plugin:clarity-pack:session:';
 
 /**
  * Build a host-faithful fake `ctx.agents` (the `get` + `sessions` slice the
@@ -36,13 +47,13 @@ import { randomUUID } from 'node:crypto';
  * @param {object}  opts
  * @param {string}  opts.agentStatus            — status `agents.get` reports (default 'idle').
  * @param {boolean} opts.agentNull              — when true, `agents.get` returns null.
- * @param {number}  opts.notFoundForFirstNSends — race sim: the first N sendMessage
- *                                                attempts (per session) reject
- *                                                `Session not found` before the
- *                                                session becomes messageable.
+ * @param {number}  opts.notFoundForFirstNSends — transient sim: the first N
+ *                                                sendMessage attempts (per
+ *                                                session) reject `Session not
+ *                                                found` before succeeding.
  * @param {string|null} opts.sendMessageRejection — when set, EVERY sendMessage
  *                                                rejects with this (non-transient)
- *                                                message — for testing that the
+ *                                                message — for asserting the
  *                                                adapter does NOT retry a
  *                                                non-"not found" failure.
  * @param {Array}   opts.events                 — AgentSessionEvents replayed via
@@ -59,11 +70,21 @@ export function makeHostFaithfulAgents({
   events = [],
   replayNone = false,
 } = {}) {
-  /** sessionId -> AgentSession row. */
+  /** sessionId -> AgentSession row (carries the stored taskKey). */
   const sessions = new Map();
   /** sessionId -> count of sendMessage attempts seen so far. */
   const sendAttempts = new Map();
   const calls = { get: [], create: [], list: [], sendMessage: [], close: [] };
+
+  /** Host-faithful lookup: a session is reachable only when its stored taskKey
+   *  conforms to the host's `plugin:<pluginKey>:session:%` filter. */
+  const isReachable = (session, companyId) =>
+    Boolean(
+      session &&
+        session.status === 'active' &&
+        session.companyId === companyId &&
+        session.taskKey.startsWith(SESSION_TASKKEY_PREFIX),
+    );
 
   const agents = {
     async get(agentId, companyId) {
@@ -73,25 +94,43 @@ export function makeHostFaithfulAgents({
     },
     sessions: {
       async create(agentId, companyId, createOpts) {
-        // The live host mints a real `AgentTaskSession` and returns it with a
-        // well-formed UUID — exactly what the drill observed.
+        // Host L1949: a caller taskKey is stored verbatim; otherwise the host
+        // generates a conforming `plugin:<pluginKey>:session:<uuid>`.
+        const taskKey =
+          createOpts?.taskKey ?? `${SESSION_TASKKEY_PREFIX}${randomUUID()}`;
         const session = {
           sessionId: randomUUID(),
           agentId,
           companyId,
+          taskKey,
           status: 'active',
           createdAt: new Date().toISOString(),
         };
         sessions.set(session.sessionId, session);
         calls.create.push({ agentId, companyId, opts: createOpts, sessionId: session.sessionId });
-        return session;
+        // `create` ALWAYS returns an active session — even when taskKey is
+        // non-conforming. That is the trap: the phantom only surfaces on the
+        // next call.
+        return {
+          sessionId: session.sessionId,
+          agentId,
+          companyId,
+          status: 'active',
+          createdAt: session.createdAt,
+        };
       },
 
       async list(agentId, companyId) {
         calls.list.push({ agentId, companyId });
-        return [...sessions.values()].filter(
-          (s) => s.agentId === agentId && s.companyId === companyId && s.status === 'active',
-        );
+        return [...sessions.values()]
+          .filter((s) => s.agentId === agentId && isReachable(s, companyId))
+          .map((s) => ({
+            sessionId: s.sessionId,
+            agentId: s.agentId,
+            companyId: s.companyId,
+            status: s.status,
+            createdAt: s.createdAt,
+          }));
       },
 
       async sendMessage(sessionId, companyId, sendOpts) {
@@ -104,18 +143,16 @@ export function makeHostFaithfulAgents({
           throw new Error(sendMessageRejection);
         }
 
-        // Race simulation — the first N attempts reject exactly as the live
-        // host did on 2026-05-15 (bare "Session not found: <id>").
+        // Genuine-transient simulation — the first N attempts reject before
+        // the session becomes messageable (host hiccup, not the taskKey bug).
         if (attempt <= notFoundForFirstNSends) {
           throw new Error(`Session not found: ${sessionId}`);
         }
 
-        // Host-faithful lifecycle checks (ported from testing.js semantics).
-        const session = sessions.get(sessionId);
-        if (!session || session.status !== 'active') {
-          throw new Error(`Session not found or closed: ${sessionId}`);
-        }
-        if (session.companyId !== companyId) {
+        // Host-faithful lookup. The real host ANDs id + companyId + the
+        // taskKey-prefix LIKE into one SELECT; a miss on ANY of them yields a
+        // bare `Session not found: <id>` (host plugin-host-services.ts L2019).
+        if (!isReachable(sessions.get(sessionId), companyId)) {
           throw new Error(`Session not found: ${sessionId}`);
         }
 
@@ -134,10 +171,9 @@ export function makeHostFaithfulAgents({
       async close(sessionId, companyId) {
         calls.close.push({ sessionId, companyId });
         const session = sessions.get(sessionId);
-        if (!session) {
-          throw new Error(`Session not found: ${sessionId}`);
-        }
-        if (session.companyId !== companyId) {
+        // close applies the SAME taskKey-prefix filter (host L2115); a
+        // non-conforming session is unreachable here too.
+        if (!session || session.companyId !== companyId || !session.taskKey.startsWith(SESSION_TASKKEY_PREFIX)) {
           throw new Error(`Session not found: ${sessionId}`);
         }
         session.status = 'closed';

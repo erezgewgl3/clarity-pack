@@ -310,7 +310,6 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         const llm = sessionLlmAdapter(ctx, {
           agentId: editorAgentId,
           companyId: company.id,
-          taskKeyPrefix: `clarity-pack:bulletin:cycle-${cycleNumber}`,
         });
         let draft: BulletinDraft;
         try {

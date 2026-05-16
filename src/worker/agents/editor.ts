@@ -128,7 +128,6 @@ export async function handleEditorHeartbeat(
   const llm = sessionLlmAdapter(ctx, {
     agentId: payload.agentId,
     companyId: payload.companyId,
-    taskKeyPrefix: 'clarity-pack:tldr',
   });
 
   for (const issueId of issueIds) {
