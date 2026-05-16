@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-15T06:41:04.852Z",
+  "timestamp": "2026-05-16T13:53:31.255Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
-  "phase_name": "2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + Opt-In) — **COMPLETE 2026-05-15 ✓**",
+  "phase_name": "3 (Daily Bulletin) — **EXECUTING** — all 5 plans built (03-01/02/03/04/05); session-not-found + Defect A + Defect B all RESOLVED; every auto/TDD task green. Only Plan 03-04 Task 3 (Eric's Phase 3 closure drill on Countermoves) remains.",
   "phase_dir": null,
   "plan": null,
   "task": null,
@@ -22,33 +22,21 @@
     },
     {
       "status": "M",
-      "path": ".planning/REQUIREMENTS.md"
-    },
-    {
-      "status": "M",
-      "path": ".planning/ROADMAP.md"
-    },
-    {
-      "status": "M",
       "path": ".planning/STATE.md"
     },
     {
-      "status": "M",
-      "path": ".planning/phases/02-scaffold-and-surfaces/02-04-SUMMARY.md"
+      "status": "??",
+      "path": ".codex/"
     },
     {
-      "status": "M",
-      "path": ".planning/phases/02-scaffold-and-surfaces/02-08-SUMMARY.md"
+      "status": "??",
+      "path": ".planning/phases/03-daily-bulletin/03-04-SUMMARY.md"
     },
     {
-      "status": "M",
-      "path": ".planning/phases/02-scaffold-and-surfaces/02-09-SUMMARY.md"
-    },
-    {
-      "status": "M",
-      "path": "runbook/REHEARSAL.md"
+      "status": "??",
+      "path": "AGENTS.md"
     }
   ],
   "next_action": "Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.",
-  "context_notes": "Status: Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.\n\nRecent commits:\nf4df6e2 docs(02-09): close Tasks 1-3 in STATE.md + HANDOFF.json; Plan 02-09 Task 4 awaiting Eric's Countermoves re-drill\n7b5f1be docs(02-09): SUMMARY (Tasks 1-3 complete) + Finding #11 (userId-null detail-tab gap)\n21473fd test(02-09): Task 3 - lock issue-reader DEV-16 degradation contract\na00371d feat(02-09): Task 2 GREEN - thread useResolvedUserId through all wrapped-handler UI call sites\nc1c3930 test(02-09): Task 2 RED - useResolvedUserId threading contract at all wrapped-handler call sites"
+  "context_notes": "Status: Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.\n\nRecent commits:\ne65088a feat(03-04): GREEN bulletin errata and compile status\nec9c08c test(03-04): add bulletin closure RED contracts\nd801d3a docs(quick-260516-gx4): compile-path host-faithful test-hardening pass + Defect B\n4ed04b1 fix(quick-260516-gx4-03): extract JSON from fenced/prose-wrapped LLM output (Defect B)\nced4209 test(quick-260516-gx4-02): assembled host-faithful ctx + compile-bulletin host-contract net"
 }
