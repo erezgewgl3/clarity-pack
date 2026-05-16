@@ -29,6 +29,7 @@ import {
   recordSuccess,
   resetCircuitBreakerState,
   MAX_CONSECUTIVE_FAILURES,
+  CLARITY_PACK_VERSION,
 } from '../../../src/worker/agents/circuit-breaker.ts';
 
 const AGENT_ID = '00000000-0000-0000-0000-000000000001';
@@ -142,4 +143,100 @@ test('isCircuitOpenDurable: a query error fails open (returns false)', async () 
     },
   };
   assert.equal(await isCircuitOpenDurable(ctx, 'bulletin-compile'), false);
+});
+
+// ===========================================================================
+// Plan 03-07 Task 1 RED — version-scoped durable breaker.
+// `isCircuitOpenDurable` used to count ALL editor_agent_failures rows, so a
+// fresh post-fix install was silently DOA on pre-fix failure history (the
+// 2026-05-16 re-drill had to hand-delete 518+482 stale rows). recordFailure
+// now stamps the current plugin version (CLARITY_PACK_VERSION) on each row;
+// isCircuitOpenDurable filters WHERE plugin_version = $N.
+// ===========================================================================
+
+/** A CircuitBreakerCtx whose `db.execute` RECORDS each INSERT's SQL + params. */
+function makeRecordingBreakerCtx() {
+  const executes = [];
+  const paused = [];
+  return {
+    executes,
+    paused,
+    ctx: {
+      agents: {
+        async pause(agentId, companyId) {
+          paused.push({ agentId, companyId });
+        },
+      },
+      db: {
+        async execute(sql, params) {
+          executes.push({ sql, params });
+          return { rowCount: 1 };
+        },
+      },
+    },
+  };
+}
+
+test('CLARITY_PACK_VERSION is a non-empty string', () => {
+  assert.equal(typeof CLARITY_PACK_VERSION, 'string');
+  assert.ok(CLARITY_PACK_VERSION.length > 0);
+});
+
+// ---- Test E — recordFailure stamps the plugin version ---------------------
+
+test('Test E — recordFailure stamps CLARITY_PACK_VERSION on the editor_agent_failures INSERT', async () => {
+  resetCircuitBreakerState();
+  const { ctx, executes } = makeRecordingBreakerCtx();
+  await recordFailure(ctx, {
+    agentKey: 'bulletin-compile',
+    agentId: AGENT_ID,
+    companyId: COMPANY_ID,
+    reason: 'forced failure',
+  });
+  assert.equal(executes.length, 1, 'one INSERT');
+  assert.match(executes[0].sql, /plugin_version/i, 'the INSERT SQL mentions plugin_version');
+  assert.ok(
+    executes[0].params.includes(CLARITY_PACK_VERSION),
+    'the INSERT params include the current plugin version',
+  );
+});
+
+// ---- Test F — isCircuitOpenDurable filters by plugin_version --------------
+
+test('Test F — isCircuitOpenDurable SELECT filters WHERE plugin_version = $N', async () => {
+  resetCircuitBreakerState();
+  const { ctx, queries } = makeDurableCtx([]);
+  await isCircuitOpenDurable(ctx, 'bulletin-compile');
+  assert.equal(queries.length, 1, 'exactly one SELECT');
+  assert.match(queries[0].sql, /plugin_version/i, 'the SELECT SQL filters on plugin_version');
+  assert.ok(
+    queries[0].params.includes(CLARITY_PACK_VERSION),
+    'the SELECT params include the current plugin version',
+  );
+});
+
+// ---- Test G — version-scoped: fresh install is NOT breaker-suppressed -----
+
+test('Test G — isCircuitOpenDurable: 3 current-version rows → true; [] (only pre-fix NULL rows filtered out) → false', async () => {
+  resetCircuitBreakerState();
+  const open = makeDurableCtx([
+    { consecutive: MAX_CONSECUTIVE_FAILURES },
+    { consecutive: MAX_CONSECUTIVE_FAILURES - 1 },
+    { consecutive: MAX_CONSECUTIVE_FAILURES - 2 },
+  ]);
+  assert.equal(
+    await isCircuitOpenDurable(open.ctx, 'bulletin-compile'),
+    true,
+    'three current-version failure rows read as an open circuit',
+  );
+
+  // A fresh post-fix install: the only rows in the table are pre-fix
+  // NULL-version rows, which the plugin_version = $N filter excludes — so the
+  // query returns []. The breaker must read closed (a fresh install is NOT DOA).
+  const fresh = makeDurableCtx([]);
+  assert.equal(
+    await isCircuitOpenDurable(fresh.ctx, 'bulletin-compile'),
+    false,
+    'a fresh install whose only rows are pre-fix NULL-version rows reads as a closed circuit',
+  );
 });

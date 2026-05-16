@@ -32,6 +32,7 @@ import {
   OPERATION_ORIGIN_KIND_PREFIX,
   operationOriginKind,
 } from '../../../src/worker/agents/agent-task-delivery.ts';
+import { PENDING_DELIVERIES } from '../../../src/worker/agents/compile-result-tool.ts';
 import manifest from '../../../src/manifest.ts';
 
 const AGENT_ID = 'editor-agent-uuid';
@@ -61,7 +62,8 @@ function validDraftJson() {
 }
 
 /**
- * Build a fake `ctx.issues` with `create`/`list`/`listComments`/`requestWakeup`.
+ * Build a fake `ctx.issues` with `create`/`list`/`listComments`/`requestWakeup`
+ * and (Plan 03-07) `documents.list` / `documents.get`.
  *
  * @param {object}  opts
  * @param {Array}   opts.existing       — rows `ctx.issues.list` returns (idempotency).
@@ -69,8 +71,17 @@ function validDraftJson() {
  *                                        Each entry is the IssueComment[] that
  *                                        poll returns. The polling loop is
  *                                        genuinely exercised across ≥2 polls.
+ * @param {Array}   opts.documentSummaries — IssueDocumentSummary[] returned by
+ *                                        `documents.list` (default []).
+ * @param {object}  opts.documentBodies — key → body string; `documents.get`
+ *                                        returns `{...summary, body}` for a key.
  */
-function makeFakeCtx({ existing = [], commentScript = [] } = {}) {
+function makeFakeCtx({
+  existing = [],
+  commentScript = [],
+  documentSummaries = [],
+  documentBodies = {},
+} = {}) {
   const calls = { list: [], create: [], requestWakeup: [], listComments: [] };
   let createdSeq = 0;
   let pollIndex = 0;
@@ -103,6 +114,16 @@ function makeFakeCtx({ existing = [], commentScript = [] } = {}) {
         const entry = commentScript[pollIndex] ?? [];
         if (pollIndex < commentScript.length - 1) pollIndex += 1;
         return entry;
+      },
+      documents: {
+        async list() {
+          return documentSummaries;
+        },
+        async get(issueId, key) {
+          if (!(key in documentBodies)) return null;
+          const summary = documentSummaries.find((s) => s.key === key) ?? { key };
+          return { ...summary, issueId, body: documentBodies[key] };
+        },
       },
     },
   };
@@ -281,6 +302,130 @@ test('deliveryLlmAdapter.complete() forwards the prompt as the issue description
 test('AGENT_TASK_DELIVERY_TIMEOUT is a positive number (default result-readback ceiling)', () => {
   assert.equal(typeof AGENT_TASK_DELIVERY_TIMEOUT, 'number');
   assert.ok(AGENT_TASK_DELIVERY_TIMEOUT > 0);
+});
+
+// ===========================================================================
+// Plan 03-07 Task 1 RED — the promise-registry readback (Option C).
+// `deliverAgentTask` registers a PENDING_DELIVERIES entry keyed by issue.id
+// BEFORE requestWakeup, then Promise.race's that pending promise against a slow
+// comment+document fallback poll and the timeout. The submit-compile-result
+// tool handler resolves the pending promise directly — no comment-poll race on
+// the designed path.
+// ===========================================================================
+
+/** A document summary as the SDK's IssueDocumentSummary shape. */
+function docSummary({ key = 'bulletin', id = 'doc-1' } = {}) {
+  return {
+    id,
+    issueId: 'op-1',
+    key,
+    title: 'Compiled draft',
+    format: 'markdown',
+    latestRevisionNumber: 1,
+    createdByAgentId: AGENT_ID,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
+// ---- Test A — the tool channel resolves the delivery ----------------------
+
+test('deliverAgentTask: Test A — a submit-compile-result tool call resolves the delivery (no comment, no document)', async () => {
+  PENDING_DELIVERIES.clear();
+  const draft = validDraftJson();
+  const { ctx, calls } = makeFakeCtx({
+    existing: [],
+    commentScript: [[]], // listComments always empty — the tool wins
+  });
+
+  const pending = deliverAgentTask(ctx, {
+    ...BASE_OPTS,
+    timeoutMs: 2000,
+    fallbackPollIntervalMs: 1000,
+  });
+
+  // Wait a tick so deliverAgentTask creates the issue and registers its entry.
+  await new Promise((r) => setTimeout(r, 30));
+  const createdId = calls.create.length ? 'op-1' : null;
+  assert.ok(createdId, 'an operation issue was created');
+  const entry = PENDING_DELIVERIES.get(createdId);
+  assert.ok(entry, 'deliverAgentTask registered a PENDING_DELIVERIES entry keyed by issue.id');
+
+  // The simulated agent calls the tool — resolve directly.
+  entry.resolve(draft);
+
+  const result = await pending;
+  assert.equal(result, draft, 'deliverAgentTask resolves the tool-delivered result string');
+});
+
+// ---- Test B — the comment fallback poll still works -----------------------
+
+test('deliverAgentTask: Test B — fallback comment poll resolves when the agent never calls the tool', async () => {
+  PENDING_DELIVERIES.clear();
+  const draft = validDraftJson();
+  const { ctx } = makeFakeCtx({
+    existing: [],
+    commentScript: [
+      [], // poll 1 — no result yet
+      [comment({ body: draft })], // poll 2 — the JSON result comment (Option A)
+    ],
+  });
+
+  const result = await deliverAgentTask(ctx, {
+    ...BASE_OPTS,
+    timeoutMs: 2000,
+    fallbackPollIntervalMs: 30,
+  });
+  assert.equal(result, draft, 'the comment-scan fallback resolves the result');
+});
+
+// ---- Test C — the document fallback scan works ----------------------------
+
+test('deliverAgentTask: Test C — fallback document scan resolves a BulletinDraft filed as a document', async () => {
+  PENDING_DELIVERIES.clear();
+  const draft = validDraftJson();
+  const { ctx } = makeFakeCtx({
+    existing: [],
+    commentScript: [[]], // no result comment ever
+    documentSummaries: [docSummary({ key: 'bulletin' })],
+    documentBodies: { bulletin: draft },
+  });
+
+  const result = await deliverAgentTask(ctx, {
+    ...BASE_OPTS,
+    timeoutMs: 2000,
+    fallbackPollIntervalMs: 30,
+  });
+  assert.equal(result, draft, 'the document-scan fallback (Option B) resolves the result');
+});
+
+// ---- Test D — timeout cleans up the Map entry -----------------------------
+
+test('deliverAgentTask: Test D — timeout rejects AND cleans up the PENDING_DELIVERIES entry', async () => {
+  PENDING_DELIVERIES.clear();
+  const { ctx, calls } = makeFakeCtx({
+    existing: [],
+    commentScript: [[]], // nothing ever resolves on any channel
+  });
+
+  await assert.rejects(
+    () =>
+      deliverAgentTask(ctx, {
+        ...BASE_OPTS,
+        timeoutMs: 120,
+        fallbackPollIntervalMs: 40,
+      }),
+    /timeout/i,
+    'rejects with a timeout-tagged error',
+  );
+
+  const createdId = calls.create.length ? 'op-1' : null;
+  assert.ok(createdId, 'an operation issue was created');
+  assert.equal(
+    PENDING_DELIVERIES.has(createdId),
+    false,
+    'the finally cleanup deleted the Map entry — no leak',
+  );
 });
 
 // ---- Task 4 — manifest contract test (drift guard) ------------------------
