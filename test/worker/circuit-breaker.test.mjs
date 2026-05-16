@@ -109,8 +109,18 @@ test('recordFailure appends to editor_agent_failures audit table in the baked pl
     /plugin_clarity_pack_cdd6bda4bd\.editor_agent_failures/,
     'SQL must target the baked-namespace audit table (02-01 SMOKE-FINDINGS Finding #4)',
   );
-  // params: [agentKey, reason, consecutive]
-  assert.deepEqual(dbCalls[0].params, ['editor-agent', 'audit-row-test', 1]);
+  // params: [agentKey, reason, consecutive, plugin_version]
+  // Plan 03-07 — recordFailure now stamps the plugin version (migration 0005's
+  // plugin_version column) so isCircuitOpenDurable can scope its count to the
+  // current version (DURABLE-BREAKER-STALE-HISTORY fix).
+  assert.equal(dbCalls[0].params.length, 4, 'INSERT carries 4 params incl. plugin_version');
+  assert.deepEqual(
+    dbCalls[0].params.slice(0, 3),
+    ['editor-agent', 'audit-row-test', 1],
+    'the first three params (agentKey, reason, consecutive) are unchanged',
+  );
+  assert.match(dbCalls[0].sql, /plugin_version/, 'the INSERT column list includes plugin_version');
+  assert.equal(typeof dbCalls[0].params[3], 'string', 'the 4th param is the plugin version string');
 });
 
 test('recordFailure returns the current consecutive count', async () => {

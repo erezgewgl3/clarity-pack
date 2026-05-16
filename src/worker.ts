@@ -81,6 +81,11 @@ import {
   registerBulletinLatestStatus,
   type BulletinLatestStatusCtx,
 } from './worker/handlers/bulletin-latest-status.ts';
+// Plan 03-07 — the submit-compile-result plugin tool (Option C result-readback).
+import {
+  registerCompileResultTool,
+  type CompileResultToolCtx,
+} from './worker/agents/compile-result-tool.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -111,6 +116,14 @@ const plugin = definePlugin({
     registerSituationRoomHandlers(ctx as unknown as SituationRoomCtx);
     registerActiveViewerPing(ctx as unknown as ActiveViewerPingCtx);
     registerSituationSnapshotJob(ctx as unknown as SituationSnapshotCtx);
+
+    // ---- Plan 03-07 — the submit-compile-result plugin tool -----------------
+    // The Editor-Agent delivers its compiled BulletinDraft / TL;DR by calling
+    // this tool (Option C). agent-task-delivery registers the in-flight
+    // delivery in PENDING_DELIVERIES; the tool handler resolves it. Registered
+    // BEFORE the compile-bulletin job so the tool exists before any compile
+    // fires.
+    registerCompileResultTool(ctx as unknown as CompileResultToolCtx);
 
     // ---- Plan 03-01/03-02/03-05 — Daily Bulletin compile job ----------------
     // The compile-bulletin job runs the two-pass compile pipeline; Plan 03-05

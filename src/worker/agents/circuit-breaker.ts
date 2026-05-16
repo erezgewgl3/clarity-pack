@@ -21,8 +21,21 @@
 // truth (verified empirically against
 // node_modules/@paperclipai/plugin-sdk/dist/types.d.ts:1119).
 
+import manifest from '../../manifest.ts';
+
 /** D-06 locked: 3 consecutive failures trigger pause. */
 export const MAX_CONSECUTIVE_FAILURES = 3;
+
+/**
+ * Plan 03-07 — the current Clarity Pack plugin version. Sourced from the
+ * manifest so the durable-breaker version scope tracks a manifest version bump
+ * automatically (no second source of truth to drift). `recordFailure` stamps
+ * this onto each editor_agent_failures row; `isCircuitOpenDurable` counts only
+ * rows whose `plugin_version` matches it. Pre-fix rows carry NULL and are
+ * excluded — so a fresh post-fix install is NOT silently DOA on the pre-fix
+ * failure history (DURABLE-BREAKER-STALE-HISTORY).
+ */
+export const CLARITY_PACK_VERSION: string = manifest.version;
 
 /**
  * Plan 03-02 — Separate counter key so bulletin-compile failures track
@@ -76,9 +89,12 @@ export async function recordFailure(
   counters.set(args.agentKey, next);
 
   // Audit row first (durable). Baked namespace per 02-01 SMOKE-FINDINGS Finding #4.
+  // Plan 03-07 — stamp the plugin version (migration 0005's plugin_version
+  // column) so isCircuitOpenDurable can scope its count to the current version.
+  // `failed_at` stays OMITTED — the column default populates it.
   await ctx.db.execute(
-    'INSERT INTO plugin_clarity_pack_cdd6bda4bd.editor_agent_failures (agent_key, reason, consecutive) VALUES ($1, $2, $3)',
-    [args.agentKey, args.reason, next],
+    'INSERT INTO plugin_clarity_pack_cdd6bda4bd.editor_agent_failures (agent_key, reason, consecutive, plugin_version) VALUES ($1, $2, $3, $4)',
+    [args.agentKey, args.reason, next, CLARITY_PACK_VERSION],
   );
 
   if (next >= MAX_CONSECUTIVE_FAILURES) {
@@ -136,6 +152,14 @@ export function isCircuitOpen(agentKey: string): boolean {
  * Fail-open: a query error returns `false`. The in-memory `isCircuitOpen` is
  * the primary gate; this is the restart backstop, and a transient DB error
  * must not permanently wedge the bulletin pipeline.
+ *
+ * Plan 03-07 — VERSION-SCOPED. The SELECT now filters
+ * `WHERE plugin_version = $N`, so only rows recorded by the CURRENT plugin
+ * version are counted. Pre-fix `editor_agent_failures` rows carry NULL
+ * plugin_version (migration 0005 adds the column nullable) and are excluded —
+ * closing DURABLE-BREAKER-STALE-HISTORY: a fresh post-fix install is no longer
+ * silently DOA on stale pre-fix failure history (the 2026-05-16 re-drill had
+ * to hand-delete 518+482 stale rows before the compile would fire).
  */
 export async function isCircuitOpenDurable(
   ctx: { db: { query<T>(sql: string, params: unknown[]): Promise<T[]> } },
@@ -145,10 +169,10 @@ export async function isCircuitOpenDurable(
     const rows = await ctx.db.query<{ consecutive: number }>(
       `SELECT consecutive
          FROM plugin_clarity_pack_cdd6bda4bd.editor_agent_failures
-        WHERE agent_key = $1
+        WHERE agent_key = $1 AND plugin_version = $2
         ORDER BY id DESC
-        LIMIT $2`,
-      [agentKey, MAX_CONSECUTIVE_FAILURES],
+        LIMIT $3`,
+      [agentKey, CLARITY_PACK_VERSION, MAX_CONSECUTIVE_FAILURES],
     );
     if (rows.length !== MAX_CONSECUTIVE_FAILURES) return false;
     return Number(rows[0]?.consecutive ?? 0) >= MAX_CONSECUTIVE_FAILURES;

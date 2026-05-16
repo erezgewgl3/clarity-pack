@@ -1,6 +1,7 @@
 // src/worker/agents/agent-task-delivery.ts
 //
 // Plan 03-06 — the operation-issue task-delivery layer (Path (d)).
+// Plan 03-07 — the readback (steps 4-5) rewritten to the Option-C tool channel.
 //
 // THE GAP THIS CLOSES. Plan 03-05's `sessionLlmAdapter` drove the Editor-Agent
 // via `ctx.agents.sessions.sendMessage({prompt})`. The Plan 03-04 Phase 3
@@ -13,16 +14,31 @@
 // The compile prompt becomes the BODY (description) of an operation issue
 // ASSIGNED to the Editor-Agent. The agent's heartbeat finds the assigned issue
 // via "Step 3 — Get Assignments" (which PR #3106 explicitly leaves unchanged),
-// reads the prompt from the issue body, and posts the BulletinDraft / TL;DR
-// JSON as a comment on that issue. The worker polls `ctx.issues.listComments`
-// for that comment and returns its raw body — feeding it UNCHANGED through the
-// existing `extractJsonObject → JSON.parse → validateDraftSchema → verifyDraft
-// → publishBulletin` pipeline.
+// reads the prompt from the issue body, and completes the operation. The
+// 2026-05-16 re-drill PROVED this scoped-issue architecture (PAPERCLIP_TASK_ID
+// scoping confirmed) — it is NOT re-opened by Plan 03-07.
+//
+// THE READBACK (Plan 03-07 — Option C). The 03-06 re-drill found a contained
+// output-channel gap: the agent filed the BulletinDraft as an issue DOCUMENT
+// and posted prose as the COMMENT, while the 03-06 readback polled
+// `listComments` for a JSON comment — so nothing published. Plan 03-07 rewrites
+// the readback (steps 4-5 ONLY): the agent now delivers its result by CALLING
+// the declared `submit-compile-result` plugin tool. `deliverAgentTask`
+// registers a `{resolve, reject}` entry in the shared `PENDING_DELIVERIES` Map
+// (compile-result-tool.ts) keyed by the operation issue id BEFORE waking the
+// agent; the tool handler resolves it directly. A slow ~15s comment+document
+// fallback poll is kept as belt-and-suspenders — the first of {tool-call,
+// result comment, result document} to yield a schema-valid result wins. The
+// operation-issue CREATION path (steps 1-3) is byte-identical to 03-06.
+//
+// The raw result string still flows UNCHANGED through the caller's
+// `extractJsonObject → JSON.parse → validateDraftSchema → verifyDraft →
+// publishBulletin` pipeline — the LlmAdapter contract is byte-identical.
 //
 // Governance parity STRENGTHENED (Decision #3 / coexistence guarantee #4): the
-// compile now runs as a real, audited agent run against a real assigned issue
-// — budget caps, pause/terminate, and the audit trail all apply. No
-// direct-HTTP LLM call is introduced (Mechanism 4 stays rejected).
+// compile runs as a real, audited agent run against a real assigned issue —
+// budget caps, pause/terminate, and the audit trail all apply; the tool call
+// is itself visible in the agent's run history. No direct-HTTP LLM call.
 //
 // Coexistence guarantee #2: operation issues are created with
 // `surfaceVisibility:'plugin_operation'` + a `plugin:*` originKind, so they
@@ -37,11 +53,20 @@
 //   - PluginIssuesClient.listComments(issueId, companyId) → IssueComment[];
 //     IssueComment.authorAgentId is `string | null` (non-optional);
 //     IssueComment.createdAt is a `Date` object (not a string).
+//   - ctx.issues.documents (PluginIssueDocumentsClient) — `list(issueId,
+//     companyId)` → IssueDocumentSummary[]; `get(issueId, key, companyId)` →
+//     IssueDocument | null (IssueDocument has a `body` string).
 
 import type { PluginIssuesClient, PluginLogger, IssueComment } from '@paperclipai/plugin-sdk';
 
+// PluginIssueDocumentsClient is not re-exported from the SDK's index barrel
+// (only `PluginIssuesClient` is) — reach it through the `documents` member of
+// PluginIssuesClient, which is typed `PluginIssueDocumentsClient`.
+type PluginIssueDocumentsClient = PluginIssuesClient['documents'];
+
 import { extractJsonObject, validateDraftSchema } from '../bulletin/compile-pass-1.ts';
 import type { LlmAdapter } from '../bulletin/compile-pass-1.ts';
+import { PENDING_DELIVERIES } from './compile-result-tool.ts';
 
 /** The operation-issue originKind namespace. The agent matches on this prefix. */
 export const OPERATION_ORIGIN_KIND_PREFIX = 'plugin:clarity-pack:operation:';
@@ -67,8 +92,16 @@ export function operationOriginKind(kind: OperationKind): `plugin:${string}` {
  */
 export const AGENT_TASK_DELIVERY_TIMEOUT = 300_000;
 
-/** Default poll cadence for the result-comment readback loop. */
+/** Default poll cadence for the result-comment readback loop (legacy alias). */
 export const POLL_INTERVAL_MS = 5_000;
+
+/**
+ * Plan 03-07 — the slow fallback-poll cadence. The `submit-compile-result` tool
+ * is the DESIGNED delivery path; the comment+document fallback poll is a
+ * belt-and-suspenders backstop, so it runs slowly (~15s) — it does not need to
+ * be fast because the tool channel resolves immediately when the agent calls it.
+ */
+export const FALLBACK_POLL_INTERVAL_MS = 15_000;
 
 /** Issue statuses that mean an operation issue is finished — never reuse one. */
 const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
@@ -76,10 +109,13 @@ const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
 /**
  * The narrow ctx slice this layer needs. Kept deliberately minimal so BOTH the
  * compile-bulletin job ctx and the editor heartbeat ctx structurally satisfy it
- * without a cast.
+ * without a cast. Plan 03-07 widens `issues` with a `documents` member for the
+ * Option-B document fallback scan.
  */
 export type AgentTaskDeliveryCtx = {
-  issues: Pick<PluginIssuesClient, 'list' | 'create' | 'requestWakeup' | 'listComments'>;
+  issues: Pick<PluginIssuesClient, 'list' | 'create' | 'requestWakeup' | 'listComments'> & {
+    documents: Pick<PluginIssueDocumentsClient, 'list' | 'get'>;
+  };
   logger?: PluginLogger;
 };
 
@@ -99,7 +135,13 @@ export type DeliverAgentTaskOpts = {
   prompt: string;
   /** Override the result-readback timeout. Default AGENT_TASK_DELIVERY_TIMEOUT. */
   timeoutMs?: number;
-  /** Override the poll cadence. Default POLL_INTERVAL_MS. */
+  /**
+   * Override the fallback comment+document poll cadence. Default
+   * FALLBACK_POLL_INTERVAL_MS. `pollIntervalMs` is accepted as a backward-compat
+   * alias (Plan 03-06 callers / tests).
+   */
+  fallbackPollIntervalMs?: number;
+  /** Backward-compat alias for `fallbackPollIntervalMs` (Plan 03-06 option name). */
   pollIntervalMs?: number;
 };
 
@@ -145,8 +187,8 @@ function isResultComment(body: string, operationKind: OperationKind): boolean {
 }
 
 /**
- * Deliver a task to an agent as an assigned operation issue, then poll for the
- * agent's JSON result comment.
+ * Deliver a task to an agent as an assigned operation issue, then read the
+ * agent's result back through the Option-C tool channel.
  *
  *   1. Idempotency search — `ctx.issues.list` with `includePluginOperations:
  *      true` (B-1 — MANDATORY: the operation issue is created off the default
@@ -157,19 +199,30 @@ function isResultComment(body: string, operationKind: OperationKind): boolean {
  *      issue `description`, assigned to the Editor-Agent, off the human board.
  *   3. Wake the agent now via `requestWakeup` (non-fatal — the next scheduled
  *      heartbeat picks the issue up anyway).
- *   4. Poll `ctx.issues.listComments` until a comment authored by the agent
- *      qualifies as the result (schema-valid), or `timeoutMs` elapses.
- *   5. Return the raw result comment body — the caller still runs its own
- *      `extractJsonObject` + parse + validate, so the LlmAdapter contract ("a
- *      completion string") is byte-identical and the downstream pipeline is
- *      structurally untouched.
+ *   4. Plan 03-07 — the readback is now a TYPED tool boundary, not a poll race:
+ *      - 4a. Register a `{resolve, reject}` entry in the shared
+ *            `PENDING_DELIVERIES` Map keyed by the operation issue id BEFORE
+ *            requestWakeup, so the entry exists when the agent calls the
+ *            `submit-compile-result` tool.
+ *      - 4b. `Promise.race` that pending promise against (i) the `timeoutMs`
+ *            deadline and (ii) a SLOW (~15s) belt-and-suspenders fallback poll
+ *            that scans BOTH `listComments` (Option A) AND `documents.list` +
+ *            `.get` (Option B) for a schema-valid result. The first of
+ *            {tool-call, result comment, result document} to yield a
+ *            schema-valid result wins.
+ *   5. Always delete the Map entry in a `finally` — a resolved, fallback-won,
+ *      or timed-out delivery never leaks an entry. The raw result string flows
+ *      UNCHANGED through the caller's `extractJsonObject` + parse + validate,
+ *      so the LlmAdapter contract ("a completion string") is byte-identical
+ *      and the downstream pipeline is structurally untouched.
  */
 export async function deliverAgentTask(
   ctx: AgentTaskDeliveryCtx,
   opts: DeliverAgentTaskOpts,
 ): Promise<string> {
   const timeoutMs = opts.timeoutMs ?? AGENT_TASK_DELIVERY_TIMEOUT;
-  const pollIntervalMs = opts.pollIntervalMs ?? POLL_INTERVAL_MS;
+  const fallbackPollIntervalMs =
+    opts.fallbackPollIntervalMs ?? opts.pollIntervalMs ?? FALLBACK_POLL_INTERVAL_MS;
 
   // 1. Idempotency search. includePluginOperations:true is MANDATORY (B-1).
   let issue: { id: string } | null = null;
@@ -232,42 +285,118 @@ export async function deliverAgentTask(
     );
   }
 
-  // 4. Poll for the agent's result comment.
-  const deadline = Date.now() + timeoutMs;
-  // Compare against issue-create time so a stale comment (e.g. on a reused
-  // issue from a prior run) cannot be consumed as this run's result.
-  // listComments may return comments from a prior poll round; we always scan
-  // the full list and accept the first schema-valid agent comment.
-  while (Date.now() < deadline) {
-    let comments: IssueComment[] = [];
-    try {
-      comments = await ctx.issues.listComments(issue.id, opts.companyId);
-    } catch (e) {
-      ctx.logger?.warn?.(
-        `agent-task-delivery: listComments failed for issue ${issue.id}: ${
-          (e as Error).message
-        }`,
+  // 4. Read the result back. Plan 03-07 — a typed tool boundary, not a poll.
+  const operationIssueId = issue.id;
+
+  // 4a. Register the pending promise BEFORE the readback race, so the entry
+  //     exists when the agent calls the submit-compile-result tool. (The
+  //     requestWakeup above already fired — registering here, immediately
+  //     after, is the only ordering nuance touching step 3; it does not change
+  //     the create call. The agent's heartbeat run takes far longer than this
+  //     synchronous registration, so there is no lost-wakeup race.)
+  const resultPromise = new Promise<string>((resolve, reject) => {
+    PENDING_DELIVERIES.set(operationIssueId, { resolve, reject });
+  });
+
+  // 4b. The timeout — rejects after timeoutMs with the existing tagged error
+  //     the caller's recordCompileFailure path handles like any other failure.
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<string>((_resolve, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(
+        new Error(
+          `agent-task-delivery timeout: no result for operation issue ` +
+            `${operationIssueId} after ${timeoutMs}ms`,
+        ),
       );
-    }
-    for (const c of comments) {
-      // authorAgentId is a non-optional `string | null`; a direct === is safe.
-      // null is a non-agent author and simply does not match.
-      if (c.authorAgentId === opts.agentId && isResultComment(c.body, opts.operationKind)) {
-        ctx.logger?.info?.(
-          `agent-task-delivery: result comment received on operation issue ${issue.id}`,
+    }, timeoutMs);
+  });
+
+  // 4b (cont). The SLOW belt-and-suspenders fallback poll. The tool channel is
+  //     the designed path; this scans BOTH the result comment (Option A) AND
+  //     the result document (Option B) for the case where the agent ignores
+  //     the tool. Each scan is wrapped in try/catch — a transient list/get
+  //     error logs a warn and the loop continues.
+  let fallbackStopped = false;
+  const fallbackPromise = (async (): Promise<string> => {
+    const deadline = Date.now() + timeoutMs;
+    while (!fallbackStopped && Date.now() < deadline) {
+      await sleep(fallbackPollIntervalMs);
+      if (fallbackStopped) break;
+
+      // (i) Option A — scan the agent's comments for a schema-valid result.
+      try {
+        const comments: IssueComment[] = await ctx.issues.listComments(
+          operationIssueId,
+          opts.companyId,
         );
-        return c.body;
+        for (const c of comments) {
+          // authorAgentId is a non-optional `string | null`; a direct === is
+          // safe. null is a non-agent author and simply does not match.
+          if (
+            c.authorAgentId === opts.agentId &&
+            isResultComment(c.body, opts.operationKind)
+          ) {
+            ctx.logger?.info?.(
+              `agent-task-delivery: result COMMENT (fallback) received on ` +
+                `operation issue ${operationIssueId}`,
+            );
+            return c.body;
+          }
+        }
+      } catch (e) {
+        ctx.logger?.warn?.(
+          `agent-task-delivery: fallback listComments failed for issue ` +
+            `${operationIssueId}: ${(e as Error).message}`,
+        );
+      }
+
+      // (ii) Option B — scan the agent's filed documents for a schema-valid
+      //      result. `format` is typed 'markdown' but the agent may file raw
+      //      JSON in it — isResultComment parses, so an off-label format is
+      //      harmless.
+      try {
+        const summaries = await ctx.issues.documents.list(
+          operationIssueId,
+          opts.companyId,
+        );
+        for (const summary of summaries) {
+          const doc = await ctx.issues.documents.get(
+            operationIssueId,
+            summary.key,
+            opts.companyId,
+          );
+          if (doc && isResultComment(doc.body, opts.operationKind)) {
+            ctx.logger?.info?.(
+              `agent-task-delivery: result DOCUMENT (fallback) found on ` +
+                `operation issue ${operationIssueId} (key=${summary.key})`,
+            );
+            return doc.body;
+          }
+        }
+      } catch (e) {
+        ctx.logger?.warn?.(
+          `agent-task-delivery: fallback documents scan failed for issue ` +
+            `${operationIssueId}: ${(e as Error).message}`,
+        );
       }
     }
-    await sleep(pollIntervalMs);
-  }
+    // The fallback loop exhausted the deadline without finding a result — let
+    // the timeoutPromise be the one that rejects the race (a single, canonical
+    // timeout error). Block here until that happens.
+    return new Promise<string>(() => {});
+  })();
 
-  // 5. Timeout — surface a tagged error the caller's recordCompileFailure path
-  //    handles like any other compile failure.
-  throw new Error(
-    `agent-task-delivery timeout: no schema-valid JSON result comment on ` +
-      `operation issue ${issue.id} after ${timeoutMs}ms`,
-  );
+  // 4c. Race them — first of {tool resolves resultPromise, comment/document
+  //     resolves fallbackPromise, deadline rejects timeoutPromise} wins.
+  try {
+    return await Promise.race([resultPromise, fallbackPromise, timeoutPromise]);
+  } finally {
+    // 5. Always clean up — no Map entry, timer, or fallback loop leaks.
+    PENDING_DELIVERIES.delete(operationIssueId);
+    fallbackStopped = true;
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
 }
 
 /** Factory options for `deliveryLlmAdapter` — `prompt` is supplied per call. */
