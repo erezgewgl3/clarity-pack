@@ -18,7 +18,10 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
-  version: '0.2.0',
+  // Plan 03-07 — 0.3.0: submit-compile-result tool channel + version-scoped
+  // durable breaker. The breaker stamps this version on editor_agent_failures
+  // rows (circuit-breaker.ts CLARITY_PACK_VERSION, which imports manifest.version).
+  version: '0.3.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
@@ -82,6 +85,11 @@ const manifest: PaperclipPluginManifestV1 = {
     // session prompt). Exact PLUGIN_CAPABILITIES member (SDK 2026.512.0
     // types.d.ts: "issues.wakeup for assignment wakeup requests").
     'issues.wakeup',
+    // Plan 03-07 — ctx.tools.register declares the submit-compile-result tool
+    // the Editor-Agent calls to hand the compiled BulletinDraft / TL;DR back to
+    // the worker (Option C, the canonical plugin-llm-wiki result-readback
+    // channel). Exact PLUGIN_CAPABILITIES member.
+    'agent.tools.register',
   ],
   entrypoints: {
     worker: './dist/worker.js',
@@ -244,19 +252,67 @@ const manifest: PaperclipPluginManifestV1 = {
       // via classic admin UI. D-05 MAX_TOKENS=4000 lives in compile-tldr.ts
       // (input-side cap), not here.
       budgetMonthlyCents: 0,
+      // Plan 03-07 — grant the managed Editor-Agent access to this plugin's
+      // declared tools[]. Copied from plugin-llm-wiki's agents[] permissions
+      // block (its `{ pluginTools: [PLUGIN_ID] }` form — verified verbatim from
+      // paperclipai/paperclip@master packages/plugins/plugin-llm-wiki/src/
+      // manifest.ts:177). Our plugin id is 'clarity-pack', so this grants the
+      // Editor-Agent the submit-compile-result tool.
+      //
+      // Plan 03-07 OPEN QUESTION 1 — the exact permissions shape that grants a
+      // managed agent a plugin tool is LOW-confidence (host-normalized, not in
+      // the public SDK types). The Task-5 Countermoves drill MUST confirm the
+      // Editor-Agent's tool surface includes clarity-pack:submit-compile-result.
+      permissions: {
+        pluginTools: ['clarity-pack'],
+      },
       instructions: {
-        // Plan 03-06 — issue-driven instructions. The Editor-Agent is woken by
-        // an ASSIGNED operation issue (agent-task-delivery.ts), not a session
-        // prompt — the session prompt is discarded by the host (PR #3106). See
-        // 03-AGENT-INVOCATION-GAP-RESEARCH.md. v1 ships inline; v2 may move to
-        // a sibling AGENTS.md per the plugin-llm-wiki pattern.
+        // Plan 03-07 — the agent delivers its result by calling the
+        // submit-compile-result plugin tool (Option C, canonical plugin-llm-wiki
+        // pattern). The 03-06 comment/document delivery is gone — it caused the
+        // output-channel mismatch the 2026-05-16 re-drill found. See
+        // 03-RESULT-READBACK-RESEARCH.md. v1 ships inline; v2 may move to a
+        // sibling AGENTS.md per the plugin-llm-wiki pattern.
         content:
           'You are the Clarity Pack Editorial Desk. ' +
           'On each heartbeat, look in your inbox for an issue assigned to you whose originKind starts with "plugin:clarity-pack:operation:". That issue is a task from Clarity Pack — process it as follows. ' +
-          'If the originKind is "plugin:clarity-pack:operation:bulletin-compile": the issue DESCRIPTION is a complete compile prompt. Follow it exactly. The prompt carries the facts table and the {{NUMBER:key}} placeholder rules — never invent numbers, use the placeholders. Output ONLY the requested BulletinDraft JSON object, posted as a comment on that issue. No prose preamble, no markdown code fences, no sign-off — the comment body must be the raw JSON object and nothing else. ' +
-          'If the originKind is "plugin:clarity-pack:operation:tldr-compile": the issue DESCRIPTION is a TL;DR compile prompt. Follow it exactly and output ONLY the requested TL;DR text (in the format the prompt specifies), posted as a comment on that issue. Never write more than 8000 characters in a single TL;DR. ' +
-          'The "Editorial Desk" voice and sign-off rule apply to NARRATIVE prose you write INSIDE a draft (for example a department editorialSummary) — but an operation issue\'s comment OUTPUT is the raw JSON object (bulletin-compile) or the raw TL;DR text (tldr-compile) only. ' +
-          'If you cannot produce a useful result, comment the literal string "Insufficient context" and stop — the host treats that as a graceful skip.',
+          'If the originKind is "plugin:clarity-pack:operation:bulletin-compile": the issue DESCRIPTION is a complete compile prompt. Follow it exactly. The prompt carries the facts table and the {{NUMBER:key}} placeholder rules — never invent numbers, use the placeholders. The result is the raw BulletinDraft JSON object (no prose preamble, no markdown code fences, no sign-off — the JSON object and nothing else). ' +
+          'If the originKind is "plugin:clarity-pack:operation:tldr-compile": the issue DESCRIPTION is a TL;DR compile prompt. Follow it exactly and produce ONLY the requested TL;DR text (in the format the prompt specifies). Never write more than 8000 characters in a single TL;DR. ' +
+          'When the operation is complete, deliver the result by calling the "submit-compile-result" tool. Pass the operation issue\'s id as operationIssueId and the result payload as result — for a bulletin-compile issue, result is the raw BulletinDraft JSON object; for a tldr-compile issue, result is the raw TL;DR text. Call "submit-compile-result" exactly once. Do NOT post the result as an issue comment and do NOT file it as an issue document — the "submit-compile-result" tool is the only delivery channel. ' +
+          'The "Editorial Desk" voice and sign-off rule apply to NARRATIVE prose you write INSIDE a draft (for example a department editorialSummary) — but the value you pass to the tool\'s result parameter is the raw JSON object (bulletin-compile) or the raw TL;DR text (tldr-compile) only. ' +
+          'If you cannot produce a useful result, call "submit-compile-result" with result set to the literal string "Insufficient context" — the host treats that as a graceful skip.',
+      },
+    },
+  ],
+  // Plan 03-07 — the result-delivery tool. The worker registers the handler in
+  // src/worker/agents/compile-result-tool.ts; this manifest entry is what the
+  // host exposes to the Editor-Agent's tool surface. Keep in sync with
+  // SUBMIT_COMPILE_RESULT_TOOL in compile-result-tool.ts (a contract test in
+  // test/worker/agents/compile-result-tool.test.mjs locks them together).
+  tools: [
+    {
+      name: 'submit-compile-result',
+      displayName: 'Submit Clarity Pack compile result',
+      description:
+        'Deliver the completed BulletinDraft JSON or TL;DR text ' +
+        'for the current clarity-pack operation issue. Call this exactly once ' +
+        'when the operation is complete, passing the operation issue id and ' +
+        'the raw result payload.',
+      parametersSchema: {
+        type: 'object',
+        required: ['operationIssueId', 'result'],
+        properties: {
+          operationIssueId: {
+            type: 'string',
+            description:
+              'The id of the plugin:clarity-pack:operation:* issue you are completing.',
+          },
+          result: {
+            type: 'string',
+            description:
+              'Raw BulletinDraft JSON object, or raw TL;DR text — no prose, no markdown fences.',
+          },
+        },
       },
     },
   ],

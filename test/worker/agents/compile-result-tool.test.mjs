@@ -27,6 +27,7 @@ import {
   SUBMIT_COMPILE_RESULT_TOOL,
   SUBMIT_COMPILE_RESULT_TOOL_NAME,
 } from '../../../src/worker/agents/compile-result-tool.ts';
+import manifest from '../../../src/manifest.ts';
 
 /**
  * Build a fake `ctx` whose `tools.register` captures `(name, declaration, fn)`.
@@ -142,5 +143,43 @@ test('SUBMIT_COMPILE_RESULT_TOOL declaration has the required parametersSchema',
   assert.equal(schema.properties.result.type, 'string', 'result is typed string');
 });
 
-// NOTE — the manifest contract tests (capabilities / tools[] / instructions /
-// version) are added by Task 3, which is where the manifest changes land.
+// ---- Task 3 — manifest contract tests (drift guard) -----------------------
+// The manifest tool[] declaration must stay locked to the worker's
+// SUBMIT_COMPILE_RESULT_TOOL so they cannot drift apart silently.
+
+test('manifest: capabilities include agent.tools.register', () => {
+  assert.ok(
+    manifest.capabilities.includes('agent.tools.register'),
+    'agent.tools.register is required for ctx.tools.register',
+  );
+});
+
+test('manifest: tools[] declares exactly the submit-compile-result tool', () => {
+  assert.ok(Array.isArray(manifest.tools), 'manifest carries a tools[] array');
+  assert.equal(manifest.tools.length, 1, 'exactly one tool declared');
+  assert.equal(
+    manifest.tools[0].name,
+    SUBMIT_COMPILE_RESULT_TOOL_NAME,
+    'the manifest tool name matches the worker declaration',
+  );
+  const schema = manifest.tools[0].parametersSchema;
+  assert.ok(schema.required.includes('operationIssueId'), 'manifest tool requires operationIssueId');
+  assert.ok(schema.required.includes('result'), 'manifest tool requires result');
+});
+
+test('manifest: Editor-Agent instructions are tool-directed, not comment-directed', () => {
+  const editor = manifest.agents.find((a) => a.agentKey === 'editor-agent');
+  assert.ok(editor, 'the Editor-Agent is declared in the manifest');
+  assert.ok(
+    editor.instructions.content.includes('submit-compile-result'),
+    'the instructions reference the submit-compile-result tool',
+  );
+  assert.ok(
+    !editor.instructions.content.includes('as a comment'),
+    'the old comment-delivery instruction is removed',
+  );
+});
+
+test('manifest: version is 0.3.0', () => {
+  assert.equal(manifest.version, '0.3.0');
+});
