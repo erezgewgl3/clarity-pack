@@ -52,13 +52,14 @@
 // drill (Plan 03-06 Task 5) can prove the agent actually processes the
 // assigned operation issue.
 //
-// Plan 03-07 — the `tools` + `issues.documents` fakes model the HOST CONSTRAINT
-// (the ctx API shape), NOT the agent's real behaviour. A fake cannot prove the
-// real Editor-Agent calls submit-compile-result rather than filing a document —
-// only the Task-5 live Countermoves drill can. (Research lesson:
-// 03-RESULT-READBACK-RESEARCH.md / the 2026-05-16 re-drill.) The helper
-// SIMULATES the agent by exposing `callTool(name, params, runCtx)`, which
-// invokes a registered tool handler in-process.
+// Plan 03-08 — the `issues.documents` fake models the HOST CONSTRAINT (the
+// ctx.issues.documents API shape), NOT the agent's real behaviour. A fake
+// cannot prove the real Editor-Agent files the BulletinDraft as a document at
+// key `compile-result` — only the live Countermoves closure drill can.
+// (Research lesson: 03-RESULT-READBACK-RESEARCH.md / the 2026-05-16 re-drill.)
+// The helper SIMULATES the agent by serving the `resultDocuments` fixture.
+// Plan 03-07's Option C tool channel is dead — the `ctx.tools.register` fake
+// and `callTool` helper were removed.
 
 import { wrapHostFaithfulDb } from './host-faithful-db.mjs';
 import { makeHostFaithfulAgents as makeHostFaithfulSessions } from './host-faithful-sessions.mjs';
@@ -144,7 +145,6 @@ export function makeHostFaithfulCompileCtx({
   const compileFailures = []; // bulletin_compile_failures rows
   const loggedMessages = []; // item 5 — message STRINGS only, never metadata
   const jobs = new Map();
-  const registeredTools = new Map(); // Plan 03-07 — ctx.tools.register captures
 
   // ---- In-memory bulletins/issues SQL model (lifted from the e2e test) -----
   const fakeDb = {
@@ -315,15 +315,6 @@ export function makeHostFaithfulCompileCtx({
         jobs.set(key, fn);
       },
     },
-    // Plan 03-07 — ctx.tools.register. Captures (name, declaration, fn) so a
-    // test can SIMULATE the agent by invoking the captured handler via the
-    // returned `callTool` helper. Models the host CONSTRAINT (the API shape),
-    // not the agent's behaviour.
-    tools: {
-      register(name, declaration, fn) {
-        registeredTools.set(name, { declaration, fn });
-      },
-    },
     companies: {
       async list() {
         return companies;
@@ -447,19 +438,8 @@ export function makeHostFaithfulCompileCtx({
     compileFailures,
     loggedMessages,
     jobs,
-    registeredTools,
     agentCalls: agentsFake.calls,
     resolvedAgentId: agentsFake.resolvedAgentId,
     sessions: sessionsFake,
-    /**
-     * Plan 03-07 — SIMULATE the agent calling a registered plugin tool. Invokes
-     * the captured handler for `name` with `(params, runCtx)`. Throws if no
-     * tool of that name was registered.
-     */
-    async callTool(name, params, runCtx = {}) {
-      const entry = registeredTools.get(name);
-      if (!entry) throw new Error(`callTool: no tool registered with name "${name}"`);
-      return entry.fn(params, runCtx);
-    },
   };
 }
