@@ -1,7 +1,8 @@
 ---
-status: fix-implemented — pending Countermoves drill verification
+status: root-caused + fixed — pending Countermoves re-drill
 surfaced: 2026-05-15
-fix-implemented: 2026-05-15
+fix-implemented: 2026-05-16
+root-cause: host taskKey namespace contract (plugin-host-services.ts agentSessions)
 phase: 3
 plan: 03-05
 component: src/worker/agents/session-llm-adapter.ts
@@ -161,3 +162,65 @@ hypothesis is the strongest available, not proven. Re-drill on Countermoves: if
 the bulletin compiles, the race hypothesis holds and the defect closes; if it
 still fails, the new instrumentation in the failure row + `paperclip-run.log`
 pinpoints whether retries exhausted (race too wide) or it is a different cause.
+
+## 2026-05-16 re-drill — retry fix DISPROVEN, true root cause found
+
+The retry fix was drilled on Countermoves (`05:58:30`, after forcing
+`bulletins.next_due_at` into the past). The instrumentation did its job and
+**disproved the timing-race hypothesis**:
+
+```
+[05:58:30] sessionLlmAdapter: created session=f75605f4-… status=active
+[05:58:30] sendMessage attempt 1/4 rejected "Session not found: f75605f4-…" — retrying in 100ms
+[05:58:30] sendMessage attempt 2/4 rejected "Session not found: f75605f4-…" — retrying in 200ms
+[05:58:30] sendMessage attempt 3/4 rejected "Session not found: f75605f4-…" — retrying in 400ms
+[05:58:30] sessionLlmAdapter: session close failed   err: "Session not found: f75605f4-…"
+[05:58:30] job completed successfully durationMs:782
+```
+
+All 4 attempts over 720ms rejected — **and so did `close`**. A timing race
+clears within 720ms; this never does. The session is a permanent phantom.
+
+**TRUE ROOT CAUSE — host `taskKey` namespace contract** (root-caused against
+the open-source host `server/src/services/plugin-host-services.ts`,
+`agentSessions` service):
+
+- `create` (host L1949): `taskKey = params.taskKey ?? \`plugin:<pluginKey>:session:<uuid>\``
+  — a caller-supplied `taskKey` is stored **verbatim, no prefix, no validation**.
+  `create` always returns a real, persisted, `status:"active"` session.
+- `sendMessage` (L2015), `close` (L2115), `list` (L1985) all look the session
+  up with `… AND taskKey LIKE 'plugin:<pluginKey>:session:%'`.
+
+The contract is enforced on READ but not on WRITE. The adapter passed
+`taskKey: "clarity-pack:bulletin:cycle-N:<ts>"` — starts with `clarity-pack:`,
+not `plugin:` — so `create` inserted the row and returned an active session,
+but every subsequent lookup filtered it out → permanent "Session not found".
+4 retries cannot help: the stored `taskKey` string is static.
+
+`plugin-llm-wiki/startWikiQuerySession` works only because its `taskKey`
+(`plugin:<PLUGIN_ID>:session:wiki:…`) *happens* to satisfy the prefix — the
+issue-creation / assignee details are incidental to session findability. The
+earlier "three host round-trips" Phase-2 finding was a red herring.
+
+**THE FIX** (`src/worker/agents/session-llm-adapter.ts`): the `create()` call
+**omits `taskKey` entirely** — the host then generates a conforming
+`plugin:<pluginKey>:session:<uuid>` itself, using its own definitionally-correct
+`pluginKey`. The `taskKeyPrefix` factory option is removed; the two call sites
+(`compile-bulletin.ts`, `editor.ts`) updated. The bounded retry is kept as
+honest defense-in-depth for a *genuine* transient (host restart mid-call), with
+its comment corrected — it is no longer the fix.
+
+**Why local tests missed it (the recurring disease, again):** the
+`host-faithful-sessions.mjs` fake looked sessions up by id alone — it did not
+model the `taskKey` read-filter, so it could not reproduce the bug. The fake is
+now upgraded to enforce the contract (`create` stores/generates the taskKey;
+`sendMessage`/`close`/`list` only find `plugin:<pluginKey>:session:%` rows). It
+now reproduces the live failure verbatim (`on all 4 attempts … did not clear`),
+and a dedicated test asserts the adapter passes no `taskKey`. Suite 590 / 588
+pass / 0 fail / 2 skip; typecheck + 3 builds clean.
+
+**Re-drill once more** to confirm the bulletin compiles past the LLM step.
+Secondary gate to watch next (host L2034): once the session is reachable,
+`sendMessage` throws `"Agent wakeup was skipped by heartbeat policy"` if the
+Editor-Agent is not invokable — a *different* error string, handled by the
+existing fail-fast path, not the retry.
