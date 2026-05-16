@@ -173,3 +173,55 @@ exposes `submit-compile-result` on the agent's tool surface. A gap-closure must 
    tool call can happen at all.
 3. Diagnose why the comment+document fallback poll failed to publish (worker log).
 4. Clear the 3 `plugin_version = '0.3.0'` rows from `editor_agent_failures` (breaker tripped).
+
+### Plan 03-07 — live diagnostic follow-up, 2026-05-16 — Open Question 1 ANSWERED: Option C is dead
+
+After the failed drill, the live Editor-Agent's instructions were hand-edited to the v0.3.0
+tool-directed text (the Instructions tab IS editable — confirms instruction-propagation can be
+forced manually), the 3 `0.3.0` breaker rows were cleared, and a compile was re-triggered. The
+agent ran on a FRESH operation issue (COU-11, `plugin:clarity-pack:operation:bulletin-compile`).
+
+**DECISIVE: the `submit-compile-result` tool is NOT on the agent's tool surface.** With the
+correct instructions, the agent explicitly tried to call the tool and could not find it.
+Verbatim from the run transcript:
+- "the submit-compile-result tool wasn't found via ToolSearch"
+- "The submit-compile-result tool is not available as a deferred tool"
+- "there's no Clarity Pack MCP server listed in the deferred tools"
+- "The submit-compile-result tool is a Clarity Pack MCP tool not loaded in this session"
+
+The agent then fell back: composed the `BulletinDraft`, stored it as an issue **document**
+keyed `compile-result` on COU-11, posted a comment, and marked the issue `done`.
+
+**CONCLUSION — Option C is not viable for a `claude_local` managed agent.** A plugin's
+`tools[]` declaration + `agents[].permissions.pluginTools` does NOT surface the tool into the
+agent's Claude Code tool environment. `ctx.tools.register` registers the tool with the worker/
+host, but the `claude_local` adapter's agent session never receives it (it would have to be
+wired as an MCP server the agent's session connects to — the agent itself diagnosed exactly
+this). Plan 03-07's premise (copied from `plugin-llm-wiki`) does not hold here — either
+`plugin-llm-wiki`'s tool reaches its agent by a different mechanism, or that pattern was never
+exercised end-to-end against a `claude_local` agent.
+
+This is the phase advisory anti-pattern realised exactly: the 03-07 host-faithful e2e faked
+`ctx.tools.register` + a fake agent calling the tool. A fake cannot model "the real
+`claude_local` agent has no such tool on its surface." Only the live drill caught it.
+
+**THE PATH — Option B (worker reads the agent's issue document).** The agent's reliable,
+observed behaviour is: it stores the result as an issue **document** and marks the operation
+issue `done`. That is a stable contract the worker CAN consume. Plan 03-08 (gap closure):
+1. Abandon the tool channel. `deliverAgentTask`'s readback reads the operation issue's document
+   via the issues documents API (`GET /api/issues/{id}/documents/{key}` or list+get), parsing
+   the `BulletinDraft` / TL;DR out of it; poll until the operation issue is `done` or the
+   document appears.
+2. Pin the document key by CONTRACT — instruct the agent (in the operation-issue DESCRIPTION,
+   which propagates; not the static manifest, which does not) to store the result as an issue
+   document with an exact key (e.g. `compile-result`) and nothing else. The agent already chose
+   `compile-result` unprompted — make it deterministic.
+3. Diagnose why 03-07's existing comment+document fallback poll did NOT publish despite the
+   agent filing a document — that fallback was meant to be exactly this Option-B path. Likely a
+   wrong documents-API shape, a key mismatch, or an operation-issue id mismatch. The worker log
+   is the artifact to read.
+4. The manifest `tools[]` / `agent.tools.register` capability / `permissions.pluginTools` block
+   from 03-07 are dead weight — remove or leave inert.
+5. Operability: clear stale `editor_agent_failures` rows; the compile loop creates a new
+   operation issue per cron fire because the agent marks each one `done` (idempotency search
+   skips done issues) — acceptable, but the worker should advance `next_due_at` only on publish.
