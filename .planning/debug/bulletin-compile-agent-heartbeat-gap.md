@@ -115,3 +115,61 @@ structured artifact in a versioned document rather than a chat comment.
 **Routing:** the output-channel mismatch → `03-RESULT-READBACK-RESEARCH.md` (research the SDK
 document-read surface — Option A: instruct agent to comment raw JSON; Option B: worker reads the
 document) → a small follow-up plan → re-drill. This is a contained fix, not a re-architecture.
+
+---
+
+## Plan 03-07 closure re-drill — Countermoves Hostinger, 2026-05-16 — DID NOT PASS
+
+**Verdict:** Phase 3 still NOT closed. Option C (the `submit-compile-result` tool channel) did
+not fire on the live instance, and the comment+document fallback poll did not publish either.
+The drill surfaced a real host-behaviour gap the plan did not account for.
+
+**What was verified GREEN before the failure:**
+- Migration `0005_breaker_version_scope.sql` applied — `editor_agent_failures` has the nullable
+  `plugin_version text` column.
+- The version-scoped breaker fix works as designed: 3 pre-fix rows (`plugin_version IS NULL`)
+  did NOT suppress the fresh `0.3.0` install — `isCircuitOpenDurable` ignored them. The
+  DURABLE-BREAKER-STALE-HISTORY fix is confirmed.
+- The 03-06 scoped-issue architecture still works: `deliverAgentTask` created the operation
+  issue, the Editor-Agent ran scoped to it and produced a flawless `BulletinDraft`.
+
+**ROOT CAUSE — manifest `agents[].instructions.content` does NOT propagate to an
+already-existing managed agent.** The repo `src/manifest.ts` v0.3.0 ships the correct
+tool-directed instructions (lines 276-284: "deliver ... by calling submit-compile-result ...
+the JSON object and nothing else"). But the LIVE Editor-Agent's Instructions tab still shows
+the original pre-03-06 generic text ("Your job: compile plain-English TL;DRs ... If you cannot
+compile a useful summary, output the literal string 'Insufficient context'"). The Editor-Agent
+was created in Phase 2 (Plan 02-03); `ctx.agents.managed.reconcile()` evidently sets
+`instructions.content` only at agent CREATION and never updates it on plugin upgrade/reinstall.
+Consequence: BOTH 03-06's and 03-07's manifest instruction rewrites have been no-ops on the live
+agent. 03-06 still appeared to work because the scoped-issue handoff is driven by the host's
+generic Paperclip heartbeat skill (`PAPERCLIP_TASK_ID` → checkout that issue), independent of
+custom instructions — but 03-07's Option C depends entirely on the agent being told to call the
+tool, and that instruction never reached it. The agent did what its real (old) instructions +
+generic Paperclip skill imply: produced the draft, then filed it as a document + prose comment.
+
+**SECONDARY — the comment+document fallback poll did not publish.** `editor_agent_failures`
+after the drill: `NULL → 3`, `0.3.0 → 3`. The three `0.3.0`-stamped rows mean the v0.3.0
+worker's `deliverAgentTask` timed out (or errored) 3× and ran `recordFailure` — so the fallback
+poll that is supposed to scan `listComments` + `issues.documents.list/.get` did NOT yield a
+schema-valid result from the document the agent filed. Why is open (worker-log not yet read):
+candidate causes — the fallback document-scan keys to the wrong operation issue, the SDK
+documents API shape differs, or the agent filed the document on a different operation issue than
+the one `deliverAgentTask` is polling. The 3 `0.3.0` failures have now TRIPPED the durable
+breaker for v0.3.0 — it must be cleared before any re-drill.
+
+**OPEN QUESTION 1 still unresolved.** Because the agent was never instructed to call the tool,
+the drill could NOT confirm whether `permissions: { pluginTools: ['clarity-pack'] }` actually
+exposes `submit-compile-result` on the agent's tool surface. A gap-closure must resolve this.
+
+**Fix direction for the gap-closure plan (likely 03-08):**
+1. Do NOT rely on the static manifest `agents[].instructions.content` — it does not propagate.
+   Move the "deliver the result by calling submit-compile-result with {operationIssueId, result}"
+   instruction into the OPERATION ISSUE DESCRIPTION, which `deliverAgentTask` creates fresh every
+   compile and the agent provably reads (the 03-07 plan deliberately kept that creation path
+   "byte-identical to 03-06" — that is the line that must change). Alternatively force an
+   instruction refresh via `PATCH /api/agents/{agentId}/instructions-path` or agent recreate.
+2. Confirm Open Question 1 — whether the tool is on the agent's surface — before assuming the
+   tool call can happen at all.
+3. Diagnose why the comment+document fallback poll failed to publish (worker log).
+4. Clear the 3 `plugin_version = '0.3.0'` rows from `editor_agent_failures` (breaker tripped).

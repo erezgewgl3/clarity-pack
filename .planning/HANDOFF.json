@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-16T16:50:32.857Z",
+  "timestamp": "2026-05-16T17:27:54.059Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -25,6 +25,10 @@
       "path": ".planning/STATE.md"
     },
     {
+      "status": "M",
+      "path": ".planning/debug/bulletin-compile-agent-heartbeat-gap.md"
+    },
+    {
       "status": "??",
       "path": ".codex/"
     },
@@ -34,5 +38,5 @@
     }
   ],
   "next_action": "Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.",
-  "context_notes": "Status: Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.\n\nRecent commits:\n7d925af docs(03-07): SUMMARY — result-readback channel (Option C) + version-scoped breaker, Tasks 1-4 complete\n91772fc test(03-07): host-faithful tool-channel e2e + rebuild for the closure drill\n1684a8f feat(03-07): submit-compile-result tool manifest declaration + tool-directed Editor-Agent instructions\n2e48770 feat(03-07): GREEN — submit-compile-result tool + promise-registry readback + version-scoped breaker\nc1f4145 test(03-07): RED — submit-compile-result tool + promise-registry readback + version-scoped breaker"
+  "context_notes": "Status: Phase 2 close-out commit chain a49e720..7b5f1be (Plan 02-09 RED→GREEN tasks 1-3 + SUMMARY + Finding #11). Final suite 422 tests / 420 pass / 0 fail / 2 skip. Typecheck + build clean. dist/ui/index.js 67.8 KB; dist/worker.js 38.9 KB.\n\nRecent commits:\n3999638 docs(phase-03): record Plan 03-07 Tasks 1-4 complete, awaiting Task 5 checkpoint .planning/STATE.md\n7d925af docs(03-07): SUMMARY — result-readback channel (Option C) + version-scoped breaker, Tasks 1-4 complete\n91772fc test(03-07): host-faithful tool-channel e2e + rebuild for the closure drill\n1684a8f feat(03-07): submit-compile-result tool manifest declaration + tool-directed Editor-Agent instructions\n2e48770 feat(03-07): GREEN — submit-compile-result tool + promise-registry readback + version-scoped breaker"
 }
