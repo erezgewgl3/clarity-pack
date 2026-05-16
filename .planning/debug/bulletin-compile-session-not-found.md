@@ -1,5 +1,5 @@
 ---
-status: root-caused + fixed — pending Countermoves re-drill
+status: RESOLVED — confirmed on the 2026-05-16 Countermoves re-drill
 surfaced: 2026-05-15
 fix-implemented: 2026-05-16
 root-cause: host taskKey namespace contract (plugin-host-services.ts agentSessions)
@@ -224,3 +224,27 @@ Secondary gate to watch next (host L2034): once the session is reachable,
 `sendMessage` throws `"Agent wakeup was skipped by heartbeat policy"` if the
 Editor-Agent is not invokable — a *different* error string, handled by the
 existing fail-fast path, not the retry.
+
+## RESOLVED — 2026-05-16 Countermoves re-drill confirmation
+
+The taskKey fix was drilled on Countermoves. The live
+`bulletin_compile_failures` rows after the fixed build went in **no longer
+contain "Session not found"** — the session connects and the Editor-Agent's
+LLM now runs. The session-not-found defect is **closed**.
+
+The re-drill surfaced the next two compile-path defects (tracked in STATE.md
+"Active Blockers", not here):
+
+- **Defect A — FIXED (commit `76bd28a`).** `compilePass1` passed the non-UUID
+  `EDITOR_AGENT_ID_TAG` ('clarity-pack-editor-agent') to the circuit breaker;
+  on a breaker trip `recordFailure` calls `ctx.agents.pause(agentId)` and the
+  host rejected the non-UUID with `invalid input syntax for type uuid`, masking
+  the real failure. Fixed by threading the resolved Editor-Agent UUID through
+  `CompilePass1Args.editorAgentId`.
+- **Defect B — OPEN.** `compilePass1` rejects `LLM output was not valid JSON`:
+  the agent's streamed response is not the `BulletinDraft` JSON expected
+  (likely wrapped in prose / ```json fences).
+
+Per Eric's 2026-05-16 decision, Defect B and any further compile-path defects
+are to be resolved via a **host-faithful test-hardening pass** (see STATE.md
+"Next session resume point"), not more one-reinstall-at-a-time drilling.
