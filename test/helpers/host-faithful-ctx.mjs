@@ -113,6 +113,15 @@ function cannedDraft({ mrr = 2475 } = {}) {
  * @param {boolean} opts.noResultComment — when true, `listComments` returns
  *                                    NO agent result comment (the
  *                                    delivery-timeout path).
+ * @param {object} opts.resultDocuments — Plan 03-08 — key → body string. The
+ *                                    `issues.documents` fake serves these
+ *                                    (`get` by key, `list` returns summaries),
+ *                                    SIMULATING the agent filing its result as
+ *                                    an issue document. Models the host
+ *                                    CONSTRAINT (the documents API shape), NOT
+ *                                    the agent's real behaviour — only the live
+ *                                    Countermoves drill proves the real agent
+ *                                    files the document.
  */
 export function makeHostFaithfulCompileCtx({
   companies = [],
@@ -124,6 +133,7 @@ export function makeHostFaithfulCompileCtx({
   issues = [],
   operationIssues = [],
   noResultComment = false,
+  resultDocuments = {},
 } = {}) {
   // {cycle_number, company_id, next_due_at, compiled_at, content_hash,
   //  compile_status, published_issue_id}
@@ -388,16 +398,40 @@ export function makeHostFaithfulCompileCtx({
       async createComment() {
         return { id: 'comment-x' };
       },
-      // Plan 03-07 — the issues.documents fake (Option-B fallback scan). Both
-      // default to empty so the tool channel — not the fallback — is the path
-      // exercised by default. A test that wants to drill the document fallback
-      // overrides these.
+      // Plan 03-08 — the issues.documents fake. Option B's PRIMARY readback
+      // is a `documents.get(issueId, 'compile-result', companyId)` poll, with
+      // a `documents.list` off-key scan as the fallback. The fake serves the
+      // `resultDocuments` map (key → body), SIMULATING the agent filing its
+      // result as an issue document. Empty by default (the delivery-timeout
+      // path) — a test seeds `resultDocuments` to drill the document readback.
       documents: {
-        async list() {
-          return [];
+        async list(issueId) {
+          return Object.keys(resultDocuments).map((key, i) => ({
+            id: `doc-${i + 1}`,
+            issueId,
+            key,
+            title: 'Compiled result',
+            format: 'markdown',
+            latestRevisionNumber: 1,
+            createdByAgentId: agentsFake.resolvedAgentId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }));
         },
-        async get() {
-          return null;
+        async get(issueId, key) {
+          if (!(key in resultDocuments)) return null;
+          return {
+            id: `doc-${key}`,
+            issueId,
+            key,
+            title: 'Compiled result',
+            format: 'markdown',
+            latestRevisionNumber: 1,
+            createdByAgentId: agentsFake.resolvedAgentId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            body: resultDocuments[key],
+          };
         },
       },
     },

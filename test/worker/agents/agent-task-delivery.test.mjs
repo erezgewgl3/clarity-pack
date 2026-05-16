@@ -1,26 +1,23 @@
 // test/worker/agents/agent-task-delivery.test.mjs
 //
-// Plan 03-06 Task 1 RED — failing spec for the operation-issue task-delivery
-// layer.
+// Plan 03-06 Task 1 — spec for the operation-issue task-delivery layer.
+// Plan 03-08 — the readback (steps 4-5) re-pointed at Option B: a PRIMARY
+// issue-document poll via `ctx.issues.documents.get/.list`.
 //
 // Plan 03-05's `sessionLlmAdapter` drove the Editor-Agent via
 // `ctx.agents.sessions.sendMessage({prompt})` — but the host silently discards
-// the `prompt` before it reaches the agent (upstream PR #3106). The agent runs
-// its ordinary org-chart heartbeat, finds an empty inbox, and emits prose.
+// the `prompt` (upstream PR #3106). Plan 03-06's scoped-issue handoff puts the
+// compile prompt in the operation-issue BODY; the agent's heartbeat finds the
+// assigned issue, reads the prompt, and produces the result.
 //
-// Path (d) — the scoped-issue handoff: the compile prompt becomes the BODY of
-// an operation issue ASSIGNED to the Editor-Agent. The agent's heartbeat finds
-// the assigned issue ("Step 3 — Get Assignments", which PR #3106 leaves
-// unchanged), reads the prompt from the issue body, and posts the BulletinDraft
-// JSON as a comment. The worker polls for that comment.
-//
-// `deliverAgentTask(ctx, opts)` creates (or reuses) the operation issue, wakes
-// the agent, polls `ctx.issues.listComments` for a schema-valid JSON result
-// comment, and returns the raw result string. `deliveryLlmAdapter` wraps it
-// behind the byte-identical `LlmAdapter` interface.
-//
-// RED expectation: `src/worker/agents/agent-task-delivery.ts` does not exist
-// yet — the import fails with ERR_MODULE_NOT_FOUND.
+// Plan 03-07 tried Option C (the agent calls a declared plugin tool) — the
+// 2026-05-16 closure re-drill LIVE-DISPROVED it (a `claude_local` managed
+// agent's session never receives a plugin-declared tool). Plan 03-08 adopts
+// Option B: the agent files the result as an issue DOCUMENT keyed
+// `compile-result`; `deliverAgentTask` reads it back via
+// `ctx.issues.documents.get`. The "store the result as a document keyed
+// compile-result" instruction is carried in the operation-issue DESCRIPTION
+// (the channel that propagates — the static manifest instructions do NOT).
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
@@ -29,13 +26,12 @@ import {
   deliverAgentTask,
   deliveryLlmAdapter,
   AGENT_TASK_DELIVERY_TIMEOUT,
+  RESULT_DOCUMENT_KEY,
+  RESULT_DELIVERY_INSTRUCTION,
+  RESULT_POLL_INTERVAL_MS,
   OPERATION_ORIGIN_KIND_PREFIX,
   operationOriginKind,
 } from '../../../src/worker/agents/agent-task-delivery.ts';
-import {
-  PENDING_DELIVERIES,
-  registerCompileResultTool,
-} from '../../../src/worker/agents/compile-result-tool.ts';
 import { makeHostFaithfulCompileCtx } from '../../helpers/host-faithful-ctx.mjs';
 import manifest from '../../../src/manifest.ts';
 
@@ -45,8 +41,8 @@ const COMPANY_ID = 'COU';
 /**
  * A real minimal BulletinDraft — masthead/actionInbox/departments/
  * standingNumbers/lineageThreads — so it genuinely passes `validateDraftSchema`
- * (Test 4 depends on a real schema-valid vs schema-invalid distinction, not a
- * brace count).
+ * (the schema-valid vs schema-invalid distinction is a real one, not a brace
+ * count).
  */
 function validDraftJson() {
   return JSON.stringify({
@@ -67,28 +63,34 @@ function validDraftJson() {
 
 /**
  * Build a fake `ctx.issues` with `create`/`list`/`listComments`/`requestWakeup`
- * and (Plan 03-07) `documents.list` / `documents.get`.
+ * and the Plan 03-08 PRIMARY readback surface `documents.list` / `documents.get`.
  *
  * @param {object}  opts
- * @param {Array}   opts.existing       — rows `ctx.issues.list` returns (idempotency).
- * @param {Array}   opts.commentScript  — array-of-arrays; one entry per poll.
- *                                        Each entry is the IssueComment[] that
- *                                        poll returns. The polling loop is
- *                                        genuinely exercised across ≥2 polls.
- * @param {Array}   opts.documentSummaries — IssueDocumentSummary[] returned by
- *                                        `documents.list` (default []).
- * @param {object}  opts.documentBodies — key → body string; `documents.get`
- *                                        returns `{...summary, body}` for a key.
+ * @param {Array}   opts.existing          — rows `ctx.issues.list` returns (idempotency).
+ * @param {Array}   opts.commentScript     — array-of-arrays; one entry per poll
+ *                                           (the IssueComment[] that poll returns).
+ * @param {object}  opts.documentScript    — { delayPolls, summaries, bodies } — the
+ *                                           document fixture appears only AFTER
+ *                                           `delayPolls` document polls, so the
+ *                                           poll loop is genuinely exercised.
  */
-function makeFakeCtx({
-  existing = [],
-  commentScript = [],
-  documentSummaries = [],
-  documentBodies = {},
-} = {}) {
-  const calls = { list: [], create: [], requestWakeup: [], listComments: [] };
+function makeFakeCtx({ existing = [], commentScript = [], documentScript = null } = {}) {
+  const calls = {
+    list: [],
+    create: [],
+    requestWakeup: [],
+    listComments: [],
+    documentsGet: [],
+    documentsList: [],
+  };
   let createdSeq = 0;
-  let pollIndex = 0;
+  let commentPollIndex = 0;
+  let documentGetPolls = 0;
+  let documentListPolls = 0;
+
+  const docDelay = documentScript?.delayPolls ?? 0;
+  const docSummaries = documentScript?.summaries ?? [];
+  const docBodies = documentScript?.bodies ?? {};
 
   const ctx = {
     logger: { info() {}, warn() {}, error() {}, debug() {} },
@@ -115,18 +117,24 @@ function makeFakeCtx({
       },
       async listComments(issueId, companyId) {
         calls.listComments.push({ issueId, companyId });
-        const entry = commentScript[pollIndex] ?? [];
-        if (pollIndex < commentScript.length - 1) pollIndex += 1;
+        const entry = commentScript[commentPollIndex] ?? [];
+        if (commentPollIndex < commentScript.length - 1) commentPollIndex += 1;
         return entry;
       },
       documents: {
-        async list() {
-          return documentSummaries;
+        async list(issueId, companyId) {
+          calls.documentsList.push({ issueId, companyId });
+          documentListPolls += 1;
+          if (documentListPolls <= docDelay) return [];
+          return docSummaries;
         },
-        async get(issueId, key) {
-          if (!(key in documentBodies)) return null;
-          const summary = documentSummaries.find((s) => s.key === key) ?? { key };
-          return { ...summary, issueId, body: documentBodies[key] };
+        async get(issueId, key, companyId) {
+          calls.documentsGet.push({ issueId, key, companyId });
+          documentGetPolls += 1;
+          if (documentGetPolls <= docDelay) return null;
+          if (!(key in docBodies)) return null;
+          const summary = docSummaries.find((s) => s.key === key) ?? { key };
+          return { ...summary, issueId, body: docBodies[key] };
         },
       },
     },
@@ -149,6 +157,21 @@ function comment({ id = 'c1', authorAgentId = AGENT_ID, body = '' } = {}) {
   };
 }
 
+/** A document summary as the SDK's IssueDocumentSummary shape. */
+function docSummary({ key = RESULT_DOCUMENT_KEY, id = 'doc-1' } = {}) {
+  return {
+    id,
+    issueId: 'op-1',
+    key,
+    title: 'Compiled draft',
+    format: 'markdown',
+    latestRevisionNumber: 1,
+    createdByAgentId: AGENT_ID,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
 const BASE_OPTS = {
   agentId: AGENT_ID,
   companyId: COMPANY_ID,
@@ -156,28 +179,36 @@ const BASE_OPTS = {
   operationId: 'cycle-1',
   title: 'Compile Daily Bulletin — cycle 1',
   prompt: 'You are the Editorial Desk. Compile a bulletin.',
-  timeoutMs: 200,
+  timeoutMs: 400,
   pollIntervalMs: 20,
 };
 
-// ---- Test 1 — happy path --------------------------------------------------
+// ---- Test 1 — happy path: PRIMARY document poll ---------------------------
 
-test('deliverAgentTask: happy path — create + wakeup + JSON comment on poll 2 → resolves raw JSON', async () => {
+test('deliverAgentTask: happy path — create + wakeup + result document at key compile-result on poll 2 → resolves raw JSON', async () => {
   const draft = validDraftJson();
   const { ctx, calls } = makeFakeCtx({
     existing: [],
-    commentScript: [
-      [], // poll 1 — no comment yet
-      [comment({ body: draft })], // poll 2 — the result
-    ],
+    // the document appears only after the FIRST document poll — exercises the loop.
+    documentScript: {
+      delayPolls: 1,
+      summaries: [docSummary({ key: RESULT_DOCUMENT_KEY })],
+      bodies: { [RESULT_DOCUMENT_KEY]: draft },
+    },
   });
 
   const result = await deliverAgentTask(ctx, BASE_OPTS);
 
-  assert.equal(result, draft, 'resolves the raw JSON string from the result comment');
+  assert.equal(result, draft, 'resolves the raw JSON string from the result document');
   assert.equal(calls.create.length, 1, 'one operation issue created');
   assert.equal(calls.requestWakeup.length, 1, 'the agent is woken once');
-  assert.ok(calls.listComments.length >= 2, 'polled at least twice');
+  assert.ok(calls.documentsGet.length >= 2, 'documents.get polled at least twice');
+  // the PRIMARY get keys EXACTLY on compile-result.
+  assert.equal(
+    calls.documentsGet[0].key,
+    RESULT_DOCUMENT_KEY,
+    'the PRIMARY readback calls documents.get with key "compile-result"',
+  );
 });
 
 // ---- Test 2 — idempotency -------------------------------------------------
@@ -197,7 +228,11 @@ test('deliverAgentTask: idempotency — an existing operation issue with the sam
   };
   const { ctx, calls } = makeFakeCtx({
     existing: [existingIssue],
-    commentScript: [[comment({ issueId: 'op-existing', body: draft })]],
+    documentScript: {
+      delayPolls: 0,
+      summaries: [docSummary({ key: RESULT_DOCUMENT_KEY })],
+      bodies: { [RESULT_DOCUMENT_KEY]: draft },
+    },
   });
 
   const result = await deliverAgentTask(ctx, BASE_OPTS);
@@ -220,10 +255,11 @@ test('deliverAgentTask: idempotency — an existing operation issue with the sam
 
 // ---- Test 3 — timeout -----------------------------------------------------
 
-test('deliverAgentTask: timeout — no JSON comment ever appears → rejects with a timeout-tagged error', async () => {
+test('deliverAgentTask: timeout — no document or comment ever appears → rejects with a timeout-tagged error', async () => {
   const { ctx } = makeFakeCtx({
     existing: [],
-    commentScript: [[]], // every poll returns no comment
+    commentScript: [[]], // every comment poll returns nothing
+    documentScript: null, // documents.list/get always empty
   });
 
   await assert.rejects(
@@ -233,34 +269,71 @@ test('deliverAgentTask: timeout — no JSON comment ever appears → rejects wit
   );
 });
 
-// ---- Test 4 — non-result comments skipped ---------------------------------
+// ---- Test 4 — off-key document fallback scan ------------------------------
 
-test('deliverAgentTask: a stray-brace progress comment is skipped; the schema-valid comment resolves', async () => {
-  const draft = validDraftJson();
-  const { ctx } = makeFakeCtx({
-    existing: [],
-    commentScript: [
-      // poll 1 — a progress note with a stray `{` but NOT a schema-valid draft
-      [comment({ id: 'c-progress', body: 'working on it {step 1} — almost done' })],
-      // poll 2 — the genuine schema-valid BulletinDraft JSON
-      [
-        comment({ id: 'c-progress', body: 'working on it {step 1} — almost done' }),
-        comment({ id: 'c-result', body: draft }),
-      ],
-    ],
-  });
-
-  const result = await deliverAgentTask(ctx, BASE_OPTS);
-  assert.equal(result, draft, 'resolves the poll-2 schema-valid comment, not the stray-brace one');
-});
-
-// ---- Test 5 — operation-issue shape ---------------------------------------
-
-test('deliverAgentTask: the created issue carries assigneeAgentId, originKind, surfaceVisibility, description', async () => {
+test('deliverAgentTask: a document filed at a DIFFERENT key still resolves via the documents.list off-key scan', async () => {
   const draft = validDraftJson();
   const { ctx, calls } = makeFakeCtx({
     existing: [],
-    commentScript: [[comment({ body: draft })]],
+    // the agent picked key "bulletin", not "compile-result".
+    documentScript: {
+      delayPolls: 0,
+      summaries: [docSummary({ key: 'bulletin' })],
+      bodies: { bulletin: draft },
+    },
+  });
+
+  const result = await deliverAgentTask(ctx, BASE_OPTS);
+  assert.equal(result, draft, 'the off-key documents.list scan resolves the result');
+  // the PRIMARY get (compile-result) missed, the list scan found "bulletin".
+  assert.ok(
+    calls.documentsList.length >= 1,
+    'documents.list was scanned when the primary key missed',
+  );
+});
+
+// ---- Test 5 — non-result document skipped ---------------------------------
+
+test('deliverAgentTask: a progress-note document is skipped; the schema-valid document resolves', async () => {
+  const draft = validDraftJson();
+  const { ctx } = makeFakeCtx({
+    existing: [],
+    // poll 1 — a progress note at the result key (stray brace, NOT schema-valid);
+    // the document fixture is delayed so the genuine draft is the one resolved.
+    documentScript: {
+      delayPolls: 0,
+      summaries: [
+        docSummary({ key: RESULT_DOCUMENT_KEY, id: 'doc-progress' }),
+        docSummary({ key: 'notes', id: 'doc-notes' }),
+      ],
+      bodies: {
+        // the result key holds a non-schema-valid progress note...
+        [RESULT_DOCUMENT_KEY]: 'working on it {step 1} — almost done',
+        // ...the genuine draft is filed under a different key.
+        notes: draft,
+      },
+    },
+  });
+
+  const result = await deliverAgentTask(ctx, BASE_OPTS);
+  assert.equal(
+    result,
+    draft,
+    'resolves the schema-valid document, not the stray-brace progress note at the result key',
+  );
+});
+
+// ---- Test 6 — operation-issue shape: description carries the instruction --
+
+test('deliverAgentTask: the created issue carries assigneeAgentId, originKind, surfaceVisibility, and a description with the compile-result delivery instruction', async () => {
+  const draft = validDraftJson();
+  const { ctx, calls } = makeFakeCtx({
+    existing: [],
+    documentScript: {
+      delayPolls: 0,
+      summaries: [docSummary()],
+      bodies: { [RESULT_DOCUMENT_KEY]: draft },
+    },
   });
 
   await deliverAgentTask(ctx, BASE_OPTS);
@@ -273,18 +346,55 @@ test('deliverAgentTask: the created issue carries assigneeAgentId, originKind, s
     'originKind is the operation kind',
   );
   assert.equal(created.surfaceVisibility, 'plugin_operation', 'off the human board');
-  assert.equal(created.description, BASE_OPTS.prompt, 'the compile prompt is the issue description');
   assert.equal(created.originId, 'cycle-1', 'originId is the dedupe key');
-  assert.equal(calls.requestWakeup[0].issueId, 'op-1', 'requestWakeup is called with the created issue id');
+  // Plan 03-08 — the description is the prompt PLUS the result-delivery instruction.
+  assert.ok(
+    created.description.startsWith(BASE_OPTS.prompt),
+    'the description begins with the compile prompt',
+  );
+  assert.ok(
+    created.description.includes('compile-result'),
+    'the description carries the "compile-result" document-key delivery instruction',
+  );
+  assert.ok(
+    created.description.includes(RESULT_DELIVERY_INSTRUCTION),
+    'the description appends the exact RESULT_DELIVERY_INSTRUCTION constant',
+  );
+  assert.equal(
+    calls.requestWakeup[0].issueId,
+    'op-1',
+    'requestWakeup is called with the created issue id',
+  );
 });
 
-// ---- Test 6 — deliveryLlmAdapter ------------------------------------------
+// ---- Test 7 — comment fallback (lowest priority, belt-and-suspenders) ------
 
-test('deliveryLlmAdapter.complete() forwards the prompt as the issue description and returns the result', async () => {
+test('deliverAgentTask: comment fallback — a future agent that posts raw JSON as a comment still resolves', async () => {
+  const draft = validDraftJson();
+  const { ctx } = makeFakeCtx({
+    existing: [],
+    commentScript: [
+      [], // poll 1 — no comment yet
+      [comment({ body: draft })], // poll 2 — the JSON result comment
+    ],
+    documentScript: null, // no document is ever filed
+  });
+
+  const result = await deliverAgentTask(ctx, BASE_OPTS);
+  assert.equal(result, draft, 'the comment-scan fallback resolves the result');
+});
+
+// ---- Test 8 — deliveryLlmAdapter ------------------------------------------
+
+test('deliveryLlmAdapter.complete() forwards the prompt into the issue description and returns the result', async () => {
   const draft = validDraftJson();
   const { ctx, calls } = makeFakeCtx({
     existing: [],
-    commentScript: [[comment({ body: draft })]],
+    documentScript: {
+      delayPolls: 0,
+      summaries: [docSummary()],
+      bodies: { [RESULT_DOCUMENT_KEY]: draft },
+    },
   });
 
   const adapter = deliveryLlmAdapter(ctx, {
@@ -292,7 +402,7 @@ test('deliveryLlmAdapter.complete() forwards the prompt as the issue description
     companyId: COMPANY_ID,
     operationKind: 'bulletin-compile',
     operationId: 'cycle-1',
-    timeoutMs: 200,
+    timeoutMs: 400,
     pollIntervalMs: 20,
   });
 
@@ -300,192 +410,82 @@ test('deliveryLlmAdapter.complete() forwards the prompt as the issue description
   const result = await adapter.complete({ maxTokens: 6000, prompt });
 
   assert.equal(result, draft, 'complete() resolves the agent result string');
-  assert.equal(calls.create[0].description, prompt, 'complete() forwards prompt as the issue description');
+  assert.ok(
+    calls.create[0].description.startsWith(prompt),
+    'complete() forwards prompt as the head of the issue description',
+  );
 });
 
-test('AGENT_TASK_DELIVERY_TIMEOUT is a positive number (default result-readback ceiling)', () => {
+// ---- Test 9 — constants ---------------------------------------------------
+
+test('AGENT_TASK_DELIVERY_TIMEOUT and RESULT_POLL_INTERVAL_MS are positive numbers', () => {
   assert.equal(typeof AGENT_TASK_DELIVERY_TIMEOUT, 'number');
   assert.ok(AGENT_TASK_DELIVERY_TIMEOUT > 0);
+  assert.equal(typeof RESULT_POLL_INTERVAL_MS, 'number');
+  assert.ok(RESULT_POLL_INTERVAL_MS > 0);
+});
+
+test('RESULT_DOCUMENT_KEY is the exact contract key "compile-result"', () => {
+  assert.equal(RESULT_DOCUMENT_KEY, 'compile-result');
 });
 
 // ===========================================================================
-// Plan 03-07 Task 1 RED — the promise-registry readback (Option C).
-// `deliverAgentTask` registers a PENDING_DELIVERIES entry keyed by issue.id
-// BEFORE requestWakeup, then Promise.race's that pending promise against a slow
-// comment+document fallback poll and the timeout. The submit-compile-result
-// tool handler resolves the pending promise directly — no comment-poll race on
-// the designed path.
+// Plan 03-08 Task 3 — host-faithful e2e: the document-poll-primary readback.
+//
+// IMPORTANT — these e2e tests assert host CONSTRAINTS (the ctx.issues.documents
+// API shape), NOT agent BEHAVIOUR. A host-faithful fake CANNOT prove the real
+// `claude_local` Editor-Agent files the BulletinDraft as a document at key
+// `compile-result` — only the live Countermoves closure drill (Plan 03-08
+// Task 4) proves that. A green suite here is necessary but NOT sufficient to
+// close Phase 3 (the phase advisory anti-pattern: a green local suite does not
+// prove the live agent).
 // ===========================================================================
 
-/** A document summary as the SDK's IssueDocumentSummary shape. */
-function docSummary({ key = 'bulletin', id = 'doc-1' } = {}) {
-  return {
-    id,
-    issueId: 'op-1',
-    key,
-    title: 'Compiled draft',
-    format: 'markdown',
-    latestRevisionNumber: 1,
-    createdByAgentId: AGENT_ID,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-}
-
-// ---- Test A — the tool channel resolves the delivery ----------------------
-
-test('deliverAgentTask: Test A — a submit-compile-result tool call resolves the delivery (no comment, no document)', async () => {
-  PENDING_DELIVERIES.clear();
-  const draft = validDraftJson();
-  const { ctx, calls } = makeFakeCtx({
-    existing: [],
-    commentScript: [[]], // listComments always empty — the tool wins
-  });
-
-  const pending = deliverAgentTask(ctx, {
-    ...BASE_OPTS,
-    timeoutMs: 2000,
-    fallbackPollIntervalMs: 1000,
-  });
-
-  // Wait a tick so deliverAgentTask creates the issue and registers its entry.
-  await new Promise((r) => setTimeout(r, 30));
-  const createdId = calls.create.length ? 'op-1' : null;
-  assert.ok(createdId, 'an operation issue was created');
-  const entry = PENDING_DELIVERIES.get(createdId);
-  assert.ok(entry, 'deliverAgentTask registered a PENDING_DELIVERIES entry keyed by issue.id');
-
-  // The simulated agent calls the tool — resolve directly.
-  entry.resolve(draft);
-
-  const result = await pending;
-  assert.equal(result, draft, 'deliverAgentTask resolves the tool-delivered result string');
-});
-
-// ---- Test B — the comment fallback poll still works -----------------------
-
-test('deliverAgentTask: Test B — fallback comment poll resolves when the agent never calls the tool', async () => {
-  PENDING_DELIVERIES.clear();
-  const draft = validDraftJson();
-  const { ctx } = makeFakeCtx({
-    existing: [],
-    commentScript: [
-      [], // poll 1 — no result yet
-      [comment({ body: draft })], // poll 2 — the JSON result comment (Option A)
-    ],
-  });
-
-  const result = await deliverAgentTask(ctx, {
-    ...BASE_OPTS,
-    timeoutMs: 2000,
-    fallbackPollIntervalMs: 30,
-  });
-  assert.equal(result, draft, 'the comment-scan fallback resolves the result');
-});
-
-// ---- Test C — the document fallback scan works ----------------------------
-
-test('deliverAgentTask: Test C — fallback document scan resolves a BulletinDraft filed as a document', async () => {
-  PENDING_DELIVERIES.clear();
-  const draft = validDraftJson();
-  const { ctx } = makeFakeCtx({
-    existing: [],
-    commentScript: [[]], // no result comment ever
-    documentSummaries: [docSummary({ key: 'bulletin' })],
-    documentBodies: { bulletin: draft },
-  });
-
-  const result = await deliverAgentTask(ctx, {
-    ...BASE_OPTS,
-    timeoutMs: 2000,
-    fallbackPollIntervalMs: 30,
-  });
-  assert.equal(result, draft, 'the document-scan fallback (Option B) resolves the result');
-});
-
-// ---- Test D — timeout cleans up the Map entry -----------------------------
-
-test('deliverAgentTask: Test D — timeout rejects AND cleans up the PENDING_DELIVERIES entry', async () => {
-  PENDING_DELIVERIES.clear();
-  const { ctx, calls } = makeFakeCtx({
-    existing: [],
-    commentScript: [[]], // nothing ever resolves on any channel
-  });
-
-  await assert.rejects(
-    () =>
-      deliverAgentTask(ctx, {
-        ...BASE_OPTS,
-        timeoutMs: 120,
-        fallbackPollIntervalMs: 40,
-      }),
-    /timeout/i,
-    'rejects with a timeout-tagged error',
-  );
-
-  const createdId = calls.create.length ? 'op-1' : null;
-  assert.ok(createdId, 'an operation issue was created');
-  assert.equal(
-    PENDING_DELIVERIES.has(createdId),
-    false,
-    'the finally cleanup deleted the Map entry — no leak',
-  );
-});
-
-// ===========================================================================
-// Plan 03-07 Task 4 — host-faithful e2e: the tool channel end-to-end.
-// `deliverAgentTask` resolves when the SIMULATED agent calls
-// submit-compile-result via the host-faithful ctx's `callTool` helper — with
-// no comment and no document posted (the tool channel wins, not the fallback).
-// ===========================================================================
-
-test('e2e (host-faithful): deliverAgentTask resolves via the submit-compile-result tool channel', async () => {
-  PENDING_DELIVERIES.clear();
+test('e2e (host-faithful): deliverAgentTask resolves via a document filed at key compile-result (no comment required)', async () => {
   const draft = validDraftJson();
   const harness = makeHostFaithfulCompileCtx({
     companies: [{ id: COMPANY_ID }],
-    // listComments returns the canned draft by default — to PROVE the tool
-    // channel won (not the fallback comment scan), suppress the result comment.
+    // suppress the canned result COMMENT so this test PROVES the document poll
+    // — not the comment fallback — is the channel that resolved.
     noResultComment: true,
+    // seed the agent's filed document at the exact contract key.
+    resultDocuments: { [RESULT_DOCUMENT_KEY]: draft },
   });
-  const { ctx, callTool, issuesCreated } = harness;
+  const { ctx, issuesCreated } = harness;
 
-  // Register the real submit-compile-result tool against the host-faithful ctx.
-  registerCompileResultTool(ctx);
-
-  const pending = deliverAgentTask(ctx, {
+  const result = await deliverAgentTask(ctx, {
     ...BASE_OPTS,
     timeoutMs: 4000,
-    fallbackPollIntervalMs: 2000,
+    pollIntervalMs: 30,
   });
 
-  // Wait a tick so deliverAgentTask creates the operation issue and registers
-  // its PENDING_DELIVERIES entry.
-  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(result, draft, 'deliverAgentTask resolves the document-delivered result string');
   assert.equal(issuesCreated.length, 1, 'one operation issue was created');
-  // The host-faithful issues.create assigns ids `issue-${n}`.
-  const operationIssueId = 'issue-1';
   assert.ok(
-    PENDING_DELIVERIES.has(operationIssueId),
-    'deliverAgentTask registered a PENDING_DELIVERIES entry for the created operation issue',
+    issuesCreated[0].description.includes('compile-result'),
+    'the operation-issue description carries the compile-result delivery instruction',
   );
-
-  // SIMULATE the agent calling the tool.
-  const toolResult = await callTool('submit-compile-result', {
-    operationIssueId,
-    result: draft,
-  });
-  assert.deepEqual(toolResult, { content: 'received' }, 'the tool handler returned {content:"received"}');
-
-  const result = await pending;
-  assert.equal(result, draft, 'deliverAgentTask resolves the tool-delivered result string');
 });
 
-// ---- Task 4 — manifest contract test (drift guard) ------------------------
-// Added in Task 4: the Editor-Agent manifest instructions must reference the
-// operation originKind prefix so the agent instructions and the worker's
-// originKind cannot drift apart silently; the capabilities must include
-// issues.wakeup so ctx.issues.requestWakeup is permitted.
+test('e2e (host-faithful): a document filed at a DIFFERENT key still resolves via the off-key documents.list scan', async () => {
+  const draft = validDraftJson();
+  const harness = makeHostFaithfulCompileCtx({
+    companies: [{ id: COMPANY_ID }],
+    noResultComment: true,
+    // the agent filed it under "bulletin", not the contract key.
+    resultDocuments: { bulletin: draft },
+  });
+  const { ctx } = harness;
+
+  const result = await deliverAgentTask(ctx, {
+    ...BASE_OPTS,
+    timeoutMs: 4000,
+    pollIntervalMs: 30,
+  });
+  assert.equal(result, draft, 'the off-key documents.list scan (host-faithful) resolves the result');
+});
+
+// ---- manifest contract tests (drift guards) -------------------------------
 
 test('manifest: Editor-Agent instructions reference the operation originKind prefix', () => {
   const editor = manifest.agents.find((a) => a.agentKey === 'editor-agent');
@@ -500,5 +500,31 @@ test('manifest: capabilities include issues.wakeup', () => {
   assert.ok(
     manifest.capabilities.includes('issues.wakeup'),
     'issues.wakeup is required for ctx.issues.requestWakeup',
+  );
+});
+
+test('manifest: Option C is stripped — no agent.tools.register capability, no tools[], no agent permissions', () => {
+  assert.ok(
+    !manifest.capabilities.includes('agent.tools.register'),
+    'the dead Option C agent.tools.register capability is removed',
+  );
+  assert.equal(manifest.tools, undefined, 'the dead Option C tools[] array is removed');
+  const editor = manifest.agents.find((a) => a.agentKey === 'editor-agent');
+  assert.equal(
+    editor.permissions,
+    undefined,
+    'the dead Option C agents[].permissions.pluginTools block is removed',
+  );
+});
+
+test('manifest: Editor-Agent instructions deliver via a compile-result document, not the dead submit-compile-result tool', () => {
+  const editor = manifest.agents.find((a) => a.agentKey === 'editor-agent');
+  assert.ok(
+    editor.instructions.content.includes('compile-result'),
+    'the instructions name the compile-result document key',
+  );
+  assert.ok(
+    !editor.instructions.content.includes('submit-compile-result'),
+    'the instructions no longer mention the dead submit-compile-result tool',
   );
 });
