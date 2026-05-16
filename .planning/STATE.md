@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: "Phase 3 EXECUTING. 2026-05-16 Countermoves re-drill CONFIRMED the session-not-found defect FIXED — root cause was the host taskKey namespace contract (a session created with a taskKey not matching plugin:<pluginKey>:session:% is permanently unfindable); fix omits taskKey so the host generates a conforming one (f0ff821/4a904e4). Defect A also FIXED — compilePass1 passed the non-UUID EDITOR_AGENT_ID_TAG to ctx.agents.pause → 'invalid input syntax for type uuid'; now threads the resolved Editor-Agent UUID (76bd28a). Defect B OPEN — compilePass1 rejects 'LLM output was not valid JSON'. DECISION 2026-05-16 (Eric): STOP per-defect Countermoves drilling — do ONE focused pass making the whole compile path testable against host-faithful fakes. Private GitHub backup live: github.com/erezgewgl3/clarity-pack. Suite 591 / 589 pass / 0 fail / 2 skip. NEXT: compile-path host-faithful test-hardening pass, then Defect B, Plan 03-04, Phase 3 verification."
-last_updated: "2026-05-16T20:45:00.000Z"
+status: "Phase 3 EXECUTING. Quick task 260516-gx4 DONE — compile-path host-faithful test-hardening pass complete + Defect B FIXED. The whole bulletin compile path is now testable locally in node --test: a reusable host-faithful ctx fake (test/helpers/host-faithful-{agents,sessions,ctx}.mjs) encodes the 9-item host-constraint catalogue and an e2e test runs registerCompileBulletinJob against it, failing locally on any host-contract violation. Defect B FIXED — compilePass1 now extracts JSON from fenced/prose-wrapped LLM output via extractJsonObject (commit 4ed04b1); genuinely-non-JSON output still rejects identically. Earlier: session-not-found + Defect A both FIXED and confirmed on the 2026-05-16 Countermoves re-drill. Private GitHub backup live: github.com/erezgewgl3/clarity-pack. Suite 626 / 624 pass / 0 fail / 2 skip. NEXT: Plan 03-04, then Phase 3 verification, then a confirming Countermoves drill (now confirms rather than discovers — BULL-05/06/09 live verification)."
+last_updated: "2026-05-16T12:30:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
@@ -111,7 +111,13 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 - **SAFE-02 Part B (rehearsed at least once)** — pending Eric's drill against the fresh local Paperclip clone. Not a code blocker; the gate, runbook, and CLI are all green. The acceptance grep `^\| 20[0-9]{2}-` over `runbook/REHEARSAL.md` flips to PASS the moment Eric appends his first dated drill row.
 - **BULLETIN-COMPILE-SESSION (RESOLVED 2026-05-16)** — root cause was NOT sync-vs-async; it was the host taskKey namespace contract. `sessions.create` stores a caller `taskKey` verbatim, but `sendMessage`/`close`/`list` only find sessions whose taskKey is `LIKE 'plugin:<pluginKey>:session:%'`. The adapter passed `clarity-pack:bulletin:cycle-N:<ts>` → every lookup filtered it out → permanent "Session not found". Fix: omit `taskKey` so the host generates a conforming one (`f0ff821`/`4a904e4`). Confirmed fixed on the 2026-05-16 Countermoves re-drill. Full investigation: `.planning/debug/bulletin-compile-session-not-found.md`.
-- **DEFECT-B (OPEN, surfaced 2026-05-16)** — with the session reachable, `compilePass1` now rejects `LLM output was not valid JSON`. The Editor-Agent session responds but the streamed text is not the `BulletinDraft` JSON — most likely valid JSON wrapped in prose or ```json fences. Resolve inside the host-faithful hardening pass (script the agent output in an end-to-end test); a Countermoves drill then only confirms. Blocks BULL-05/06/09 live verification.
+- **DEFECT-B (RESOLVED 2026-05-16, quick task 260516-gx4)** — `compilePass1` rejected valid `BulletinDraft` JSON as `LLM output was not valid JSON` whenever the Editor-Agent wrapped it in a ```json fence or a prose preamble. Fixed by `extractJsonObject` (pure fenced-block peel → brace-balanced quote-aware scan) wired into `compilePass1` (commit `4ed04b1`); genuinely-non-JSON output still hits `recordFailure` with the identical rejection. 15 TDD tests. A confirming Countermoves drill still pending for BULL-05/06/09 live verification — but it now confirms rather than discovers, since the whole compile path is host-faithful-testable locally.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260516-gx4 | Compile-path host-faithful test-hardening pass + Defect B JSON-extraction fix | 2026-05-16 | 4ed04b1 | [260516-gx4-compile-path-host-faithful-test-hardenin](./quick/260516-gx4-compile-path-host-faithful-test-hardenin/) |
 
 ### Phase History
 
