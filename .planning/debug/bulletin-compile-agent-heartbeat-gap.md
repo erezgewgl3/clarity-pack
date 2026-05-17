@@ -284,3 +284,101 @@ present. The host and the agent are blameless. This is a one-spot validator-misu
 
 **Pre-re-drill cleanup:** `DELETE FROM plugin_clarity_pack_cdd6bda4bd.editor_agent_failures
 WHERE plugin_version='0.4.0';` (the 0.5.0 bump also version-scopes the breaker past it).
+
+---
+
+## Plan 03-09 closure re-drill — 2026-05-17 — DID NOT PASS (readback PROVEN; standing-number schema-drift gap)
+
+**Build:** `clarity-pack-0.5.0.tgz` (sha256 `e687615287c65ab65a43356a64983d949dc4eb69fc4ff3b59aa5dadb4785f113`).
+Installed clean on Countermoves Hostinger via `install-helper.sh` —
+`pnpm paperclipai plugin list` → `key=clarity-pack status=ready version=0.5.0
+id=0d4fc40a-0541-4b67-8979-9d346cb9c07b`.
+
+**Pre-drill:** snapshot `2026-05-17T07-02-14Z` taken (recorded snapshot-only practice — Eric's
+explicit choice, matching every Phase 2/3 drill; the full gate+verify bookend was exercised once
+at the Phase 1 rehearsal). `postgres.dump` 2.98 MB + `instance-fs.tar.gz` 144 MB, both
+sha256-verified — the rollback bookend held intact across the whole drill. v0.4.0 uninstalled
+cleanly. NOTE: the plan's cleanup step `DELETE … WHERE plugin_version='0.4.0'` returned
+`DELETE 0` — there were ZERO `0.4.0`-stamped `editor_agent_failures` rows. The plan mis-scoped
+the stale state; the real prior failure history was elsewhere. Harmless (the 0.5.0 bump
+version-scopes the breaker regardless), but noted: the cleanup step was a no-op.
+
+**What the drill PROVED — Plan 03-09's readback fix works end-to-end on the live instance.**
+v0.5.0 ran THREE real `compile-bulletin` pipeline runs (07:15, 07:17, 07:19 UTC). The worker log
+at 07:19:43 shows the structure-only readback ACCEPTING the agent's placeholder-bearing draft,
+verbatim:
+
+> `[plugin] agent-task-delivery: result DOCUMENT received on operation issue`
+> `35c023f5-a6c0-4e5e-9ade-ba652d9839fa (key=compile-result)`
+
+`validateDraftStructure` accepted the agent's `BulletinDraft` document **with its
+`{{NUMBER:key}}` placeholders intact** — no ~36×-rejection poll loop, no `deliverAgentTask` 300s
+timeout. The v0.4.0 readback validator-misuse bug (`validateDraftSchema(parsed, {})` throwing
+`UNKNOWN_SLOT` on every placeholder — the entire reason Plan 03-09 existed) is **DEAD**. Plan
+03-09's stated objective is met: the readback validates STRUCTURE ONLY and never resolves slots.
+
+**What FAILED — a NEW, UNRELATED gap blocks Phase 3 closure: standing-number schema drift.**
+Immediately after the structure-only readback accepted the draft, `verifyDraft` pass-2 ran its 5
+standing-number `ctx.db.query` calls — and ALL FIVE failed at the Paperclip host RPC layer
+(`ERROR: host handler error {method: "db.query"}`):
+
+| Standing number | `db.query` failure |
+|---|---|
+| `mrr` | `column "active_subscription_cents" does not exist` |
+| `briefs_sent_week` | `column "tags" does not exist` |
+| `reply_rate_7d` | `column "tags" does not exist` |
+| `discoveries_7d` | `column "tags" does not exist` |
+| `refund_rate_30d` | `column "tags" does not exist` |
+
+The standing-number SQL queries (`src/worker/bulletin/standing-numbers.ts`, and almost certainly
+`src/worker/bulletin/facts-table.ts`, which runs the same/similar queries) reference columns
+that **do not exist in the live Paperclip schema**. `active_subscription_cents` and an
+`issues.tags` column are both invented/wrong against Countermoves' actual tables.
+
+**FAILURE ROWS** (`plugin_clarity_pack_cdd6bda4bd.editor_agent_failures`, `plugin_version='0.5.0'`):
+
+| id | consecutive | reason |
+|---|---|---|
+| 529 | 1 | `draft_schema_invalid: UNKNOWN_SLOT:key` |
+| 530 | 2 | `draft_schema_invalid: UNKNOWN_SLOT:key` |
+| 531 | 3 | `verifier rejected:` — all 5 slots `"actual":"query_failed"` |
+
+The `UNKNOWN_SLOT:key` runs cascade from the same root: `computeFactsTable` hits the broken
+`ctx.db.query`, returns an empty facts table, the prompt then has no real fact keys, and the
+agent emits the literal template placeholder `{{NUMBER:key}}`. The breaker tripped at
+`consecutive=3`, paused the Editor-Agent; every later cron fire no-op'd with
+`"Editor-Agent is paused AND the bulletin-compile circuit breaker is open — not resuming (D-06)"`.
+
+No `Bulletin No. N` issue was published. `bulletins` still holds only the bootstrap
+`cycle_number 0` (`compile_status=pending`). Operation issue = COU-20
+(uuid `35c023f5-a6c0-4e5e-9ade-ba652d9839fa`).
+
+**Why the local suite missed it.** The 690-test suite is green because the host-faithful fakes
+return canned `db.query` results — they never execute the standing-number SQL against a real
+Paperclip schema. This is exactly the `.continue-here.md` blocking anti-pattern: "green local
+suite ≠ live agent/host behaviour." The same anti-pattern that hid the 03-08 validator-misuse
+(fixture had no `{{NUMBER:key}}` placeholders) now hides a SQL-vs-schema mismatch — only a live
+drill against the real Postgres schema surfaces it.
+
+**Post-drill:** v0.5.0 uninstalled (no `--purge` — plugin-namespace data + the agent's
+`compile-result` document on COU-20 preserved). Box quiet. Bookend snapshot `2026-05-17T07-02-14Z`
+intact; no restore needed (the instance was not degraded — the failure was contained to the
+plugin's own compile loop, which the breaker correctly halted).
+
+**THE FIX (Plan 03-10 — standing-number / facts-table schema-drift closure):**
+1. Correct the standing-number SQL in `src/worker/bulletin/standing-numbers.ts` and the
+   facts-table SQL in `src/worker/bulletin/facts-table.ts` to match Paperclip's ACTUAL schema —
+   discover the real columns via `\d` on the live Countermoves tables. `active_subscription_cents`
+   and an `issues.tags` column are both wrong/invented and must be replaced with whatever the
+   live schema actually exposes (or the standing number re-derived from real columns).
+2. A `gsd-debugger` pass against the live schema is the natural first step — enumerate the
+   queries each of the 5 standing numbers + the facts table issues, run each against the real
+   `paperclip_countermoves` schema, and record the correct column mapping.
+3. Re-pack (0.5.0 → 0.6.0), re-drill from the compile step. The breaker is version-scoped, so a
+   fresh install is not DOA on the three `0.5.0` rows; clear them belt-and-suspenders if desired.
+4. The Option B document-handoff + the structure-only readback (Plan 03-08 + 03-09) are FULLY
+   PROVEN — do NOT re-open them. Plan 03-10's scope is the standing-number/facts-table SQL only.
+
+**Net Phase 3 status after 03-09:** the readback channel is closed and proven; Phase 3 closure
+is blocked solely by the standing-number schema-drift gap. Plan 03-09's Tasks 1-2 are GREEN;
+its Task 3 closure drill did not pass; routed to gap-closure Plan 03-10.
