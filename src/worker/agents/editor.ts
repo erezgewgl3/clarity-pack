@@ -158,9 +158,25 @@ export async function handleEditorHeartbeat(
         llm,
       });
     } catch (err) {
-      // recordFailure already fired inside compileTldr; log + continue so one
-      // broken issue does not deny the rest of the batch.
-      ctx.logger?.warn?.('Editor-Agent compile failed for issue', { issueId, err: (err as Error).message });
+      // Defect C (2026-05-17 v0.6.2 re-drill). This catch is the per-ISSUE
+      // skip path of the HEARTBEAT TL;DR dispatcher — NOT the bulletin
+      // compile, and NOT a genuine compile-failure signal:
+      //   - `compileTldr` has ALREADY fired `recordFailure` for a real LLM
+      //     failure before it re-throws, so the circuit breaker is handled.
+      //   - Best-effort heartbeat compiles legitimately throw a delivery
+      //     timeout when the Editor-Agent is paused (see the comment above) —
+      //     an EXPECTED skip, not a failure.
+      // The prior message `Editor-Agent compile failed for issue` overstated
+      // every skip as a failure: it fired with the published bulletin's issue
+      // id on a SUCCESSFUL bulletin cycle (the bulletin issue is itself an
+      // `issue.created` event the dispatcher then tries to TL;DR-compile) and
+      // misled the v0.6.2 drill into reading a healthy cycle as broken.
+      // Corrected to name what it actually is — a skipped per-issue TL;DR
+      // compile — and logged at `info`, the severity of a benign skip.
+      ctx.logger?.info?.('Editor-Agent: skipped TL;DR compile for issue', {
+        issueId,
+        reason: (err as Error).message,
+      });
     }
   }
 }

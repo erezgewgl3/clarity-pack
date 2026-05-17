@@ -187,6 +187,23 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
     }
 
     for (const company of companies) {
+      // Defect D (2026-05-17 v0.6.2 re-drill). The per-company iteration tracks
+      // a `cycleNumber` (set once the cycle is computed) so the catch at the
+      // bottom can route an UNEXPECTED throw — a render/publish-path TypeError,
+      // a bug anywhere in the per-company body that is NOT one of the handled
+      // `continue`-on-failure paths — through BOTH `recordFailure` (so the D-06
+      // bulletin-compile circuit breaker can trip) AND `recordCycleCompileFailure`
+      // (so the D-22 failed-compile banner shows). Before this fix the catch
+      // only `warn`-logged; a render TypeError thrown from `publishBulletin`'s
+      // un-try-wrapped `renderBulletinIssueBody` call surfaced as
+      // `job completed successfully`, the breaker never tripped, and the broken
+      // loop created an operation issue every minute forever (v0.6.1 drill).
+      let cycleNumber: number | null = null;
+      // The resolved Editor-Agent UUID, captured so the catch-all `recordFailure`
+      // can pause the real agent. Null until reconcile succeeds — when it is
+      // still null the catch-all skips `recordFailure` (an un-resolved agent has
+      // no UUID to pause; the throw is logged but the breaker is not advanced).
+      let editorAgentIdForCatch: string | null = null;
       try {
         const nextDueAtIso = await getNextDueAtForCompany(ctx, company.id);
 
@@ -249,6 +266,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           });
           continue;
         }
+        editorAgentIdForCatch = editorAgentId;
 
         // Plan 03-06 — breaker-aware resume of the Editor-Agent.
         //
@@ -304,7 +322,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
            WHERE company_id = $1 AND compile_status = $2`,
           [company.id, 'published'],
         );
-        const cycleNumber = (maxRows[0]?.max_cycle ?? 0) + 1;
+        cycleNumber = (maxRows[0]?.max_cycle ?? 0) + 1;
 
         // ---- Plan 03-03 — Cycle-start reconcile + lineage build ----
         // 1a. Reconcile department membership (idempotent — ON CONFLICT DO
@@ -405,6 +423,13 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           operationId: `cycle-${cycleNumber}`,
           title: `Compile Daily Bulletin — cycle ${cycleNumber}`,
         });
+        // Defect B — the masthead is pipeline-built, not LLM-invented. Pass
+        // `compiledAt` (this fire's instant) and the company display name so
+        // `compilePass1`'s `buildMasthead` can populate volume/number/weekday/
+        // dateText/prepareForName/cycleNumber deterministically. `company.name`
+        // is the SDK `Company` display name; it is read defensively because the
+        // test fakes seed companies as bare `{ id }`.
+        const companyName = (company as { name?: string }).name;
         let draft: BulletinDraft;
         try {
           draft = await compilePass1(ctx, {
@@ -415,6 +440,8 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             departments: DEFAULT_DEPARTMENTS,
             editorAgentId,
             llm,
+            compiledAt: now,
+            companyName,
           });
         } catch (e) {
           // recordFailure already invoked inside compilePass1.
@@ -507,9 +534,47 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           [newNextDueAt.toISOString(), cycleNumber, company.id],
         );
       } catch (e) {
-        ctx.logger?.warn?.(`compile-bulletin: per-company iteration failed: ${errText(e)}`, {
-          companyId: company.id,
-        });
+        // Defect D — an UNEXPECTED throw reached the per-company catch-all (a
+        // render/publish-path TypeError, or any bug not caught by one of the
+        // handled `continue`-on-failure paths above). This is a genuine compile
+        // failure, NOT a benign skip:
+        //   - route it through `recordFailure` so the D-06 bulletin-compile
+        //     circuit breaker advances (3 consecutive → the Editor-Agent is
+        //     paused and the broken loop stops); and
+        //   - route it through `recordCycleCompileFailure` so the D-22
+        //     failed-compile banner surfaces it to the operator.
+        // Before this fix the catch only `warn`-logged, so a render TypeError
+        // was reported as `job completed successfully`, the breaker never
+        // tripped, and the loop created an operation issue every minute (the
+        // v0.6.1 drill's runaway). Both record calls are themselves wrapped so
+        // a failure inside the failure-recording path cannot abort the company
+        // loop.
+        ctx.logger?.error?.(
+          `compile-bulletin: per-company iteration failed: ${errText(e)}`,
+          { companyId: company.id },
+        );
+        try {
+          if (editorAgentIdForCatch) {
+            await recordFailure(ctx, {
+              agentKey: BULLETIN_COMPILE_AGENT_KEY,
+              agentId: editorAgentIdForCatch,
+              companyId: company.id,
+              reason: `per-company iteration threw: ${(e as Error).message}`,
+            });
+          }
+          if (cycleNumber !== null) {
+            await recordCycleCompileFailure(ctx, {
+              cycleNumber,
+              reason: `per-company iteration threw: ${(e as Error).message}`,
+              now,
+            });
+          }
+        } catch (recErr) {
+          ctx.logger?.warn?.(
+            `compile-bulletin: failed to record the iteration failure: ${errText(recErr)}`,
+            { companyId: company.id },
+          );
+        }
       }
     }
   });

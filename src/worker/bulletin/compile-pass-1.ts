@@ -21,6 +21,7 @@ import {
   type CircuitBreakerCtx,
 } from '../agents/circuit-breaker.ts';
 import { replaceSlots } from './facts-table.ts';
+import { BULLETIN_TZ, formatInTimeZone } from './next-due-at.ts';
 import type {
   BulletinDraft,
   FactsTable,
@@ -78,6 +79,17 @@ export type CompilePass1Args = {
    * supplied by the caller, so `llm` is required here.
    */
   llm: LlmAdapter;
+  /**
+   * Defect B (2026-05-17 v0.6.2 re-drill). The masthead is DETERMINISTIC — the
+   * pipeline owns today's ET date, the cycle number, and the recipient identity
+   * (BULL-05: code owns facts, the LLM never invents them). `compilePass1`
+   * OVERWRITES the agent's masthead with a pipeline-built one. `compiledAt` and
+   * `companyName` are the only two inputs `buildMasthead` needs that are not
+   * already on `CompilePass1Args`; both default sensibly when omitted (a test
+   * that does not care about the masthead can leave them off).
+   */
+  compiledAt?: Date;
+  companyName?: string;
 };
 
 /**
@@ -153,6 +165,10 @@ export function validateDraftStructure(
  * with the real facts table. The Option-B result readback does NOT use this;
  * it calls `validateDraftStructure` (structure-only) because an agent draft
  * legitimately carries unresolved `{{NUMBER:key}}` placeholders.
+ *
+ * NOTE: this is validation-only — it deliberately DISCARDS the resolved string.
+ * The write-back of resolved prose into the draft is `resolveDraftSlots`'s job,
+ * a separate pass `compilePass1` runs AFTER this validator (Defect A).
  */
 export function validateDraftSchema(
   body: unknown,
@@ -169,6 +185,91 @@ export function validateDraftSchema(
       replaceSlots(dept.editorialSummary, facts);
     }
   }
+}
+
+/**
+ * Defect A (2026-05-17 v0.6.2 re-drill). Resolve every `{{NUMBER:key}}`
+ * placeholder in the draft's prose fields and WRITE THE RESULT BACK into the
+ * draft, so the published `draft_json` AND every renderer (the markdown body +
+ * the React UI) carry resolved prose — never a literal `{{NUMBER:completed_7d}}`.
+ *
+ * Root cause this fixes: `validateDraftSchema` called `replaceSlots` purely to
+ * VALIDATE (it throws on an unknown slot) and discarded the resolved string;
+ * nowhere in the pipeline wrote the resolution back. The agent's raw
+ * placeholder prose survived all the way to the rendered page.
+ *
+ * Prose fields scanned:
+ *   - every `department.editorialSummary`
+ *   - every `actionInbox[].summary` (defence-in-depth: today the inbox summary
+ *     is an issue description with no placeholders, but a future inbox prose
+ *     source would otherwise leak raw placeholders; `replaceSlots` is a no-op
+ *     on text that contains no `{{NUMBER:...}}` pattern, so this is free).
+ *
+ * MUTATES `draft` in place and also returns it (convenient for chaining). An
+ * unknown slot still throws the tagged UNKNOWN_SLOT error — `validateDraftSchema`
+ * has already run by the time `compilePass1` calls this, so a bad key was
+ * rejected upstream; the throw here is belt-and-suspenders.
+ */
+export function resolveDraftSlots(
+  draft: BulletinDraft,
+  facts: FactsTable,
+): BulletinDraft {
+  for (const dept of draft.departments) {
+    if (typeof dept.editorialSummary === 'string') {
+      dept.editorialSummary = replaceSlots(dept.editorialSummary, facts);
+    }
+  }
+  for (const card of draft.actionInbox) {
+    if (typeof card.summary === 'string') {
+      card.summary = replaceSlots(card.summary, facts);
+    }
+  }
+  return draft;
+}
+
+/**
+ * Defect B (2026-05-17 v0.6.2 re-drill). Build the masthead DETERMINISTICALLY
+ * from pipeline-owned facts — never from LLM output.
+ *
+ * Root cause this fixes: `buildPrompt` instructed the agent to "Output a JSON
+ * BulletinDraft with keys: masthead, ..." so the masthead was AGENT-supplied;
+ * the LLM left every field blank and the rendered page showed
+ * `VOL. ⟨blank⟩ · NO. ⟨blank⟩`, blank weekday/date, blank recipient. The footer
+ * was correct because it renders the (pipeline-owned) cycle number, not the
+ * masthead.
+ *
+ * BULL-05 spirit — code owns facts:
+ *   - `volume`   — v1 ships a single volume; locked to 'I' (matches the
+ *                  sketches/ mockups).
+ *   - `number`   — the cycle number. The footer already proves this datum is
+ *                  in-pipeline ("END OF BULLETIN · NO. 1").
+ *   - `weekday`  — ET weekday of `compiledAt`, via the same `formatInTimeZone`
+ *                  that `publish.ts` uses for the issue title.
+ *   - `dateText` — ET `yyyy-MM-dd` of `compiledAt` (matches the issue title).
+ *   - `prepareForName` — the recipient identity. v1 has no per-recipient
+ *                  config, so the company name is the deterministic stand-in
+ *                  (the Editor-in-Chief of the org). Falls back to a fixed
+ *                  label when no company name is supplied.
+ *   - `cycleNumber` — the cycle number (the sub-masthead's "Operations Cycle N").
+ */
+export function buildMasthead(args: {
+  cycleNumber: number;
+  compiledAt: Date;
+  companyName?: string;
+}): BulletinDraft['masthead'] {
+  const weekday = formatInTimeZone(args.compiledAt, BULLETIN_TZ, 'EEEE');
+  const dateText = formatInTimeZone(args.compiledAt, BULLETIN_TZ, 'yyyy-MM-dd');
+  return {
+    volume: 'I',
+    number: args.cycleNumber,
+    weekday,
+    dateText,
+    prepareForName:
+      args.companyName && args.companyName.trim().length > 0
+        ? args.companyName.trim()
+        : 'Operations',
+    cycleNumber: args.cycleNumber,
+  };
 }
 
 /**
@@ -255,6 +356,7 @@ function buildPrompt(args: CompilePass1Args): string {
     JSON.stringify(args.standingNumbers, null, 2),
     '',
     'Output a JSON BulletinDraft with keys: masthead, actionInbox, departments, standingNumbers, lineageThreads.',
+    'The `masthead` object is REBUILT deterministically by the pipeline after you respond — you may emit an empty masthead `{}`; any values you put there are overwritten.',
     'Each department object MUST carry an `items` array (use `[]` if the department has nothing to report).',
     'Department `editorialSummary` prose may use `{{NUMBER:key}}` placeholders; a post-pass interpolates them.',
   ].join('\n');
@@ -271,6 +373,12 @@ function buildPrompt(args: CompilePass1Args): string {
  * compile-bulletin job's responsibility, called only after a verified publish.
  * Resetting the counter here would let a draft that pass-1 accepts but the
  * pass-2 verifier rejects escape the "3 consecutive rejections" trip wire.
+ *
+ * Post-validation passes (Defect A + B, 2026-05-17 v0.6.2 re-drill):
+ *   - `resolveDraftSlots` writes resolved `{{NUMBER:key}}` prose back into the
+ *     draft so the published draft_json + every renderer carry resolved text.
+ *   - `buildMasthead` OVERWRITES the agent's masthead with a deterministic,
+ *     pipeline-built one (the LLM masthead is never trusted — BULL-05).
  */
 export async function compilePass1(
   ctx: CompilePass1Ctx,
@@ -342,5 +450,20 @@ export async function compilePass1(
     throw err;
   }
 
-  return parsed as BulletinDraft;
+  const draft = parsed as BulletinDraft;
+
+  // Defect A — write resolved `{{NUMBER:key}}` prose back into the draft so the
+  // published draft_json and every renderer carry resolved text. validateDraft-
+  // Schema has already rejected an unknown slot, so this never throws here.
+  resolveDraftSlots(draft, args.factsTable);
+
+  // Defect B — overwrite the agent-supplied (blank) masthead with a
+  // deterministic, pipeline-built one. The LLM masthead is never trusted.
+  draft.masthead = buildMasthead({
+    cycleNumber: args.cycleNumber,
+    compiledAt: args.compiledAt ?? new Date(),
+    companyName: args.companyName,
+  });
+
+  return draft;
 }
