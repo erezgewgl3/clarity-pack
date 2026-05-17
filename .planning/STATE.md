@@ -51,12 +51,31 @@ Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
      (RESOLVED), fix `2b1419f` (pre-check re-keyed on (company_id,cycle_number);
      `ctx.issues.listComments`; + compile-bulletin post-readback instrumentation).
      Suite 712 tests, 710 pass / 0 fail / 2 skip.
-Version bumped 0.6.3→0.6.4 + packed `clarity-pack-0.6.4.tgz` commit `c375004`
-(sha256 `4af8406764f63ea76a1afb0ff5ca979b1aa76d08a7d2d5e118cfff27182da1da`).
-**AWAITING ERIC: closure re-drill of v0.6.4 on live Countermoves** — blocking
-checkpoint:human-verify. Closure criterion: Bulletin No. 2 publishes end-to-end
-(cycle_number >= 2 row, compile_status='published') with resolved prose +
-populated masthead, breaker not tripped. On PASS, Phase 3 closes (BULL-05/06/09).
+  9. v0.6.4 cycle-2 re-drill (2026-05-17): **Bulletin No. 2 PUBLISHED end-to-end**
+     (cycle_number=2, compile_status='published', issue c29d5ef7) — the cycle-2
+     publish fix + resolved prose + populated masthead ALL PROVEN LIVE. Phase 3's
+     bulletin deliverable works. BUT the v0.6.4 bug-2 fix (TL;DR heartbeat
+     un-crashed) unleashed an infinite recursion: the editor heartbeat
+     TL;DR-compiles every issue INCLUDING the plugin's own tldr-compile
+     operation issues — each spawns the next (`originId=tldr-<prev>` chain),
+     unbounded. Plus a `malformed array literal` db.execute error in the TL;DR
+     write path (source_revisions[] column gets a scalar hash). Both routed to
+     debug `tldr-heartbeat-recursion.md` (INVESTIGATING — root causes pinned,
+     fix pending). v0.6.4 UNINSTALLED 2026-05-17 ~12:56 to halt the cascade;
+     Editor-Agent must be PAUSED (operator action).
+
+**NEXT (new chat): build v0.6.5** — fix the two `tldr-heartbeat-recursion.md`
+bugs (exclude `plugin:clarity-pack:operation:*` issues from the editor
+heartbeat; wrap the TL;DR `source_revisions` hash as a single-element array;
+add a hard guard that a tldr-compile op-issue never spawns a tldr-compile),
+rebuild/pack v0.6.5, then a closure re-drill. Cleanest drill reset: RESTORE the
+pre-cascade snapshot `2026-05-17T12-52-04Z` (cycle 1 published, no cascade
+issues) — cycle 2's publish is already proven so losing it costs nothing.
+On a clean v0.6.5 drill (cycle 2 publishes, no recursion), Phase 3 closes
+(BULL-05/06/09).
+
+Latest tarball (do NOT drill — it has the recursion): `clarity-pack-0.6.4.tgz`
+commit `c375004` sha256 `4af8406764f63ea76a1afb0ff5ca979b1aa76d08a7d2d5e118cfff27182da1da`.
 Open v1-polish question (non-blocking): masthead `prepareForName` uses the
 company display name with an 'Operations' fallback — no per-recipient config
 exists. If the masthead should name the human operator (Eric), an `instanceConfig`
