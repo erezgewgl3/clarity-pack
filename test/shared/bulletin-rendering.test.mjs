@@ -89,3 +89,61 @@ test('rendering: lineage threads render under a One artifact heading with arrow-
   assert.match(md, /Scout/);
   assert.match(md, /TERMINAL/);
 });
+
+// ---------------------------------------------------------------------------
+// Regression — debug session render-dept-items-undefined (2026-05-17).
+//
+// On the live v0.6.1 Countermoves re-drill, `renderBulletinIssueBody` crashed
+// every compile-bulletin cycle with `TypeError: Cannot read properties of
+// undefined (reading 'length')` at `dept.items.length`. Root cause: the LLM
+// Editor-Agent emitted a department with nothing to report and OMITTED the
+// `items` key; `validateDraftStructure` accepted the draft (it only checked
+// top-level arrays); the renderer tripped on the first such department.
+//
+// The renderer carries a defence-in-depth `?? []` guard so a draft that
+// reaches this pure function un-normalized (e.g. a `draft_json` persisted
+// before the fix) still renders the quiet-day marker instead of crashing.
+// ---------------------------------------------------------------------------
+
+test('rendering: a department object that OMITS `items` renders the quiet-day marker, not a crash', () => {
+  const md = renderBulletinIssueBody(
+    draftWith({
+      departments: [
+        // No `items` key at all — exactly the agent-emitted shape that crashed
+        // dist/worker.js:4402 on the live drill.
+        { name: 'Operations', editorialSummary: 'Nothing to report today.' },
+      ],
+    }),
+  );
+  assert.match(md, /### Operations/);
+  assert.match(md, /Nothing to report today\./);
+  assert.match(md, /\*· no items ·\*/);
+});
+
+test('rendering: a department whose `items` is a non-array (null) renders without crashing', () => {
+  const md = renderBulletinIssueBody(
+    draftWith({
+      departments: [{ name: 'Engineering', editorialSummary: '', items: null }],
+    }),
+  );
+  assert.match(md, /### Engineering/);
+  assert.match(md, /\*· no items ·\*/);
+});
+
+test('rendering: a mix of a populated department and an items-less department both render', () => {
+  const md = renderBulletinIssueBody(
+    draftWith({
+      departments: [
+        {
+          name: 'Sales',
+          editorialSummary: 'Busy.',
+          items: [{ title: 'Closed a deal', timeText: '11:00', bylineHtml: '', lineageInline: '', note: '' }],
+        },
+        { name: 'Legal', editorialSummary: 'Quiet.' }, // omits `items`
+      ],
+    }),
+  );
+  assert.match(md, /Closed a deal/);
+  assert.match(md, /### Legal/);
+  assert.match(md, /\*· no items ·\*/);
+});

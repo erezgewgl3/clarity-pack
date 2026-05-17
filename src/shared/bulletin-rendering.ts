@@ -81,12 +81,21 @@ export function renderBulletinIssueBody(draft: BulletinDraft): string {
       parts.push(dept.editorialSummary);
       parts.push('');
     }
-    if (dept.items.length === 0) {
+    // `dept.items` is typed as a required array, but a draft can reach this
+    // pure function un-normalized — the LLM Editor-Agent may omit `items` on a
+    // department with nothing to report, and a `draft_json` persisted before
+    // the render-dept-items-undefined fix (2026-05-17) carries the same gap.
+    // `validateDraftStructure` is the primary normalization point; this `?? []`
+    // is a defence-in-depth guard so the renderer never crashes on a stray
+    // un-normalized draft (the live v0.6.1 crash: `Cannot read properties of
+    // undefined (reading 'length')`).
+    const items = dept.items ?? [];
+    if (items.length === 0) {
       parts.push('*· no items ·*');
       parts.push('');
       continue;
     }
-    for (const item of dept.items) {
+    for (const item of items) {
       parts.push(`- **${item.title}** — ${item.timeText}`);
       if (item.bylineHtml) parts.push(`  - ${stripHtml(item.bylineHtml)}`);
       if (item.lineageInline) parts.push(`  - Lineage: ${item.lineageInline}`);

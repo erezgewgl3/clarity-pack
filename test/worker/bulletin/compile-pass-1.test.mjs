@@ -10,6 +10,7 @@ import test from 'node:test';
 import {
   compilePass1,
   validateDraftSchema,
+  validateDraftStructure,
   BULLETIN_COMPILE_AGENT_KEY,
   MAX_BULLETIN_TOKENS,
 } from '../../../src/worker/bulletin/compile-pass-1.ts';
@@ -143,4 +144,84 @@ test('compile-pass-1: a tripped circuit breaker pauses the RESOLVED agent UUID, 
     EDITOR_UUID,
     'pause must receive the resolved Editor-Agent UUID — the non-UUID tag "clarity-pack-editor-agent" is rejected host-side as invalid uuid syntax',
   );
+});
+
+// ---------------------------------------------------------------------------
+// Regression — debug session render-dept-items-undefined (2026-05-17).
+//
+// `validateDraftStructure` is the SINGLE normalization point: the LLM
+// Editor-Agent may emit a department with nothing to report and OMIT the
+// `items` key. `BulletinDraft` types `department.items` as a required array,
+// but agent JSON does not honor the type. The validator COERCES a
+// missing/non-array `items` to `[]` in place, so every downstream consumer —
+// `renderBulletinIssueBody`, the React `DepartmentSection`, and the
+// slot-resolving `validateDraftSchema` — receives a draft that honors the
+// contract. LENIENT by design (Plan 03-09 structure-only precedent).
+// ---------------------------------------------------------------------------
+
+test('compile-pass-1: validateDraftStructure normalizes a department that OMITS `items` to []', () => {
+  const draft = {
+    ...wellFormedDraft(),
+    departments: [{ name: 'Operations', editorialSummary: 'Nothing to report.' }],
+  };
+  assert.doesNotThrow(() => validateDraftStructure(draft));
+  assert.ok(
+    Array.isArray(draft.departments[0].items),
+    'a missing department `items` key must be coerced to an array in place',
+  );
+  assert.equal(draft.departments[0].items.length, 0);
+});
+
+test('compile-pass-1: validateDraftStructure coerces a non-array department `items` to []', () => {
+  const draft = {
+    ...wellFormedDraft(),
+    departments: [{ name: 'Engineering', editorialSummary: '', items: null }],
+  };
+  assert.doesNotThrow(() => validateDraftStructure(draft));
+  assert.ok(Array.isArray(draft.departments[0].items));
+  assert.equal(draft.departments[0].items.length, 0);
+});
+
+test('compile-pass-1: validateDraftStructure throws when a department entry is not an object', () => {
+  const draft = { ...wellFormedDraft(), departments: ['not-an-object'] };
+  assert.throws(() => validateDraftStructure(draft), /departments entry must be an object/);
+});
+
+test('compile-pass-1: a populated department `items` array is left untouched', () => {
+  const items = [{ title: 'x', timeText: '09:00', bylineHtml: '', lineageInline: '', note: '' }];
+  const draft = {
+    ...wellFormedDraft(),
+    departments: [{ name: 'Sales', editorialSummary: '', items }],
+  };
+  validateDraftStructure(draft);
+  assert.equal(draft.departments[0].items, items, 'an existing items array must not be replaced');
+});
+
+test('compile-pass-1: validateDraftSchema also normalizes a department missing `items`', () => {
+  const draft = {
+    ...wellFormedDraft(),
+    departments: [{ name: 'Legal', editorialSummary: 'Quiet day.' }],
+  };
+  assert.doesNotThrow(() => validateDraftSchema(draft, {}));
+  assert.ok(Array.isArray(draft.departments[0].items));
+});
+
+test('compile-pass-1: an agent draft whose department omits `items` compiles end-to-end', async () => {
+  // The exact failure shape from the live v0.6.1 Countermoves drill: the agent
+  // emits a department with no `items` key. compilePass1 must accept it (after
+  // normalization) and return a BulletinDraft with `items: []` on that
+  // department — never throw `draft_schema_invalid`.
+  resetCircuitBreakerState();
+  const { ctx, failures } = makeCtx();
+  const agentJson = JSON.stringify({
+    ...wellFormedDraft(),
+    departments: [{ name: 'Operations', editorialSummary: 'Nothing to report today.' }],
+  });
+  const draft = await compilePass1(ctx, {
+    ...BASE_ARGS,
+    llm: { async complete() { return agentJson; } },
+  });
+  assert.equal(failures.length, 0, 'a normalizable draft must not record a failure');
+  assert.ok(Array.isArray(draft.departments[0].items));
+  assert.equal(draft.departments[0].items.length, 0);
 });

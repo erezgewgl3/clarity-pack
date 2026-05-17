@@ -88,6 +88,22 @@ export type CompilePass1Args = {
  * (`agent-task-delivery.ts`) calls THIS, never the slot-resolving
  * `validateDraftSchema` — an agent draft legitimately carries unresolved
  * `{{NUMBER:key}}` placeholders that `verifyDraft` pass-2 resolves later.
+ *
+ * NORMALIZATION (debug session render-dept-items-undefined, 2026-05-17). The
+ * LLM Editor-Agent may emit a department object with nothing to report and
+ * OMIT the `items` key entirely. `BulletinDraft` types `department.items` as a
+ * required array, but agent JSON does not honor the type. Both consumers of
+ * `dept.items` — `renderBulletinIssueBody` (markdown) and the React
+ * `DepartmentSection` — would otherwise crash on `dept.items.length`. Rather
+ * than scatter `?? []` guards, this validator is the SINGLE normalization
+ * point: it COERCES each department's missing/non-array `items` to `[]` in
+ * place, so every downstream consumer receives a draft that honors the type
+ * contract. This is LENIENT by design — an empty department is a valid state
+ * the renderer already handles with `*· no items ·*`, and the Plan 03-09
+ * structure-only precedent is explicitly "validate STRUCTURE ONLY, never
+ * reject for cosmetic issues". `validateDraftStructure` is an `asserts`
+ * function, so after it returns the body genuinely conforms to BulletinDraft —
+ * mutating `items` here makes that assertion honest.
  */
 export function validateDraftStructure(
   body: unknown,
@@ -110,6 +126,20 @@ export function validateDraftStructure(
   }
   if (!Array.isArray(d.lineageThreads)) {
     throw new Error('BulletinDraft.lineageThreads must be an array');
+  }
+
+  // Per-department LENIENT normalization. An agent may omit `items` on a
+  // department with nothing to report; coerce a missing/non-array `items` to
+  // `[]` so the renderer + UI never trip on `dept.items.length`. A department
+  // entry that is not even an object is a genuine structural fault — throw.
+  for (const dept of d.departments) {
+    if (!dept || typeof dept !== 'object') {
+      throw new Error('BulletinDraft.departments entry must be an object');
+    }
+    const dd = dept as Record<string, unknown>;
+    if (!Array.isArray(dd.items)) {
+      dd.items = [];
+    }
   }
 }
 
@@ -225,6 +255,7 @@ function buildPrompt(args: CompilePass1Args): string {
     JSON.stringify(args.standingNumbers, null, 2),
     '',
     'Output a JSON BulletinDraft with keys: masthead, actionInbox, departments, standingNumbers, lineageThreads.',
+    'Each department object MUST carry an `items` array (use `[]` if the department has nothing to report).',
     'Department `editorialSummary` prose may use `{{NUMBER:key}}` placeholders; a post-pass interpolates them.',
   ].join('\n');
 }
