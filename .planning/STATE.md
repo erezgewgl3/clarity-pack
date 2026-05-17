@@ -28,26 +28,29 @@ progress:
 ## Current Position
 
 Phase: 03 (daily-bulletin) — EXECUTING
-Plan: 10 of 10 built. Two live-drill defects debugged + fixed since the failed
-03-10 re-drill, both as gap-closure debug sessions (no new plan filed):
+Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
+03-10 re-drill, all as gap-closure debug sessions (no new plan filed):
   1. BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE — debug `verifier-counts-own-issue.md`
-     (RESOLVED), fix `a0e77d3`. PROVEN LIVE on the 2026-05-17 v0.6.1 re-drill —
-     zero `verifier rejected` lines, breaker re-scope worked, pipeline ran
-     through verification.
-  2. BULLETIN-RENDER-DEPT-ITEMS-UNDEFINED — surfaced by that same v0.6.1 re-drill
-     (renderBulletinIssueBody crashed on a department missing its `items` array,
-     one step past verification). Debug `render-dept-items-undefined.md`
-     (RESOLVED), fix `c9c6318` (validateDraftStructure normalizes per-department
-     `items` to []). Suite 701 tests, 699 pass / 0 fail / 2 skip.
-Version bumped 0.6.1→0.6.2 + packed `clarity-pack-0.6.2.tgz` commit `ea8a3b4`
-(sha256 `9555355585c3b909913c37e07277b673bd0c8044ae387c75339319c6ea3e6d56`).
-**AWAITING ERIC: closure re-drill of v0.6.2 on live Countermoves** — blocking
-checkpoint:human-verify. Closure criterion: a `Bulletin No. N` (cycle_number >= 1)
-publishes end-to-end, breaker not tripped.
-Known follow-up (non-blocking): the `compile-bulletin` job wrapper swallows a
-render/publish exception as `job completed successfully`, so a crash loops
-forever without tripping the D-06 breaker — route publish-path exceptions
-through `recordFailure`.
+     (RESOLVED), fix `a0e77d3`. PROVEN LIVE on the v0.6.1 re-drill.
+  2. BULLETIN-RENDER-DEPT-ITEMS-UNDEFINED — debug `render-dept-items-undefined.md`
+     (RESOLVED), fix `c9c6318`. PROVEN LIVE on the v0.6.2 re-drill.
+  3-6. v0.6.2 re-drill (2026-05-17) PUBLISHED Bulletin No. 1 end-to-end (issue
+     ecdb1ba9) — pipeline architecture proven — but the rendered page showed 4
+     content/operability defects: (A) {{NUMBER}} placeholders unresolved in
+     department prose, (B) blank masthead, (C) mislabeled WARN, (D) job wrapper
+     swallowed publish exceptions. All 4 fixed — debug `bulletin-content-defects.md`
+     (RESOLVED), fix `c... ` commit (resolveDraftSlots + buildMasthead + log
+     downgrade + recordFailure routing). Suite 710 tests, 708 pass / 0 fail / 2 skip.
+Version bumped 0.6.2→0.6.3 + packed `clarity-pack-0.6.3.tgz` commit `9fdc601`
+(sha256 `28b58f8a3cc3584c094390bef7f0d0a5bc0934091eaa13d1494e9ba1dab5daf1`).
+**AWAITING ERIC: closure re-drill of v0.6.3 on live Countermoves** — blocking
+checkpoint:human-verify. Closure criterion: Bulletin No. N publishes end-to-end
+with resolved prose + populated masthead, breaker not tripped. On PASS, Phase 3
+closes (BULL-05/06/09).
+Open v1-polish question (non-blocking): masthead `prepareForName` currently uses
+the company display name with an 'Operations' fallback — no per-recipient config
+exists. If the masthead should name the human operator (Eric), an `instanceConfig`
+field is needed; the org-name default ships otherwise.
 **Phase 3 plans:**
 
   - 03-01 — Foundation: **COMPLETE 2026-05-15** — `0004_bulletin.sql` migration (bulletins incl. `draft_json jsonb` + UNIQUE(next_due_at,content_hash) + bulletin_errata + clarity_department_membership + bulletin_compile_failures) + DST-safe `computeNextDueAt` (date-fns-tz) + bulletins repo (8 fns) + manifest `jobs[]`+capabilities+config + self-loop-filter `BULLETIN_TAG_PREFIX` extension + compile-bulletin no-op job. 3 TDD commits ab217b0..e059d8b; suite 455/453-pass/0-fail/2-skip; typecheck+build green. BULL-01, BULL-02 foundation delivered. SUMMARY: `03-01-SUMMARY.md`.
