@@ -1,13 +1,13 @@
 ---
 slug: tldr-heartbeat-recursion
-status: investigating
+status: resolved
 trigger: v0.6.4 cycle-2 drill — the editor TL;DR heartbeat infinite-recurses on its own operation issues + a malformed-array-literal db.execute error
 created: 2026-05-17
 updated: 2026-05-17
 phase: 03-daily-bulletin
 related_sessions:
   - cycle2-publish-and-tldr-typo.md (v0.6.4 — its bug-2 fix un-crashed the TL;DR heartbeat and unleashed this recursion)
-note: root causes pinned by direct source read; fix pending — this is the v0.6.5 work
+note: root causes pinned by direct source read; FIX SHIPPED in v0.6.5 — full suite green + tsc clean; pending live re-drill
 ---
 
 # Debug: tldr-heartbeat-recursion
@@ -31,7 +31,7 @@ proven. But two new failures appeared:
    `Editor-Agent: skipped TL;DR compile … reason: "malformed array literal:
    \"<64-hex-char hash>\""` — every TL;DR write fails at the host db layer.
 
-## Root causes (pinned from source — fix pending)
+## Root causes (pinned from source — FIXED in v0.6.5)
 
 ### Bug 1 — editor heartbeat recurses on its own operation issues
 
@@ -48,43 +48,60 @@ This was LATENT — until v0.6.4 the heartbeat crashed instantly on the
 (`cycle2-publish-and-tldr-typo.md`) un-crashed the path WITHOUT adding a guard
 to skip the plugin's own operation issues — so the recursion was unleashed.
 
-FIX DIRECTION (v0.6.5):
-- In `handleEditorHeartbeat`, after `ctx.issues.get(issueId)`, SKIP any issue
-  whose `originKind` starts with `OPERATION_ORIGIN_KIND_PREFIX`
-  (`plugin:clarity-pack:operation:`) — the plugin must never TL;DR-compile its
-  own plumbing. (`OPERATION_ORIGIN_KIND_PREFIX` lives in
-  src/worker/agents/agent-task-delivery.ts. Confirm the SDK `Issue` type exposes
-  the persisted `originKind` field — 03-10-SCHEMA-FINDINGS confirmed the
-  `origin_kind` column exists; check the SDK Issue shape for the camelCase
-  accessor.)
-- Belt-and-suspenders HARD GUARD: a `tldr-compile` operation issue must never
-  trigger another `tldr-compile`. Consider also filtering in
-  `filterSelfLoopEvents` or at the `deliverAgentTask` level.
-- The same exclusion the standing-number SQL already uses
-  (`origin_kind NOT LIKE 'plugin:clarity-pack:operation:%'`).
+**FIX SHIPPED (v0.6.5):** `handleEditorHeartbeat` now calls the new
+`isOwnOperationIssue(issue)` predicate immediately after `ctx.issues.get` and
+`continue`s — logging `Editor-Agent: skipped own operation issue (recursion
+guard)` — for any issue whose `originKind` starts with
+`OPERATION_ORIGIN_KIND_PREFIX` (`plugin:clarity-pack:operation:`). The plugin
+never TL;DR-compiles its own plumbing, so no operation issue is ever spawned
+from a `tldr-compile` / `bulletin-compile` operation issue. This is the same
+exclusion the standing-number SQL already applies. The guard runs BEFORE
+`deliveryLlmAdapter` / `compileTldr`, so the cascade is dead at its source.
 
 ### Bug 2 — TL;DR write: scalar hash into an array column
 
 `malformed array literal: "<hex hash>"` from `db.execute`. The `tldr_cache`
-table has a `source_revisions[]` array column (per CLAUDE.md sketch:
-`tldrs(issue_id, summary, generated_at, source_revisions[],
-compiled_by_agent_id)`). The TL;DR write path (likely `upsertTldr` in a
-tldr-cache repo, or `compileTldr` in src/worker/agents/compile-tldr.ts) passes a
-single content-hash STRING where Postgres expects an array literal.
+table (migrations/0002_tldrs_and_editor.sql) has TWO `text[]` array columns:
+`source_revisions` AND `tags`. `upsertTldr` (src/worker/db/tldr-cache.ts) bound
+JS string arrays directly as `$N` parameters. The host's `ctx.db.execute`
+parameter bridge does NOT round-trip a JS array as a native Postgres array — it
+arrives at Postgres as a scalar, and Postgres then fails to coerce the scalar
+into `text[]`.
 
-FIX DIRECTION (v0.6.5): grep `source_revisions` — find the INSERT/UPSERT — and
-pass the hash as a single-element array (`['<hash>']` / a proper `text[]`
-parameter), not a bare string. Add a regression test.
+**FIX SHIPPED (v0.6.5):** the new `toPgTextArrayLiteral(values: string[])`
+encodes a JS array as a Postgres array-LITERAL string (`['h']` → `{"h"}`, `[]`
+→ `{}`, with per-element quote/backslash escaping). `upsertTldr` binds BOTH
+`text[]` columns through it AND adds explicit `$6::text[]` / `$8::text[]` casts
+in the INSERT SQL — a cast scalar is unambiguously coerced regardless of how
+the host bridge serializes the parameter. `tags` had the identical latent bug
+(the debug doc only saw `source_revisions` fail because that placeholder is
+earlier in the row); both are fixed.
 
-## Verification plan (v0.6.5)
+## Verification (v0.6.5 — DONE)
 
-- Regression test: a `tldr-compile` (or any `plugin:clarity-pack:operation:*`)
-  operation issue passed to `handleEditorHeartbeat` is SKIPPED — no `compileTldr`,
-  no `deliverAgentTask` call.
-- Regression test: the TL;DR write stores `source_revisions` as a valid array.
-- Full suite green + tsc clean.
-- Drill reset: RESTORE snapshot `2026-05-17T12-52-04Z` (pre-cascade) so the
-  v0.6.5 drill runs on a clean board, then install v0.6.5 and re-drill.
+- **Bug 1 regression** — new file
+  `test/worker/agents/editor-heartbeat-recursion.test.mjs` (5 tests): a
+  `tldr-compile` / `bulletin-compile` operation issue passed to
+  `handleEditorHeartbeat` is SKIPPED with ZERO `issues.create` calls; an
+  ordinary issue still proceeds into the compile path; a 5-issue operation-issue
+  batch spawns ZERO new operation issues (the cascade is dead);
+  `isOwnOperationIssue` truth table.
+- **Bug 2 regression** — 3 new tests in `test/worker/tldr-cache.test.mjs`:
+  `toPgTextArrayLiteral` encoder contract (incl. 64-hex-char hash + escape
+  cases); `upsertTldr` binds `$6::text[]`/`$8::text[]` casts and array-literal
+  STRING params; a TL;DR round-trips — `source_revisions`/`tags` stored and read
+  back as JS arrays. The host-faithful fakes in `tldr-cache.test.mjs` +
+  `editor-agent.test.mjs` decode the array literal on store, mirroring the live
+  host's `postgres`-driver round-trip.
+- **Full suite green** — 718 pass / 0 fail / 2 pre-existing skips (720 total).
+- **tsc clean** — `tsc --noEmit` exits clean.
+- **Artifacts rebuilt** — `dist/worker.js` (182.8 kB), `dist/ui/index.js`
+  (105.1 kB), `dist/manifest.js` (version `0.6.5`). `npm pack` →
+  `clarity-pack-0.6.5.tgz` (72.6 kB, 9 files).
+- **Drill reset (PENDING — operator step):** RESTORE snapshot
+  `2026-05-17T12-52-04Z` (pre-cascade) so the v0.6.5 drill runs on a clean
+  board, then install `clarity-pack-0.6.5.tgz` and re-drill. The live re-drill
+  is the final proof — this session's verification is local-suite + tsc only.
 
 ## Process note
 
@@ -92,5 +109,8 @@ This is the 5th fix round on Phase 3 closure on 2026-05-17. The v0.6.4 round
 fixed the cycle-2 publish bug (proven live) but its bug-2 fix unleashed this
 recursion — fixing a crash without realising the crash was load-bearing. The
 host-faithful local suite never exercises the live editor-heartbeat →
-operation-issue → heartbeat loop. A faithful integration test of that loop is a
-standing open recommendation before further drills.
+operation-issue → heartbeat loop. The new
+`editor-heartbeat-recursion.test.mjs` closes that gap for the recursion guard
+specifically, but a faithful integration test of the FULL live loop (heartbeat
+fires → operation issue created → host re-emits issue.created → heartbeat fires
+again) is still a standing open recommendation before further drills.

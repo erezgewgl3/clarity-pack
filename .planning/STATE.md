@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-17T09:17:00.000Z"
+last_updated: "2026-05-17T13:50:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 1
@@ -59,23 +59,31 @@ Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
      TL;DR-compiles every issue INCLUDING the plugin's own tldr-compile
      operation issues — each spawns the next (`originId=tldr-<prev>` chain),
      unbounded. Plus a `malformed array literal` db.execute error in the TL;DR
-     write path (source_revisions[] column gets a scalar hash). Both routed to
-     debug `tldr-heartbeat-recursion.md` (INVESTIGATING — root causes pinned,
-     fix pending). v0.6.4 UNINSTALLED 2026-05-17 ~12:56 to halt the cascade;
-     Editor-Agent must be PAUSED (operator action).
+     write path (source_revisions[] column gets a scalar hash). v0.6.4
+     UNINSTALLED 2026-05-17 ~12:56 to halt the cascade.
+  10. v0.6.5 (2026-05-17): **both `tldr-heartbeat-recursion.md` bugs FIXED**
+     (debug RESOLVED). Bug 1 — `handleEditorHeartbeat` now calls new
+     `isOwnOperationIssue(issue)` and `continue`s for any issue whose
+     `originKind` starts with `plugin:clarity-pack:operation:` — the cascade is
+     dead at its source (guard runs before `compileTldr`). Bug 2 — new
+     `toPgTextArrayLiteral`; `upsertTldr` binds `source_revisions`+`tags` as
+     `$N::text[]` array-literal strings, not bare scalars. 8 new regression
+     tests (`editor-heartbeat-recursion.test.mjs` ×5 + `tldr-cache.test.mjs`
+     ×3). Suite 720 tests, 718 pass / 0 fail / 2 skip; tsc clean. Artifacts
+     rebuilt; `clarity-pack-0.6.5.tgz` packed. Local-suite + tsc only — the
+     live re-drill is the final proof.
 
-**NEXT (new chat): build v0.6.5** — fix the two `tldr-heartbeat-recursion.md`
-bugs (exclude `plugin:clarity-pack:operation:*` issues from the editor
-heartbeat; wrap the TL;DR `source_revisions` hash as a single-element array;
-add a hard guard that a tldr-compile op-issue never spawns a tldr-compile),
-rebuild/pack v0.6.5, then a closure re-drill. Cleanest drill reset: RESTORE the
-pre-cascade snapshot `2026-05-17T12-52-04Z` (cycle 1 published, no cascade
-issues) — cycle 2's publish is already proven so losing it costs nothing.
-On a clean v0.6.5 drill (cycle 2 publishes, no recursion), Phase 3 closes
-(BULL-05/06/09).
+**NEXT (new chat): v0.6.5 closure re-drill** — operator steps:
+  1. RESTORE the pre-cascade snapshot `2026-05-17T12-52-04Z` (cycle 1 published,
+     no cascade issues) so the drill runs on a clean board — cycle 2's publish
+     is already proven, losing it costs nothing.
+  2. Install `clarity-pack-0.6.5.tgz`, re-drill.
+On a clean v0.6.5 drill (cycle 2 publishes, no recursion, TL;DR compiles
+without the array-literal error), Phase 3 closes (BULL-05/06/09).
 
-Latest tarball (do NOT drill — it has the recursion): `clarity-pack-0.6.4.tgz`
-commit `c375004` sha256 `4af8406764f63ea76a1afb0ff5ca979b1aa76d08a7d2d5e118cfff27182da1da`.
+Latest tarball (DRILL THIS): `clarity-pack-0.6.5.tgz`
+sha256 `50736ff18745a9ec1d312fb95a2bbfb82781f1c568a46dee1408e1c06ef9d02d`.
+Prior `clarity-pack-0.6.4.tgz` — do NOT drill, it has the recursion.
 Open v1-polish question (non-blocking): masthead `prepareForName` uses the
 company display name with an 'Operations' fallback — no per-recipient config
 exists. If the masthead should name the human operator (Eric), an `instanceConfig`
