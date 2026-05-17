@@ -16,9 +16,39 @@
 // planner's discretion per 03-CONTEXT.md line 92. computeStandingNumbers
 // catches a per-slot query error and defaults that slot to 0, so a
 // column-not-found never aborts a compile.
+//
+// SELF-COUNT EXCLUSION (debug verifier-counts-own-issue, 2026-05-17). The
+// bulletin-compile pipeline delivers the compile prompt as an operation issue
+// ASSIGNED to the Editor-Agent (deliverAgentTask, originKind
+// `plugin:clarity-pack:operation:bulletin-compile`). That issue is itself an
+// open `public.issues` row, created AFTER pass-1 freezes `open_issues` into
+// the draft but still open when `verifyDraft` pass-2 re-runs the SQL — so
+// pass-2 counts +1 and the `count`-format tolerance-0 verifier hard-rejects
+// every cycle. Every `public.issues` slot below therefore appends
+// `AND origin_kind NOT LIKE 'plugin:clarity-pack:operation:%'` (origin_kind
+// is the persisted discriminator — see 03-10-SCHEMA-FINDINGS.md §2; the plugin
+// has no `issues.tags`/`metadata` column, and `surfaceVisibility` is not the
+// persisted column name). The LIKE pattern is a static literal inside the
+// module-constant SQL string — `$1` (companyId) remains the SOLE bound
+// parameter, so the T-03-10 SQL-injection invariant holds. The exclusion is
+// scoped to `plugin:clarity-pack:operation:%` and so does NOT touch any
+// human-board issue or another plugin's issues. The prefix MUST stay in sync
+// with OPERATION_ORIGIN_KIND_PREFIX in src/worker/agents/agent-task-delivery.ts.
 
 import type { PluginDatabaseClient } from '@paperclipai/plugin-sdk';
 import type { StandingNumberSlot } from '../../shared/types.ts';
+
+/**
+ * SQL fragment excluding Clarity Pack's own operation issues from a
+ * `public.issues` count. Kept as a single static module constant so the slot
+ * SQL below stays a plain string literal (no template-literal interpolation —
+ * T-03-10). MUST match OPERATION_ORIGIN_KIND_PREFIX in agent-task-delivery.ts.
+ * `origin_kind` is nullable on `public.issues`; `NOT LIKE` evaluates to NULL
+ * (not TRUE) for a NULL origin_kind, which would silently DROP every human
+ * issue — so the predicate is `(origin_kind IS NULL OR origin_kind NOT LIKE …)`.
+ */
+const EXCLUDE_OPERATION_ISSUES_SQL =
+  "AND (origin_kind IS NULL OR origin_kind NOT LIKE 'plugin:clarity-pack:operation:%')";
 
 /**
  * v1 final 5 slots — agent-operations metrics over public.issues /
@@ -29,21 +59,27 @@ export const STANDING_NUMBER_SLOTS: readonly StandingNumberSlot[] = [
   {
     key: 'open_issues',
     displayName: 'Open issues',
-    sql: "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status NOT IN ('done','cancelled') AND hidden_at IS NULL",
+    sql:
+      "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status NOT IN ('done','cancelled') AND hidden_at IS NULL " +
+      EXCLUDE_OPERATION_ISSUES_SQL,
     params: ['<companyId>'],
     format: 'count',
   },
   {
     key: 'completed_7d',
     displayName: 'Issues completed · 7d',
-    sql: "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status = 'done' AND completed_at >= now() - interval '7 days'",
+    sql:
+      "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status = 'done' AND completed_at >= now() - interval '7 days' " +
+      EXCLUDE_OPERATION_ISSUES_SQL,
     params: ['<companyId>'],
     format: 'count',
   },
   {
     key: 'blocked_issues',
     displayName: 'Blocked · awaiting action',
-    sql: "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status = 'blocked' AND hidden_at IS NULL",
+    sql:
+      "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status = 'blocked' AND hidden_at IS NULL " +
+      EXCLUDE_OPERATION_ISSUES_SQL,
     params: ['<companyId>'],
     format: 'count',
   },

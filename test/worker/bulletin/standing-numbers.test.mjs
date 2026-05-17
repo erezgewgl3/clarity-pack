@@ -3,6 +3,11 @@
 // Plan 03-02 Task 1 RED — STANDING_NUMBER_SLOTS registry + computeStandingNumbers.
 // BULL-05: every number is grep-able to a static parameterized SQL query.
 // T-03-10: no string concatenation in SQL — companyId is the only bound param.
+//
+// Debug verifier-counts-own-issue (2026-05-17): the three public.issues slots
+// MUST exclude Clarity Pack's own operation issues (origin_kind prefixed
+// `plugin:clarity-pack:operation:`) — otherwise the bulletin-compile pipeline
+// counts its own dispatch issue and verifyDraft pass-2 hard-rejects every cycle.
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
@@ -44,6 +49,40 @@ test('standing-numbers: every slot params array carries exactly the companyId pl
 test('standing-numbers: every slot format is one of the four NumberFormat values', () => {
   for (const slot of STANDING_NUMBER_SLOTS) {
     assert.ok(['currency', 'count', 'pct', 'ratio'].includes(slot.format));
+  }
+});
+
+test('standing-numbers: the three public.issues slots exclude clarity-pack operation issues', () => {
+  // Debug verifier-counts-own-issue — the compile pipeline's own operation
+  // issue (origin_kind `plugin:clarity-pack:operation:%`) must not be counted.
+  for (const key of ['open_issues', 'completed_7d', 'blocked_issues']) {
+    const slot = STANDING_NUMBER_SLOTS.find((s) => s.key === key);
+    assert.ok(slot, `slot ${key} must exist`);
+    assert.ok(
+      slot.sql.includes('FROM public.issues'),
+      `${key} must query public.issues`,
+    );
+    assert.ok(
+      slot.sql.includes("origin_kind NOT LIKE 'plugin:clarity-pack:operation:%'"),
+      `${key} must exclude clarity-pack operation issues by origin_kind`,
+    );
+    // The NULL-safe guard is mandatory: origin_kind is nullable, and a bare
+    // `NOT LIKE` would drop every human issue (NULL NOT LIKE → NULL, not TRUE).
+    assert.ok(
+      slot.sql.includes('origin_kind IS NULL OR'),
+      `${key} must keep human issues whose origin_kind IS NULL`,
+    );
+  }
+});
+
+test('standing-numbers: the two public.companies slots do NOT carry the issue-exclusion clause', () => {
+  for (const key of ['agent_spend_mtd', 'budget_used_pct']) {
+    const slot = STANDING_NUMBER_SLOTS.find((s) => s.key === key);
+    assert.ok(slot, `slot ${key} must exist`);
+    assert.ok(
+      !slot.sql.includes('origin_kind'),
+      `${key} queries public.companies and must not reference issues.origin_kind`,
+    );
   }
 });
 
