@@ -229,7 +229,6 @@ test('Defect C: a per-issue heartbeat skip logs an info "skipped" line, not a "c
       async requestWakeup() { return { queued: true }; },
       async listComments() { return []; },
     },
-    issue: { comments: { async read() { return []; } } },
   };
 
   await handleEditorHeartbeat(ctx, {
@@ -246,6 +245,43 @@ test('Defect C: a per-issue heartbeat skip logs an info "skipped" line, not a "c
   const skipLine = infoLogs.find((l) => /skipped TL;DR compile/i.test(l.msg));
   assert.ok(skipLine, 'the per-issue skip must log an info "skipped TL;DR compile" line');
   assert.equal(skipLine.meta.issueId, 'issue-77', 'the skip line names the issue id it skipped');
+});
+
+test('v0.6.3-drill regression: handleEditorHeartbeat reads comments via ctx.issues.listComments — the ctx.issue typo crash is gone', async () => {
+  // editor.ts read comments via `ctx.issue.comments.read` — `ctx.issue`
+  // (singular) is undefined on the host PluginContext, so every heartbeat
+  // TL;DR compile threw `Cannot read properties of undefined (reading
+  // 'comments')`. The v0.6.3 defect-C "fix" mislabeled that crash as a benign
+  // skip and only quieted the log. The real API is `ctx.issues.listComments`.
+  const infoLogs = [];
+  const listCommentsCalls = [];
+  const ctx = {
+    logger: { info: (msg, meta) => infoLogs.push({ msg, meta }), warn() {}, error() {} },
+    issues: {
+      async get(id) { return { id, description: 'issue body' }; },
+      async listComments(issueId, companyId) {
+        listCommentsCalls.push({ issueId, companyId });
+        return [{ body: 'a comment body' }];
+      },
+      // create throws so compileTldr fails fast — no 300s LLM delivery poll.
+      async create() { throw new Error('compile short-circuit'); },
+      async list() { return []; },
+      async requestWakeup() { return { queued: true }; },
+    },
+  };
+
+  await handleEditorHeartbeat(ctx, {
+    companyId: 'company-1',
+    agentId: EDITOR_UUID,
+    events: [{ entity_type: 'issue', entity_id: 'issue-88', author_id: 'someone-else' }],
+  });
+
+  assert.equal(listCommentsCalls.length, 1, 'comments must be read via ctx.issues.listComments');
+  assert.deepEqual(listCommentsCalls[0], { issueId: 'issue-88', companyId: 'company-1' });
+  const undefinedCrash = infoLogs.find((l) =>
+    /Cannot read properties of undefined.*comments/i.test(l.meta?.reason ?? ''),
+  );
+  assert.ok(!undefinedCrash, 'the ctx.issue undefined-crash must be gone');
 });
 
 // ===========================================================================

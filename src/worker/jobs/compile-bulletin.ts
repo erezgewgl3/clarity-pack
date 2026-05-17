@@ -455,11 +455,23 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
 
         // 5. Pass 2 — deterministic verifier re-runs every standing-number SQL.
         const verdict = await verifyDraft(draft, ctx.db, company.id);
+        // Instrumentation (2026-05-17 v0.6.3 drill): the post-readback path used
+        // to log NOTHING between `result DOCUMENT received` and the job ending,
+        // so a silent publish failure was undiagnosable from the run log. These
+        // info/warn lines make verify + publish outcomes visible every cycle.
+        ctx.logger?.info?.('compile-bulletin: verifyDraft verdict', {
+          companyId: company.id,
+          cycleNumber,
+          ok: verdict.ok,
+        });
         if (!verdict.ok) {
           const reason =
             'mismatches' in verdict
               ? `verifier rejected: ${JSON.stringify(verdict.mismatches)}`
               : `verifier rejected: ${verdict.kind}:${verdict.slot}`;
+          ctx.logger?.warn?.(`compile-bulletin: cycle ${cycleNumber} ${reason}`, {
+            companyId: company.id,
+          });
           await recordFailure(ctx, {
             agentKey: BULLETIN_COMPILE_AGENT_KEY,
             // editorAgentId is the resolved UUID — guaranteed non-null here by
@@ -503,8 +515,17 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           compiledAt: now,
           priorCycleErratumSnapshot,
         });
+        ctx.logger?.info?.('compile-bulletin: publishBulletin result', {
+          companyId: company.id,
+          cycleNumber,
+          kind: publishResult.kind,
+        });
 
         if (publishResult.kind === 'failed') {
+          ctx.logger?.warn?.(
+            `compile-bulletin: publish failed for cycle ${cycleNumber}: ${publishResult.reason}`,
+            { companyId: company.id },
+          );
           await recordCycleCompileFailure(ctx, {
             cycleNumber,
             reason: publishResult.reason,

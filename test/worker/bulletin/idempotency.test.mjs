@@ -64,10 +64,18 @@ function makeCtx() {
           return { rowCount: 1 };
         },
         async query(sql, params) {
-          if (/WHERE next_due_at = \$1 AND compile_status = 'published'/i.test(sql)) {
-            const row = rows.find((r) => r.next_due_at === params[0] && r.compile_status === 'published');
+          // Idempotency pre-check — cycle-scoped (v0.6.4 fix): keyed on
+          // (company_id, cycle_number), params [companyId, cycleNumber].
+          if (/WHERE company_id = \$1 AND cycle_number = \$2 AND compile_status = 'published'/i.test(sql)) {
+            const row = rows.find(
+              (r) =>
+                r.company_id === params[0] &&
+                r.cycle_number === params[1] &&
+                r.compile_status === 'published',
+            );
             return row ? [{ compile_status: row.compile_status, content_hash: row.content_hash }] : [];
           }
+          // Post-INSERT owns check — keyed on (next_due_at, content_hash).
           if (/SELECT compile_status/i.test(sql)) {
             const row = rows.find((r) => r.next_due_at === params[0] && r.content_hash === params[1]);
             return row ? [{ compile_status: row.compile_status }] : [];

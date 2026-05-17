@@ -88,12 +88,15 @@ export type EditorHeartbeatPayload = {
 // adapter factory without a cast. The `issues` member is widened to the full
 // `PluginIssuesClient` so it satisfies BOTH the adapter slice AND this
 // handler's own `ctx.issues.get` reads.
+// The handler reads comments via `ctx.issues.listComments(issueId, companyId)`
+// — the real host API. An earlier revision typed a fictional
+// `ctx.issue.comments.read` member that the host PluginContext never provides;
+// `ctx.issue` was `undefined` at runtime and every heartbeat TL;DR compile
+// threw `Cannot read properties of undefined (reading 'comments')`. Surfaced
+// on the 2026-05-17 v0.6.3 drill.
 export type EditorHeartbeatCtx = Parameters<typeof compileTldr>[0] &
   AgentTaskDeliveryCtx & {
     issues: PluginIssuesClient;
-    issue: {
-      comments: { read(issueId: string): Promise<Array<{ body: string }>> };
-    };
   };
 
 /**
@@ -132,7 +135,7 @@ export async function handleEditorHeartbeat(
     try {
       const issue = await ctx.issues.get(issueId, payload.companyId);
       if (!issue) continue;
-      const comments = await ctx.issue.comments.read(issueId);
+      const comments = await ctx.issues.listComments(issueId, payload.companyId);
       const refs = extractRefsFromBody(issue.description ?? undefined);
       // Plan 03-06 — build the operation-issue-backed adapter PER ISSUE: the
       // operationId must be unique per TL;DR scope so the idempotency search

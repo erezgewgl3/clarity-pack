@@ -117,19 +117,31 @@ export async function publishBulletin(
   const dateText = formatInTimeZone(args.compiledAt, BULLETIN_TZ, 'yyyy-MM-dd');
   const title = `Bulletin No. ${args.cycleNumber} — ${weekday}, ${dateText}`;
 
-  const existingForDue = await ctx.db.query<{ compile_status: string; content_hash?: string }>(
+  // Idempotency pre-check — "has THIS cycle already published?" — keyed on the
+  // per-bulletin identity (company_id, cycle_number), NOT next_due_at.
+  //
+  // BUG (latent since Plan 03-02, first hit on the 2026-05-17 v0.6.3 cycle-2
+  // drill): this check used to key on `next_due_at` alone. But `next_due_at` is
+  // the SCHEDULE POINTER — after a cycle publishes, the compile-bulletin job
+  // advances that cycle's OWN row to carry the time the NEXT cycle is due
+  // (compile-bulletin.ts step 7). So the prior cycle's published row carries
+  // the exact `next_due_at` value the next cycle publishes under; the old
+  // `WHERE next_due_at = $1 AND compile_status='published'` matched the PRIOR
+  // cycle, saw a different content_hash, and returned `failed` — every cycle
+  // >= 2 could never publish. cycle_number is the stable per-bulletin key.
+  const existingForCycle = await ctx.db.query<{ compile_status: string; content_hash?: string }>(
     `SELECT compile_status, content_hash
      FROM ${BULLETINS_TABLE}
-     WHERE next_due_at = $1 AND compile_status = 'published'
+     WHERE company_id = $1 AND cycle_number = $2 AND compile_status = 'published'
      LIMIT 1`,
-    [args.nextDueAtIso],
+    [args.companyId, args.cycleNumber],
   );
-  if (existingForDue[0]?.compile_status === 'published') {
-    const existingHash = existingForDue[0].content_hash;
+  if (existingForCycle[0]?.compile_status === 'published') {
+    const existingHash = existingForCycle[0].content_hash;
     if (existingHash && existingHash !== contentHash) {
       return {
         kind: 'failed',
-        reason: 'published bulletin already exists for next_due_at with a different content_hash',
+        reason: `cycle ${args.cycleNumber} already published with a different content_hash`,
       };
     }
     return { kind: 'duplicate', cycleNumber: args.cycleNumber };

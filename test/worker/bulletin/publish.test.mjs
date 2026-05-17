@@ -135,3 +135,46 @@ test('publish: issues.create returning null yields {kind:failed} and no publishe
   assert.match(result.reason, /null/i);
   assert.ok(!callOrder.includes('update'));
 });
+
+test('publish: cycle-2 idempotency pre-check is keyed on cycle_number, not next_due_at (v0.6.3 drill regression)', async () => {
+  // Latent since Plan 03-02, first hit on the 2026-05-17 v0.6.3 cycle-2 drill.
+  // After a cycle publishes, the compile-bulletin job advances that cycle's
+  // OWN row to carry the next cycle's next_due_at. The pre-check used to query
+  // `WHERE next_due_at = $1 AND compile_status='published'` — so it matched the
+  // PRIOR cycle, saw a different content_hash, and returned {kind:'failed'};
+  // every cycle >= 2 could never publish. The pre-check must key on the stable
+  // per-bulletin identity (company_id, cycle_number).
+  const seen = [];
+  const ctx = {
+    logger: { info() {}, warn() {} },
+    db: wrapHostFaithfulDb({
+      async execute() { return { rowCount: 1 }; },
+      async query(sql) {
+        seen.push(sql);
+        // Idempotency pre-check (cycle-scoped): cycle 2 is not yet published.
+        if (/cycle_number = \$2 AND compile_status = 'published'/i.test(sql)) return [];
+        // Post-INSERT owns check.
+        if (/SELECT compile_status/i.test(sql)) return [{ compile_status: 'attempting' }];
+        return [];
+      },
+    }),
+    issues: {
+      async create(a) {
+        return { id: 'issue-cycle2', identifier: 'COU-200', ...a };
+      },
+    },
+  };
+  const result = await publishBulletin(ctx, { ...BASE_ARGS, cycleNumber: 2 });
+  assert.equal(result.kind, 'published', 'cycle 2 must publish; the pre-check must not match a prior cycle');
+
+  const preCheck = seen.find(
+    (s) => /SELECT compile_status, content_hash/i.test(s) && /compile_status = 'published'/i.test(s),
+  );
+  assert.ok(preCheck, 'the idempotency pre-check query must run');
+  assert.match(preCheck, /cycle_number = \$2/, 'the pre-check must be keyed on cycle_number');
+  assert.doesNotMatch(
+    preCheck,
+    /WHERE next_due_at = \$1\s+AND compile_status = 'published'/i,
+    'the pre-check must not be keyed on next_due_at alone',
+  );
+});
