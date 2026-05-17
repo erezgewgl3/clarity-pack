@@ -9,50 +9,55 @@
 // literals, no string concatenation — the standing-numbers source-grep test
 // asserts `/\$\{[^}]*\}/` never matches.
 //
-// NOTE: the EXACT column references below (active_subscription_cents,
-// author_role, tags @> ARRAY[...]) are sensible v1 defaults; the registry
-// SHAPE (5 slots, parameterized SQL, format, displayName) is the locked
-// contract. Plan 03-03's Countermoves dry-run validates the real schema and
-// refines the SQL. computeStandingNumbers catches a per-slot query error and
-// defaults that slot to 0, so a column-not-found never aborts a compile.
+// NOTE: the 5 slots below are agent-operations metrics; every column is
+// verified present against the live Paperclip schema in
+// 03-10-SCHEMA-FINDINGS.md §2. The registry SHAPE (5 slots, parameterized
+// SQL, format, displayName) is the locked contract; the specific numbers are
+// planner's discretion per 03-CONTEXT.md line 92. computeStandingNumbers
+// catches a per-slot query error and defaults that slot to 0, so a
+// column-not-found never aborts a compile.
 
 import type { PluginDatabaseClient } from '@paperclipai/plugin-sdk';
 import type { StandingNumberSlot } from '../../shared/types.ts';
 
-/** v1 final 5 slots. SQL targets coreReadTables; $1 is always companyId. */
+/**
+ * v1 final 5 slots — agent-operations metrics over public.issues /
+ * public.companies. SQL targets coreReadTables; $1 is always companyId.
+ * Columns verified live in 03-10-SCHEMA-FINDINGS.md §2.
+ */
 export const STANDING_NUMBER_SLOTS: readonly StandingNumberSlot[] = [
   {
-    key: 'mrr',
-    displayName: 'MRR',
-    sql: 'SELECT COALESCE(SUM(active_subscription_cents), 0)::bigint AS value FROM public.companies WHERE id = $1',
+    key: 'open_issues',
+    displayName: 'Open issues',
+    sql: "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status NOT IN ('done','cancelled') AND hidden_at IS NULL",
+    params: ['<companyId>'],
+    format: 'count',
+  },
+  {
+    key: 'completed_7d',
+    displayName: 'Issues completed · 7d',
+    sql: "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status = 'done' AND completed_at >= now() - interval '7 days'",
+    params: ['<companyId>'],
+    format: 'count',
+  },
+  {
+    key: 'blocked_issues',
+    displayName: 'Blocked · awaiting action',
+    sql: "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status = 'blocked' AND hidden_at IS NULL",
+    params: ['<companyId>'],
+    format: 'count',
+  },
+  {
+    key: 'agent_spend_mtd',
+    displayName: 'Agent spend · MTD',
+    sql: 'SELECT ROUND(COALESCE(spent_monthly_cents,0) / 100.0)::bigint AS value FROM public.companies WHERE id = $1',
     params: ['<companyId>'],
     format: 'currency',
   },
   {
-    key: 'briefs_sent_week',
-    displayName: 'Briefs sent · this week',
-    sql: "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND status = 'done' AND tags @> ARRAY['brief'] AND updated_at >= now() - interval '7 days'",
-    params: ['<companyId>'],
-    format: 'count',
-  },
-  {
-    key: 'reply_rate_7d',
-    displayName: 'Cold reply rate · 7d',
-    sql: "WITH outbound AS (SELECT COUNT(*)::numeric AS n FROM public.issues WHERE company_id = $1 AND tags @> ARRAY['cold-email'] AND updated_at >= now() - interval '7 days'), replies AS (SELECT COUNT(*)::numeric AS n FROM public.issue_comments c JOIN public.issues i ON c.issue_id = i.id WHERE i.company_id = $1 AND i.tags @> ARRAY['cold-email'] AND c.created_at >= now() - interval '7 days' AND c.author_role = 'prospect') SELECT CASE WHEN (SELECT n FROM outbound) = 0 THEN 0 ELSE (SELECT n FROM replies) / (SELECT n FROM outbound) END AS value",
-    params: ['<companyId>'],
-    format: 'pct',
-  },
-  {
-    key: 'discoveries_7d',
-    displayName: 'Discoveries booked · 7d',
-    sql: "SELECT COUNT(*)::int AS value FROM public.issues WHERE company_id = $1 AND tags @> ARRAY['discovery-booked'] AND updated_at >= now() - interval '7 days'",
-    params: ['<companyId>'],
-    format: 'count',
-  },
-  {
-    key: 'refund_rate_30d',
-    displayName: 'Refund rate · 30d',
-    sql: "SELECT CASE WHEN (SELECT COUNT(*) FROM public.issues WHERE company_id = $1 AND tags @> ARRAY['paying-customer'])::numeric = 0 THEN 0 ELSE (SELECT COUNT(*)::numeric FROM public.issues WHERE company_id = $1 AND tags @> ARRAY['refund'] AND updated_at >= now() - interval '30 days') / (SELECT COUNT(*)::numeric FROM public.issues WHERE company_id = $1 AND tags @> ARRAY['paying-customer']) END AS value",
+    key: 'budget_used_pct',
+    displayName: 'Budget used · MTD',
+    sql: "SELECT CASE WHEN COALESCE(budget_monthly_cents,0) = 0 THEN 0 ELSE spent_monthly_cents::numeric / budget_monthly_cents::numeric END AS value FROM public.companies WHERE id = $1",
     params: ['<companyId>'],
     format: 'pct',
   },
