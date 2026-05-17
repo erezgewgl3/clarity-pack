@@ -108,13 +108,28 @@ Repointed every test/helper keyed to an old slot name to the new keys (by format
 
 Task 3's `<verify>` says "grep `src/manifest.ts` for `0.5.0` -> 0 matches", but the same task's `<action>` explicitly directs the manifest comment to reference the stale `plugin_version='0.5.0'` failure rows and the `0.5.0 -> 0.6.0` bump. The `<action>` wins: the `version:` field is `0.6.0`; the 2 remaining `0.5.0` strings are intentional descriptive comment text naming the rows being re-scoped past. Recorded here for the verifier so it is not flagged as an unmet criterion.
 
-## Task 4 — Closure Re-Drill: VERDICT PENDING (awaiting Eric)
+## Task 4 — Closure Re-Drill: DID NOT PASS (2026-05-17)
 
-Task 4 is a `checkpoint:human-verify` with `gate="blocking"`. It is a live Countermoves Hostinger Paperclip drill that **only Eric can perform** — the local 690-test suite is green because its host-faithful fakes return canned `db.query` results; they never execute the standing-number SQL against a real schema. The drill was **not attempted** by the executor and is **not auto-approved**.
+Task 4 is a `checkpoint:human-verify` with `gate="blocking"`. Eric ran the live Countermoves Hostinger Paperclip drill on 2026-05-17: pre-drill snapshot `2026-05-17T09-25-46Z` taken (DB dump + 156 MB FS tar, at `~/clarity-pack/.planning/snapshots/`), `clarity-pack-0.6.0.tgz` installed (`status=ready version=0.6.0`, plugin id `0d4fc40a-0541-4b67-8979-9d346cb9c07b`), `compile-bulletin` job fired.
 
-**Verdict:** PENDING — awaiting Eric's live closure re-drill.
+**Verdict:** DID NOT PASS — no `Bulletin No. N` published; `bulletins` remains `cycle_number=0 / compile_status=pending`.
 
-**Closure criterion:** a `Bulletin No. N` issue (`cycle_number >= 1`) is published end-to-end on the live Countermoves instance with the 5 verified standing numbers, and the circuit breaker did not trip. That — and only that — closes the standing-number gap and unblocks Phase 3 / BULL-09. On PASS, this section is to be updated with the published `cycle_number` and issue identifier.
+**What the drill PROVED (Plan 03-10's actual goal — achieved):** the schema-verified `STANDING_NUMBER_SLOTS` SQL now *executes* against the live schema. Pass-1 produced real values (`open_issues=2, completed_7d=17, blocked_issues=0, agent_spend_mtd=0, budget_used_pct=0`) with NO `column does not exist` / `host handler error`. The standing-number schema-drift gap is closed.
+
+**NEW gap surfaced — `BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE`:** `editor_agent_failures` rows 532–534 (`plugin_version=0.6.0`, consecutive 1→3, breaker tripped → Editor-Agent paused) all read:
+`verifier rejected: [{"slot":"open_issues","claimed":2,"actual":3,"tolerance":0}]`
+
+Root cause — the bulletin-compile pipeline counts its own dispatch issue:
+1. Pass-1 computes `open_issues` → 2 (before the operation issue exists), freezes it into the agent prompt.
+2. The worker creates the `Compile Daily Bulletin` operation issue (e.g. COU-21) — itself an open `public.issues` row → 3.
+3. The agent writes the `compile-result` document, *then* marks the operation issue done. The worker's readback fires on the document (written before the issue is marked done), so pass-2 re-runs the `open_issues` SQL while the operation issue is still open → 3.
+4. `verifyDraft` `count`-format slots have `tolerance: 0` (confirmed `src/worker/bulletin/bulletin-verifier.ts` — only `pct` gets ±1pp, `ratio` ±0.01) → `claimed 2 ≠ actual 3` → hard reject, every cycle.
+
+This bug was masked before Plan 03-10: while the SQL threw `query_failed`, pass-2 never reached the number comparison. Fixing the columns let pass-2 run far enough to expose that `open_issues` is a moving target the compiler races against itself.
+
+**Routed to gap-closure Plan 03-11:** exclude clarity-pack operation issues from the issue-counting standing-number SQL (`open_issues`; review `completed_7d` / `blocked_issues`) — correct on the merits (a user "Open issues" count must not include the compiler's own plumbing) and removes the self-race. Open question for the planner: whether `count` slots also need a small tolerance for the residual case of a real issue created mid-compile. Needs a quick live schema check on how operation issues are identifiable in `public.issues` (the `issues.tags` column does not exist per 03-10-SCHEMA-FINDINGS §2).
+
+**Phase 3 remains OPEN.** BULL-05/06 schema-drift code fix landed and is proven live; BULL-09 closure still blocked by the verifier-count gap above.
 
 ## Self-Check: PASSED
 
