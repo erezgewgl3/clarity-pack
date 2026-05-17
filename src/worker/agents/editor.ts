@@ -29,7 +29,11 @@ import { compileTldr, EDITOR_AGENT_ID_TAG } from './compile-tldr.ts';
 // the Reader's stuck "Compiling TL;DR…" was the same broken path. The TL;DR
 // compile prompt is now delivered as an operation issue
 // (originKind plugin:clarity-pack:operation:tldr-compile).
-import { deliveryLlmAdapter, type AgentTaskDeliveryCtx } from './agent-task-delivery.ts';
+import {
+  deliveryLlmAdapter,
+  OPERATION_ORIGIN_KIND_PREFIX,
+  type AgentTaskDeliveryCtx,
+} from './agent-task-delivery.ts';
 
 // Stable agent key — referenced by manifest agents[] AND every reconcile call.
 export const EDITOR_AGENT_KEY = 'editor-agent';
@@ -109,10 +113,44 @@ export function extractRefsFromBody(body: string | undefined): string[] {
 }
 
 /**
+ * True when an issue is one of the plugin's OWN operation issues — i.e. its
+ * `originKind` starts with `plugin:clarity-pack:operation:` (the namespace
+ * `deliverAgentTask` stamps onto every `tldr-compile` / `bulletin-compile`
+ * operation issue).
+ *
+ * v0.6.5 — Bug 1 (tldr-heartbeat-recursion). The heartbeat dispatcher used to
+ * `compileTldr` EVERY observed issue, including the `tldr-compile` operation
+ * issues the dispatcher itself spawned. Each such compile created the NEXT
+ * `tldr-compile` operation issue → an unbounded `issue.created` cascade
+ * (`originId=tldr-<prev-operation-issue-id>` chains in the worker log are the
+ * proof). It was LATENT until v0.6.4 — the heartbeat crashed instantly on the
+ * `ctx.issue` typo, an accidental circuit breaker. The v0.6.4 typo fix
+ * un-crashed the path WITHOUT this guard and unleashed the recursion.
+ *
+ * The plugin must NEVER TL;DR-compile its own plumbing. This is the same
+ * exclusion the standing-number SQL already applies
+ * (`origin_kind NOT LIKE 'plugin:clarity-pack:operation:%'`). Coexistence
+ * guarantee #2 (operation issues stay off Eric's human board) is preserved —
+ * a `plugin_operation`-visibility issue is never a thing the Reader surfaces
+ * a TL;DR for anyway.
+ */
+export function isOwnOperationIssue(issue: {
+  originKind?: string | null;
+}): boolean {
+  const kind = issue.originKind ?? '';
+  return kind.startsWith(OPERATION_ORIGIN_KIND_PREFIX);
+}
+
+/**
  * Per-heartbeat dispatcher. Given a batch of events + the resolved agentId:
  *   1. Drop self-loop events (D-04 belt-and-suspenders).
  *   2. Bucket events by issue id.
  *   3. For each issue, read body + comments, build inputs, call compileTldr().
+ *
+ * Bug 1 (v0.6.5) — after `ctx.issues.get`, SKIP any issue whose `originKind`
+ * is in the `plugin:clarity-pack:operation:` namespace. The plugin must never
+ * TL;DR-compile its own operation issues — doing so spawns the next operation
+ * issue and recurses unbounded.
  *
  * Errors in any one issue do NOT abort the loop — compileTldr's recordFailure
  * path handles the circuit breaker, and subsequent issues still get a
@@ -135,6 +173,21 @@ export async function handleEditorHeartbeat(
     try {
       const issue = await ctx.issues.get(issueId, payload.companyId);
       if (!issue) continue;
+
+      // Bug 1 (v0.6.5) — HARD GUARD against the heartbeat→operation-issue→
+      // heartbeat recursion. A `tldr-compile` (or any
+      // `plugin:clarity-pack:operation:*`) operation issue must NEVER itself
+      // trigger a TL;DR compile: that compile would spawn the next operation
+      // issue, which is itself an `issue.created` event, unbounded. Skip the
+      // plugin's own plumbing before `deliveryLlmAdapter`/`compileTldr` run.
+      if (isOwnOperationIssue(issue)) {
+        ctx.logger?.info?.(
+          'Editor-Agent: skipped own operation issue (recursion guard)',
+          { issueId, originKind: (issue as { originKind?: string | null }).originKind ?? null },
+        );
+        continue;
+      }
+
       const comments = await ctx.issues.listComments(issueId, payload.companyId);
       const refs = extractRefsFromBody(issue.description ?? undefined);
       // Plan 03-06 — build the operation-issue-backed adapter PER ISSUE: the

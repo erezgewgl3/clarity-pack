@@ -3,13 +3,17 @@
 // Plan 02-03 Task 1 — Editor-Agent integration: compileTldr enforces EDITOR-03
 // idempotency (same hash → cache hit, no LLM call), EDITOR-05 max-tokens cap
 // BEFORE the LLM call, EDITOR-04 tag stamp on writes (so the next heartbeat's
-// self-loop filter excludes the write), and D-06 circuit breaker (3 LLM
+// self-loop filter excludes them), and D-06 circuit breaker (3 LLM
 // throws → ctx.agents.pause invoked once with the resolved agentId).
 //
 // The "LLM adapter" is injected. In production it's
 // ctx.agents.invoke(agentId, ...) or an MCP tool the agent calls; the kernel
 // of the contract — count calls, throw on budget, never invoke twice for the
 // same hash — is identical and is what this test pins down.
+//
+// v0.6.5 — Bug 2 (tldr-heartbeat-recursion debug). upsertTldr now binds the
+// two `text[]` columns as Postgres array-literal strings; the fake `execute`
+// decodes them back to JS arrays on store, mirroring the host round-trip.
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
@@ -23,6 +27,45 @@ import {
   resetCircuitBreakerState,
 } from '../../src/worker/agents/circuit-breaker.ts';
 import { EDITOR_WRITE_TAG } from '../../src/worker/agents/self-loop-filter.ts';
+
+/**
+ * Decode a Postgres text-array literal (`{"a","b"}`, `{}`) back to a JS string
+ * array — mirrors how the live host's `postgres` driver returns a `text[]`
+ * column as a JS array on SELECT. Inverse of `toPgTextArrayLiteral`.
+ */
+function decodePgTextArrayLiteral(literal) {
+  if (typeof literal !== 'string') return literal; // already an array (defensive)
+  const inner = literal.replace(/^\{/, '').replace(/\}$/, '');
+  if (inner === '') return [];
+  const out = [];
+  let buf = '';
+  let i = 0;
+  while (i < inner.length) {
+    const ch = inner[i];
+    if (ch === '"') {
+      i += 1;
+      while (i < inner.length && inner[i] !== '"') {
+        if (inner[i] === '\\') {
+          buf += inner[i + 1];
+          i += 2;
+        } else {
+          buf += inner[i];
+          i += 1;
+        }
+      }
+      i += 1; // closing quote
+    } else if (ch === ',') {
+      out.push(buf);
+      buf = '';
+      i += 1;
+    } else {
+      buf += ch;
+      i += 1;
+    }
+  }
+  out.push(buf);
+  return out;
+}
 
 function makeFakeCtx({ llm, initialCache = [] } = {}) {
   const dbCalls = [];
@@ -48,7 +91,19 @@ function makeFakeCtx({ llm, initialCache = [] } = {}) {
           if (/INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
             const [surface, scope_id, content_hash, body, generated_at, source_revisions, compiled_by_agent_id, tags] = params;
             if (!cacheRows.some((r) => r.surface === surface && r.scope_id === scope_id && r.content_hash === content_hash)) {
-              cacheRows.push({ surface, scope_id, content_hash, body, generated_at, source_revisions, compiled_by_agent_id, tags });
+              // v0.6.5 Bug 2 — the host round-trips a `$N::text[]` insert to a
+              // JS array on SELECT; decode the array-literal string the same
+              // way so cached rows hold JS arrays.
+              cacheRows.push({
+                surface,
+                scope_id,
+                content_hash,
+                body,
+                generated_at,
+                source_revisions: decodePgTextArrayLiteral(source_revisions),
+                compiled_by_agent_id,
+                tags: decodePgTextArrayLiteral(tags),
+              });
             }
           }
         },
@@ -140,6 +195,13 @@ test('compileTldr stamps clarity:editor-write tag AND EDITOR_AGENT_ID_TAG on the
   assert.ok(Array.isArray(result.tags));
   assert.ok(result.tags.includes(EDITOR_WRITE_TAG), `tags include ${EDITOR_WRITE_TAG}`);
   assert.equal(result.compiled_by_agent_id, EDITOR_AGENT_ID_TAG);
+  // v0.6.5 Bug 2 — the persisted row's text[] columns round-trip as JS arrays.
+  assert.deepEqual(fake.cacheRows[0].tags, result.tags, 'cached row tags round-trip as a JS array');
+  assert.deepEqual(
+    fake.cacheRows[0].source_revisions,
+    result.source_revisions,
+    'cached row source_revisions round-trip as a JS array',
+  );
 });
 
 test('3 consecutive LLM throws trigger ctx.agents.pause exactly once with (agentId, companyId) — D-06', async () => {
