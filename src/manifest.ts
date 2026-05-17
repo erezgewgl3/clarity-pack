@@ -18,15 +18,23 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.6.4 (debug fix 2b1419f) — two latent bugs the v0.6.3 cycle-2 drill
+  // exposed (neither a v0.6.3 regression): (1) every cycle >= 2 silently failed
+  // to publish — publishBulletin's idempotency pre-check keyed on `next_due_at`,
+  // which the prior published cycle's row also carries, so the pre-check matched
+  // the prior cycle and returned 'failed'; re-keyed on (company_id,
+  // cycle_number). (2) the Editor-Agent TL;DR compile had never run —
+  // editor.ts read comments via a fictional `ctx.issue.comments.read`
+  // (undefined on the host), now `ctx.issues.listComments`. The 0.6.3 defect-C
+  // "fix" had only quieted that crash's log. compile-bulletin also gained
+  // post-readback instrumentation (verdict + publish-result logging).
+  //
   // 0.6.3 (debug fix from session bulletin-content-defects) — four defects the
   // v0.6.2 re-drill exposed on the published bulletin: (A) {{NUMBER:key}}
-  // placeholders rendered literally — resolveDraftSlots now writes resolved
-  // prose back into every editorialSummary + actionInbox summary; (B) blank
-  // masthead — buildMasthead now populates Vol./No./date/cycle/recipient
-  // deterministically in code instead of trusting the LLM; (C) the mislabeled
-  // "Editor-Agent compile failed for issue" WARN downgraded to an info skip
-  // line; (D) the compile-bulletin job catch-all now routes unexpected throws
-  // through recordFailure (D-06 breaker) instead of swallowing them.
+  // placeholders rendered literally — resolveDraftSlots writes resolved prose
+  // back into editorialSummary + actionInbox summaries; (B) blank masthead —
+  // buildMasthead populates it deterministically; (C) mislabeled WARN; (D) the
+  // compile-bulletin catch-all routes unexpected throws through recordFailure.
   //
   // 0.6.2 (debug fix c9c6318) — per-department items normalization for
   // BULLETIN-RENDER-DEPT-ITEMS-UNDEFINED: validateDraftStructure coerces each
@@ -46,7 +54,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.6.3',
+  version: '0.6.4',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
