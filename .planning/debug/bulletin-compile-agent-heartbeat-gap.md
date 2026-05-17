@@ -225,3 +225,62 @@ issue `done`. That is a stable contract the worker CAN consume. Plan 03-08 (gap 
 5. Operability: clear stale `editor_agent_failures` rows; the compile loop creates a new
    operation issue per cron fire because the agent marks each one `done` (idempotency search
    skips done issues) — acceptable, but the worker should advance `next_due_at` only on publish.
+
+---
+
+## Plan 03-08 closure re-drill — 2026-05-17 — DID NOT PASS (root cause CONFIRMED)
+
+**Build:** `clarity-pack-0.4.0.tgz` (Option B document-readback). Installed clean on Countermoves.
+
+**What the drill PROVED (Option B agent side works end-to-end):**
+- Worker created operation issue **COU-15** (`727112e2-8dca-4a91-af35-13cdc1bad104`),
+  `bulletin-compile` cycle 1, assigned to the Editor-Agent.
+- The operation-issue DESCRIPTION carried the compile prompt **plus** `RESULT_DELIVERY_INSTRUCTION`
+  — the agent transcript shows it read that instruction, explicitly noted `submit-compile-result`
+  is unreachable (Option C dead — re-confirmed), and routed to the document channel.
+- The agent produced a **flawless `BulletinDraft`** (clean JSON, 6308 chars, `{{NUMBER:key}}`
+  placeholders intact) and filed it as an issue **document at the exact key `compile-result`**
+  (`public.issue_documents` row: issue COU-15, key `compile-result`, document `61dc402d…`,
+  created `2026-05-17 05:14:14Z`). It then marked COU-15 `done`.
+
+**What FAILED:** the worker never published — `bulletins` shows only the bootstrap `cycle_number 0`,
+no `Bulletin No. N` issue, one `editor_agent_failures` row stamped `plugin_version='0.4.0'`
+(a `deliverAgentTask` 300s timeout). `/COU/bulletin` correctly shows its empty state.
+
+**ROOT CAUSE — `isResultDocument` rejects every valid draft (a Clarity Pack bug, NOT the host).**
+`agent-task-delivery.ts` `isResultDocument` → `isResultComment` calls
+`validateDraftSchema(parsed, {})` with an **empty facts table**. But `validateDraftSchema`
+(`compile-pass-1.ts:113-119`) does NOT only check structural shape — it loops every
+`department.editorialSummary` and runs `replaceSlots(summary, facts)`, which **throws
+`UNKNOWN_SLOT:<key>`** (`facts-table.ts:81-83`) for any `{{NUMBER:key}}` placeholder not in
+the facts table. With `facts = {}`, EVERY placeholder is unknown → `validateDraftSchema` throws
+→ `isResultComment` catch → returns `false`. So `deliverAgentTask`'s `documents.get` correctly
+fetched the agent's document on every 5s poll, but `isResultDocument` rejected it ~36×, the
+loop ran to the 300s deadline, and the timeout was recorded as a compile failure.
+
+The `agent-task-delivery.ts:200-208` comment asserted calling `validateDraftSchema` with `{}`
+was safe ("the readback only needs the structural shape"). That assumption is **false** —
+`validateDraftSchema` resolves slots. The Task 3 host-faithful e2e test passed only because its
+fixture draft had no `{{NUMBER:key}}` placeholders in any `department.editorialSummary` — the
+exact "green local suite ≠ live agent" anti-pattern flagged in `.continue-here.md`.
+
+SDK shapes are all CORRECT — `documents.get(issueId, key, companyId)` arity verified against
+`types.d.ts:819`; `IssueDocument.body` is the body field; capability `issue.documents.read`
+present. The host and the agent are blameless. This is a one-spot validator-misuse bug.
+
+**THE FIX (Plan 03-09 — Option B readback validation):**
+- The readback must validate STRUCTURE ONLY — never resolve `{{NUMBER:key}}` slots. Slot
+  resolution against the REAL facts table happens downstream in `compilePass1`; the readback
+  only needs "is this a structurally-valid `BulletinDraft` JSON object".
+- Split `validateDraftSchema` into a structural core (the object/array checks,
+  `compile-pass-1.ts:93-111`) and the slot-resolution pass (`:113-119`), OR add a
+  `resolveSlots: boolean` parameter. `isResultComment`/`isResultDocument` call structure-only.
+- Regression test MUST use a fixture draft WITH `{{NUMBER:key}}` placeholders in a
+  `department.editorialSummary` — the current fixture would not catch this.
+- `compile-bulletin.ts` / `compilePass1`'s production validation path is UNCHANGED (it still
+  resolves slots with the real facts table — that contract is correct).
+- ~15–25 LOC. The architecture (Option B document handoff) is fully proven; this is the last
+  byte of the readback. Re-pack 0.4.0→0.5.0, re-drill from the compile step.
+
+**Pre-re-drill cleanup:** `DELETE FROM plugin_clarity_pack_cdd6bda4bd.editor_agent_failures
+WHERE plugin_version='0.4.0';` (the 0.5.0 bump also version-scopes the breaker past it).
