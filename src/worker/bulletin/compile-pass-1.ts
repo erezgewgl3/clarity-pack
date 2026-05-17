@@ -81,14 +81,16 @@ export type CompilePass1Args = {
 };
 
 /**
- * Throws if `body` is not a well-formed BulletinDraft. Asserts every required
- * top-level key, then resolves every department `editorialSummary` through
- * replaceSlots so an unknown `{{NUMBER:X}}` placeholder surfaces as a tagged
- * UNKNOWN_SLOT error.
+ * Throws if `body` is not a structurally well-formed BulletinDraft — asserts
+ * the object shape, masthead, and the four required arrays. Does NOT resolve
+ * `{{NUMBER:key}}` slots: slot resolution is a downstream `compilePass1`
+ * concern (it needs the real facts table). The Option-B result readback
+ * (`agent-task-delivery.ts`) calls THIS, never the slot-resolving
+ * `validateDraftSchema` — an agent draft legitimately carries unresolved
+ * `{{NUMBER:key}}` placeholders that `verifyDraft` pass-2 resolves later.
  */
-export function validateDraftSchema(
+export function validateDraftStructure(
   body: unknown,
-  facts: FactsTable,
 ): asserts body is BulletinDraft {
   if (!body || typeof body !== 'object') {
     throw new Error('BulletinDraft failed schema validation (not an object)');
@@ -109,10 +111,30 @@ export function validateDraftSchema(
   if (!Array.isArray(d.lineageThreads)) {
     throw new Error('BulletinDraft.lineageThreads must be an array');
   }
+}
+
+/**
+ * Throws if `body` is not a well-formed BulletinDraft. Asserts every required
+ * top-level key (via `validateDraftStructure`), then resolves every department
+ * `editorialSummary` through replaceSlots so an unknown `{{NUMBER:X}}`
+ * placeholder surfaces as a tagged UNKNOWN_SLOT error.
+ *
+ * This is the production validator used by `compilePass1` — it MUST be called
+ * with the real facts table. The Option-B result readback does NOT use this;
+ * it calls `validateDraftStructure` (structure-only) because an agent draft
+ * legitimately carries unresolved `{{NUMBER:key}}` placeholders.
+ */
+export function validateDraftSchema(
+  body: unknown,
+  facts: FactsTable,
+): asserts body is BulletinDraft {
+  validateDraftStructure(body);
 
   // Resolve every department prose summary — replaceSlots throws (with a
   // tagged `.slot`) if a placeholder references an unknown factsTable key.
-  for (const dept of d.departments as Array<{ editorialSummary?: unknown }>) {
+  for (const dept of (body as BulletinDraft).departments as Array<{
+    editorialSummary?: unknown;
+  }>) {
     if (typeof dept.editorialSummary === 'string') {
       replaceSlots(dept.editorialSummary, facts);
     }

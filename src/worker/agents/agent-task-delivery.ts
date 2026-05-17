@@ -52,8 +52,9 @@
 // reads (confirmed on the 03-06 + 03-07 drills).
 //
 // The raw result string still flows UNCHANGED through the caller's
-// `extractJsonObject → JSON.parse → validateDraftSchema → verifyDraft →
-// publishBulletin` pipeline — the LlmAdapter contract is byte-identical.
+// `extractJsonObject → JSON.parse → compilePass1 slot-resolving validator →
+// verifyDraft → publishBulletin` pipeline — the LlmAdapter contract is
+// byte-identical.
 //
 // Governance parity (Decision #3 / coexistence guarantee #4): the compile runs
 // as a real, audited agent run against a real assigned issue — budget caps,
@@ -82,7 +83,7 @@ import type { PluginIssuesClient, PluginLogger, IssueComment } from '@paperclipa
 // PluginIssuesClient, which is typed `PluginIssueDocumentsClient`.
 type PluginIssueDocumentsClient = PluginIssuesClient['documents'];
 
-import { extractJsonObject, validateDraftSchema } from '../bulletin/compile-pass-1.ts';
+import { extractJsonObject, validateDraftStructure } from '../bulletin/compile-pass-1.ts';
 import type { LlmAdapter } from '../bulletin/compile-pass-1.ts';
 
 /** The operation-issue originKind namespace. The agent matches on this prefix. */
@@ -199,11 +200,18 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
  * schema, is a progress / status note and is NOT the result (W-4 — the worker
  * must resolve on a schema-valid object, never a bare brace test).
  *
- * - `bulletin-compile`: `validateDraftSchema` (the BulletinDraft validator).
- *   It is called with an EMPTY facts table — the readback only needs the
- *   structural shape; the numerics get re-verified downstream by `verifyDraft`,
- *   and the real per-slot `{{NUMBER:key}}` resolution runs in `compilePass1`
- *   with the real facts table.
+ * - `bulletin-compile`: `validateDraftStructure` (the structure-only
+ *   BulletinDraft validator). It checks SHAPE ONLY — the object shape,
+ *   masthead, and the four required arrays — and NEVER resolves
+ *   `{{NUMBER:key}}` slots. An agent draft is CONTRACTED to emit unresolved
+ *   `{{NUMBER:key}}` placeholders in its `editorialSummary` prose, so the
+ *   readback must NOT reject on them. Slot resolution against the real facts
+ *   table runs downstream in `compilePass1` (which calls the slot-resolving
+ *   validator), and `verifyDraft` pass-2 re-verifies every numeric before
+ *   publish. Calling that slot-resolving validator here — with an empty facts
+ *   table — was the Plan 03-08 readback bug: every real draft's placeholders
+ *   threw `UNKNOWN_SLOT` and the readback rejected the agent's flawless
+ *   document.
  * - `tldr-compile`: a TL;DR is a plain non-empty string under the 8000-char
  *   ceiling `compileTldr` enforces.
  */
@@ -213,7 +221,9 @@ function isResultComment(body: string, operationKind: OperationKind): boolean {
     // here we only need "the agent posted a usable, non-empty completion".
     return body.trim().length > 0 && body.length <= 8000;
   }
-  // bulletin-compile — the body must be a schema-valid BulletinDraft JSON.
+  // bulletin-compile — the body must be a STRUCTURALLY-valid BulletinDraft
+  // JSON. Structure only: unresolved `{{NUMBER:key}}` placeholders are
+  // expected and must NOT fail the readback.
   let parsed: unknown;
   try {
     parsed = JSON.parse(extractJsonObject(body));
@@ -221,7 +231,7 @@ function isResultComment(body: string, operationKind: OperationKind): boolean {
     return false;
   }
   try {
-    validateDraftSchema(parsed, {});
+    validateDraftStructure(parsed);
   } catch {
     return false;
   }

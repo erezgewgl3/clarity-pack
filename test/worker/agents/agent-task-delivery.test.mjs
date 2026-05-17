@@ -40,9 +40,20 @@ const COMPANY_ID = 'COU';
 
 /**
  * A real minimal BulletinDraft — masthead/actionInbox/departments/
- * standingNumbers/lineageThreads — so it genuinely passes `validateDraftSchema`
- * (the schema-valid vs schema-invalid distinction is a real one, not a brace
- * count).
+ * standingNumbers/lineageThreads — so it genuinely passes the structural
+ * BulletinDraft validator (the schema-valid vs schema-invalid distinction is a
+ * real one, not a brace count).
+ *
+ * Plan 03-09 — the `Sales` department's `editorialSummary` carries an
+ * UNRESOLVED `{{NUMBER:deals_won}}` placeholder. This is the fixture shape
+ * that REPRODUCES the live readback bug: before Plan 03-09 the readback called
+ * the slot-resolving `validateDraftSchema(parsed, {})` with an empty facts
+ * table, which threw `UNKNOWN_SLOT:deals_won` on this draft and rejected it.
+ * The 03-08 fixture used `editorialSummary: ''` — no placeholder — so the
+ * green suite never caught the bug. The readback now calls
+ * `validateDraftStructure` (structure-only) and ACCEPTS this draft; slot
+ * resolution + numeric verification happen downstream in
+ * `compilePass1`/`verifyDraft`.
  */
 function validDraftJson() {
   return JSON.stringify({
@@ -55,7 +66,15 @@ function validDraftJson() {
       cycleNumber: 1,
     },
     actionInbox: [],
-    departments: [{ name: 'Sales', items: [], editorialSummary: '' }],
+    departments: [
+      {
+        name: 'Sales',
+        items: [],
+        // An UNRESOLVED {{NUMBER:key}} placeholder — the agent is CONTRACTED
+        // to emit these; the readback must accept them (Plan 03-09).
+        editorialSummary: 'Sales closed {{NUMBER:deals_won}} deals this week.',
+      },
+    ],
     standingNumbers: [{ key: 'mrr', displayName: 'MRR', value: 2475, format: 'currency' }],
     lineageThreads: [],
   });
@@ -208,6 +227,39 @@ test('deliverAgentTask: happy path — create + wakeup + result document at key 
     calls.documentsGet[0].key,
     RESULT_DOCUMENT_KEY,
     'the PRIMARY readback calls documents.get with key "compile-result"',
+  );
+});
+
+// ---- Test 1b — Plan 03-09 regression: readback accepts {{NUMBER:key}} -----
+
+test('deliverAgentTask: REGRESSION (Plan 03-09) — a BulletinDraft whose editorialSummary carries an unresolved {{NUMBER:key}} placeholder PASSES the readback', async () => {
+  const draft = validDraftJson();
+  // Hard-assert the fixture genuinely carries the placeholder — if a future
+  // edit drops it this test still passes vacuously, so pin it.
+  assert.ok(
+    draft.includes('{{NUMBER:deals_won}}'),
+    'the fixture draft carries an unresolved {{NUMBER:deals_won}} placeholder in a department editorialSummary',
+  );
+
+  const { ctx } = makeFakeCtx({
+    existing: [],
+    documentScript: {
+      delayPolls: 0,
+      summaries: [docSummary({ key: RESULT_DOCUMENT_KEY })],
+      bodies: { [RESULT_DOCUMENT_KEY]: draft },
+    },
+  });
+
+  // Before Plan 03-09 the readback called validateDraftSchema(parsed, {}) with
+  // an empty facts table — replaceSlots threw UNKNOWN_SLOT:deals_won on this
+  // exact draft, isResultDocument returned false, and deliverAgentTask ran to
+  // its timeout. With the structure-only validateDraftStructure readback the
+  // document is ACCEPTED and the raw JSON resolves.
+  const result = await deliverAgentTask(ctx, BASE_OPTS);
+  assert.equal(
+    result,
+    draft,
+    'the readback ACCEPTS the placeholder-bearing draft and resolves it (structure-only validation)',
   );
 });
 
