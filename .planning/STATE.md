@@ -28,15 +28,26 @@ progress:
 ## Current Position
 
 Phase: 03 (daily-bulletin) — EXECUTING
-Plan: 10 of 10 built. 03-10 closure re-drill (2026-05-17) DID NOT PASS — surfaced
-BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE. Debugged + fixed: debug session
-`.planning/debug/verifier-counts-own-issue.md` (RESOLVED), fix commit `a0e77d3`
-(operation-issue exclusion clause on the 3 public.issues standing-number slots),
-version bumped 0.6.0→0.6.1 + packed `clarity-pack-0.6.1.tgz` commit `7b651de`
-(sha256 `7562b4b7ecb09e84cca0335e89fec533d7fa3988784d8d848e7bfa95dd280cd5`).
-**AWAITING ERIC: closure re-drill of v0.6.1 on live Countermoves** — blocking
+Plan: 10 of 10 built. Two live-drill defects debugged + fixed since the failed
+03-10 re-drill, both as gap-closure debug sessions (no new plan filed):
+  1. BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE — debug `verifier-counts-own-issue.md`
+     (RESOLVED), fix `a0e77d3`. PROVEN LIVE on the 2026-05-17 v0.6.1 re-drill —
+     zero `verifier rejected` lines, breaker re-scope worked, pipeline ran
+     through verification.
+  2. BULLETIN-RENDER-DEPT-ITEMS-UNDEFINED — surfaced by that same v0.6.1 re-drill
+     (renderBulletinIssueBody crashed on a department missing its `items` array,
+     one step past verification). Debug `render-dept-items-undefined.md`
+     (RESOLVED), fix `c9c6318` (validateDraftStructure normalizes per-department
+     `items` to []). Suite 701 tests, 699 pass / 0 fail / 2 skip.
+Version bumped 0.6.1→0.6.2 + packed `clarity-pack-0.6.2.tgz` commit `ea8a3b4`
+(sha256 `9555355585c3b909913c37e07277b673bd0c8044ae387c75339319c6ea3e6d56`).
+**AWAITING ERIC: closure re-drill of v0.6.2 on live Countermoves** — blocking
 checkpoint:human-verify. Closure criterion: a `Bulletin No. N` (cycle_number >= 1)
 publishes end-to-end, breaker not tripped.
+Known follow-up (non-blocking): the `compile-bulletin` job wrapper swallows a
+render/publish exception as `job completed successfully`, so a crash loops
+forever without tripping the D-06 breaker — route publish-path exceptions
+through `recordFailure`.
 **Phase 3 plans:**
 
   - 03-01 — Foundation: **COMPLETE 2026-05-15** — `0004_bulletin.sql` migration (bulletins incl. `draft_json jsonb` + UNIQUE(next_due_at,content_hash) + bulletin_errata + clarity_department_membership + bulletin_compile_failures) + DST-safe `computeNextDueAt` (date-fns-tz) + bulletins repo (8 fns) + manifest `jobs[]`+capabilities+config + self-loop-filter `BULLETIN_TAG_PREFIX` extension + compile-bulletin no-op job. 3 TDD commits ab217b0..e059d8b; suite 455/453-pass/0-fail/2-skip; typecheck+build green. BULL-01, BULL-02 foundation delivered. SUMMARY: `03-01-SUMMARY.md`.
