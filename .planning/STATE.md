@@ -41,16 +41,30 @@ Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
      swallowed publish exceptions. All 4 fixed — debug `bulletin-content-defects.md`
      (RESOLVED), fix `c... ` commit (resolveDraftSlots + buildMasthead + log
      downgrade + recordFailure routing). Suite 710 tests, 708 pass / 0 fail / 2 skip.
-Version bumped 0.6.2→0.6.3 + packed `clarity-pack-0.6.3.tgz` commit `9fdc601`
-(sha256 `28b58f8a3cc3584c094390bef7f0d0a5bc0934091eaa13d1494e9ba1dab5daf1`).
-**AWAITING ERIC: closure re-drill of v0.6.3 on live Countermoves** — blocking
-checkpoint:human-verify. Closure criterion: Bulletin No. N publishes end-to-end
-with resolved prose + populated masthead, breaker not tripped. On PASS, Phase 3
-closes (BULL-05/06/09).
-Open v1-polish question (non-blocking): masthead `prepareForName` currently uses
-the company display name with an 'Operations' fallback — no per-recipient config
+  7-8. v0.6.3 cycle-2 re-drill (2026-05-17) exposed TWO latent bugs (NEITHER a
+     v0.6.3 regression): (1) every cycle >= 2 silently fails to publish —
+     publishBulletin's idempotency pre-check keyed on `next_due_at`, which the
+     prior published cycle's row also carries (latent since Plan 03-02; first
+     hit at cycle 2); (2) the Editor-Agent TL;DR compile has never run —
+     editor.ts read comments via a fictional `ctx.issue.comments.read`
+     (undefined on the host). Both fixed — debug `cycle2-publish-and-tldr-typo.md`
+     (RESOLVED), fix `2b1419f` (pre-check re-keyed on (company_id,cycle_number);
+     `ctx.issues.listComments`; + compile-bulletin post-readback instrumentation).
+     Suite 712 tests, 710 pass / 0 fail / 2 skip.
+Version bumped 0.6.3→0.6.4 + packed `clarity-pack-0.6.4.tgz` commit `c375004`
+(sha256 `4af8406764f63ea76a1afb0ff5ca979b1aa76d08a7d2d5e118cfff27182da1da`).
+**AWAITING ERIC: closure re-drill of v0.6.4 on live Countermoves** — blocking
+checkpoint:human-verify. Closure criterion: Bulletin No. 2 publishes end-to-end
+(cycle_number >= 2 row, compile_status='published') with resolved prose +
+populated masthead, breaker not tripped. On PASS, Phase 3 closes (BULL-05/06/09).
+Open v1-polish question (non-blocking): masthead `prepareForName` uses the
+company display name with an 'Operations' fallback — no per-recipient config
 exists. If the masthead should name the human operator (Eric), an `instanceConfig`
 field is needed; the org-name default ships otherwise.
+Open recommendation: 4 debug rounds today each shipped a green 700+-test suite
+that broke live anew — the host-faithful fakes don't model the live compile-
+bulletin job / heartbeat control flow. A faithful integration test of the job
+control flow is wanted before further drills.
 **Phase 3 plans:**
 
   - 03-01 — Foundation: **COMPLETE 2026-05-15** — `0004_bulletin.sql` migration (bulletins incl. `draft_json jsonb` + UNIQUE(next_due_at,content_hash) + bulletin_errata + clarity_department_membership + bulletin_compile_failures) + DST-safe `computeNextDueAt` (date-fns-tz) + bulletins repo (8 fns) + manifest `jobs[]`+capabilities+config + self-loop-filter `BULLETIN_TAG_PREFIX` extension + compile-bulletin no-op job. 3 TDD commits ab217b0..e059d8b; suite 455/453-pass/0-fail/2-skip; typecheck+build green. BULL-01, BULL-02 foundation delivered. SUMMARY: `03-01-SUMMARY.md`.
