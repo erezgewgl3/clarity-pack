@@ -18,17 +18,24 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.6.1 (debug fix a0e77d3) — carries the operation-issue exclusion fix for
+  // BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE: the three public.issues
+  // standing-number slots now exclude Clarity Pack's own Compile Daily Bulletin
+  // operation issue (origin_kind NOT LIKE 'plugin:clarity-pack:operation:%'), so
+  // verifyDraft pass-2 no longer re-counts +1 against the frozen pass-1 number.
+  // The breaker stamps this version on editor_agent_failures rows
+  // (circuit-breaker.ts CLARITY_PACK_VERSION, which imports manifest.version) —
+  // the 0.6.0→0.6.1 bump re-scopes the durable breaker past the 3 stale
+  // plugin_version='0.6.0' failure rows (ids 532-534) the 03-10 re-drill left,
+  // so the breaker starts clean for the 03-10 closure re-drill.
+  //
   // Plan 03-10 — 0.6.0: standing-number schema-drift fix. STANDING_NUMBER_SLOTS
   // was rewritten with 5 agent-operations metrics whose SQL uses only columns
   // verified present against the live Paperclip schema (03-10-SCHEMA-FINDINGS.md
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
-  // pass-2 ctx.db.query on the Plan 03-09 closure drill. The breaker stamps this
-  // version on editor_agent_failures rows (circuit-breaker.ts CLARITY_PACK_VERSION,
-  // which imports manifest.version) — the 0.5.0→0.6.0 bump re-scopes the durable
-  // breaker past the 3 stale plugin_version='0.5.0' failure rows (ids 529-531)
-  // the 03-09 drill left, so the breaker starts clean for the 03-10 re-drill.
-  version: '0.6.0',
+  // pass-2 ctx.db.query on the Plan 03-09 closure drill.
+  version: '0.6.1',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
