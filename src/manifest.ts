@@ -18,6 +18,22 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.6.5 (debug fix from session tldr-heartbeat-recursion) — two bugs the
+  // v0.6.4 cycle-2 re-drill exposed once its bug-2 fix un-crashed the editor
+  // TL;DR heartbeat: (1) INFINITE TL;DR RECURSION — handleEditorHeartbeat
+  // compiled EVERY observed issue, including the plugin's OWN `tldr-compile`
+  // operation issues, each of which spawns the next operation issue,
+  // unbounded (17+ concurrent Editor-Agent runs live). Fixed: the heartbeat
+  // skips any issue whose `originKind` is in the
+  // `plugin:clarity-pack:operation:` namespace — the plugin must never
+  // TL;DR-compile its own plumbing. (2) MALFORMED ARRAY LITERAL — every TL;DR
+  // write failed at the host db layer: a scalar content-hash string was bound
+  // into the `source_revisions text[]` (and `tags text[]`) column. Fixed:
+  // upsertTldr binds both `text[]` columns as Postgres array-literal strings
+  // through `$N::text[]` casts (toPgTextArrayLiteral). The recursion was
+  // LATENT — the heartbeat crashed on the v0.6.3 `ctx.issue` typo (an
+  // accidental circuit breaker) until v0.6.4's bug-2 fix un-crashed it.
+  //
   // 0.6.4 (debug fix 2b1419f) — two latent bugs the v0.6.3 cycle-2 drill
   // exposed (neither a v0.6.3 regression): (1) every cycle >= 2 silently failed
   // to publish — publishBulletin's idempotency pre-check keyed on `next_due_at`,
@@ -54,7 +70,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.6.4',
+  version: '0.6.5',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
