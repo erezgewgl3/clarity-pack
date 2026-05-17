@@ -18,15 +18,20 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
-  // 0.6.2 (debug fix c9c6318) — carries the per-department items normalization
-  // fix for BULLETIN-RENDER-DEPT-ITEMS-UNDEFINED: validateDraftStructure now
-  // coerces each department's missing/non-array `items` to [], so a department
-  // the agent emits with no items no longer crashes renderBulletinIssueBody at
-  // `dept.items.length` in the publish path. The 0.6.1 v0.6.1 re-drill proved
-  // the verifier-count fix live but surfaced this downstream render crash.
-  // The 0.6.1→0.6.2 bump re-scopes the durable breaker past any stale 0.6.1
-  // rows (the v0.6.1 drill's render crashes were swallowed by the job wrapper
-  // and did NOT record breaker failures — but the bump keeps the count clean).
+  // 0.6.3 (debug fix from session bulletin-content-defects) — four defects the
+  // v0.6.2 re-drill exposed on the published bulletin: (A) {{NUMBER:key}}
+  // placeholders rendered literally — resolveDraftSlots now writes resolved
+  // prose back into every editorialSummary + actionInbox summary; (B) blank
+  // masthead — buildMasthead now populates Vol./No./date/cycle/recipient
+  // deterministically in code instead of trusting the LLM; (C) the mislabeled
+  // "Editor-Agent compile failed for issue" WARN downgraded to an info skip
+  // line; (D) the compile-bulletin job catch-all now routes unexpected throws
+  // through recordFailure (D-06 breaker) instead of swallowing them.
+  //
+  // 0.6.2 (debug fix c9c6318) — per-department items normalization for
+  // BULLETIN-RENDER-DEPT-ITEMS-UNDEFINED: validateDraftStructure coerces each
+  // department's missing/non-array `items` to []. PROVEN LIVE on the v0.6.2
+  // re-drill (Bulletin No. 1 published end-to-end).
   //
   // 0.6.1 (debug fix a0e77d3) — operation-issue exclusion for
   // BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE: the three public.issues
@@ -41,7 +46,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.6.2',
+  version: '0.6.3',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
