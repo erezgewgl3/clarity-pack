@@ -18,16 +18,17 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
-  // Plan 03-09 — 0.5.0: readback structure-only validator fix. The 03-08 Option
-  // B document-readback architecture is unchanged; the one-spot bug was that
-  // `deliverAgentTask`'s readback called the slot-resolving `validateDraftSchema`
-  // with an empty facts table, which threw `UNKNOWN_SLOT` on every real agent
-  // draft's `{{NUMBER:key}}` placeholders and rejected the flawless document.
-  // The readback now calls structure-only `validateDraftStructure`. The breaker
-  // stamps this version on editor_agent_failures rows (circuit-breaker.ts
-  // CLARITY_PACK_VERSION, which imports manifest.version) — the 0.4.0→0.5.0 bump
-  // re-scopes the durable breaker past the stale plugin_version='0.4.0' row.
-  version: '0.5.0',
+  // Plan 03-10 — 0.6.0: standing-number schema-drift fix. STANDING_NUMBER_SLOTS
+  // was rewritten with 5 agent-operations metrics whose SQL uses only columns
+  // verified present against the live Paperclip schema (03-10-SCHEMA-FINDINGS.md
+  // §2); the old 5 slots referenced invented columns (active_subscription_cents,
+  // issues.tags, issue_comments.author_role) that failed every verifyDraft
+  // pass-2 ctx.db.query on the Plan 03-09 closure drill. The breaker stamps this
+  // version on editor_agent_failures rows (circuit-breaker.ts CLARITY_PACK_VERSION,
+  // which imports manifest.version) — the 0.5.0→0.6.0 bump re-scopes the durable
+  // breaker past the 3 stale plugin_version='0.5.0' failure rows (ids 529-531)
+  // the 03-09 drill left, so the breaker starts clean for the 03-10 re-drill.
+  version: '0.6.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
