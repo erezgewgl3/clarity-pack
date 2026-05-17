@@ -20,7 +20,7 @@ test('standing-numbers: registry has exactly 5 slots', () => {
 test('standing-numbers: registry keys are the 5 v1 slots in exact order', () => {
   assert.deepEqual(
     STANDING_NUMBER_SLOTS.map((s) => s.key),
-    ['mrr', 'briefs_sent_week', 'reply_rate_7d', 'discoveries_7d', 'refund_rate_30d'],
+    ['open_issues', 'completed_7d', 'blocked_issues', 'agent_spend_mtd', 'budget_used_pct'],
   );
 });
 
@@ -75,7 +75,7 @@ test('standing-numbers: computeStandingNumbers returns a Record with all 5 keys 
   const out = await computeStandingNumbers(ctx, 'company-1');
   assert.deepEqual(
     Object.keys(out).sort(),
-    ['briefs_sent_week', 'discoveries_7d', 'mrr', 'refund_rate_30d', 'reply_rate_7d'],
+    ['agent_spend_mtd', 'blocked_issues', 'budget_used_pct', 'completed_7d', 'open_issues'],
   );
   for (const v of Object.values(out)) {
     assert.equal(v, 42);

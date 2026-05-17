@@ -65,9 +65,9 @@ import { wrapHostFaithfulDb } from './host-faithful-db.mjs';
 import { makeHostFaithfulAgents as makeHostFaithfulSessions } from './host-faithful-sessions.mjs';
 import { makeHostFaithfulAgents as makeHostFaithfulAgentLifecycle } from './host-faithful-agents.mjs';
 
-/** A canned, well-formed BulletinDraft whose `mrr` standing number the
- *  verifier re-checks against the SQL result. */
-function cannedDraft({ mrr = 2475 } = {}) {
+/** A canned, well-formed BulletinDraft whose `agent_spend_mtd` standing number
+ *  the verifier re-checks against the SQL result. */
+function cannedDraft({ spend = 2475 } = {}) {
   return {
     masthead: {
       volume: 'I',
@@ -79,7 +79,7 @@ function cannedDraft({ mrr = 2475 } = {}) {
     },
     actionInbox: [],
     departments: [{ name: 'Sales', items: [], editorialSummary: '' }],
-    standingNumbers: [{ key: 'mrr', displayName: 'MRR', value: mrr, format: 'currency' }],
+    standingNumbers: [{ key: 'agent_spend_mtd', displayName: 'Agent spend · MTD', value: spend, format: 'currency' }],
     lineageThreads: [],
   };
 }

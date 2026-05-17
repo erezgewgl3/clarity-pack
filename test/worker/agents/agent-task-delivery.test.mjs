@@ -75,7 +75,7 @@ function validDraftJson() {
         editorialSummary: 'Sales closed {{NUMBER:deals_won}} deals this week.',
       },
     ],
-    standingNumbers: [{ key: 'mrr', displayName: 'MRR', value: 2475, format: 'currency' }],
+    standingNumbers: [{ key: 'agent_spend_mtd', displayName: 'Agent spend · MTD', value: 2475, format: 'currency' }],
     lineageThreads: [],
   });
 }

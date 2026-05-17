@@ -21,12 +21,12 @@ const JOB_EVENT = {
 
 // A canned BulletinDraft. standingNumbers values are what the verifier
 // re-checks against the SQL result.
-function cannedDraft({ mrr = 2475 } = {}) {
+function cannedDraft({ spend = 2475 } = {}) {
   return {
     masthead: { volume: 'I', number: 1, weekday: 'Thursday', dateText: '2026-05-07', prepareForName: 'Eric G.', cycleNumber: 1 },
     actionInbox: [],
     departments: [{ name: 'Sales', items: [], editorialSummary: '' }],
-    standingNumbers: [{ key: 'mrr', displayName: 'MRR', value: mrr, format: 'currency' }],
+    standingNumbers: [{ key: 'agent_spend_mtd', displayName: 'Agent spend · MTD', value: spend, format: 'currency' }],
     lineageThreads: [],
   };
 }
@@ -284,7 +284,7 @@ test('e2e: after publish, next_due_at advances to a future instant', async () =>
 
 test('e2e: verifier rejection (mismatched MRR) -> no bulletin issue, recordFailure called', async () => {
   resetCircuitBreakerState();
-  // canned draft claims mrr=2475 but SQL returns 9999 => mismatch
+  // canned draft claims agent_spend_mtd=2475 but SQL returns 9999 => mismatch
   const { ctx, issuesCreated, failures, jobs } = makeFakeCtx({
     companies: [{ id: 'COU' }],
     nextDue: { COU: PAST },

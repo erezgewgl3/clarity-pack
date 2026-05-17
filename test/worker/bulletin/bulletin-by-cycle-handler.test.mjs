@@ -20,7 +20,7 @@ function stubDraft() {
     masthead: { volume: 'I', number: 7, weekday: 'Friday', dateText: '2026-05-15', prepareForName: 'Eric G.', cycleNumber: 7 },
     actionInbox: [],
     departments: [{ name: 'Production', items: [], editorialSummary: 'Quiet.' }],
-    standingNumbers: [{ key: 'mrr', displayName: 'MRR', value: 2475, format: 'currency' }],
+    standingNumbers: [{ key: 'agent_spend_mtd', displayName: 'Agent spend · MTD', value: 2475, format: 'currency' }],
     lineageThreads: [{ id: 't1', entityId: 'i1', nodes: [], truncatedCount: 0 }],
   };
 }
