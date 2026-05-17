@@ -28,7 +28,15 @@ progress:
 ## Current Position
 
 Phase: 03 (daily-bulletin) — EXECUTING
-Plan: 10 of 10 built (03-10 AUTO TASKS 1-3 COMPLETE; TASK 4 closure re-drill = checkpoint:human-verify, blocking — AWAITING ERIC)
+Plan: 10 of 10 built. 03-10 closure re-drill (2026-05-17) DID NOT PASS — surfaced
+BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE. Debugged + fixed: debug session
+`.planning/debug/verifier-counts-own-issue.md` (RESOLVED), fix commit `a0e77d3`
+(operation-issue exclusion clause on the 3 public.issues standing-number slots),
+version bumped 0.6.0→0.6.1 + packed `clarity-pack-0.6.1.tgz` commit `7b651de`
+(sha256 `7562b4b7ecb09e84cca0335e89fec533d7fa3988784d8d848e7bfa95dd280cd5`).
+**AWAITING ERIC: closure re-drill of v0.6.1 on live Countermoves** — blocking
+checkpoint:human-verify. Closure criterion: a `Bulletin No. N` (cycle_number >= 1)
+publishes end-to-end, breaker not tripped.
 **Phase 3 plans:**
 
   - 03-01 — Foundation: **COMPLETE 2026-05-15** — `0004_bulletin.sql` migration (bulletins incl. `draft_json jsonb` + UNIQUE(next_due_at,content_hash) + bulletin_errata + clarity_department_membership + bulletin_compile_failures) + DST-safe `computeNextDueAt` (date-fns-tz) + bulletins repo (8 fns) + manifest `jobs[]`+capabilities+config + self-loop-filter `BULLETIN_TAG_PREFIX` extension + compile-bulletin no-op job. 3 TDD commits ab217b0..e059d8b; suite 455/453-pass/0-fail/2-skip; typecheck+build green. BULL-01, BULL-02 foundation delivered. SUMMARY: `03-01-SUMMARY.md`.
