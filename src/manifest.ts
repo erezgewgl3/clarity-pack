@@ -18,13 +18,16 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
-  // Plan 03-08 — 0.4.0: Option B document-readback. deliverAgentTask reads the
-  // agent's issue document keyed `compile-result` back as the PRIMARY readback;
-  // the dead Option C tool channel (03-07) is stripped. The breaker stamps this
-  // version on editor_agent_failures rows (circuit-breaker.ts
-  // CLARITY_PACK_VERSION, which imports manifest.version) — the 0.3.0→0.4.0 bump
-  // re-scopes the durable breaker past the 3 stale plugin_version='0.3.0' rows.
-  version: '0.4.0',
+  // Plan 03-09 — 0.5.0: readback structure-only validator fix. The 03-08 Option
+  // B document-readback architecture is unchanged; the one-spot bug was that
+  // `deliverAgentTask`'s readback called the slot-resolving `validateDraftSchema`
+  // with an empty facts table, which threw `UNKNOWN_SLOT` on every real agent
+  // draft's `{{NUMBER:key}}` placeholders and rejected the flawless document.
+  // The readback now calls structure-only `validateDraftStructure`. The breaker
+  // stamps this version on editor_agent_failures rows (circuit-breaker.ts
+  // CLARITY_PACK_VERSION, which imports manifest.version) — the 0.4.0→0.5.0 bump
+  // re-scopes the durable breaker past the stale plugin_version='0.4.0' row.
+  version: '0.5.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
