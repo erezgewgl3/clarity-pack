@@ -91,8 +91,16 @@ Plans:
   3. An attempt to attach a file when the work-products service is unavailable disables the attach button with an explicit "Attachments are temporarily unavailable" message - never silently lost; when available, attachments persist as Paperclip work-products.
   4. Each agent message exposes `Promote to task` and `Pin` affordances, "decision recorded" messages render as a distinct typeform, and the reasoning panel (collapsed by default) shows sources + reasoning bullets when expanded.
   5. Disabling the plugin in Paperclip's classic plugin-admin UI leaves every chat message intact and visible as ordinary threaded comments in classic Paperclip - verified by an automated coexistence test, plus per-employee linear timeline + global search across visible threads work for the current user.
-**Plans**: TBD
+**Plans**: 6 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 04-01-PLAN.md — Falsify-first spike: live-verify on Countermoves the native issue_commented agent wake + reply form (D-01/OQ-4), closed-topic re-wake (OQ-3), event payload shape (OQ-2), and any attachment-upload path (OQ-1). Builds zero chat code; gates 04-02..04-06. Wave 1, non-autonomous (Eric Countermoves probe drill). (CHAT-07)
+- [ ] 04-02-PLAN.md — Data layer: 0006_chat.sql (chat_topics + chat_messages side table) + chat-topics-repo.ts (typed CRUD, CHT-NN allocator, message_uuid dedup lookup) + manifest capability additions + version bump to 0.7.0. Wave 2, autonomous, TDD. (CHAT-03)
+- [ ] 04-03-PLAN.md — Realtime + persistence spine: chat-send (dedup, createComment, side-table, auto-reopen), chat-edit (append-with-supersedes), chat-stream-bridge (issue.comment.created to ctx.streams.emit), worker.ts wiring. Wave 3, autonomous, TDD. (CHAT-02, CHAT-04, CHAT-05, CHAT-06)
+- [ ] 04-04-PLAN.md — Read + CRUD handlers: chat-roster (Editor-Agent excluded), chat-topics (+ New topic action), chat-messages, chat-search (CHAT-08 ILIKE), chat-promote, chat-pin, worker.ts wiring. Wave 4, autonomous, TDD. (CHAT-01, CHAT-08, CHAT-09)
+- [ ] 04-05-PLAN.md — UI surface: replace chat-stub.tsx — four-region shell, roster rail, topic strip, optimistic message thread (stream-primary + poll fallback), composer with attachment graceful-degrade, reasoning panel, scoped chat.css. Wave 5, non-autonomous (Eric Countermoves visual-fidelity drill). (CHAT-07, CHAT-10)
+- [ ] 04-06-PLAN.md — Coexistence + closure: 08-chat-disable.mjs CHAT-11 check + CI checklist extension + traceability update + Phase 4 closure drill. Wave 6, non-autonomous (Eric Countermoves closure drill). (CHAT-11)
 
 ### Phase 5: Distribution & Polish
 **Goal**: clarity-pack ships as a public npm package installable via `pnpm paperclipai plugin install clarity-pack` with a documented runbook, AC auto-status promoted from Phase 2's manual checklist to event-derived without breaking the manual UX, full-fidelity previewers replacing Phase 2's placeholder (xlsx -> grid, pdf -> embed, md -> rendered, png -> img), and lockfile audit + a11y pass + visual-regression baseline locked into CI.
