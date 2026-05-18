@@ -145,11 +145,17 @@ function log(msg, extra) {
 }
 
 // ---------------------------------------------------------------------------
-// Endpoint helpers — companyId-scoped routes per paperclip-api.mjs note that
-// /api/issues moved to /api/companies/{id}/issues post-2026-05-08.
+// Endpoint helpers — route shapes VERIFIED LIVE against Countermoves
+// 2026-05-18. Issue/agent COLLECTION routes are companyId-scoped
+// (`/api/companies/{id}/issues`, `/api/companies/{id}/agents`), but per-issue
+// SUB-routes are FLAT (`/api/issues/{id}`, `/api/issues/{id}/comments`, ...).
+// The earlier company-scoped per-issue guess returned 404 "API route not
+// found" on createComment / updateIssue / documents — see the first failed
+// run in 04-01-probe-output.txt. Discovery curl loop confirmed the flat shape.
 // ---------------------------------------------------------------------------
 
 const C = () => encodeURIComponent(COMPANY_ID);
+const I = (issueId) => encodeURIComponent(issueId);
 
 function listAgents() {
   return call('GET', `/api/companies/${C()}/agents`);
@@ -158,50 +164,33 @@ function listAgents() {
 function createIssue(payload) {
   // payload: { parentId?, title, description?, status?, assigneeAgentId?,
   //            originKind?, originId? }
+  // Collection route — companyId-scoped (verified: createIssue succeeded).
   return call('POST', `/api/companies/${C()}/issues`, payload);
 }
 
 function getIssue(issueId) {
-  return call('GET', `/api/companies/${C()}/issues/${encodeURIComponent(issueId)}`);
+  return call('GET', `/api/issues/${I(issueId)}`);
 }
 
 function updateIssue(issueId, patch) {
-  return call(
-    'PATCH',
-    `/api/companies/${C()}/issues/${encodeURIComponent(issueId)}`,
-    patch,
-  );
+  return call('PATCH', `/api/issues/${I(issueId)}`, patch);
 }
 
 function listComments(issueId) {
-  return call(
-    'GET',
-    `/api/companies/${C()}/issues/${encodeURIComponent(issueId)}/comments`,
-  );
+  return call('GET', `/api/issues/${I(issueId)}/comments`);
 }
 
 function createComment(issueId, bodyText) {
-  return call(
-    'POST',
-    `/api/companies/${C()}/issues/${encodeURIComponent(issueId)}/comments`,
-    { body: bodyText },
-  );
+  return call('POST', `/api/issues/${I(issueId)}/comments`, { body: bodyText });
 }
 
 function requestWakeup(issueId) {
   // capability `issues.wakeup` is already declared in the manifest.
-  return call(
-    'POST',
-    `/api/companies/${C()}/issues/${encodeURIComponent(issueId)}/wakeup`,
-    {},
-  );
+  return call('POST', `/api/issues/${I(issueId)}/wakeup`, {});
 }
 
 function listDocuments(issueId) {
-  return call(
-    'GET',
-    `/api/companies/${C()}/issues/${encodeURIComponent(issueId)}/documents`,
-  );
+  return call('GET', `/api/issues/${I(issueId)}/documents`);
 }
 
 /** Normalize an array-or-wrapped-array REST body into a plain array. */
@@ -596,7 +585,7 @@ async function probeOQ1(state) {
   try {
     const res = await call(
       'POST',
-      `/api/companies/${C()}/issues/${encodeURIComponent(targetIssueId)}/documents`,
+      `/api/issues/${I(targetIssueId)}/documents`,
       {
         key: 'chat-attachment-test',
         title: 'chat-attachment-test',
@@ -647,7 +636,7 @@ async function probeOQ1(state) {
   // routes with a HEAD/OPTIONS-style GET to see if any exist (404 vs 405/200).
   for (const route of [
     `/api/companies/${C()}/attachments`,
-    `/api/companies/${C()}/issues/${encodeURIComponent(targetIssueId)}/attachments`,
+    `/api/issues/${I(targetIssueId)}/attachments`,
     `/api/companies/${C()}/uploads`,
     '/api/uploads',
   ]) {
