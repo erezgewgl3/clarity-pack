@@ -194,16 +194,33 @@ test('0006 contains zero ALTER TABLE ... DROP COLUMN statements (additive-only i
 });
 
 test('0006 has no apostrophe inside any -- line comment (greedy-strip hazard)', () => {
+  // Quote-aware scan: a `--` only starts a real line comment when it is NOT
+  // inside a `'...'` string literal (e.g. the `--` inside a COMMENT ON string
+  // body is literal text, not a comment). Track quote state per line; the
+  // migration has no multi-line string literals.
   const lines = rawSql.split('\n');
   for (const line of lines) {
-    const idx = line.indexOf('--');
-    if (idx === -1) continue;
-    const comment = line.slice(idx);
-    assert.equal(
-      comment.includes("'"),
-      false,
-      `migration comment contains an apostrophe (greedy string-strip hazard): ${comment.trim()}`,
-    );
+    let inQuote = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (inQuote) {
+        if (ch === "'") inQuote = false;
+        continue;
+      }
+      if (ch === "'") {
+        inQuote = true;
+        continue;
+      }
+      if (ch === '-' && line[i + 1] === '-') {
+        const comment = line.slice(i);
+        assert.equal(
+          comment.includes("'"),
+          false,
+          `migration comment contains an apostrophe (greedy string-strip hazard): ${comment.trim()}`,
+        );
+        break; // rest of the line is comment
+      }
+    }
   }
 });
 
