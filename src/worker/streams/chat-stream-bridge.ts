@@ -39,14 +39,20 @@ export type ChatStreamBridgeCtx = ChatTopicsRepoCtx & {
   logger?: PluginLogger;
 };
 
+/** Coerce a host createdAt (Date | string | undefined) to an epoch ms. */
+function createdAtMs(comment: IssueComment): number {
+  const raw = (comment as { createdAt?: Date | string }).createdAt;
+  if (!raw) return 0;
+  const t = new Date(raw).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
 /** Return the id of the most-recently-created comment, or null. */
 function newestCommentId(comments: IssueComment[]): string | null {
   if (!comments || comments.length === 0) return null;
   let newest = comments[0];
   for (const c of comments) {
-    const a = (c as { createdAt?: string }).createdAt ?? '';
-    const b = (newest as { createdAt?: string }).createdAt ?? '';
-    if (a > b) newest = c;
+    if (createdAtMs(c) > createdAtMs(newest)) newest = c;
   }
   return (newest as { id?: string }).id ?? null;
 }

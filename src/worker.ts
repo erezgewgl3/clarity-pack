@@ -81,6 +81,13 @@ import {
   registerBulletinLatestStatus,
   type BulletinLatestStatusCtx,
 } from './worker/handlers/bulletin-latest-status.ts';
+// Plan 04-03 — Employee Chat send / edit action handlers + realtime bridge.
+import { registerChatSend, type ChatSendCtx } from './worker/handlers/chat-send.ts';
+import { registerChatEdit, type ChatEditCtx } from './worker/handlers/chat-edit.ts';
+import {
+  registerChatStreamBridge,
+  type ChatStreamBridgeCtx,
+} from './worker/streams/chat-stream-bridge.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -130,6 +137,15 @@ const plugin = definePlugin({
     registerBulletinActionDecline(ctx as unknown as BulletinActionDeclineCtx);
     registerBulletinErrata(ctx as unknown as BulletinErrataCtx);
     registerBulletinLatestStatus(ctx as unknown as BulletinLatestStatusCtx);
+
+    // ---- Plan 04-03 — Employee Chat send / edit action handlers -------------
+    // chat.send is the canonical-write path (createComment -> public.
+    // issue_comments, CHAT-02) with message_uuid dedup (CHAT-06) and auto-
+    // reopen (D-06). chat.edit appends a superseding comment (CHAT-05 / D-11).
+    // Both are non-exempt — registered AFTER the exempt-key handlers, and
+    // opt-in-guard wrapped (T-04-08).
+    registerChatSend(ctx as unknown as ChatSendCtx);
+    registerChatEdit(ctx as unknown as ChatEditCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
@@ -213,8 +229,15 @@ const plugin = definePlugin({
       });
     }
 
+    // ---- Plan 04-03 — Employee Chat realtime stream bridge ------------------
+    // Subscribes to the core issue.comment.created event and re-emits comments
+    // on chat-topic issues onto the per-company plugin SSE channel
+    // chat:<companyId> (CHAT-04 / D-08). The handler body is try/catch wrapped
+    // internally — a throwing event handler never crashes the worker (T-04-12).
+    registerChatStreamBridge(ctx as unknown as ChatStreamBridgeCtx);
+
     ctx.logger?.info?.(
-      `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status registered`,
+      `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status + chat.send/chat.edit + chat-stream-bridge registered`,
     );
   },
 });
