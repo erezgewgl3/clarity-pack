@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-19T00:00:00.000Z"
+last_updated: "2026-05-18T21:36:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 22
-  percent: 67
+  completed_plans: 23
+  percent: 70
 ---
 
 # State: Clarity Pack
@@ -28,21 +28,28 @@ progress:
 ## Current Position
 
 Phase: 04 (employee-chat) — EXECUTING
-Plan: 2 of 6 (Plan 04-01 COMPLETE 2026-05-19)
+Plan: 3 of 6 (Plan 04-02 COMPLETE 2026-05-18)
 
-**Plan 04-01 — Falsify-First Spike: COMPLETE 2026-05-19.** Tasks 1-3 done. Task 1
-built the throwaway probe `scripts/spike/chat-spike-probe.mjs` (commits b91d887,
-route fix d36c81c). Task 2 ran the probe on live Countermoves bookended by verified
-snapshot `2026-05-18T20-15-56Z` (commits 9555aac, 5f49c38). Task 3 (commit 6c0d6ef)
-wrote `04-01-SPIKE-FINDINGS.md` + `test/phases/04-01-spike-findings.test.mjs` (5
-tests, all pass). **Phase 4 Gate Verdict: GO** — D-01 native `issue_commented` agent
-wake PROVEN on live Countermoves (CEO employee-agent woke on a posted comment and
-replied as an `issue_comments` row, 0 documents). Verdicts: D-01/OQ-4 PASS, OQ-2
-recorded, OQ-3 STATUS-FLIP-NOT-NEEDED, OQ-1 NO-PATH (CHAT-07 ships degraded).
-Downstream design inputs: 04-03 folds a reply-channel instruction into new topic
-descriptions; 04-03 auto-reopen needs no `requestWakeup`; 04-03 stream bridge derives
-the comment via a `listComments` re-fetch; 04-04 builds the disabled-attach UI.
-SUMMARY: `04-01-SUMMARY.md`. **NEXT: Plan 04-02 (data layer, autonomous, TDD).**
+**Plan 04-02 — Employee Chat Data Layer: COMPLETE 2026-05-18.** TDD, autonomous,
+3 tasks / 7 commits (`5549206..6b251fa`). Task A — `migrations/0006_chat.sql`:
+three additive plugin-namespace tables — `chat_topics` (CHT-NN topic metadata),
+`chat_messages` (the D-09 id-map side table: `message_uuid -> comment_id`,
+supersedes link, pin flag — NO `body` column, CHAT-02 invariant), and
+`chat_employee_parents` (D-05 per-employee parent-issue map, composite PK,
+race-safe). Validator-clean (fully-qualified, no CREATE INDEX, no DO $$,
+apostrophe-free, ;-terminated). Task B — `src/worker/db/chat-topics-repo.ts`:
+typed CRUD mirroring `bulletins-repo.ts` — `insertChatTopic`,
+`getChatTopicByIssueId`, `listChatTopicsForEmployee`, `allocateChtNumber`
+(CHT-NN per-company allocator), `insertChatMessage` (ON CONFLICT message_uuid
+dedup), `getChatMessageByUuid` (dedup-on-send), `updateChatMessagePinned`,
+`getEmployeeParentIssueId`, `insertEmployeeParent` (race-safe). Task C —
+manifest bumped 0.6.6 -> 0.7.0; no new capability strings (the chat handlers'
+host calls are all covered by Phase 2/3 capabilities proven live). Deviation:
+the stale Phase-2 COEXIST-05 stub (forbade any `chat_messages` table) corrected
+to the real CHAT-02 invariant — side table allowed, `body` column forbidden.
+Suite 767 tests / 765 pass / 0 fail / 2 skip; typecheck clean. SUMMARY:
+`04-02-SUMMARY.md`. **NEXT: Plan 04-03 (realtime + persistence spine,
+autonomous, TDD).**
 
 ---
 
@@ -207,6 +214,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 | Phase 1 commits | 11 (RED + GREEN + docs across 3 plans) |
 | Plan 03-01 | ~38 min, 3 TDD commits, 13 files (8 created), suite 422→455 (+33; 453 pass / 0 fail / 2 skip) |
 | Plan 03-02 | ~42 min, 4 TDD commits, 15 files (13 created), suite 455→504 (+49; 502 pass / 0 fail / 2 skip) |
+| Plan 04-02 | ~12 min, 7 commits (6 TDD + 1 deviation fix), 8 files (5 created), suite 762→767 (+5; 765 pass / 0 fail / 2 skip) |
 
 ## Accumulated Context
 
@@ -226,6 +234,9 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 12. **Bulletin-compile circuit-breaker `recordSuccess` is pipeline-scoped, not pass-scoped** (Plan 03-02) - `recordSuccess(BULLETIN_COMPILE_AGENT_KEY)` fires exactly once after a *verified publish*, never after pass-1's parse. A draft that pass-1 accepts but the pass-2 verifier rejects must accumulate toward the 3-rejection circuit-breaker trip; resetting the shared counter on pass-1 success would let verifier-rejected drafts escape the trip wire. `BULLETIN_COMPILE_AGENT_KEY = 'bulletin-compile'` keeps bulletin failures isolated from compile-tldr's counter.
 13. **Managed-agent result readback = an issue-document poll, not a tool call and not a comment poll** (Plan 03-08, Option B) - a `claude_local` managed agent's session never receives a plugin-declared tool (Option C live-disproven on the 2026-05-16 drill). `deliverAgentTask`'s PRIMARY readback is `ctx.issues.documents.get(operationIssueId, 'compile-result', companyId)` at a 5s cadence; an off-key `documents.list` scan and a legacy `listComments` scan are lower-priority fallbacks. The agent files its `BulletinDraft`/TL;DR as an issue document keyed `compile-result` — its proven, observed behaviour.
 14. **Per-operation agent instructions ride the operation-issue DESCRIPTION, not the static manifest** (Plan 03-08) - `reconcile()` sets `agents[].instructions.content` at agent CREATION only; it does NOT propagate to an already-existing managed agent. Any instruction the agent must follow per-compile (e.g. "store the result as a document keyed `compile-result`" — `RESULT_DELIVERY_INSTRUCTION`) is appended to the operation-issue description, which `deliverAgentTask` creates fresh every compile and the agent provably reads.
+16. **`chat_messages` is a mandatory id-map side table, never a content store** (Plan 04-02 / D-09) - `ctx.issues.createComment` accepts no metadata field and `public.issue_comments` has no supersedes column, so the `message_uuid -> comment_id` idempotency map (CHAT-06), the D-11 supersedes link and the D-13 pin flag live in `plugin_clarity_pack_cdd6bda4bd.chat_messages`. That table has NO `body` column — message content lives only in `public.issue_comments` (CHAT-02). The Phase-2 COEXIST-05 stub (forbade any `chat_messages` table) was corrected to enforce the real invariant: side table allowed, `body` column forbidden.
+17. **Phase 4 chat handlers need no new manifest capability strings** (Plan 04-02) - posting a chat message uses `issue.comments.create`, the stream bridge uses `events.subscribe`, the roster uses `agents.read`, `+ New topic` uses `issues.create`, and D-06 auto-reopen calls `ctx.issues.update` — all covered by capabilities Phase 2/3 declared and proved live on Countermoves (`bulletin-action-approve` exercises `ctx.issues.update` with the current set). An unrecognized capability string would risk the host install validator, so `issues.update` is deliberately NOT added.
+
 15. **Standing-number SQL is column-bound to a live-introspected schema** (Plan 03-10) - the 5 `STANDING_NUMBER_SLOTS` are agent-operations metrics (`open_issues`, `completed_7d`, `blocked_issues`, `agent_spend_mtd`, `budget_used_pct`) over `public.issues`/`public.companies`; every column is verified present by a live `\d` introspection capture (`03-10-SCHEMA-FINDINGS.md §2`), never extrapolated from the host repo or a CRM mental model. Paperclip has no customer/revenue/sales data — the original CRM-model slots (MRR, cold-email reply rate, refunds) referenced columns that do not exist. Per 03-CONTEXT.md line 92 only the registry SHAPE + BULL-05 (SQL-derived, grep-able, never LLM-generated) are locked; the specific numbers are planner's discretion. The local host-faithful test suite returns canned `db.query` results and CANNOT catch schema drift — a live Countermoves drill is the only valid proof.
 
 ### Open Todos
