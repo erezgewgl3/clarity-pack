@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sketch 001 — Employee Chat · Density</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg);color:var(--ink);
+    font-family:var(--font-sans);font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11";
+    height:100%;
+  }
+  body{
+    overflow:hidden;
+    background:
+      radial-gradient(900px 500px at 100% 0%, rgba(217,162,62,.05), transparent 60%),
+      linear-gradient(180deg,#0E0D0A 0%, #0B0A07 100%);
+    padding-top:46px;
+  }
+
+  /* scrollbars — thin + theme-toned (default chunky OS bars clashed badly) */
+  .messages,.roster-list,.ctx{scrollbar-width:thin;scrollbar-color:var(--line-bright) transparent}
+  .messages::-webkit-scrollbar,.roster-list::-webkit-scrollbar,.ctx::-webkit-scrollbar{width:7px;height:7px}
+  .messages::-webkit-scrollbar-track,.roster-list::-webkit-scrollbar-track,.ctx::-webkit-scrollbar-track{background:transparent}
+  .messages::-webkit-scrollbar-thumb,.roster-list::-webkit-scrollbar-thumb,.ctx::-webkit-scrollbar-thumb{
+    background:var(--line-bright);border-radius:4px;
+  }
+  .messages::-webkit-scrollbar-thumb:hover,.roster-list::-webkit-scrollbar-thumb:hover,.ctx::-webkit-scrollbar-thumb:hover{background:var(--ink-4)}
+  /* topic strip scrolls horizontally with no visible bar (Slack/Linear convention) */
+  .topics{scrollbar-width:none;-ms-overflow-style:none}
+  .topics::-webkit-scrollbar{display:none}
+
+  /* ───────── variant tab bar ───────── */
+  #variant-nav{
+    position:fixed;top:0;left:0;right:0;z-index:9998;height:46px;
+    background:var(--bg-2);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;padding:0 16px;
+    font-family:var(--font-mono);
+  }
+  #variant-nav .lbl{
+    font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-4);margin-right:4px;
+  }
+  .variant-tab{
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:6px 12px;border:1px solid var(--line-bright);background:transparent;color:var(--ink-3);
+    cursor:pointer;transition:all .15s ease;
+  }
+  .variant-tab:hover{color:var(--ink-2);border-color:var(--ink-3)}
+  .variant-tab.active{background:var(--you);color:#1B150A;border-color:var(--you);font-weight:600}
+  #variant-nav .desc{
+    margin-left:auto;font-size:10px;letter-spacing:.04em;color:var(--ink-3);
+  }
+  #variant-nav .desc b{color:var(--ink-2)}
+
+  /* ───────── shell ───────── */
+  .shell{
+    display:grid;grid-template-columns:264px 1fr 340px;grid-template-rows:minmax(0,1fr);
+    height:calc(100vh - 46px);position:relative;z-index:1;
+    /* density tokens — overridden per data-density */
+    --msg-text:14.5px; --msg-lh:1.55; --msg-gap:18px;
+    --bubble-py:13px; --bubble-px:16px; --msg-av:34px;
+    --meta-text:10.5px; --messages-py:24px; --messages-px:22px;
+    --emp-py:10px; --b-weight:300; --msg-maxw:780px;
+    --thread-head-py:14px; --topics-py:10px; --composer-py:14px;
+  }
+  .shell[data-density="compact"]{
+    --msg-text:13px; --msg-lh:1.45; --msg-gap:9px;
+    --bubble-py:8px; --bubble-px:12px; --msg-av:26px;
+    --meta-text:9.5px; --messages-py:13px; --messages-px:16px;
+    --emp-py:6px; --b-weight:400; --msg-maxw:760px;
+    --thread-head-py:9px; --topics-py:7px; --composer-py:9px;
+  }
+  .shell[data-density="editorial"]{
+    --msg-text:15.5px; --msg-lh:1.72; --msg-gap:32px;
+    --bubble-py:18px; --bubble-px:22px; --msg-av:40px;
+    --meta-text:11px; --messages-py:38px; --messages-px:40px;
+    --emp-py:12px; --b-weight:300; --msg-maxw:680px;
+    --thread-head-py:20px; --topics-py:13px; --composer-py:18px;
+  }
+
+  /* ───────── LEFT: roster ───────── */
+  .roster{border-right:1px solid var(--line);background:var(--bg-2);display:flex;flex-direction:column;height:100%;min-height:0}
+  .roster-head{
+    padding:14px 16px 12px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .roster-head .ttl{font-family:var(--font-serif);font-style:italic;font-size:20px;color:var(--ink)}
+  .roster-head .ct{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase}
+  .roster-search{padding:10px 12px;border-bottom:1px solid var(--line)}
+  .roster-search input{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    font-family:var(--font-mono);font-size:11.5px;padding:7px 10px;letter-spacing:.04em;
+  }
+  .roster-search input::placeholder{color:var(--ink-3)}
+  .roster-search input:focus{outline:none;border-color:var(--ink-3)}
+  .roster-list{flex:1;min-height:0;overflow-y:auto;padding:6px 0}
+  .roster-section{
+    padding:14px 16px 8px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.22em;
+    color:var(--ink-4);text-transform:uppercase;border-top:1px solid var(--line);margin-top:8px;
+  }
+  .roster-section:first-child{border-top:none;margin-top:0}
+  .emp{
+    display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:10px;
+    padding:var(--emp-py) 14px;cursor:pointer;border-left:2px solid transparent;transition:background .12s ease;
+  }
+  .emp:hover{background:var(--bg-3)}
+  .emp.active{background:var(--bg-3);border-left-color:var(--you)}
+  .emp .av{
+    width:24px;height:24px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:12px;color:var(--ink-2);position:relative;
+  }
+  .emp .av::after{
+    content:"";position:absolute;width:7px;height:7px;border-radius:50%;
+    bottom:-2px;right:-2px;border:1.5px solid var(--bg-2);
+  }
+  .emp.s-live .av::after{background:var(--live)}
+  .emp.s-warn .av::after{background:var(--warn)}
+  .emp.s-alert .av::after{background:var(--alert)}
+  .emp.s-idle .av::after{background:var(--idle)}
+  .emp .name{font-size:13.5px;color:var(--ink);font-weight:400;letter-spacing:-.003em}
+  .emp .name small{display:block;font-family:var(--font-mono);font-size:10px;color:var(--ink-3);letter-spacing:.06em;margin-top:2px}
+  .emp .badge{
+    font-family:var(--font-mono);font-size:10px;color:var(--bg);background:var(--alert);
+    padding:2px 6px;letter-spacing:.04em;font-weight:600;border-radius:2px;
+  }
+  .emp .badge.muted{background:transparent;color:var(--ink-4);border:1px solid var(--line)}
+
+  /* ───────── MIDDLE: thread ───────── */
+  .thread{display:flex;flex-direction:column;height:100%;background:var(--bg);min-width:0;min-height:0}
+  .thread-head{
+    display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;
+    padding:var(--thread-head-py) 22px;border-bottom:1px solid var(--line);background:var(--bg-2);
+  }
+  .who-big{display:flex;align-items:center;gap:14px}
+  .who-big .av{
+    width:38px;height:38px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:18px;color:var(--ink);position:relative;
+  }
+  .who-big .av::after{
+    content:"";position:absolute;width:9px;height:9px;border-radius:50%;
+    bottom:-2px;right:-2px;border:2px solid var(--bg-2);background:var(--live);
+  }
+  .who-big .role{font-family:var(--font-serif);font-style:italic;font-size:22px;color:var(--ink);line-height:1}
+  .who-big .role small{
+    display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-3);margin-top:4px;font-style:normal;
+  }
+  .global-search{position:relative;max-width:380px;margin:0 auto;width:100%}
+  .global-search input{
+    width:100%;background:var(--bg);border:1px solid var(--line-bright);color:var(--ink);
+    font-family:var(--font-mono);font-size:11.5px;padding:9px 14px 9px 34px;letter-spacing:.04em;
+  }
+  .global-search input::placeholder{color:var(--ink-3)}
+  .global-search input:focus{outline:none;border-color:var(--ink-2)}
+  .global-search .icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:12px}
+  .global-search .kbd{
+    position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);
+    font-size:10px;color:var(--ink-3);border:1px solid var(--line);padding:2px 6px;letter-spacing:.04em;
+  }
+  .head-actions{display:flex;gap:8px;align-items:center}
+  .btn{
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    padding:7px 12px;border:1px solid var(--ink-2);background:var(--ink);color:var(--bg);cursor:pointer;
+    font-weight:500;white-space:nowrap;transition:transform .12s ease;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn.ghost{background:transparent;color:var(--ink-2);border-color:var(--line-bright)}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--ink-2)}
+
+  /* topic strip */
+  .topics{
+    display:flex;gap:6px;padding:var(--topics-py) 22px;border-bottom:1px solid var(--line);
+    background:var(--bg-2);overflow-x:auto;align-items:center;
+  }
+  .topic-lbl{
+    font-family:var(--font-mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-3);margin-right:6px;flex-shrink:0;
+  }
+  .topic{
+    display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border:1px solid var(--line);
+    font-family:var(--font-mono);font-size:11px;color:var(--ink-2);cursor:pointer;letter-spacing:.02em;
+    flex-shrink:0;transition:all .12s ease;
+  }
+  .topic:hover{border-color:var(--line-bright);color:var(--ink)}
+  .topic.active{background:var(--bg-3);border-color:var(--ink-3);color:var(--ink)}
+  .topic .id{color:var(--ink-3);font-size:10px}
+  .topic .dot{width:5px;height:5px;border-radius:50%;background:var(--live)}
+  .topic.warn .dot{background:var(--warn)}
+  .topic.alert .dot{background:var(--alert)}
+
+  /* messages scroller */
+  .messages{
+    flex:1;min-height:0;overflow-y:auto;padding:var(--messages-py) var(--messages-px) 16px;
+    display:flex;flex-direction:column;gap:var(--msg-gap);
+  }
+  .day-divider{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;margin:4px 0}
+  .day-divider::before,.day-divider::after{content:"";height:1px;background:var(--line)}
+  .day-divider span{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.2em;color:var(--ink-3);text-transform:uppercase;
+  }
+
+  .msg{display:grid;grid-template-columns:var(--msg-av) 1fr;gap:14px;max-width:var(--msg-maxw)}
+  .msg.me{justify-self:end;grid-template-columns:1fr var(--msg-av);direction:rtl}
+  .msg.me > *{direction:ltr}
+  .msg .av{
+    width:var(--msg-av);height:var(--msg-av);border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:calc(var(--msg-av) * .44);color:var(--ink-2);
+    background:var(--bg);align-self:flex-end;
+  }
+  .msg.me .av{background:var(--you-soft);border-color:var(--you);color:var(--you)}
+  .bubble{
+    background:var(--agent-bubble);border:1px solid var(--line);
+    padding:var(--bubble-py) var(--bubble-px);border-radius:2px;position:relative;
+  }
+  .msg.me .bubble{background:var(--eric-bubble);border-color:var(--line-bright)}
+  .b-meta{
+    display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-bottom:6px;
+    font-family:var(--font-mono);font-size:var(--meta-text);letter-spacing:.04em;color:var(--ink-3);
+  }
+  .b-meta .who{color:var(--ink-2);font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+  .msg.me .b-meta .who{color:var(--you)}
+  .b-meta .ts{font-variant-numeric:tabular-nums}
+  .b-text{font-size:var(--msg-text);line-height:var(--msg-lh);color:var(--ink);font-weight:var(--b-weight);letter-spacing:-.003em}
+  .b-text b{font-weight:500}
+  .b-text p+p{margin-top:8px}
+  .b-text .num{
+    font-family:var(--font-mono);font-size:.88em;font-weight:500;color:var(--ink);
+    background:var(--bg-4);padding:1px 5px;border:1px solid var(--line);border-radius:2px;
+  }
+  /* resolved reference chip — title-forward (the whole point: read the task,
+     not BEAAA-NNN). ID is a legible recessed tag; status keeps its colour. */
+  .ref-inline{
+    display:inline-flex;align-items:baseline;gap:7px;padding:2px 5px 2px 8px;
+    background:var(--bg-4);border:1px solid var(--line-bright);border-radius:3px;cursor:pointer;
+    line-height:1.35;vertical-align:baseline;transition:border-color .12s ease,background .12s ease;
+  }
+  .ref-inline:hover{border-color:var(--ink-3);background:var(--bg-3)}
+  .ref-inline .tt{font-family:var(--font-sans);font-size:.93em;font-weight:400;color:var(--ink);letter-spacing:-.003em;white-space:nowrap}
+  .ref-inline .id{
+    font-family:var(--font-mono);font-size:9px;color:var(--ink-3);letter-spacing:.03em;
+    background:var(--bg);border:1px solid var(--line);border-radius:2px;padding:1.5px 4px;
+  }
+  .ref-inline .st{font-family:var(--font-mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:500}
+  .ref-inline .st.review{color:var(--warn)}
+  .ref-inline .st.done{color:var(--live)}
+  .ref-inline .st.locked{color:var(--idle)}
+  .ref-inline .st.todo{color:var(--ink-3)}
+
+  /* click a resolved chip → inline PEEK (resolve in place — never navigate away) */
+  .ref-peek{
+    position:fixed;z-index:9997;width:322px;max-width:90vw;display:none;
+    background:var(--bg-3);border:1px solid var(--line-bright);border-radius:4px;
+    box-shadow:0 14px 38px rgba(0,0,0,.62);padding:14px 16px;
+  }
+  .ref-peek.show{display:block}
+  .ref-peek .pk-title{font-family:var(--font-serif);font-style:italic;font-size:19px;color:var(--ink);line-height:1.15}
+  .ref-peek .pk-tags{display:flex;gap:7px;align-items:baseline;margin-top:8px;flex-wrap:wrap}
+  .ref-peek .pk-id{
+    font-family:var(--font-mono);font-size:9px;color:var(--ink-3);background:var(--bg);
+    border:1px solid var(--line);border-radius:2px;padding:1.5px 5px;letter-spacing:.03em;
+  }
+  .ref-peek .pk-st{font-family:var(--font-mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:500}
+  .ref-peek .pk-st.review{color:var(--warn)}
+  .ref-peek .pk-st.done{color:var(--live)}
+  .ref-peek .pk-st.locked{color:var(--idle)}
+  .ref-peek .pk-st.todo{color:var(--ink-3)}
+  .ref-peek .pk-kind{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-4)}
+  .ref-peek .pk-tldr{
+    margin-top:11px;padding-top:10px;border-top:1px dashed var(--line);
+    font-size:13px;line-height:1.5;color:var(--ink-2);font-weight:300;
+  }
+  .ref-peek .pk-tldr b{
+    display:block;color:var(--ink-3);font-family:var(--font-mono);font-size:9px;
+    letter-spacing:.14em;text-transform:uppercase;margin-bottom:5px;font-weight:500;
+  }
+  .ref-peek .pk-meta{margin-top:9px;font-family:var(--font-mono);font-size:10px;color:var(--ink-3);letter-spacing:.02em}
+  .ref-peek .pk-actions{display:flex;gap:7px;margin-top:13px}
+  .ref-peek .pk-actions button{
+    font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:6px 10px;cursor:pointer;border:1px solid var(--line-bright);background:transparent;color:var(--ink-2);
+  }
+  .ref-peek .pk-actions button:hover{color:var(--ink);border-color:var(--ink-2)}
+  .ref-peek .pk-actions button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:500}
+
+  /* reasoning panel */
+  .reasoning{margin-top:10px;border-left:2px solid var(--line);padding:6px 12px;background:var(--bg-3)}
+  .reasoning summary{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:var(--ink-3);
+    text-transform:uppercase;cursor:pointer;list-style:none;
+  }
+  .reasoning summary::before{content:"▸ ";color:var(--ink-4)}
+  .reasoning[open] summary::before{content:"▾ "}
+  .reasoning summary::-webkit-details-marker{display:none}
+  .reasoning .body{
+    margin-top:8px;font-size:13px;color:var(--ink-2);line-height:1.55;font-weight:300;
+    border-top:1px dashed var(--line);padding-top:8px;
+  }
+  .reasoning .body ul{padding-left:18px}
+  .reasoning .body li{margin-bottom:4px}
+  .reasoning .body code{font-family:var(--font-mono);font-size:11.5px;color:var(--ink);background:var(--bg-4);padding:1px 4px;border:1px solid var(--line)}
+
+  /* attachment — GENERIC CHIP ONLY (D-12: no inline preview in Phase 4) */
+  .attach{
+    margin-top:11px;border:1px solid var(--line);background:var(--bg);
+    display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;
+  }
+  .attach .ico{
+    width:32px;height:32px;border:1px solid var(--line-bright);display:grid;place-items:center;
+    font-family:var(--font-mono);font-size:9px;color:var(--ink-2);font-weight:600;letter-spacing:.04em;
+  }
+  .attach .info .nm{font-size:13px;color:var(--ink);font-weight:400}
+  .attach .info .meta{font-family:var(--font-mono);font-size:10px;color:var(--ink-3);letter-spacing:.04em;margin-top:2px}
+  .attach .open{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-2);border:1px solid var(--line-bright);padding:5px 9px;cursor:pointer;background:transparent;
+  }
+  .attach .open:hover{color:var(--ink);border-color:var(--ink-2)}
+
+  /* resolved outcome pill */
+  .resolved{
+    margin-top:10px;display:inline-flex;align-items:center;gap:9px;padding:6px 11px;
+    border:1px solid var(--live);background:var(--live-soft);
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink);border-radius:2px;
+  }
+  .resolved::before{content:"✓";color:var(--live);font-weight:600;font-family:var(--font-sans)}
+  .resolved b{color:var(--live);font-weight:500;letter-spacing:.04em}
+  .resolved.warn{border-color:var(--warn);background:var(--warn-soft)}
+  .resolved.warn::before{content:"⚠";color:var(--warn)}
+
+  /* promote-to-task hover affordance */
+  .promote{position:absolute;top:-10px;right:14px;display:flex;gap:6px;opacity:0;transition:opacity .15s ease}
+  .bubble:hover .promote{opacity:1}
+  .promote .pa{
+    font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    background:var(--bg-2);border:1px solid var(--line-bright);color:var(--ink-2);padding:4px 8px;cursor:pointer;
+  }
+  .promote .pa:hover{color:var(--ink);border-color:var(--ink-2);background:var(--bg-3)}
+
+  /* one-click decision message */
+  .decision-msg{
+    align-self:center;max-width:640px;text-align:center;
+    border:1px dashed var(--you);background:var(--you-soft);padding:11px 16px;
+  }
+  .decision-msg .lbl{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--you);font-weight:600;margin-bottom:5px;
+  }
+  .decision-msg .lbl::before{content:"⚵  "}
+  .decision-msg .txt{font-size:13.5px;color:var(--ink);line-height:1.45}
+  .decision-msg .meta{margin-top:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;color:var(--ink-3)}
+
+  /* pending "working" indicator (D-04) */
+  .pending{display:grid;grid-template-columns:var(--msg-av) 1fr;gap:14px;max-width:var(--msg-maxw)}
+  .pending .av{
+    width:var(--msg-av);height:var(--msg-av);border:1px dashed var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:calc(var(--msg-av) * .44);color:var(--ink-3);
+    background:var(--bg);align-self:flex-end;
+  }
+  .pending .pbox{
+    border:1px dashed var(--line-bright);background:var(--bg-2);padding:var(--bubble-py) var(--bubble-px);
+    display:flex;align-items:center;gap:10px;border-radius:2px;
+  }
+  .pending .ptext{
+    font-family:var(--font-mono);font-size:var(--meta-text);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  }
+  .pending .dots{display:inline-flex;gap:3px}
+  .pending .dots i{width:4px;height:4px;border-radius:50%;background:var(--ink-3);animation:blink 1.2s infinite}
+  .pending .dots i:nth-child(2){animation-delay:.2s}
+  .pending .dots i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+
+  /* composer */
+  .composer{border-top:1px solid var(--line);background:var(--bg-2);padding:var(--composer-py) 22px}
+  .composer-meta{
+    display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  }
+  .composer-meta .topic-now{color:var(--ink-2);font-weight:500}
+  .composer-meta .topic-now b{color:var(--you)}
+  .composer-box{border:1px solid var(--line-bright);background:var(--bg);transition:border-color .15s ease}
+  .composer-box:focus-within{border-color:var(--ink-3)}
+  .composer-input{
+    width:100%;background:transparent;border:none;outline:none;color:var(--ink);
+    font-family:var(--font-sans);font-size:14.5px;padding:14px 16px 4px;line-height:1.5;resize:none;min-height:54px;
+  }
+  .composer-input::placeholder{color:var(--ink-3);font-style:italic}
+  .composer-foot{
+    display:flex;justify-content:space-between;align-items:center;padding:8px 14px 10px;
+    border-top:1px dashed var(--line);
+  }
+  .composer-tools{display:flex;gap:6px}
+  .tool-btn{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-3);background:transparent;border:1px solid transparent;padding:5px 8px;cursor:pointer;
+  }
+  .tool-btn:hover{color:var(--ink-2);border-color:var(--line)}
+  .composer-foot .send-row{display:flex;gap:8px;align-items:center}
+  .composer-hint{font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;color:var(--ink-3)}
+  .composer-hint kbd{border:1px solid var(--line);padding:1px 4px;color:var(--ink-2)}
+
+  /* ───────── RIGHT: context rail ───────── */
+  .ctx{border-left:1px solid var(--line);background:var(--bg-2);height:100%;overflow-y:auto;padding:18px 18px 60px}
+  .ctx h3{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:500;border-bottom:1px solid var(--line);
+    padding-bottom:8px;margin:18px 0 12px;
+  }
+  .ctx h3:first-child{margin-top:0}
+  .agent-card{border:1px solid var(--line);padding:14px;background:var(--bg-3)}
+  .agent-card .role-line{font-family:var(--font-serif);font-style:italic;font-size:22px;color:var(--ink);line-height:1.05}
+  .agent-card .role-line small{
+    display:block;font-family:var(--font-mono);font-style:normal;font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--ink-3);margin-top:5px;
+  }
+  .agent-card .blurb{margin-top:10px;font-size:13px;color:var(--ink-2);line-height:1.45;font-style:italic;font-family:var(--font-serif)}
+  .agent-card .stat-row{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);
+  }
+  .agent-card .stat{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
+  .agent-card .stat b{
+    display:block;font-family:var(--font-serif);font-style:italic;font-size:18px;font-weight:400;
+    color:var(--ink);text-transform:none;letter-spacing:0;margin-top:2px;
+  }
+  .task-row{
+    display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+    padding:9px 0;border-bottom:1px dashed var(--line);
+  }
+  .task-row:last-child{border-bottom:none}
+  .task-row .id{font-family:var(--font-mono);font-size:10px;color:var(--ink-3);letter-spacing:.04em}
+  .task-row .ttl{font-size:13px;color:var(--ink-2);line-height:1.4}
+  .task-row .st{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+  .task-row .st.review{color:var(--warn)}
+  .task-row .st.todo{color:var(--ink-3)}
+  .task-row .st.done{color:var(--live)}
+  .task-row.owe{background:var(--you-soft);border:1px solid var(--you);padding-left:8px;padding-right:8px}
+  .task-row.owe .ttl{color:var(--ink)}
+  .task-row.owe .st{color:var(--you)}
+  .pin-row{
+    font-family:var(--font-mono);font-size:11px;color:var(--ink-2);letter-spacing:.02em;
+    padding:8px 10px;background:var(--bg);border:1px dashed var(--line);margin-bottom:6px;
+  }
+  .pin-row b{color:var(--ink);font-weight:500}
+  .pin-row small{color:var(--ink-3);font-size:10px}
+  .quick{display:flex;flex-direction:column;gap:6px}
+  .quick .qa{
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-2);
+    background:transparent;border:1px solid var(--line);padding:8px 12px;text-align:left;cursor:pointer;
+  }
+  .quick .qa:hover{border-color:var(--line-bright);color:var(--ink)}
+
+  /* toast */
+  #toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--bg-3);border:1px solid var(--line-bright);color:var(--ink);
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;padding:10px 16px;
+    opacity:0;transition:all .25s ease;z-index:9999;pointer-events:none;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* sketch toolbar */
+  #sketch-tools{
+    position:fixed;bottom:12px;right:12px;z-index:9999;font-family:system-ui;font-size:12px;
+    background:rgba(0,0,0,.78);color:#fff;padding:8px 12px;border-radius:8px;opacity:.4;
+    transition:opacity .2s;display:flex;gap:10px;align-items:center;
+  }
+  #sketch-tools:hover{opacity:1}
+  #sketch-tools select,#sketch-tools button{
+    font-family:system-ui;font-size:11px;background:#222;color:#fff;border:1px solid #444;
+    border-radius:4px;padding:3px 6px;cursor:pointer;
+  }
+  #sketch-tools .vp button.on{background:#E5C56F;color:#1B150A}
+  body.annotate *:hover{outline:1px solid rgba(229,197,111,.4)}
+
+  @media (max-width:1180px){.shell{grid-template-columns:220px 1fr}.ctx{display:none}}
+</style>
+</head>
+<body>
+
+<!-- ───────── variant tab bar ───────── -->
+<div id="variant-nav">
+  <span class="lbl">Density</span>
+  <button class="variant-tab active" data-d="comfortable" onclick="setDensity('comfortable',this)">A · Comfortable ★</button>
+  <button class="variant-tab" data-d="compact" onclick="setDensity('compact',this)">B · Compact</button>
+  <button class="variant-tab" data-d="editorial" onclick="setDensity('editorial',this)">C · Editorial</button>
+  <span class="desc" id="variant-desc"><b>Comfortable</b> — matches the locked sketch: generous spacing, large bubbles.</span>
+</div>
+
+<!-- ───────── chat shell ───────── -->
+<div class="shell" data-density="comfortable" id="shell">
+
+  <!-- LEFT: roster (Phase-4 scope — NO group threads, D-03) -->
+  <aside class="roster">
+    <div class="roster-head">
+      <div class="ttl">Employees</div>
+      <span class="ct">9 · BEAAA</span>
+    </div>
+    <div class="roster-search"><input placeholder="Search employees…" oninput="filterRoster(this.value)" /></div>
+    <div class="roster-list" id="roster-list">
+      <div class="roster-section">Leadership</div>
+      <div class="emp s-alert" onclick="pickEmp(this,'CEO')"><div class="av">C</div><div class="name">CEO<small>Strategy · Eric proxy</small></div><span class="badge">3</span></div>
+      <div class="emp s-live active" onclick="pickEmp(this,'CFO')"><div class="av">C</div><div class="name">CFO<small>Capital · economics</small></div><span class="badge">2</span></div>
+      <div class="emp s-warn" onclick="pickEmp(this,'Actuary')"><div class="av">A</div><div class="name">Actuary<small>Pricing · models</small></div><span class="badge muted">·</span></div>
+      <div class="roster-section">Operations</div>
+      <div class="emp s-warn" onclick="pickEmp(this,'CMO')"><div class="av">M</div><div class="name">CMO<small>Marketing · outreach</small></div><span class="badge muted">·</span></div>
+      <div class="emp s-live" onclick="pickEmp(this,'CSO')"><div class="av">S</div><div class="name">CSO<small>Sales · pipeline</small></div><span class="badge muted">·</span></div>
+      <div class="emp s-live" onclick="pickEmp(this,'CTO')"><div class="av">T</div><div class="name">CTO<small>Engineering · spike</small></div><span class="badge muted">·</span></div>
+      <div class="emp s-idle" onclick="pickEmp(this,'CBDO')"><div class="av">B</div><div class="name">CBDO<small>BizDev · channel</small></div><span class="badge muted">·</span></div>
+      <div class="emp s-warn" onclick="pickEmp(this,'Underwriter')"><div class="av">U</div><div class="name">Underwriter<small>Risk · wording</small></div><span class="badge muted">·</span></div>
+      <div class="emp s-live" onclick="pickEmp(this,'Designer')"><div class="av">D</div><div class="name">Designer<small>Comms · layout</small></div><span class="badge muted">·</span></div>
+    </div>
+  </aside>
+
+  <!-- MIDDLE: thread -->
+  <main class="thread">
+    <header class="thread-head">
+      <div class="who-big">
+        <div class="av">C</div>
+        <div class="role">CFO<small>Capital · Economics agent</small></div>
+      </div>
+      <div class="global-search">
+        <span class="icon">⌕</span>
+        <input placeholder="Search all chats and tasks across BEAAA…" />
+        <span class="kbd">⌘ K</span>
+      </div>
+      <div class="head-actions">
+        <button class="btn ghost" onclick="toast('Opening CFO profile…')">Open profile</button>
+        <button class="btn" onclick="toast('New topic — creates a child issue assigned to CFO')">+ New topic</button>
+      </div>
+    </header>
+
+    <div class="topics" id="topics">
+      <span class="topic-lbl">Topics ·</span>
+      <button class="topic active alert" onclick="pickTopic(this,'Broker comm % decision','CHT-44')"><span class="dot"></span>Broker comm % decision <span class="id">CHT-44</span></button>
+      <button class="topic" onclick="pickTopic(this,'Loss-cost prior method','CHT-39')"><span class="dot"></span>Loss-cost prior method <span class="id">CHT-39</span></button>
+      <button class="topic warn" onclick="pickTopic(this,'Capital charge sensitivity','CHT-31')"><span class="dot"></span>Capital charge sensitivity <span class="id">CHT-31</span></button>
+      <button class="topic" onclick="pickTopic(this,'Q3 budget envelope','CHT-22')"><span class="dot"></span>Q3 budget envelope <span class="id">CHT-22</span></button>
+      <button class="topic" onclick="pickTopic(this,'Reinsurance carrier shortlist','CHT-14')"><span class="dot"></span>Reinsurance carrier shortlist <span class="id">CHT-14</span></button>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="day-divider"><span>Yesterday · 6 May 2026</span></div>
+
+      <article class="msg me">
+        <div class="bubble">
+          <div class="b-meta"><span class="who">Eric · You</span><span class="ts">16:42</span></div>
+          <div class="b-text">Status on band factors v1.5? We need this to land before Wed for the actuary to validate.</div>
+        </div>
+        <div class="av">E</div>
+      </article>
+
+      <article class="msg">
+        <div class="av">C</div>
+        <div class="bubble">
+          <span class="promote"><button class="pa" onclick="toast('Promote to task — creates a real Paperclip issue (D-13)')">↗ Promote to task</button><button class="pa" onclick="toast('Pinned — surfaces in the context rail (D-13)')">⚑ Pin</button></span>
+          <div class="b-meta"><span class="who">CFO</span><span class="ts">16:43 · replied 2m</span></div>
+          <div class="b-text">
+            <p><b>60% done.</b> Sec. 1 (loss-cost prior) and Sec. 2 (expense load) are committed. Sec. 3 (capital charge) is anchored to <span class="ref-inline"><span class="tt">Board capital-charge lock</span><span class="id">BEAAA-25</span><span class="st locked">Locked</span></span> and won't move.</p>
+            <p>Sec. 4 is waiting on a decision: <b>broker commission %</b>. The CSO deck quotes <span class="num">15%</span>; Bedrock-Re's channel rate is <span class="num">12%</span>. Both are defensible — they price out differently.</p>
+          </div>
+          <details class="reasoning">
+            <summary>Show reasoning · 4 sources, 2 model runs</summary>
+            <div class="body">
+              <ul>
+                <li>Pulled Bedrock-Re's channel rate from <span class="ref-inline"><span class="tt">Reinsurance carrier shortlist</span><span class="id">BEAAA-14</span><span class="st done">Done</span></span> (rate sheet, p.3).</li>
+                <li>Cross-checked the CSO deck rate in <span class="ref-inline"><span class="tt">CSO cluster-G2 pitch deck</span><span class="id">BEAAA-137</span><span class="st done">Done</span></span> — quoted at 15%.</li>
+                <li>Sensitivity sweep: ΔPnL ≈ <code>−$8.52/policy G1, −$14.94/policy G2</code> at 12% vs 15%.</li>
+                <li>Recommendation: <b>12%</b> — Bedrock-Re is the negotiated channel partner; deck rate is unverified.</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="msg me">
+        <div class="bubble">
+          <div class="b-meta"><span class="who">Eric · You</span><span class="ts">16:51</span></div>
+          <div class="b-text">But CSO showed the deck to a prospect last week with 15%. Have they already quoted that? Here's the slide.</div>
+          <div class="attach">
+            <div class="ico">PNG</div>
+            <div class="info">
+              <div class="nm">deck-slide-12.png</div>
+              <div class="meta">work-product · cfo/CHT-44/ · 1.4 MB · uploaded 16:51</div>
+            </div>
+            <button class="open" onclick="toast('Open — routes to the Paperclip work-product')">Open</button>
+          </div>
+        </div>
+        <div class="av">E</div>
+      </article>
+
+      <article class="msg">
+        <div class="av">C</div>
+        <div class="bubble">
+          <span class="promote"><button class="pa" onclick="toast('Promote to task — creates a real Paperclip issue (D-13)')">↗ Promote to task</button><button class="pa" onclick="toast('Pinned')">⚑ Pin</button></span>
+          <div class="b-meta"><span class="who">CFO</span><span class="ts">16:58 · replied 4m</span></div>
+          <div class="b-text">
+            <p>Checked. CSO sent the deck to <b>three prospects</b> in cluster G2 between 1–3 May, all quoting 15%. None converted yet — pricing wasn't quoted as final.</p>
+            <p>Two safe paths:</p>
+            <p><b>A.</b> Lock 12% in v1.5 → I auto-open <span class="ref-inline"><span class="tt">CSO deck v3 — broker-comm refresh</span><span class="id">BEAAA-202</span><span class="st todo">Draft</span></span> for CSO. Better unit economics; ~3-day refresh.</p>
+            <p><b>B.</b> Lock 15% in v1.5 → keeps the current deck consistent, costs ≈$8.52/policy on G2. No rework.</p>
+            <p>I'd still recommend <b>A</b>. Your call.</p>
+          </div>
+          <span class="resolved warn">Awaiting your decision · <b>~3 hr</b> blocks 5 downstream tickets</span>
+        </div>
+      </article>
+
+      <div class="day-divider"><span>Today · 7 May 2026</span></div>
+
+      <article class="decision-msg">
+        <div class="lbl">Decision recorded</div>
+        <div class="txt">Eric chose <b>A · 12%</b>. CFO instructed to lock sec. 4 at 12% and draft the deck-refresh task for CSO.</div>
+        <div class="meta">10:12 ET · governance approval logged on <span class="ref-inline"><span class="tt">Per-fan band factors v1.5</span><span class="id">BEAAA-148</span><span class="st review">In review</span></span></div>
+      </article>
+
+      <article class="msg">
+        <div class="av">C</div>
+        <div class="bubble">
+          <span class="promote"><button class="pa" onclick="toast('Promote to task')">↗ Promote to task</button><button class="pa" onclick="toast('Pinned')">⚑ Pin</button></span>
+          <div class="b-meta"><span class="who">CFO</span><span class="ts">10:19 · replied 6m</span></div>
+          <div class="b-text">
+            <p>Locked. Sec. 4 of <span class="ref-inline"><span class="tt">Per-fan band factors v1.5</span><span class="id">BEAAA-148</span><span class="st review">In review</span></span> committed at 12%. New task <span class="ref-inline"><span class="tt">CSO deck v3 — broker-comm refresh</span><span class="id">BEAAA-202</span><span class="st todo">To do</span></span> assigned to CSO — due Friday.</p>
+            <p>Per-fan band factors v1.5 finalized in ~3 hr, then I hand off to Actuary for validation.</p>
+          </div>
+          <span class="resolved">Created <b>CSO deck v3 — broker-comm refresh</b> · Locked sec. 4 at 12% · Notified CSO + Actuary</span>
+          <div class="attach">
+            <div class="ico">XLSX</div>
+            <div class="info">
+              <div class="nm">band-factors-v1.5.xlsx</div>
+              <div class="meta">work-product · cfo/BEAAA-148/ · rev 5 · last write 10:13</div>
+            </div>
+            <button class="open" onclick="toast('Open — work-product (full preview lands in Phase 5)')">Open</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="msg me">
+        <div class="bubble">
+          <div class="b-meta"><span class="who">Eric · You</span><span class="ts">10:24</span></div>
+          <div class="b-text">Good. Make sure the 3 prospects get a courteous note, not a "pricing changed" note. Have CSO draft and route through me before send.</div>
+        </div>
+        <div class="av">E</div>
+      </article>
+
+      <!-- pending "working" indicator (D-04) -->
+      <div class="pending" id="pending-row">
+        <div class="av">C</div>
+        <div class="pbox">
+          <span class="ptext">CFO is working</span>
+          <span class="dots"><i></i><i></i><i></i></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-meta">
+        <span class="topic-now">Topic · <b id="topic-now">Broker comm % decision</b> (<span id="topic-now-id">CHT-44</span>)</span>
+        <span>Persists as a comment on the topic issue · attachments as work-products</span>
+      </div>
+      <div class="composer-box">
+        <textarea class="composer-input" id="composer" placeholder="Message CFO… ⌘+Enter to send"></textarea>
+        <div class="composer-foot">
+          <div class="composer-tools">
+            <button class="tool-btn" onclick="toast('Attach — stores as a Paperclip work-product (CHAT-07)')">📎 Attach</button>
+            <button class="tool-btn" onclick="toast('Approve')">⚑ Approve</button>
+            <button class="tool-btn" onclick="toast('New task')">↗ New task</button>
+            <button class="tool-btn" onclick="toast('Reference — insert a BEAAA-NNN chip')">⌗ Reference</button>
+          </div>
+          <div class="send-row">
+            <span class="composer-hint"><kbd>⌘</kbd>+<kbd>↵</kbd> to send</span>
+            <button class="btn" onclick="sendMsg()">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT: context rail -->
+  <aside class="ctx">
+    <div class="agent-card">
+      <div class="role-line">CFO<small>Capital · Economics agent</small></div>
+      <div class="blurb">"Closes the gap between board-locked capital constraints and customer-readable pricing."</div>
+      <div class="stat-row">
+        <div class="stat">On task<b>5h 11m</b></div>
+        <div class="stat">7d done<b>7 / 14</b></div>
+        <div class="stat">Spend MTD<b>$108</b></div>
+        <div class="stat">Budget left<b>$292</b></div>
+      </div>
+    </div>
+    <h3>Active tasks owned</h3>
+    <div class="task-row"><span class="id">BEAAA-148</span><span class="ttl">Per-fan band factors v1.5</span><span class="st review">In review</span></div>
+    <div class="task-row"><span class="id">BEAAA-202</span><span class="ttl">CSO deck v3 — broker-comm refresh</span><span class="st todo">Drafted</span></div>
+    <div class="task-row"><span class="id">BEAAA-114</span><span class="ttl">Q3 budget envelope memo</span><span class="st todo">Queued</span></div>
+    <div class="task-row"><span class="id">BEAAA-87</span><span class="ttl">Reinsurance carrier shortlist v2</span><span class="st done">Done</span></div>
+    <h3>You owe CFO</h3>
+    <div class="task-row owe"><span class="id">·</span><span class="ttl">Approve Q3 budget envelope (sitting 2d)</span><span class="st">⚑ You</span></div>
+    <h3>Recent attachments</h3>
+    <div class="pin-row">📎 <b>deck-slide-12.png</b> <small>· 1.4 MB · yesterday 16:51</small></div>
+    <div class="pin-row">📊 <b>band-factors-v1.5.xlsx</b> <small>· rev 5 · today 10:13</small></div>
+    <div class="pin-row">📄 <b>loss-cost-prior.md</b> <small>· v3 · 6 May 09:18</small></div>
+    <h3>Quick actions</h3>
+    <div class="quick">
+      <button class="qa" onclick="toast('Approve outstanding (1 item)')">⚑ Approve outstanding (1 item)</button>
+      <button class="qa" onclick="toast('Spawn new task with CFO')">↗ Spawn new task with CFO</button>
+      <button class="qa" onclick="toast('Search all CFO chats')">⌕ Search all CFO chats</button>
+      <button class="qa" onclick="toast('Pause CFO heartbeat')">⏸ Pause CFO heartbeat</button>
+    </div>
+    <h3>Storage pin</h3>
+    <div class="pin-row">📁 <b>cfo/CHT-44/</b><br/><small>messages persist as issue comments · attachments as work-products</small></div>
+  </aside>
+
+</div>
+
+<!-- inline reference peek -->
+<div class="ref-peek" id="ref-peek"></div>
+
+<!-- toast -->
+<div id="toast"></div>
+
+<!-- sketch toolbar -->
+<div id="sketch-tools">
+  <span>Theme</span>
+  <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'">
+    <option value="default">default</option>
+  </select>
+  <span class="vp">
+    <button onclick="setVp(375,this)">Phone</button>
+    <button onclick="setVp(1024,this)">Tablet</button>
+    <button class="on" onclick="setVp(0,this)">Full</button>
+  </span>
+  <button onclick="document.body.classList.toggle('annotate')">Annotate</button>
+</div>
+
+<script>
+  var DESC = {
+    comfortable:"<b>Comfortable</b> — matches the locked sketch: generous spacing, large bubbles.",
+    compact:"<b>Compact</b> — ops-console density: tighter rows, more history on screen.",
+    editorial:"<b>Editorial</b> — reading-room: extra air, larger type, narrower column."
+  };
+  function scrollBottom(){ var m = document.getElementById('messages'); m.scrollTop = m.scrollHeight; }
+  function setDensity(d, el){
+    document.getElementById('shell').setAttribute('data-density', d);
+    document.querySelectorAll('.variant-tab').forEach(function(t){t.classList.remove('active')});
+    el.classList.add('active');
+    document.getElementById('variant-desc').innerHTML = DESC[d];
+    scrollBottom();
+  }
+  function toast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._tm); t._tm = setTimeout(function(){t.classList.remove('show')}, 2400);
+  }
+  function pickEmp(el, name){
+    document.querySelectorAll('.emp').forEach(function(e){e.classList.remove('active')});
+    el.classList.add('active');
+    toast('Switched to ' + name + ' — thread shown is a mock for CFO');
+  }
+  function pickTopic(el, title, id){
+    document.querySelectorAll('.topic').forEach(function(t){t.classList.remove('active')});
+    el.classList.add('active');
+    document.getElementById('topic-now').textContent = title;
+    document.getElementById('topic-now-id').textContent = id;
+  }
+  function filterRoster(q){
+    q = q.toLowerCase();
+    document.querySelectorAll('#roster-list .emp').forEach(function(e){
+      e.style.display = e.querySelector('.name').textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+    });
+  }
+  function sendMsg(){
+    var box = document.getElementById('composer');
+    var txt = box.value.trim();
+    if(!txt) { toast('Type a message first'); return; }
+    var msgs = document.getElementById('messages');
+    var pending = document.getElementById('pending-row');
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    var art = document.createElement('article');
+    art.className = 'msg me';
+    art.innerHTML = '<div class="bubble"><div class="b-meta"><span class="who">Eric · You</span>' +
+      '<span class="ts">' + hh + '</span></div><div class="b-text"></div></div><div class="av">E</div>';
+    art.querySelector('.b-text').textContent = txt;
+    msgs.insertBefore(art, pending);
+    box.value = '';
+    pending.style.display = 'grid';
+    msgs.scrollTop = msgs.scrollHeight;
+    toast('Sent — optimistic render; persists as an issue comment, CFO wakes on the comment (D-01)');
+  }
+  document.getElementById('composer').addEventListener('keydown', function(e){
+    if((e.metaKey || e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); sendMsg(); }
+  });
+  function setVp(w, el){
+    var s = document.getElementById('shell');
+    if(w === 0){ s.style.maxWidth=''; s.style.margin=''; }
+    else { s.style.maxWidth = w + 'px'; s.style.margin = '0 auto'; }
+    el.parentNode.querySelectorAll('button').forEach(function(b){b.classList.remove('on')});
+    el.classList.add('on');
+  }
+  scrollBottom();
+
+  /* ── inline reference peek — click a resolved chip, resolve it in place ── */
+  var REF = {
+    'BEAAA-25':{title:'Board capital-charge lock',st:'Locked',sc:'locked',kind:'Constraint',owner:'CFO',
+      tldr:'The board-set capital-charge basis that pricing must respect. Sec. 3 of band factors v1.5 is anchored to it.',
+      activity:'Locked by board memo · no change in 9 days'},
+    'BEAAA-14':{title:'Reinsurance carrier shortlist',st:'Done',sc:'done',kind:'Task',owner:'CFO',
+      tldr:'Reinsurance carriers with channel rate sheets. Bedrock-Re’s 12% channel rate was sourced here (p.3).',
+      activity:'Closed 4 May · rate sheet attached'},
+    'BEAAA-137':{title:'CSO cluster-G2 pitch deck',st:'Done',sc:'done',kind:'Task',owner:'CSO',
+      tldr:'The sales deck shown to cluster-G2 prospects. Quotes broker commission at 15% — the rate now under review.',
+      activity:'Sent to 3 prospects, 1–3 May'},
+    'BEAAA-202':{title:'CSO deck v3 — broker-comm refresh',st:'To do',sc:'todo',kind:'Task',owner:'CSO',
+      tldr:'Re-issue the sales deck with the locked 12% broker commission. Auto-opened from this chat thread.',
+      activity:'Created today 10:19 · due Friday'},
+    'BEAAA-148':{title:'Per-fan band factors v1.5',st:'In review',sc:'review',kind:'Task',owner:'CFO',
+      tldr:'The v1.5 per-fan band-factor model. Sec. 4 just locked at 12%; next it hands to the Actuary to validate.',
+      activity:'Sec. 4 committed today 10:19'}
+  };
+  function hidePeek(){ document.getElementById('ref-peek').classList.remove('show'); }
+  function showPeek(chip){
+    var idEl = chip.querySelector('.id'); if(!idEl) return;
+    var id = idEl.textContent.trim(); var d = REF[id]; if(!d){ toast('No resolved data for ' + id); return; }
+    var pk = document.getElementById('ref-peek');
+    pk.innerHTML =
+      '<div class="pk-title">' + d.title + '</div>' +
+      '<div class="pk-tags"><span class="pk-id">' + id + '</span>' +
+      '<span class="pk-st ' + d.sc + '">' + d.st + '</span><span class="pk-kind">' + d.kind + '</span></div>' +
+      '<div class="pk-tldr"><b>Editorial Desk · TL;DR</b>' + d.tldr + '</div>' +
+      '<div class="pk-meta">Owner ' + d.owner + ' · ' + d.activity + '</div>' +
+      '<div class="pk-actions">' +
+      '<button class="primary" onclick="toast(\'Open full task — the escape hatch, not the default click\')">Open full task ↗</button>' +
+      '<button onclick="toast(\'Would open this task in Reader view\')">Reader view</button></div>';
+    pk.classList.add('show');
+    var r = chip.getBoundingClientRect();
+    var ph = pk.offsetHeight, pw = 322;
+    var left = Math.min(r.left, window.innerWidth - pw - 12);
+    var top = r.bottom + 8;
+    if(top + ph > window.innerHeight - 12) top = Math.max(12, r.top - ph - 8);
+    pk.style.left = Math.max(12, left) + 'px';
+    pk.style.top = top + 'px';
+  }
+  document.addEventListener('click', function(e){
+    var chip = e.target.closest('.ref-inline');
+    if(chip){ e.stopPropagation(); showPeek(chip); return; }
+    if(!e.target.closest('.ref-peek')) hidePeek();
+  });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') hidePeek(); });
+</script>
+</body>
+</html>

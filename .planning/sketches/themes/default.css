@@ -1,0 +1,38 @@
+/* Clarity Pack — shared sketch theme
+   Warm-dark editorial palette ported verbatim from
+   sketches/paperclip-fix-employee-chat.html (the locked Phase 4 visual contract).
+   Sketches link this file; component + density CSS lives inline per sketch. */
+
+:root{
+  /* Surfaces */
+  --bg:#0E0D0A;
+  --bg-2:#15140F;
+  --bg-3:#1B1A14;
+  --bg-4:#222019;
+
+  /* Lines */
+  --line:#2A2820;
+  --line-bright:#3D3A2E;
+
+  /* Ink (text) */
+  --ink:#E8E1CF;
+  --ink-2:#B8B0A0;
+  --ink-3:#7E7869;
+  --ink-4:#52503F;
+
+  /* Status — agent state + message accents */
+  --live:#7DB47E;   --live-soft:#1F3320;
+  --warn:#D9A23E;   --warn-soft:#3A2D14;
+  --alert:#E0744A;  --alert-soft:#3A1C12;
+  --you:#E5C56F;    --you-soft:#3D3318;
+  --idle:#5C6878;   --idle-soft:#1B2129;
+
+  /* Chat bubbles */
+  --eric-bubble:#22201A;
+  --agent-bubble:#16140F;
+
+  /* Type */
+  --font-sans:"Geist","Helvetica Neue",sans-serif;
+  --font-mono:"Geist Mono",monospace;
+  --font-serif:"Instrument Serif",serif;
+}

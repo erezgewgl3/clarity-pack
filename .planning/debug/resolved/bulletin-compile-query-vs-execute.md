@@ -1,8 +1,10 @@
 ---
-status: investigating
+status: resolved
 trigger: "Daily Bulletin compile fails in production — INSERT-via-query bug + masked compilePass1 failure; harden test harness host-faithful"
 created: 2026-05-15T00:00:00.000Z
-updated: 2026-05-15T00:00:00.000Z
+updated: 2026-05-18T00:00:00.000Z
+resolved: 2026-05-18
+resolution_note: "Resolved in substance — the Resolution block below records the landed fix (INSERT-via-execute in bulletins-repo.ts + wrapHostFaithfulDb helper). The frontmatter status was never flipped at the time; closed during the Phase 3 reconciliation 2026-05-18."
 ---
 
 ## Current Focus
