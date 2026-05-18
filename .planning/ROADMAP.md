@@ -95,7 +95,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 04-01-PLAN.md — Falsify-first spike: live-verify on Countermoves the native issue_commented agent wake + reply form (D-01/OQ-4), closed-topic re-wake (OQ-3), event payload shape (OQ-2), and any attachment-upload path (OQ-1). Builds zero chat code; gates 04-02..04-06. Wave 1, non-autonomous (Eric Countermoves probe drill). (CHAT-07)
+- [x] 04-01-PLAN.md — Falsify-first spike: live-verify on Countermoves the native issue_commented agent wake + reply form (D-01/OQ-4), closed-topic re-wake (OQ-3), event payload shape (OQ-2), and any attachment-upload path (OQ-1). Builds zero chat code; gates 04-02..04-06. Wave 1, non-autonomous (Eric Countermoves probe drill). (CHAT-07) **Done 2026-05-19** — **Phase 4 Gate Verdict: GO.** D-01/OQ-4 PASS (CEO employee-agent woke on a posted comment and replied as an issue_comments row), OQ-3 STATUS-FLIP-NOT-NEEDED, OQ-2 comment row shape recorded, OQ-1 NO-PATH (CHAT-07 ships degraded). 3 tasks, 5 commits b91d887..6c0d6ef; SUMMARY: `04-01-SUMMARY.md`; findings: `04-01-SPIKE-FINDINGS.md`.
 - [ ] 04-02-PLAN.md — Data layer: 0006_chat.sql (chat_topics + chat_messages side table) + chat-topics-repo.ts (typed CRUD, CHT-NN allocator, message_uuid dedup lookup) + manifest capability additions + version bump to 0.7.0. Wave 2, autonomous, TDD. (CHAT-03)
 - [ ] 04-03-PLAN.md — Realtime + persistence spine: chat-send (dedup, createComment, side-table, auto-reopen), chat-edit (append-with-supersedes), chat-stream-bridge (issue.comment.created to ctx.streams.emit), worker.ts wiring. Wave 3, autonomous, TDD. (CHAT-02, CHAT-04, CHAT-05, CHAT-06)
 - [ ] 04-04-PLAN.md — Read + CRUD handlers: chat-roster (Editor-Agent excluded), chat-topics (+ New topic action), chat-messages, chat-search (CHAT-08 ILIKE), chat-promote, chat-pin, worker.ts wiring. Wave 4, autonomous, TDD. (CHAT-01, CHAT-08, CHAT-09)
@@ -122,7 +122,7 @@ Plans:
 | 1. Pre-Install Safety | 4/4 | COMPLETE ✓ — rehearsal PASS landed | 2026-05-13 |
 | 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 4/5 (02-04+02-08 PARTIAL paired) | Plan 02-08 Tasks 1-3 complete 2026-05-14T23:00Z; Task 4 re-drill awaiting Eric on Countermoves | - |
 | 3. Daily Bulletin | 10/10 | Plans 03-01+03-02 COMPLETE 2026-05-15; 03-03/03-04/03-05/03-06 BUILD COMPLETE; 03-07 closure drill DID NOT PASS (Option C live-disproved); 03-08 (Option B document readback) auto Tasks 1-3 complete `d50fda2..ae529f5`. 03-09 (readback structure-only validator fix) auto Tasks 1-2 COMPLETE 2026-05-17 (`c2b55b9..b43f249`): `validateDraftSchema` split into the exported structure-only `validateDraftStructure` + the slot-resolution pass, the Option B readback re-pointed at `validateDraftStructure`, `{{NUMBER:key}}` regression fixture added, version 0.4.0→0.5.0, `clarity-pack-0.5.0.tgz` packed. Suite 690 (688 pass/0 fail/2 skip). **03-09 Task 3 closure re-drill RUN 2026-05-17 — DID NOT PASS.** The readback fix is PROVEN live (worker accepted the agent's placeholder-bearing `compile-result` document, no timeout), but a NEW, unrelated gap blocks closure: `verifyDraft` pass-2's 5 standing-number `ctx.db.query` calls all fail against the live Paperclip schema (`standing-numbers.ts`/`facts-table.ts` reference columns — `active_subscription_cents`, `issues.tags` — that do not exist on Countermoves). Routed to gap-closure Plan 03-10 (standing-number / facts-table SQL schema-drift fix). **→ SUPERSEDED: 03-10 executed, then v0.6.1→v0.6.6 gap-closure debug drills resolved all post-03-10 live defects; the v0.6.6 closure re-drill PASSED on live Countermoves 2026-05-18 — Phase 3 CLOSED.** | 2026-05-18 |
-| 4. Employee Chat | 0/0 | Not started | - |
+| 4. Employee Chat | 1/6 | Executing — Plan 04-01 falsify-first spike COMPLETE 2026-05-19, Phase 4 Gate Verdict GO; next Plan 04-02 | - |
 | 5. Distribution & Polish | 0/0 | Not started | - |
 
 ## Coverage Summary
@@ -167,4 +167,4 @@ Per the research synthesis, three conflicts must be resolved before Phase 2 code
 
 ---
 *Roadmap defined: 2026-05-07*
-*Last updated: 2026-05-18 — Phase 3 CLOSED. Plan 03-10 executed; the closure drill surfaced six further live defects, all fixed as v0.6.1→v0.6.6 gap-closure debug sessions; the v0.6.6 closure re-drill PASSED on live Countermoves (cadence settles to the daily slot, verifier clean, Bulletin No. 8 published). clarity-pack v0.6.6 installed and working on Countermoves. Next: Phase 4 (Employee Chat).*
+*Last updated: 2026-05-19 — Phase 4 executing. Plan 04-01 falsify-first spike COMPLETE: the live Countermoves probe proved the native `issue_commented` agent wake (D-01/OQ-4 PASS) — an employee-agent wakes on a posted comment and replies as an `issue_comments` row. Phase 4 Gate Verdict: GO. Plans 04-02..04-06 cleared. Next: Plan 04-02 (data layer).*

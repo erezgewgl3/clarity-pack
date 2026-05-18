@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-18T19:05:06.959Z"
+last_updated: "2026-05-19T00:00:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 21
-  percent: 64
+  completed_plans: 22
+  percent: 67
 ---
 
 # State: Clarity Pack
@@ -28,7 +28,24 @@ progress:
 ## Current Position
 
 Phase: 04 (employee-chat) — EXECUTING
-Plan: 1 of 6
+Plan: 2 of 6 (Plan 04-01 COMPLETE 2026-05-19)
+
+**Plan 04-01 — Falsify-First Spike: COMPLETE 2026-05-19.** Tasks 1-3 done. Task 1
+built the throwaway probe `scripts/spike/chat-spike-probe.mjs` (commits b91d887,
+route fix d36c81c). Task 2 ran the probe on live Countermoves bookended by verified
+snapshot `2026-05-18T20-15-56Z` (commits 9555aac, 5f49c38). Task 3 (commit 6c0d6ef)
+wrote `04-01-SPIKE-FINDINGS.md` + `test/phases/04-01-spike-findings.test.mjs` (5
+tests, all pass). **Phase 4 Gate Verdict: GO** — D-01 native `issue_commented` agent
+wake PROVEN on live Countermoves (CEO employee-agent woke on a posted comment and
+replied as an `issue_comments` row, 0 documents). Verdicts: D-01/OQ-4 PASS, OQ-2
+recorded, OQ-3 STATUS-FLIP-NOT-NEEDED, OQ-1 NO-PATH (CHAT-07 ships degraded).
+Downstream design inputs: 04-03 folds a reply-channel instruction into new topic
+descriptions; 04-03 auto-reopen needs no `requestWakeup`; 04-03 stream bridge derives
+the comment via a `listComments` re-fetch; 04-04 builds the disabled-attach UI.
+SUMMARY: `04-01-SUMMARY.md`. **NEXT: Plan 04-02 (data layer, autonomous, TDD).**
+
+---
+
 03-10 re-drill, all as gap-closure debug sessions (no new plan filed):
 
   1. BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE — debug `verifier-counts-own-issue.md`
@@ -174,8 +191,8 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Executing Phase 04
-**Progress:** [######    ] 3/5 phases complete (Phase 3 daily-bulletin CLOSED 2026-05-18); next Phase 4 — Employee Chat
+**Status:** Executing Phase 04 — Plan 04-01 COMPLETE (Gate Verdict GO); next Plan 04-02
+**Progress:** [######    ] 2/5 phases complete; Phase 4 Employee Chat 1/6 plans done
 
 ## Performance Metrics
 
