@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
+milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-18T13:51:01.233Z"
+last_updated: "2026-05-18T17:54:38.354Z"
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 27
-  completed_plans: 25
-  percent: 78
+  completed_phases: 2
+  total_plans: 33
+  completed_plans: 21
+  percent: 64
 ---
 
 # State: Clarity Pack
@@ -121,14 +121,17 @@ fresh chat with `/gsd:discuss-phase 4` (or `/gsd:ui-phase 4` first). Depends on
 Phases 2 + 3 — both satisfied.
 
 Carried-forward (non-blocking) recommendations:
+
 - The host-faithful suite still cannot fully model the live compile-bulletin job
   control-flow timing; v0.6.6 added two cadence-settling regression tests, but a
   fuller faithful integration test of the fire→publish→advance→idle loop remains
   worthwhile.
+
 - Masthead `prepareForName` uses the company display name with an 'Operations'
   fallback — no per-recipient config. If the masthead should name the human
   operator (Eric), an `instanceConfig` field is needed; the org-name default
   ships otherwise.
+
 - `02-10-PLAN.md` deferred Phase 2 polish (React-key warnings / Vite-HMR console
   noise) is still open — non-blocking, can interleave with a later phase.
 **Phase 3 plans:**
@@ -143,7 +146,9 @@ Carried-forward (non-blocking) recommendations:
   - 03-09 — Readback Structure-Only Validator Gap Closure: **AUTO TASKS 1-2 COMPLETE; TASK 3 CLOSURE RE-DRILL DID NOT PASS 2026-05-17.** `gsd-executor` ran Tasks 1-2, 2 commits `c2b55b9..b43f249`. Task 1 (`c2b55b9`, feat): split `validateDraftSchema` into a NEW exported structure-only core `validateDraftStructure` (object + masthead + 4-array key checks, NO slot resolution) + the slot-resolution pass; `validateDraftSchema` now delegates the structural checks to `validateDraftStructure` then runs the SAME `replaceSlots` loop — signature + external behaviour for `compilePass1` byte-identical; re-pointed the Option B readback (`isResultComment`/`isResultDocument`) from the bug-causing `validateDraftSchema(parsed, {})` to `validateDraftStructure(parsed)`; added a `{{NUMBER:key}}` regression fixture to `agent-task-delivery.test.mjs` (the 03-08 fixture used empty `editorialSummary` and never caught the bug). Task 2 (`b43f249`, chore): version 0.4.0→0.5.0 (`package.json` + `manifest.ts`), rebuilt 3 artifacts, `npm pack` → `clarity-pack-0.5.0.tgz` (sha256 `e687615287c65ab65a43356a64983d949dc4eb69fc4ff3b59aa5dadb4785f113`). Suite 689→690 (688 pass / 0 fail / 2 skip). **Task 3 = Eric's Countermoves closure re-drill (`checkpoint:human-verify`, blocking) — RUN 2026-05-17, DID NOT PASS.** The readback fix is PROVEN LIVE — worker log at 07:19:43: `agent-task-delivery: result DOCUMENT received ... (key=compile-result)`; the structure-only `validateDraftStructure` accepted the agent's placeholder-bearing `BulletinDraft`, no rejection poll loop, no `deliverAgentTask` timeout. The v0.4.0 validator-misuse bug is DEAD. BUT a NEW, unrelated gap blocks closure: `verifyDraft` pass-2's 5 standing-number `ctx.db.query` calls ALL failed at the host RPC layer — `mrr` → `column "active_subscription_cents" does not exist`; the other 4 (`briefs_sent_week`/`reply_rate_7d`/`discoveries_7d`/`refund_rate_30d`) → `column "tags" does not exist`. The standing-number SQL (`standing-numbers.ts` + almost certainly `facts-table.ts`) references columns that DO NOT EXIST in the live Paperclip schema. 3 `plugin_version='0.5.0'` `editor_agent_failures` rows (id 529-531), breaker tripped at `consecutive=3`. No `Bulletin No. N` published; `bulletins` still only bootstrap `cycle_number 0`. Operation issue COU-20. Local suite missed it because host-faithful fakes return canned `db.query` results — never execute the SQL against a real schema. Routed to gap-closure Plan 03-10 (standing-number / facts-table SQL schema-drift fix; a `gsd-debugger` pass against the live schema is the natural first step). BULL-05, BULL-06, BULL-09, EDITOR-05, READER-02. Debug doc: `.planning/debug/bulletin-compile-agent-heartbeat-gap.md` (Plan 03-09 closure re-drill section). SUMMARY: `03-09-SUMMARY.md`.
   - 03-08 — Option B Document-Readback Gap Closure: **AUTO TASKS 1-3 COMPLETE — AWAITING TASK 4 CHECKPOINT 2026-05-17.** `gsd-executor` ran Tasks 1-3, 3 commits `d50fda2..ae529f5`. Task 1 (`d50fda2`, feat): diagnosed the 03-07 fallback-poll miss (VERDICT — structural, not an API-shape bug: the document scan was correct code keyed to the correct `operationIssueId`, but ran only as a never-primary ~15s backstop inside a `Promise.race` against a 300s timeout) and rewrote `deliverAgentTask` steps 4-5 to Option B — a PRIMARY `ctx.issues.documents.get(operationIssueId,'compile-result',companyId)` poll at 5s + off-key `documents.list` scan + legacy `listComments` scan; the `Promise.race` + `PENDING_DELIVERIES` registry removed; `RESULT_DOCUMENT_KEY`/`RESULT_DELIVERY_INSTRUCTION`/`RESULT_POLL_INTERVAL_MS` added; the delivery instruction now rides the operation-issue DESCRIPTION. Task 2 (`4240d3f`, chore): DELETED `compile-result-tool.ts` + its test; removed the manifest `tools[]`/`agent.tools.register` cap/`agents[].permissions.pluginTools` + `worker.ts` wiring; rewrote Editor-Agent instructions to document-delivery; version 0.3.0→0.4.0. Task 3 (`ae529f5`, chore): rebuilt all 3 artifacts + `npm pack` → `clarity-pack-0.4.0.tgz` (sha256 `0a7891e67ac803abb6ced55f4e02fe16a24009257ea728995dae37ee8673baa2`). Suite 696→689 (687 pass / 0 fail / 2 skip). Typecheck + worker(176.3 KB)/UI(105.1 KB)/manifest builds clean; `dist/worker.js` grep-clean of all Option C strings. 0 deviations; Self-Check PASSED. **Task 4 = Eric's Countermoves closure re-drill (`checkpoint:human-verify`, blocking) — NOT executed; awaiting Eric.** BULL-05, BULL-06, BULL-09, EDITOR-05, READER-02. SUMMARY: `03-08-SUMMARY.md`.
 
-  - 03-10 — Standing-Number Schema-Drift Gap Closure: **AUTO TASKS 1-3 COMPLETE — AWAITING TASK 4 CHECKPOINT 2026-05-17.** Filed after the Plan 03-09 closure re-drill proved the readback fix live but surfaced standing-number schema drift: `STANDING_NUMBER_SLOTS` defined 5 slots whose SQL referenced columns absent from the live Paperclip schema (`companies.active_subscription_cents`, `issues.tags`, `issue_comments.author_role`) — all 5 `verifyDraft` pass-2 `ctx.db.query` calls failed, draft rejected, breaker tripped, no bulletin published. `gsd-executor` ran Tasks 1-3, 3 commits `17b1340..b4a1a9e`. Task 1 (`17b1340`, feat): rewrote `STANDING_NUMBER_SLOTS` with 5 agent-operations slots — `open_issues`, `completed_7d`, `blocked_issues`, `agent_spend_mtd`, `budget_used_pct` — every column verified live in `03-10-SCHEMA-FINDINGS.md §2`; `verifyDraft` re-runs `slotDef.sql` by key so the verifier is fixed automatically; T-03-10 SQL-injection invariant preserved (static module-constant SQL, `$1` sole bound param, no template literals); cents→dollars currency-bug fixed in `agent_spend_mtd` (`/ 100.0`). Task 2 (`f80e4c2`, test): repointed 6 test/helper files keyed to the old slot names (`mrr`→`agent_spend_mtd` currency, `reply_rate_7d`→`budget_used_pct` pct) — incl. a Rule-3 inline fix of `test/helpers/host-faithful-ctx.mjs`'s `cannedDraft` (its old `mrr` key made the verifier `UNKNOWN_SLOT`-reject 3 host-faithful happy-path tests); `compile-pass-1.ts` `buildPrompt` checked — NO edit needed (facts/standingNumbers injected as JSON data). Suite 690 tests, 688 pass / 0 fail / 2 skip — count unchanged. Task 3 (`b4a1a9e`, chore): version 0.5.0→0.6.0 (`manifest.ts` + `package.json`; comment re-scopes the durable breaker past the 3 stale `plugin_version='0.5.0'` failure rows 529-531), rebuilt 3 artifacts (worker 176.0 KB / UI 105.1 KB / manifest carries 0.6.0; all exit 0), `npm pack` → `clarity-pack-0.6.0.tgz` (sha256 `9101d3575b298efb0801cccadf6785a73b911dd1c1372887340280fa396df3e2`). 1 deviation (the Rule-3 host-faithful-ctx fix, documented). Self-Check PASSED. **Task 4 = Eric's Countermoves closure re-drill (`checkpoint:human-verify`, blocking) — NOT executed; awaiting Eric.** CLOSURE CRITERION: a `Bulletin No. N` issue (`cycle_number >= 1`) published end-to-end on live Countermoves with the 5 verified standing numbers, breaker not tripped. BULL-05, BULL-06, BULL-09. SUMMARY: `03-10-SUMMARY.md` (Task 4 verdict = PENDING).
+  - 03-10 — Standing-Number Schema-Drift Gap Closure: **AUTO TASKS 1-3 COMPLETE — AWAITING TASK 4 CHECKPOINT 2026-05-17.** Filed after the Plan 03-09 closure re-drill proved the readback fix live but surfaced standing-number schema drift: `STANDING_NUMBER_SLOTS` defined 5 slots whose SQL referenced columns absent from the live Paperclip schema (`companies.active_subscription_cents`, `issues.tags`, `issue_comments.author_role`) — all 5 `verifyDraft` pass-2 `ctx.db.query` calls failed, draft rejected, breaker tripped, no bulletin published. `gsd-executor` ran Tasks 1-3, 3 commits `17b1340..b4a1a9e`. Task 1 (`17b1340`, feat): rewrote `STANDING_NUMBER_SLOTS` with 5 agent-operations slots — `open_issues`, `completed_7d`, `blocked_issues`, `agent_spend_mtd`, `budget_used_pct` — every column verified live in `03-10-SCHEMA-FINDINGS.md §2`; `verifyDraft` re-runs `slotDef.sql` by key so the verifier is fixed automatically; T-03-10 SQL-injection invariant preserved (static module-constant SQL, `## Current Position
+
+` sole bound param, no template literals); cents→dollars currency-bug fixed in `agent_spend_mtd` (`/ 100.0`). Task 2 (`f80e4c2`, test): repointed 6 test/helper files keyed to the old slot names (`mrr`→`agent_spend_mtd` currency, `reply_rate_7d`→`budget_used_pct` pct) — incl. a Rule-3 inline fix of `test/helpers/host-faithful-ctx.mjs`'s `cannedDraft` (its old `mrr` key made the verifier `UNKNOWN_SLOT`-reject 3 host-faithful happy-path tests); `compile-pass-1.ts` `buildPrompt` checked — NO edit needed (facts/standingNumbers injected as JSON data). Suite 690 tests, 688 pass / 0 fail / 2 skip — count unchanged. Task 3 (`b4a1a9e`, chore): version 0.5.0→0.6.0 (`manifest.ts` + `package.json`; comment re-scopes the durable breaker past the 3 stale `plugin_version='0.5.0'` failure rows 529-531), rebuilt 3 artifacts (worker 176.0 KB / UI 105.1 KB / manifest carries 0.6.0; all exit 0), `npm pack` → `clarity-pack-0.6.0.tgz` (sha256 `9101d3575b298efb0801cccadf6785a73b911dd1c1372887340280fa396df3e2`). 1 deviation (the Rule-3 host-faithful-ctx fix, documented). Self-Check PASSED. **Task 4 = Eric's Countermoves closure re-drill (`checkpoint:human-verify`, blocking) — NOT executed; awaiting Eric.** CLOSURE CRITERION: a `Bulletin No. N` issue (`cycle_number >= 1`) published end-to-end on live Countermoves with the 5 verified standing numbers, breaker not tripped. BULL-05, BULL-06, BULL-09. SUMMARY: `03-10-SUMMARY.md` (Task 4 verdict = PENDING).
 
 **Compile-path defects fixed during the 2026-05-15 Countermoves drill:**
 
@@ -169,7 +174,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Phase 3 closed 2026-05-18 — ready to plan Phase 4
+**Status:** Ready to execute
 **Progress:** [######    ] 3/5 phases complete (Phase 3 daily-bulletin CLOSED 2026-05-18); next Phase 4 — Employee Chat
 
 ## Performance Metrics
