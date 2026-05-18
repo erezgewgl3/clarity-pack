@@ -3,11 +3,12 @@ slug: tldr-heartbeat-recursion
 status: resolved
 trigger: v0.6.4 cycle-2 drill — the editor TL;DR heartbeat infinite-recurses on its own operation issues + a malformed-array-literal db.execute error
 created: 2026-05-17
-updated: 2026-05-17
+updated: 2026-05-18
 phase: 03-daily-bulletin
 related_sessions:
   - cycle2-publish-and-tldr-typo.md (v0.6.4 — its bug-2 fix un-crashed the TL;DR heartbeat and unleashed this recursion)
-note: root causes pinned by direct source read; FIX SHIPPED in v0.6.5 — full suite green + tsc clean; pending live re-drill
+  - bulletin-compile-cadence-runaway.md (separate blocker surfaced by the same v0.6.5 re-drill)
+note: FIX SHIPPED in v0.6.5 and PROVEN LIVE on the 2026-05-18 Countermoves re-drill — recursion guard fires (`Editor-Agent: skipped own operation issue`), no cascade, no `malformed array literal`. This debug is CLOSED.
 ---
 
 # Debug: tldr-heartbeat-recursion

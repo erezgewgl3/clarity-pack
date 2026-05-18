@@ -70,20 +70,43 @@ Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
      `$N::text[]` array-literal strings, not bare scalars. 8 new regression
      tests (`editor-heartbeat-recursion.test.mjs` ×5 + `tldr-cache.test.mjs`
      ×3). Suite 720 tests, 718 pass / 0 fail / 2 skip; tsc clean. Artifacts
-     rebuilt; `clarity-pack-0.6.5.tgz` packed. Local-suite + tsc only — the
-     live re-drill is the final proof.
+     rebuilt; `clarity-pack-0.6.5.tgz` packed.
+  11. v0.6.5 closure re-drill — RUN 2026-05-18 on live Countermoves. Full restore
+     of snapshot `2026-05-17T12-52-04Z` onto live (atomic-swap; first time
+     executed on the box — restore path now proven), uninstalled the v0.6.3 it
+     carried, installed v0.6.5. **Both `tldr-heartbeat-recursion.md` bugs PROVEN
+     LIVE:** recursion guard fires (`Editor-Agent: skipped own operation issue`)
+     — no cascade, operation issues bounded at 62; no `malformed array literal`.
+     The compile pipeline PUBLISHES end-to-end — `bulletins` cycles 2–7 all
+     `compile_status='published'`. BUT the drill exposed a NEW blocker → debug
+     `bulletin-compile-cadence-runaway.md` (INVESTIGATING): (1) **runaway
+     cadence** — `compile-bulletin` re-fires every ~2 min and publishes a new
+     cycle each time (2→7 in 14 min, unbounded); `next_due_at` is not advanced
+     to a future instant after a publish. (2) **verifier loses every
+     compile-window race** — `verifyDraft` re-runs `slotDef.sql` live at
+     compile-end (tolerance 0); standing numbers drift during the ~50s compile
+     (drift PINNED 2026-05-18: published `Bulletin No. N` issues
+     `origin_kind='plugin:clarity-pack'` slip past the `:operation:`-scoped
+     exclusion + Paperclip's own `stranded_issue_recovery` churn). Fix: verify
+     against the FROZEN facts snapshot handed to pass-1, not a live re-run.
+     v0.6.5 UNINSTALLED 2026-05-18 ~07:32 to halt the cadence; live Paperclip
+     healthy on 3100; fresh bookend snapshot `2026-05-18T06-58-53Z` taken.
 
-**NEXT (new chat): v0.6.5 closure re-drill** — operator steps:
-  1. RESTORE the pre-cascade snapshot `2026-05-17T12-52-04Z` (cycle 1 published,
-     no cascade issues) so the drill runs on a clean board — cycle 2's publish
-     is already proven, losing it costs nothing.
-  2. Install `clarity-pack-0.6.5.tgz`, re-drill.
-On a clean v0.6.5 drill (cycle 2 publishes, no recursion, TL;DR compiles
-without the array-literal error), Phase 3 closes (BULL-05/06/09).
+**NEXT (new chat): build v0.6.6** — fix the two `bulletin-compile-cadence-runaway.md`
+bugs (verifier checks the draft against the pass-1 frozen facts, NOT a live SQL
+re-run; `next_due_at` advances to the next genuine daily slot after a publish),
+rebuild/pack v0.6.6, then a closure re-drill. The board is already restored +
+clean (clarity-pack uninstalled, cycles 0–1 only); the v0.6.6 drill installs
+straight onto it — no restore needed. On a clean v0.6.6 drill (one bulletin
+publishes, cadence settles to daily, verifier passes), Phase 3 closes
+(BULL-05/06/09).
 
-Latest tarball (DRILL THIS): `clarity-pack-0.6.5.tgz`
-sha256 `50736ff18745a9ec1d312fb95a2bbfb82781f1c568a46dee1408e1c06ef9d02d`.
-Prior `clarity-pack-0.6.4.tgz` — do NOT drill, it has the recursion.
+Tarball `clarity-pack-0.6.5.tgz` — recursion+array fixes proven, but do NOT
+re-drill as-is (runaway cadence). v0.6.6 supersedes it.
+Open recommendation (now 5 drill rounds deep): the host-faithful suite never
+exercises the live compile-bulletin job control flow (fire → publish →
+`next_due_at` advance → idle) nor the facts-compute↔verify timing gap. A
+faithful integration test of that loop is wanted before the v0.6.6 re-drill.
 Open v1-polish question (non-blocking): masthead `prepareForName` uses the
 company display name with an 'Operations' fallback — no per-recipient config
 exists. If the masthead should name the human operator (Eric), an `instanceConfig`
