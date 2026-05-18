@@ -58,9 +58,11 @@ function makeCtx({
           return optedIn ? [{ opted_in_at: '2026-01-01T00:00:00.000Z' }] : [];
         }
         if (/chat_messages/i.test(sql)) {
+          // getChatMessageByUuid — WHERE message_uuid = $1 AND company_id = $2.
           const uuid = params?.[0];
+          const companyId = params?.[1];
           const row = messageStore.get(uuid);
-          return row ? [row] : [];
+          return row && row.company_id === companyId ? [row] : [];
         }
         return [];
       },
