@@ -186,13 +186,19 @@ test('Coexistence #4: rejects manifest with admin/bypass capability on Editor-Ag
   }
 });
 
-test('Coexistence #5: rejects clarity-pack chat_messages CREATE TABLE in migrations/', () => {
+test('Coexistence #5: rejects a chat_messages table that declares a body column (CHAT-02)', () => {
+  // Plan 04-02 — the COEXIST-05 rule changed. Phase 4 RESEARCH D-09 made a
+  // plugin-namespace chat_messages side table MANDATORY (the message_uuid ->
+  // comment_id idempotency map). The real CHAT-02 invariant is "no body
+  // column" — message content stays in public.issue_comments — not "no
+  // chat_messages table".
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'clarity-coexist-05-'));
   try {
     mkdirSync(path.join(tmp, 'migrations'), { recursive: true });
     writeFileSync(
       path.join(tmp, 'migrations', '0001_chat.sql'),
-      'CREATE TABLE IF NOT EXISTS plugin_clarity_pack_cdd6bda4bd.chat_messages (id bigserial PRIMARY KEY);\n',
+      'CREATE TABLE IF NOT EXISTS plugin_clarity_pack_cdd6bda4bd.chat_messages ' +
+        '(message_uuid text PRIMARY KEY, body text NOT NULL);\n',
     );
     const r = spawnSync(
       process.execPath,
@@ -203,8 +209,32 @@ test('Coexistence #5: rejects clarity-pack chat_messages CREATE TABLE in migrati
         encoding: 'utf8',
       },
     );
-    assert.notEqual(r.status, 0, `should reject chat_messages table`);
-    assert.match(r.stderr + r.stdout, /chat_messages/i);
+    assert.notEqual(r.status, 0, `should reject a chat_messages body column`);
+    assert.match(r.stderr + r.stdout, /body column/i);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Coexistence #5: accepts a chat_messages ID-mapping side table with no body column (D-09)', () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'clarity-coexist-05-ok-'));
+  try {
+    mkdirSync(path.join(tmp, 'migrations'), { recursive: true });
+    writeFileSync(
+      path.join(tmp, 'migrations', '0001_chat.sql'),
+      'CREATE TABLE IF NOT EXISTS plugin_clarity_pack_cdd6bda4bd.chat_messages ' +
+        '(message_uuid text PRIMARY KEY, comment_id text, pinned boolean NOT NULL DEFAULT false);\n',
+    );
+    const r = spawnSync(
+      process.execPath,
+      [path.join(CHECKS_DIR, '05-chat-comment-coexistence-stub.mjs')],
+      {
+        cwd: tmp,
+        env: { ...process.env, NO_COLOR: '1' },
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(r.status, 0, `an ID-mapping side table is CHAT-02-compliant`);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
