@@ -18,6 +18,16 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.6.6 (debug fix from session bulletin-compile-cadence-runaway) — two bugs
+  // the v0.6.5 closure re-drill exposed: (1) RUNAWAY COMPILE CADENCE — the
+  // schedule pointer was advanced only on the success path, so every failure
+  // continue left a stale past `next_due_at` and the every-minute cron
+  // re-compiled immediately (6 cycles in 14 min). Fixed: advanceScheduleForCompany
+  // moves the pointer on every path that consumes a due tick. (2) VERIFIER RACE —
+  // verifyDraft re-ran each slot's SQL at compile END with tolerance 0; the ~50s
+  // agent window let the live board drift. Fixed: verifyDraft validates the draft
+  // against the FROZEN pass-1 facts snapshot, no live re-query.
+  //
   // 0.6.5 (debug fix from session tldr-heartbeat-recursion) — two bugs the
   // v0.6.4 cycle-2 re-drill exposed once its bug-2 fix un-crashed the editor
   // TL;DR heartbeat: (1) INFINITE TL;DR RECURSION — handleEditorHeartbeat
@@ -70,7 +80,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.6.5',
+  version: '0.6.6',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
