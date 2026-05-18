@@ -28,7 +28,36 @@ progress:
 ## Current Position
 
 Phase: 04 (employee-chat) — EXECUTING
-Plan: 3 of 6 (Plan 04-02 COMPLETE 2026-05-18)
+Plan: 4 of 6 (Plan 04-03 COMPLETE 2026-05-18)
+
+**Plan 04-03 — Chat Realtime + Persistence Spine: COMPLETE 2026-05-18.** TDD,
+autonomous, 4 tasks / 7 commits (`d6d143d..dede91a`). Task A —
+`src/worker/handlers/chat-send.ts`: the `chat.send` action handler — dedup on
+`message_uuid` (`getChatMessageByUuid`; a resend returns the original
+`commentId` without re-posting, CHAT-06 / D-10), `ctx.issues.createComment`
+canonical write to `public.issue_comments` (CHAT-02), `insertChatMessage`
+id-map side-table insert, and D-06 auto-reopen (a `done` topic flips to
+`in_progress` — best-effort, `requestWakeup` NOT called per 04-01 OQ-3
+STATUS-FLIP-NOT-NEEDED). A `createComment` host failure returns
+`{error:'SEND_FAILED'}` with no orphan side-table row. Task B —
+`src/worker/handlers/chat-edit.ts`: the `chat.edit` action handler —
+append-with-supersedes (D-11 / CHAT-05; a new comment + a `chat_messages` row
+whose `supersedes_uuid` points at the prior message, original never mutated),
+with a server-side ownership re-check rejecting agent/unknown messages
+`{error:'NOT_OWNED'}` (T-04-09). Task C — `src/worker/streams/chat-stream-bridge.ts`:
+the D-08 realtime spine — subscribes `issue.comment.created`, re-emits
+chat-topic comments on the `chat:<companyId>` plugin SSE channel
+(`ctx.streams.emit`); non-chat issues filtered via `getChatTopicByIssueId`
+(T-04-11), null `entityId`/`companyId` guarded, body try/catch wrapped
+(T-04-12); OQ-2 opaque payload resolved by a `listComments` re-fetch selecting
+the newest comment id. Task D — `worker.ts` wiring: `chat.send` + `chat.edit`
+registered after the exempt-key handlers (opt-in-guarded), the stream bridge
+subscribed near the existing `ctx.events.on` block. Deviation: one Rule-3 type
+fix — `IssueComment.createdAt` is a `Date`, normalized via `new Date().getTime()`.
+Suite 798 tests / 796 pass / 0 fail / 2 skip; typecheck + worker bundle clean.
+SUMMARY: `04-03-SUMMARY.md`. **NEXT: Plan 04-04 (read + CRUD handlers).**
+
+---
 
 **Plan 04-02 — Employee Chat Data Layer: COMPLETE 2026-05-18.** TDD, autonomous,
 3 tasks / 7 commits (`5549206..6b251fa`). Task A — `migrations/0006_chat.sql`:
@@ -198,8 +227,8 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Executing Phase 04 — Plan 04-01 COMPLETE (Gate Verdict GO); next Plan 04-02
-**Progress:** [######    ] 2/5 phases complete; Phase 4 Employee Chat 1/6 plans done
+**Status:** Executing Phase 04 — Plan 04-03 COMPLETE (chat send/edit/stream spine); next Plan 04-04
+**Progress:** [######    ] 2/5 phases complete; Phase 4 Employee Chat 3/6 plans done
 
 ## Performance Metrics
 
@@ -215,6 +244,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 | Plan 03-01 | ~38 min, 3 TDD commits, 13 files (8 created), suite 422→455 (+33; 453 pass / 0 fail / 2 skip) |
 | Plan 03-02 | ~42 min, 4 TDD commits, 15 files (13 created), suite 455→504 (+49; 502 pass / 0 fail / 2 skip) |
 | Plan 04-02 | ~12 min, 7 commits (6 TDD + 1 deviation fix), 8 files (5 created), suite 762→767 (+5; 765 pass / 0 fail / 2 skip) |
+| Plan 04-03 | ~7 min, 7 commits (6 TDD + 1 wiring), 7 files (6 created), suite 767→798 (+31; 796 pass / 0 fail / 2 skip) |
 
 ## Accumulated Context
 
@@ -236,6 +266,8 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 14. **Per-operation agent instructions ride the operation-issue DESCRIPTION, not the static manifest** (Plan 03-08) - `reconcile()` sets `agents[].instructions.content` at agent CREATION only; it does NOT propagate to an already-existing managed agent. Any instruction the agent must follow per-compile (e.g. "store the result as a document keyed `compile-result`" — `RESULT_DELIVERY_INSTRUCTION`) is appended to the operation-issue description, which `deliverAgentTask` creates fresh every compile and the agent provably reads.
 16. **`chat_messages` is a mandatory id-map side table, never a content store** (Plan 04-02 / D-09) - `ctx.issues.createComment` accepts no metadata field and `public.issue_comments` has no supersedes column, so the `message_uuid -> comment_id` idempotency map (CHAT-06), the D-11 supersedes link and the D-13 pin flag live in `plugin_clarity_pack_cdd6bda4bd.chat_messages`. That table has NO `body` column — message content lives only in `public.issue_comments` (CHAT-02). The Phase-2 COEXIST-05 stub (forbade any `chat_messages` table) was corrected to enforce the real invariant: side table allowed, `body` column forbidden.
 17. **Phase 4 chat handlers need no new manifest capability strings** (Plan 04-02) - posting a chat message uses `issue.comments.create`, the stream bridge uses `events.subscribe`, the roster uses `agents.read`, `+ New topic` uses `issues.create`, and D-06 auto-reopen calls `ctx.issues.update` — all covered by capabilities Phase 2/3 declared and proved live on Countermoves (`bulletin-action-approve` exercises `ctx.issues.update` with the current set). An unrecognized capability string would risk the host install validator, so `issues.update` is deliberately NOT added.
+
+18. **Chat send/edit/realtime contract** (Plan 04-03) - `chat.send` is the canonical-write path: dedup on `message_uuid` (a resend returns the original `commentId`, never re-posts — CHAT-06), then `ctx.issues.createComment` writes the body to `public.issue_comments` (CHAT-02), then `insertChatMessage` records only the id-map. D-06 auto-reopen flips a `done` topic to `in_progress` for UX/status only and is **best-effort** (its own try/catch — a failed flip must not fail a landed send); `requestWakeup` is NOT called (04-01 OQ-3 STATUS-FLIP-NOT-NEEDED — a posted comment alone wakes the agent). `chat.edit` is append-with-supersedes (D-11/CHAT-05): a NEW comment + a `chat_messages` row whose `supersedes_uuid` points at the prior message; the original comment is never mutated, and a server-side ownership re-check rejects agent/unknown messages (`NOT_OWNED`). Realtime (D-08) is a worker stream bridge: `ctx.events.on('issue.comment.created')` re-emits chat-topic comments on the `chat:<companyId>` plugin SSE channel via `ctx.streams.emit`; the `issue.comment.created` payload is opaque (04-01 OQ-2) so the bridge re-fetches via `listComments` and emits the newest comment id. `userId` missing on `chat.send`/`chat.edit` short-circuits to `OPT_IN_REQUIRED` (opt-in-guard consumes it before the inner handler), NOT a throw.
 
 15. **Standing-number SQL is column-bound to a live-introspected schema** (Plan 03-10) - the 5 `STANDING_NUMBER_SLOTS` are agent-operations metrics (`open_issues`, `completed_7d`, `blocked_issues`, `agent_spend_mtd`, `budget_used_pct`) over `public.issues`/`public.companies`; every column is verified present by a live `\d` introspection capture (`03-10-SCHEMA-FINDINGS.md §2`), never extrapolated from the host repo or a CRM mental model. Paperclip has no customer/revenue/sales data — the original CRM-model slots (MRR, cold-email reply rate, refunds) referenced columns that do not exist. Per 03-CONTEXT.md line 92 only the registry SHAPE + BULL-05 (SQL-derived, grep-able, never LLM-generated) are locked; the specific numbers are planner's discretion. The local host-faithful test suite returns canned `db.query` results and CANNOT catch schema drift — a live Countermoves drill is the only valid proof.
 
@@ -283,7 +315,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-18T13:51:01.221Z
+**Last session:** 2026-05-18T21:47:28Z — Plan 04-03 COMPLETE (chat realtime + persistence spine: chat.send / chat.edit / chat-stream-bridge wired into worker.ts)
 
 **Last session (extended):** 2026-05-14 evening through 2026-05-15 early morning — Plan 02-08 Task 4 drill against Countermoves Hostinger. 12 of 14 Phase 2 reqs proven; Situation Room visual fidelity APPROVED on /COU/situation-room (side-by-side with sketches/paperclip-fix-situation-room.html); OPTIN-01..05 all proven. Reader tab on /COU/issues/COU-4 stays stuck in loading state — DEV-15-STRUCTURAL diagnosed: `useHostContext().userId` returns null in detail-tab slots, exact-shape replay of the 02-03c companyId issue. opt-in-guard fails closed for every wrapped Reader handler (issue.reader / flatten-blocker-chain / editor.pause-status / resolve-refs) when params.userId is missing → bridge returns `{error:'OPT_IN_REQUIRED'}` → Reader can't render its data branch. 12 mid-drill defect-fix commits landed (aa70e82 → f1d911d): DEV-04 migration validator + regression test, DEV-06 CSS chrome (theme.css 353→755 lines), DEV-07/08/10/13 polish cluster, DEV-11 humanizeChain helper, DEV-12 now_doing fallback, DEV-14 runtime CSS injection (host doesn't auto-load sibling CSS), DEV-15 partial UI defense-in-depth (AnchoredToCards/AcChecklist/ActivityTimeline null-safety) and structural opt-in-guard accepts viewerUserId fallback + Reader threads userId. Test count 269→365 (+96; 363 pass / 0 fail / 2 skipped). Tarball shasum 7b8ecc3f at 30.7 KB. Plan 02-09 FILED with full Task 1-4 breakdown for useResolvedUserId resolver hook + DEV-16 issue-reader degradation contract tightening.
 
