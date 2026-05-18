@@ -450,12 +450,169 @@ ttachments (route-existence probe)",
 }
 
 Paste the JSON block above back into the GSD session so 04-01-SPIKE-FINDINGS.md can be written.
-eric@countermoves:~/paperclip$
+eric@countermoves:~/paperclip$ ps aux | grep '[c]hat-spike-probe'
+eric@countermoves:~/paperclip$ echo "token len: ${#TOKEN}"   # should be 56 — if 0, re-set it (line below)
+# TOKEN='pcp_board_eb2131c4254b22e9c84e67eb08f4262a93707cc364306544'
 
+PAPERCLIP_API_URL=http://127.0.0.1:3100 \
+PAPERCLIP_API_KEY="$TOKEN" \
+PAPERCLIP_COMPANY_ID=62b33a78-4f4a-4ab7-9977-a27be86f9853 \
+SPIKE_EMPLOYEE_AGENT_ID=b2a22e50-d772-4b70-bb50-4f4e93c2e984 \
+SPIKE_EDITOR_AGENT_ID=58f86f42-9fa3-4922-acff-985191ca15a7 \
+  node ~/chat-spike-probe.mjs
+token len: 58
+[2026-05-18T20:46:11.442Z] PROBE-D01/OQ-4 — native agent wake + reply form
+[2026-05-18T20:46:41.896Z] PROBE-OQ2 — comment row shape
+[2026-05-18T20:46:41.896Z] PROBE-OQ3 — auto-reopen re-wake
+[2026-05-18T20:48:12.063Z] PROBE-OQ1 — attachment upload path
 
+=== CHAT SPIKE PROBE SUMMARY ===
+{
+  "probe": "chat-spike-probe",
+  "phase": "04-employee-chat",
+  "plan": "04-01",
+  "startedAt": "2026-05-18T20:46:11.442Z",
+  "apiUrl": "http://127.0.0.1:3100",
+  "companyId": "62b33a78-4f4a-4ab7-9977-a27be86f9853",
+  "configErrors": [],
+  "findings": {
+    "d01": {
+      "probe": "D01/OQ-4",
+      "question": "Native agent wake on a comment + reply form (comment vs document)",
+      "steps": [
+        "resolved employee-agent b2a22e50-d772-4b70-bb50-4f4e93c2e984",
+        "created parent issue eba2ed7a-8ebe-4a85-b0bf-bf7f3f6817f8",
+        "created child topic issue fc1a0339-c9f8-4910-9675-1fc74a2b51aa",
+        "posted prompt comment; polling up to 8 min for a reply",
+        "agent replied with a comment; author field = author_agent_id"
+      ],
+      "agentReplied": true,
+      "replyForm": "comment",
+      "replyCommentShape": {
+        "id": "97d84be4-698d-4def-a98a-0ba9f137f9c4",
+        "companyId": "62b33a78-4f4a-4ab7-9977-a27be86f9853",
+        "issueId": "fc1a0339-c9f8-4910-9675-1fc74a2b51aa",
+        "authorAgentId": "b2a22e50-d772-4b70-bb50-4f4e93c2e984",
+        "authorUserId": null,
+        "authorType": "agent",
+        "createdByRunId": "c2fab5c9-531f-4c10-a9f1-7ee1565b861c",
+        "body": "2 + 2 = **4**.",
+        "presentation": null,
+        "metadata": null,
+        "createdAt": "2026-05-18T20:46:35.439Z",
+        "updatedAt": "2026-05-18T20:46:35.439Z"
+      },
+      "replyAuthorField": "author_agent_id",
+      "documentsFiledByAgent": 0,
+      "verdictHint": "PASS — agent woke and replied with a comment",
+      "employeeAgentId": "b2a22e50-d772-4b70-bb50-4f4e93c2e984",
+      "employeeAgentName": "CEO",
+      "parentIssueId": "eba2ed7a-8ebe-4a85-b0bf-bf7f3f6817f8",
+      "childIssueId": "fc1a0339-c9f8-4910-9675-1fc74a2b51aa"
+    },
+    "oq2": {
+      "probe": "OQ-2",
+      "question": "issue.comment.created payload / comment row shape",
+      "canSubscribeFromProbe": false,
+      "note": "Probe runs outside the worker — cannot read ctx.events. Recorded the listComments re-fetch shape instead.
+ 04-03 design input: the stream bridge derives commentId from event.entityId + a listComments re-fetch unless the live e
+vent payload proves to carry the comment id/body.",
+      "commentRowKeys": [
+        "id",
+        "companyId",
+        "issueId",
+        "authorAgentId",
+        "authorUserId",
+        "authorType",
+        "createdByRunId",
+        "body",
+        "presentation",
+        "metadata",
+        "createdAt",
+        "updatedAt"
+      ],
+      "commentRowSample": {
+        "id": "97d84be4-698d-4def-a98a-0ba9f137f9c4",
+        "companyId": "62b33a78-4f4a-4ab7-9977-a27be86f9853",
+        "issueId": "fc1a0339-c9f8-4910-9675-1fc74a2b51aa",
+        "authorAgentId": "b2a22e50-d772-4b70-bb50-4f4e93c2e984",
+        "authorUserId": null,
+        "authorType": "agent",
+        "createdByRunId": "c2fab5c9-531f-4c10-a9f1-7ee1565b861c",
+        "body": "2 + 2 = **4**.",
+        "presentation": null,
+        "metadata": null,
+        "createdAt": "2026-05-18T20:46:35.439Z",
+        "updatedAt": "2026-05-18T20:46:35.439Z"
+      }
+    },
+    "oq3": {
+      "probe": "OQ-3",
+      "question": "Does a status flip alone re-wake a done topic, or is requestWakeup needed?",
+      "steps": [
+        "set status=done: HTTP 200",
+        "posted re-wake comment: HTTP 201",
+        "agent replied with the issue still `done` — comment alone woke it"
+      ],
+      "wokeBy": "comment-on-done-issue (no status flip)",
+      "verdictHint": "STATUS-FLIP-NOT-NEEDED — a comment alone re-wakes a done topic"
+    },
+    "oq1": {
+      "probe": "OQ-1",
+      "question": "Is there ANY plugin-accessible attachment-upload path?",
+      "attempts": [
+        {
+          "path": "POST /issues/{id}/documents (base64 body)",
+          "status": 404,
+          "stored": false,
+          "responseSample": {
+            "error": "API route not found"
+          }
+        },
+        {
+          "path": "GET /api/companies/62b33a78-4f4a-4ab7-9977-a27be86f9853/attachments (route-existence probe)",
+          "status": 404,
+          "note": "route absent"
+        },
+        {
+          "path": "GET /api/issues/fc1a0339-c9f8-4910-9675-1fc74a2b51aa/attachments (route-existence probe)",
+          "status": 200,
+          "note": "route responds — inspect for an upload affordance"
+        },
+        {
+          "path": "/api/issues/fc1a0339-c9f8-4910-9675-1fc74a2b51aa/attachments",
+          "note": "a non-404 response here is a lead — 04-04 should inspect it"
+        },
+        {
+          "path": "GET /api/companies/62b33a78-4f4a-4ab7-9977-a27be86f9853/uploads (route-existence probe)",
+          "status": 404,
+          "note": "route absent"
+        },
+        {
+          "path": "GET /api/uploads (route-existence probe)",
+          "status": 404,
+          "note": "route absent"
+        },
+        {
+          "path": "POST /companies/{id}/assets (assets write probe)",
+          "status": 404,
+          "note": "no assets write route — as RESEARCH.md predicted"
+        }
+      ],
+      "pathFound": false,
+      "retrievableFile": false,
+      "verdictHint": "NO-PATH — no plugin-accessible upload path; CHAT-07 ships as the steady-state degraded path"
+    }
+  },
+  "finishedAt": "2026-05-18T20:48:12.105Z",
+  "spikeIssues": {
+    "parentIssueId": "eba2ed7a-8ebe-4a85-b0bf-bf7f3f6817f8",
+    "childIssueId": "fc1a0339-c9f8-4910-9675-1fc74a2b51aa",
+    "note": "Spike issues are tagged [SPIKE] in their titles — greppable and safe to delete."
+  }
+}
 
-
-
-
-
+Paste the JSON block above back into the GSD session so 04-01-SPIKE-FINDINGS.md can be written.
+eric@countermoves:~/paperclip$ tmux capture-pane -t spike -pS -100000 > ~/probe-output.txt
+grep -n '"d01"\|verdictHint\|agentReplied' ~/probe-output.txt
 
