@@ -18,6 +18,20 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.0 (Plan 04-02 — Employee Chat data layer) — opens Phase 4. Adds the
+  // 0006_chat.sql migration (chat_topics + chat_messages + chat_employee_parents
+  // in the plugin namespace, additive-only) and the typed chat-topics-repo.
+  // chat_messages is the D-09 idempotency side table (message_uuid -> comment_id
+  // map + supersedes link + pin flag — never message body; content lives only
+  // in public.issue_comments per CHAT-02). chat_employee_parents is the D-05
+  // per-employee parent-issue map (composite PK gives each employee exactly one
+  // Chat parent issue; race-safe first-ever-topic create). No new capability
+  // strings: the chat worker handlers call ctx.issues.createComment /
+  // ctx.issues.update / ctx.events.on / ctx.agents — all covered by capabilities
+  // Phase 2/3 already declared and proved live on Countermoves (ctx.issues.update
+  // is exercised by bulletin-action-approve, which installed live with the
+  // current set, so D-06 auto-reopen needs no new string).
+  //
   // 0.6.6 (debug fix from session bulletin-compile-cadence-runaway) — two bugs
   // the v0.6.5 closure re-drill exposed: (1) RUNAWAY COMPILE CADENCE — the
   // schedule pointer was advanced only on the success path, so every failure
@@ -80,7 +94,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.6.6',
+  version: '0.7.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
@@ -144,6 +158,16 @@ const manifest: PaperclipPluginManifestV1 = {
     // session prompt). Exact PLUGIN_CAPABILITIES member (SDK 2026.512.0
     // types.d.ts: "issues.wakeup for assignment wakeup requests").
     'issues.wakeup',
+    // Plan 04-02 — Employee Chat. The 04-03 chat worker handlers need no NEW
+    // capability strings: posting a chat message uses issue.comments.create
+    // (above); the stream bridge subscribes issue.comment.created via
+    // events.subscribe (above); the roster handler reads the employee list via
+    // agents.read (above); the + New topic flow creates the child topic issue
+    // via issues.create (above); D-06 auto-reopen calls ctx.issues.update,
+    // which Phase 3's bulletin-action-approve already exercises live with this
+    // exact capability set. Adding an unverified `issues.update` string would
+    // risk the host install validator — not added. Chat tables are in the
+    // plugin namespace so database.namespace.* (above) covers them.
     // Plan 03-08 — the dead Option C `agent.tools.register` capability was
     // removed. The 2026-05-16 closure re-drill live-disproved Option C: a
     // `claude_local` managed agent's session never receives a plugin-declared
