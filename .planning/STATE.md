@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-17T13:50:00.000Z"
+last_updated: "2026-05-18T13:51:01.233Z"
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 27
-  completed_plans: 20
-  percent: 74
+  completed_plans: 21
+  percent: 78
 ---
 
 # State: Clarity Pack
@@ -30,8 +30,10 @@ progress:
 Phase: 03 (daily-bulletin) — EXECUTING
 Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
 03-10 re-drill, all as gap-closure debug sessions (no new plan filed):
+
   1. BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE — debug `verifier-counts-own-issue.md`
      (RESOLVED), fix `a0e77d3`. PROVEN LIVE on the v0.6.1 re-drill.
+
   2. BULLETIN-RENDER-DEPT-ITEMS-UNDEFINED — debug `render-dept-items-undefined.md`
      (RESOLVED), fix `c9c6318`. PROVEN LIVE on the v0.6.2 re-drill.
   3-6. v0.6.2 re-drill (2026-05-17) PUBLISHED Bulletin No. 1 end-to-end (issue
@@ -51,6 +53,7 @@ Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
      (RESOLVED), fix `2b1419f` (pre-check re-keyed on (company_id,cycle_number);
      `ctx.issues.listComments`; + compile-bulletin post-readback instrumentation).
      Suite 712 tests, 710 pass / 0 fail / 2 skip.
+
   9. v0.6.4 cycle-2 re-drill (2026-05-17): **Bulletin No. 2 PUBLISHED end-to-end**
      (cycle_number=2, compile_status='published', issue c29d5ef7) — the cycle-2
      publish fix + resolved prose + populated masthead ALL PROVEN LIVE. Phase 3's
@@ -61,6 +64,7 @@ Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
      unbounded. Plus a `malformed array literal` db.execute error in the TL;DR
      write path (source_revisions[] column gets a scalar hash). v0.6.4
      UNINSTALLED 2026-05-17 ~12:56 to halt the cascade.
+
   10. v0.6.5 (2026-05-17): **both `tldr-heartbeat-recursion.md` bugs FIXED**
      (debug RESOLVED). Bug 1 — `handleEditorHeartbeat` now calls new
      `isOwnOperationIssue(issue)` and `continue`s for any issue whose
@@ -71,6 +75,7 @@ Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
      tests (`editor-heartbeat-recursion.test.mjs` ×5 + `tldr-cache.test.mjs`
      ×3). Suite 720 tests, 718 pass / 0 fail / 2 skip; tsc clean. Artifacts
      rebuilt; `clarity-pack-0.6.5.tgz` packed.
+
   11. v0.6.5 closure re-drill — RUN 2026-05-18 on live Countermoves. Full restore
      of snapshot `2026-05-17T12-52-04Z` onto live (atomic-swap; first time
      executed on the box — restore path now proven), uninstalled the v0.6.3 it
@@ -234,7 +239,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-14T21:00-23:00 — Plan 02-08 Tasks 1-3 executed end-to-end with strict TDD discipline (RED→GREEN per task; 6 commits 2898696..bcfc471). Closes 8 defects (DEV-06 through DEV-13) surfaced by the 2026-05-14 drill against Countermoves. Task 1 ships ~310 lines of substantive CSS — palette extension, CTA cluster, page chrome (responsive @media at 1180/760px), agent card + terminal-kind variants, critical path, awaiting-you pill, artifacts shelf, sparkline; theme.css 353→755 lines; dist/ui/index.css 8.2 KB→17.5 KB; new test/ui/clarity-pack-css-rules.test.mjs uses parse-based assertion (Node 24 can't reliably evaluate oklch + color-mix via JSDOM). Task 2 ships humanizeChain pure helper: scrubs UUIDs from terminal.label, three-pass rewrite (__unowned__ form + UUID substitution + belt-and-suspenders); shipped agent-only per DEV-11-AGENT-ONLY deviation (SDK 2026.512.0 has no PluginUsersClient — verified by grep on dist/types.d.ts); wired into situation-snapshot job's per-company loop; agent-card.tsx now has nowDoingFallback() for DEV-12. Task 3 ships useOptIn refresh wiring (Path A — SDK exposes refresh() on PluginDataResult), production-mode esbuild define block as defense-in-depth for DEV-08, react-key static analysis catches future regressions; DEV-13 awaitingYouCount fix landed in Task 2's coordinated edit to situation-snapshot.ts. Suite 269→361 pass / 0 fail / 1 skip. Typecheck + build + coexistence run-all all clean.
+**Last session:** 2026-05-18T13:51:01.221Z
 
 **Last session (extended):** 2026-05-14 evening through 2026-05-15 early morning — Plan 02-08 Task 4 drill against Countermoves Hostinger. 12 of 14 Phase 2 reqs proven; Situation Room visual fidelity APPROVED on /COU/situation-room (side-by-side with sketches/paperclip-fix-situation-room.html); OPTIN-01..05 all proven. Reader tab on /COU/issues/COU-4 stays stuck in loading state — DEV-15-STRUCTURAL diagnosed: `useHostContext().userId` returns null in detail-tab slots, exact-shape replay of the 02-03c companyId issue. opt-in-guard fails closed for every wrapped Reader handler (issue.reader / flatten-blocker-chain / editor.pause-status / resolve-refs) when params.userId is missing → bridge returns `{error:'OPT_IN_REQUIRED'}` → Reader can't render its data branch. 12 mid-drill defect-fix commits landed (aa70e82 → f1d911d): DEV-04 migration validator + regression test, DEV-06 CSS chrome (theme.css 353→755 lines), DEV-07/08/10/13 polish cluster, DEV-11 humanizeChain helper, DEV-12 now_doing fallback, DEV-14 runtime CSS injection (host doesn't auto-load sibling CSS), DEV-15 partial UI defense-in-depth (AnchoredToCards/AcChecklist/ActivityTimeline null-safety) and structural opt-in-guard accepts viewerUserId fallback + Reader threads userId. Test count 269→365 (+96; 363 pass / 0 fail / 2 skipped). Tarball shasum 7b8ecc3f at 30.7 KB. Plan 02-09 FILED with full Task 1-4 breakdown for useResolvedUserId resolver hook + DEV-16 issue-reader degradation contract tightening.
 
