@@ -25,4 +25,4 @@ agent-reply latency (minutes, not "14s") so a pending state is required.
 | # | Name | Design Question | Winner | Tags |
 |---|------|----------------|--------|------|
 | 001 | employee-chat-density | How dense/structured should the chat thread feel? | A — Comfortable | layout, chat, density |
-| 002 | employee-chat-states | How should message-level states (pending, attachment, failed, closed, reconnecting) read? | TBD | states, chat, components |
+| 002 | employee-chat-states | How should message-level states (pending, attachment, failed, closed, reconnecting) read? | Pending A · Attachment B | states, chat, components |

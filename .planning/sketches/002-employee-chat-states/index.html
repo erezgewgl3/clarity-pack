@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sketch 002 — Employee Chat · Message States</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg);color:var(--ink);
+    font-family:var(--font-sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+  body{
+    background:
+      radial-gradient(900px 500px at 100% 0%, rgba(217,162,62,.05), transparent 60%),
+      linear-gradient(180deg,#0E0D0A 0%, #0B0A07 100%);
+    min-height:100vh;padding:40px 32px 120px;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+
+  /* page header */
+  .pg-head{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:8px}
+  .pg-head .kicker{font-family:var(--font-mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
+  .pg-head h1{font-family:var(--font-serif);font-style:italic;font-size:34px;color:var(--ink);font-weight:400;margin-top:6px}
+  .pg-head p{margin-top:8px;color:var(--ink-2);font-size:13.5px;font-weight:300;max-width:720px;line-height:1.6}
+
+  /* state section */
+  .state{margin-top:44px}
+  .state > .s-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .state .s-num{font-family:var(--font-mono);font-size:11px;color:var(--ink-4);letter-spacing:.1em}
+  .state h2{font-family:var(--font-serif);font-style:italic;font-size:23px;color:var(--ink);font-weight:400}
+  .state .s-tag{
+    font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);border:1px solid var(--line);padding:2px 7px;border-radius:2px;
+  }
+  .state .s-tag.choice{color:var(--you);border-color:var(--you-soft)}
+  .state .s-note{color:var(--ink-2);font-size:12.5px;font-weight:300;margin:6px 0 16px;max-width:760px;line-height:1.6}
+  .state .s-note code{font-family:var(--font-mono);font-size:11.5px;color:var(--ink);background:var(--bg-4);padding:1px 5px;border:1px solid var(--line)}
+
+  /* option grid */
+  .opts{display:grid;gap:16px}
+  .opts.c3{grid-template-columns:repeat(3,1fr)}
+  .opts.c2{grid-template-columns:repeat(2,1fr)}
+  .opts.c1{grid-template-columns:1fr;max-width:560px}
+  @media(max-width:980px){.opts.c3,.opts.c2{grid-template-columns:1fr}}
+  .opt{border:1px solid var(--line);background:var(--bg-2);padding:0;display:flex;flex-direction:column}
+  .opt.win{border-color:var(--line-bright)}
+  .opt-label{
+    display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+    padding:9px 12px;border-bottom:1px solid var(--line);
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);
+  }
+  .opt-label .pick{color:var(--ink-4);font-size:9px;letter-spacing:.06em}
+  .opt-label .pick.star{color:var(--you)}
+  .opt-body{padding:16px 14px;flex:1;background:var(--bg)}
+  .opt-foot{
+    padding:8px 12px;border-top:1px dashed var(--line);
+    font-family:var(--font-mono);font-size:10px;color:var(--ink-3);line-height:1.5;letter-spacing:.02em;
+  }
+
+  /* ── shared chat-fragment primitives (Comfortable density, from sketch 001) ── */
+  .msg{display:grid;grid-template-columns:30px 1fr;gap:11px;margin-bottom:14px}
+  .msg:last-child{margin-bottom:0}
+  .msg.me{grid-template-columns:1fr 30px;direction:rtl}
+  .msg.me > *{direction:ltr}
+  .av{
+    width:30px;height:30px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:13px;color:var(--ink-2);
+    background:var(--bg);align-self:flex-end;
+  }
+  .msg.me .av{background:var(--you-soft);border-color:var(--you);color:var(--you)}
+  .bubble{background:var(--agent-bubble);border:1px solid var(--line);padding:11px 13px;border-radius:2px;position:relative}
+  .msg.me .bubble{background:var(--eric-bubble);border-color:var(--line-bright)}
+  .b-meta{
+    display:flex;justify-content:space-between;gap:12px;margin-bottom:5px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;color:var(--ink-3);
+  }
+  .b-meta .who{color:var(--ink-2);font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+  .msg.me .b-meta .who{color:var(--you)}
+  .b-text{font-size:13.5px;line-height:1.5;color:var(--ink);font-weight:300}
+
+  /* ── PENDING variants ── */
+  /* A: dashed ghost bubble + dots */
+  .pend-a{display:grid;grid-template-columns:30px 1fr;gap:11px}
+  .pend-a .av{border-style:dashed;color:var(--ink-3)}
+  .pend-a .pbox{
+    border:1px dashed var(--line-bright);background:var(--bg-2);padding:11px 13px;border-radius:2px;
+    display:flex;align-items:center;gap:9px;
+  }
+  .pend-a .pt{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+  .dots{display:inline-flex;gap:3px}
+  .dots i{width:4px;height:4px;border-radius:50%;background:var(--ink-3);animation:blink 1.2s infinite}
+  .dots i:nth-child(2){animation-delay:.2s}
+  .dots i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+  /* B: slim status line */
+  .pend-b{
+    display:flex;align-items:center;gap:8px;padding:6px 4px 6px 41px;
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em;color:var(--ink-3);
+  }
+  .pend-b .tk{color:var(--ink-2);font-variant-numeric:tabular-nums}
+  /* C: skeleton bubble */
+  .pend-c{display:grid;grid-template-columns:30px 1fr;gap:11px}
+  .pend-c .skel{border:1px solid var(--line);background:var(--bg-2);padding:11px 13px;border-radius:2px}
+  .pend-c .bar{height:9px;border-radius:2px;background:linear-gradient(90deg,var(--bg-3) 0%,var(--bg-4) 50%,var(--bg-3) 100%);background-size:200% 100%;animation:sh 1.4s infinite}
+  .pend-c .bar+.bar{margin-top:7px}
+  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  /* timeout notice (shared) */
+  .timeout{
+    margin-top:10px;display:flex;align-items:center;gap:8px;padding:7px 10px;
+    border:1px solid var(--warn-soft);background:var(--warn-soft);border-radius:2px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.03em;color:var(--ink-2);
+  }
+  .timeout b{color:var(--warn);font-weight:500}
+
+  /* ── ATTACHMENT variants ── */
+  /* A: generic bordered chip */
+  .att-a{
+    border:1px solid var(--line);background:var(--bg);display:grid;
+    grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;
+  }
+  .att-a .ico{
+    width:32px;height:32px;border:1px solid var(--line-bright);display:grid;place-items:center;
+    font-family:var(--font-mono);font-size:9px;color:var(--ink-2);font-weight:600;
+  }
+  .att-a .nm{font-size:13px;color:var(--ink)}
+  .att-a .mt{font-family:var(--font-mono);font-size:10px;color:var(--ink-3);margin-top:2px}
+  .att-a .op{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-2);border:1px solid var(--line-bright);padding:5px 9px;cursor:pointer;background:transparent;
+  }
+  /* B: compact inline pill */
+  .att-b{
+    display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--bg);
+    padding:6px 10px;border-radius:3px;cursor:pointer;
+  }
+  .att-b .clip{color:var(--ink-3);font-size:12px}
+  .att-b .nm{font-size:12.5px;color:var(--ink)}
+  .att-b .mt{font-family:var(--font-mono);font-size:9.5px;color:var(--ink-4);letter-spacing:.03em}
+  /* C: type-badge chip */
+  .att-c{
+    display:flex;align-items:center;gap:11px;border:1px solid var(--line);background:var(--bg);
+    padding:9px 12px;cursor:pointer;
+  }
+  .att-c .badge{
+    font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.04em;
+    padding:4px 7px;color:var(--bg);
+  }
+  .att-c .badge.png{background:var(--alert)}
+  .att-c .badge.xlsx{background:var(--live)}
+  .att-c .nm{font-size:13px;color:var(--ink)}
+  .att-c .mt{font-family:var(--font-mono);font-size:10px;color:var(--ink-3);margin-top:2px}
+
+  /* ── FAILED send ── */
+  .fail-foot{
+    margin-top:9px;display:flex;align-items:center;gap:10px;padding:7px 10px;
+    border:1px solid var(--alert);background:var(--alert-soft);border-radius:2px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.03em;color:var(--ink-2);
+  }
+  .fail-foot .lbl{color:var(--alert);font-weight:500;text-transform:uppercase;letter-spacing:.08em}
+  .fail-foot .sp{flex:1}
+  .fail-foot button{
+    font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:4px 9px;cursor:pointer;border:1px solid var(--line-bright);background:transparent;color:var(--ink-2);
+  }
+  .fail-foot button.retry{border-color:var(--you);color:var(--you)}
+  .fail-foot button:hover{color:var(--ink)}
+  .msg.failed .bubble{border-color:var(--alert);opacity:.96}
+
+  /* ── COMPOSER (closed-topic + attach-unavailable) ── */
+  .composer{border:1px solid var(--line-bright);background:var(--bg-2)}
+  .composer-note{
+    display:flex;align-items:center;gap:9px;padding:8px 12px;border-bottom:1px solid var(--line);
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.03em;background:var(--bg-3);
+  }
+  .composer-note.closed{color:var(--idle)}
+  .composer-note.closed b{color:var(--ink-2);font-weight:500}
+  .composer-note .reopen{
+    margin-left:auto;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+    border:1px solid var(--line-bright);color:var(--ink-2);padding:3px 8px;cursor:pointer;background:transparent;
+  }
+  .composer-in{
+    width:100%;background:transparent;border:none;outline:none;color:var(--ink);
+    font-family:var(--font-sans);font-size:13.5px;padding:12px 14px 4px;resize:none;min-height:46px;
+  }
+  .composer-in::placeholder{color:var(--ink-3);font-style:italic}
+  .composer-foot{display:flex;justify-content:space-between;align-items:center;padding:7px 12px 9px;border-top:1px dashed var(--line)}
+  .composer-tools{display:flex;gap:5px}
+  .tool-btn{
+    font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);background:transparent;border:1px solid transparent;padding:5px 7px;cursor:pointer;
+  }
+  .tool-btn:hover{color:var(--ink-2);border-color:var(--line)}
+  .tool-btn.disabled{color:var(--ink-4);cursor:not-allowed;text-decoration:line-through}
+  .tool-btn.disabled:hover{border-color:transparent}
+  .send-mini{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    padding:6px 11px;border:1px solid var(--ink-2);background:var(--ink);color:var(--bg);cursor:pointer;font-weight:500;
+  }
+  .send-mini.reopen{background:var(--you);border-color:var(--you);color:#1B150A}
+  .attach-warn{
+    font-family:var(--font-mono);font-size:9.5px;color:var(--alert);letter-spacing:.02em;
+    display:flex;align-items:center;gap:6px;
+  }
+
+  /* ── RECONNECTING banner ── */
+  .recon{
+    display:flex;align-items:center;gap:9px;padding:8px 12px;
+    border:1px solid var(--warn-soft);background:var(--warn-soft);
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.03em;color:var(--ink-2);
+  }
+  .recon .spin{
+    width:9px;height:9px;border:1.5px solid var(--warn);border-right-color:transparent;border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .recon b{color:var(--warn);font-weight:500}
+  .recon .right{margin-left:auto;color:var(--ink-3)}
+
+  /* sketch toolbar */
+  #sketch-tools{
+    position:fixed;bottom:12px;right:12px;z-index:9999;font-family:system-ui;font-size:12px;
+    background:rgba(0,0,0,.78);color:#fff;padding:8px 12px;border-radius:8px;opacity:.4;
+    transition:opacity .2s;display:flex;gap:10px;align-items:center;
+  }
+  #sketch-tools:hover{opacity:1}
+  #sketch-tools select,#sketch-tools button{
+    font-family:system-ui;font-size:11px;background:#222;color:#fff;border:1px solid #444;
+    border-radius:4px;padding:3px 6px;cursor:pointer;
+  }
+  body.annotate *:hover{outline:1px solid rgba(229,197,111,.4)}
+
+  #toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--bg-3);border:1px solid var(--line-bright);color:var(--ink);
+    font-family:var(--font-mono);font-size:11px;padding:10px 16px;opacity:0;
+    transition:all .25s ease;z-index:9999;pointer-events:none;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="pg-head">
+    <div class="kicker">Sketch 002 · Employee Chat</div>
+    <h1>Message States</h1>
+    <p>The states the chat thread has to handle gracefully — reconciled with the Phase 4 decisions in
+    04-CONTEXT.md. Density is locked (A · Comfortable, sketch 001). Two states are genuine design
+    choices and show 2–3 options to compare; the rest are determined by a CONTEXT decision and show
+    one treatment.</p>
+  </div>
+
+  <!-- 1 · PENDING -->
+  <section class="state">
+    <div class="s-head">
+      <span class="s-num">01</span>
+      <h2>Pending — agent is working</h2>
+      <span class="s-tag choice">Your choice · 3 options</span>
+      <span class="s-tag">D-04</span>
+    </div>
+    <p class="s-note">After Eric sends, the agent wakes on its heartbeat — a real reply takes
+    <b>minutes, not seconds</b>. The thread needs to show something honest in the gap. Pick a treatment.</p>
+    <div class="opts c3">
+      <div class="opt win">
+        <div class="opt-label"><span>A · Ghost bubble</span><span class="pick star">★ chosen</span></div>
+        <div class="opt-body">
+          <div class="msg me"><div class="bubble"><div class="b-meta"><span class="who">Eric · You</span><span>10:24</span></div><div class="b-text">Route the prospect note through me before send.</div></div><div class="av">E</div></div>
+          <div class="pend-a"><div class="av">C</div><div class="pbox"><span class="pt">CFO is working</span><span class="dots"><i></i><i></i><i></i></span></div></div>
+        </div>
+        <div class="opt-foot">A message-shaped placeholder. Reads as "a reply is coming here."</div>
+      </div>
+      <div class="opt">
+        <div class="opt-label"><span>B · Slim status line</span><span class="pick">pick</span></div>
+        <div class="opt-body">
+          <div class="msg me"><div class="bubble"><div class="b-meta"><span class="who">Eric · You</span><span>10:24</span></div><div class="b-text">Route the prospect note through me before send.</div></div><div class="av">E</div></div>
+          <div class="pend-b"><span class="dots"><i></i><i></i><i></i></span><span>CFO is working</span><span class="tk">· 0:47</span></div>
+        </div>
+        <div class="opt-foot">Quietest. A one-line whisper under the last message, with elapsed time.</div>
+      </div>
+      <div class="opt">
+        <div class="opt-label"><span>C · Skeleton bubble</span><span class="pick">pick</span></div>
+        <div class="opt-body">
+          <div class="msg me"><div class="bubble"><div class="b-meta"><span class="who">Eric · You</span><span>10:24</span></div><div class="b-text">Route the prospect note through me before send.</div></div><div class="av">E</div></div>
+          <div class="pend-c"><div class="av">C</div><div class="skel"><div class="bar" style="width:90%"></div><div class="bar" style="width:62%"></div></div></div>
+        </div>
+        <div class="opt-foot">Shimmer placeholder. Most "app-like" — but implies a reply length it can't know.</div>
+      </div>
+    </div>
+    <p class="s-note" style="margin-top:18px">If the wait crosses the timeout (D-04), the pending row resolves to an honest notice — same for whichever option wins:</p>
+    <div class="opts c1">
+      <div class="opt">
+        <div class="opt-label"><span>Timeout notice</span><span class="pick">shared</span></div>
+        <div class="opt-body">
+          <div class="pend-b"><span>CFO is working</span><span class="tk">· 4:30</span></div>
+          <div class="timeout">⚠ <span><b>No reply yet</b> — CFO may be paused or busy. The message is saved; the agent will still pick it up.</span></div>
+        </div>
+        <div class="opt-foot">Never a spinner that spins forever. After the timeout, say what's true.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · ATTACHMENT CHIP -->
+  <section class="state">
+    <div class="s-head">
+      <span class="s-num">02</span>
+      <h2>Attachment chip</h2>
+      <span class="s-tag choice">Your choice · 3 options</span>
+      <span class="s-tag">D-12</span>
+    </div>
+    <p class="s-note">Attachments persist as Paperclip work-products. Phase 4 shows a <b>chip only</b> —
+    full-fidelity inline preview (xlsx grid, pdf embed, image) is Phase 5. Pick the chip treatment.</p>
+    <div class="opts c3">
+      <div class="opt">
+        <div class="opt-label"><span>A · Bordered chip</span><span class="pick">pick</span></div>
+        <div class="opt-body">
+          <div class="att-a">
+            <div class="ico">PNG</div>
+            <div><div class="nm">deck-slide-12.png</div><div class="mt">cfo/CHT-44/ · 1.4 MB</div></div>
+            <button class="op" onclick="toast('Open work-product')">Open</button>
+          </div>
+        </div>
+        <div class="opt-foot">Full row. Most legible; matches sketch 001. Takes vertical space.</div>
+      </div>
+      <div class="opt win">
+        <div class="opt-label"><span>B · Compact pill</span><span class="pick star">★ chosen</span></div>
+        <div class="opt-body">
+          <span class="att-b" onclick="toast('Open work-product')"><span class="clip">📎</span><span class="nm">deck-slide-12.png</span><span class="mt">1.4 MB</span></span>
+        </div>
+        <div class="opt-foot">Inline, single line. Light — good when messages carry several files.</div>
+      </div>
+      <div class="opt">
+        <div class="opt-label"><span>C · Type-badge chip</span><span class="pick">pick</span></div>
+        <div class="opt-body">
+          <div class="att-c" onclick="toast('Open work-product')">
+            <span class="badge png">PNG</span>
+            <div><div class="nm">deck-slide-12.png</div><div class="mt">cfo/CHT-44/ · 1.4 MB</div></div>
+          </div>
+        </div>
+        <div class="opt-foot">Colour-coded file type — scannable at a glance when many attachments.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · FAILED SEND -->
+  <section class="state">
+    <div class="s-head">
+      <span class="s-num">03</span>
+      <h2>Failed send</h2>
+      <span class="s-tag">D-10 · determined</span>
+    </div>
+    <p class="s-note">Optimistic send failed (worker error / offline). The message <b>stays in the thread</b>,
+    marked failed, with Retry — Retry re-sends with the same <code>message_uuid</code> so a half-sent
+    message dedupes. Never silent loss.</p>
+    <div class="opts c1">
+      <div class="opt win">
+        <div class="opt-label"><span>Failed bubble + Retry</span><span class="pick star">✓ contract</span></div>
+        <div class="opt-body">
+          <div class="msg me failed">
+            <div class="bubble">
+              <div class="b-meta"><span class="who">Eric · You</span><span>10:31</span></div>
+              <div class="b-text">Can you also pull the Q2 loss triangle before the actuary review?</div>
+              <div class="fail-foot">
+                <span class="lbl">⚠ Failed to send</span><span class="sp"></span>
+                <button class="retry" onclick="toast('Retry — re-sends with the same message_uuid (dedupes)')">Retry</button>
+                <button onclick="toast('Discard draft')">Discard</button>
+              </div>
+            </div>
+            <div class="av">E</div>
+          </div>
+        </div>
+        <div class="opt-foot">Eric keeps his typed text. Retry is idempotent on <code>message_uuid</code>.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · CLOSED-TOPIC COMPOSER -->
+  <section class="state">
+    <div class="s-head">
+      <span class="s-num">04</span>
+      <h2>Closed-topic composer</h2>
+      <span class="s-tag">D-06 · determined</span>
+    </div>
+    <p class="s-note">The topic was closed (its issue is <code>done</code>, so the agent won't wake).
+    Sending <b>auto-reopens</b> it — the composer says so up front, and the Send button changes to make
+    the reopen explicit rather than silent.</p>
+    <div class="opts c1">
+      <div class="opt win">
+        <div class="opt-label"><span>Composer · topic closed</span><span class="pick star">✓ contract</span></div>
+        <div class="opt-body">
+          <div class="composer">
+            <div class="composer-note closed">⊘ <b>Topic closed</b> · sending a message will reopen it and wake CFO
+              <button class="reopen" onclick="toast('Reopen topic without sending')">Reopen only</button>
+            </div>
+            <textarea class="composer-in" placeholder="Message CFO… (sending reopens this topic)"></textarea>
+            <div class="composer-foot">
+              <div class="composer-tools"><button class="tool-btn">📎 Attach</button><button class="tool-btn">⌗ Reference</button></div>
+              <button class="send-mini reopen" onclick="toast('Reopens the topic, then sends')">Reopen &amp; send</button>
+            </div>
+          </div>
+        </div>
+        <div class="opt-foot">No silent dead-end and no silent un-closing — the reopen is named on the button.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · RECONNECTING -->
+  <section class="state">
+    <div class="s-head">
+      <span class="s-num">05</span>
+      <h2>Reconnecting — realtime degraded</h2>
+      <span class="s-tag">D-08 · determined</span>
+    </div>
+    <p class="s-note">The live stream (<code>usePluginStream</code>) dropped. The thread falls back to
+    polling so messages keep arriving — and says so, so a stale-looking thread is never a mystery.</p>
+    <div class="opts c1">
+      <div class="opt win">
+        <div class="opt-label"><span>Degraded banner — top of thread</span><span class="pick star">✓ contract</span></div>
+        <div class="opt-body">
+          <div class="recon">
+            <span class="spin"></span>
+            <span><b>Live updates reconnecting</b> — meanwhile refreshing every 20s</span>
+            <span class="right">last update 12s ago</span>
+          </div>
+          <div style="margin-top:14px">
+            <div class="msg"><div class="av">C</div><div class="bubble"><div class="b-meta"><span class="who">CFO</span><span>10:46 · replied 3m</span></div><div class="b-text">Q2 loss triangle attached — pulling the actuary in now.</div></div></div>
+          </div>
+        </div>
+        <div class="opt-foot">Stream-primary, poll-fallback (D-08). The banner clears itself when the stream is back.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · ATTACH UNAVAILABLE -->
+  <section class="state">
+    <div class="s-head">
+      <span class="s-num">06</span>
+      <h2>Attachments unavailable — graceful degrade</h2>
+      <span class="s-tag">CHAT-07 · determined</span>
+    </div>
+    <p class="s-note">The work-product service is unreachable. The attach button is <b>disabled</b> with an
+    explicit reason — an attachment is never silently lost. Text messages still send fine.</p>
+    <div class="opts c1">
+      <div class="opt win">
+        <div class="opt-label"><span>Composer · attach disabled</span><span class="pick star">✓ contract</span></div>
+        <div class="opt-body">
+          <div class="composer">
+            <textarea class="composer-in" placeholder="Message CFO…">Here's my read on the triangle —</textarea>
+            <div class="composer-foot">
+              <div class="composer-tools">
+                <button class="tool-btn disabled" title="unavailable">📎 Attach</button>
+                <button class="tool-btn">⌗ Reference</button>
+                <span class="attach-warn">⚠ Attachments temporarily unavailable</span>
+              </div>
+              <button class="send-mini" onclick="toast('Text message sends fine')">Send</button>
+            </div>
+          </div>
+        </div>
+        <div class="opt-foot">Disabled + named reason. Text path stays open; the file is never accepted-then-dropped.</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div id="toast"></div>
+<div id="sketch-tools">
+  <span>Theme</span>
+  <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'">
+    <option value="default">default</option>
+  </select>
+  <button onclick="document.body.classList.toggle('annotate')">Annotate</button>
+</div>
+
+<script>
+  function toast(msg){
+    var t=document.getElementById('toast');
+    t.textContent=msg;t.classList.add('show');
+    clearTimeout(t._tm);t._tm=setTimeout(function(){t.classList.remove('show')},2400);
+  }
+</script>
+</body>
+</html>
