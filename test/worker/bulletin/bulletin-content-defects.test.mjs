@@ -298,26 +298,37 @@ const JOB_EVENT = {
 const PAST = '2026-05-07T00:00:00.000Z';
 
 // A ctx whose per-company body throws an UNEXPECTED TypeError — modelling a
-// render/publish-path crash. Two injection points, both un-try-wrapped in the
-// job so the throw reaches the per-company catch-all:
-//
-//   throwAt: 'next_due_at' — the final `UPDATE ... SET next_due_at` execute,
-//       which runs AFTER `cycleNumber` is set AND after a successful publish.
-//       Exercises BOTH catch-all record paths: recordFailure (D-06 breaker)
-//       AND recordCycleCompileFailure (D-22 banner).
+// render/publish-path crash. Three injection points:
 //
 //   throwAt: 'max_cycle' — the `SELECT ... MAX(cycle_number)` query, the first
 //       un-try-wrapped statement of the per-company body. It throws on EVERY
 //       fire identically (no published row is ever written, so nothing blocks
 //       the next fire) — the deterministic path for the 3-consecutive-throws
-//       breaker-trip test. `cycleNumber` is still null here, so only the
-//       recordFailure path fires; the breaker is what this scenario asserts.
+//       breaker-trip test. `cycleNumber` is still null at that seam, so only
+//       the recordFailure (D-06 breaker) path fires. Before the Defect D fix
+//       the catch only warn-logged (→ `job completed successfully` and the
+//       breaker never advanced).
 //
-// Before the Defect D fix the catch only warn-logged (→ the job reported
-// `job completed successfully` and the breaker never advanced).
-function makeThrowingCtx({ throwAt = 'next_due_at' } = {}) {
+//   throwAt: 'publish_precheck' — the `SELECT compile_status` idempotency
+//       pre-check inside `publishBulletin`, which is NOT try-wrapped: a throw
+//       there propagates out of `publishBulletin` into the per-company
+//       catch-all. By this seam `cycleNumber` IS already set, so the catch-all
+//       exercises BOTH record paths — recordFailure (D-06 breaker) AND
+//       recordCycleCompileFailure (D-22 banner). This is the faithful
+//       post-`cycleNumber` unexpected-crash seam after v0.6.6 moved the
+//       `next_due_at` advance into the best-effort `advanceScheduleForCompany`.
+//
+//   throwAt: 'next_due_at' — the `UPDATE ... SET next_due_at` execute. v0.6.6
+//       (debug bulletin-compile-cadence-runaway, Bug 1) moved this statement
+//       into `advanceScheduleForCompany`, which is INTENTIONALLY best-effort:
+//       a schedule-pointer write hiccup, AFTER the bulletin has already
+//       published successfully, is logged and swallowed — it must NOT abort the
+//       per-company loop and must NOT trip the bulletin-compile breaker (the
+//       compile itself succeeded). This variant asserts exactly that contract.
+function makeThrowingCtx({ throwAt = 'max_cycle' } = {}) {
   const failures = [];
   const cycleFailures = [];
+  const loggedMessages = [];
   const jobs = new Map();
   const bulletins = [];
   const operationIssues = [];
@@ -333,11 +344,27 @@ function makeThrowingCtx({ throwAt = 'next_due_at' } = {}) {
     };
   }
 
+  // Capture log MESSAGE strings only (the host drops 2nd-arg metadata).
+  const record = (msg) => {
+    if (typeof msg === 'string') loggedMessages.push(msg);
+  };
+
   const ctx = {
-    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    logger: {
+      info: (msg) => record(msg),
+      warn: (msg) => record(msg),
+      error: (msg) => record(msg),
+      debug: (msg) => record(msg),
+    },
     db: wrapHostFaithfulDb({
       async query(sql, params) {
         if (/SELECT next_due_at/i.test(sql)) {
+          // Prefer a live in-memory row so the schedule-pointer advance is
+          // observable; fall back to the PAST seed for the first fire.
+          const live = bulletins
+            .filter((b) => b.company_id === params?.[0])
+            .sort((a, b) => b.cycle_number - a.cycle_number);
+          if (live.length > 0) return [{ next_due_at: live[0].next_due_at }];
           return params?.[0] === 'COU' ? [{ next_due_at: PAST }] : [];
         }
         if (/MAX\(cycle_number\)/i.test(sql)) {
@@ -348,6 +375,12 @@ function makeThrowingCtx({ throwAt = 'next_due_at' } = {}) {
           return [{ max_cycle: max, max }];
         }
         if (/SELECT compile_status/i.test(sql)) {
+          // publishBulletin's idempotency pre-check is NOT try-wrapped — a
+          // throw here propagates out of publishBulletin into the per-company
+          // catch-all, after `cycleNumber` is set.
+          if (throwAt === 'publish_precheck') {
+            throw new TypeError("Cannot read properties of undefined (reading 'length')");
+          }
           const row = bulletins.find(
             (b) => b.next_due_at === params?.[0] && b.content_hash === params?.[1],
           );
@@ -383,13 +416,18 @@ function makeThrowingCtx({ throwAt = 'next_due_at' } = {}) {
           if (row) row.compile_status = 'published';
           return { rowCount: row ? 1 : 0 };
         }
-        // Injection point — the final next_due_at advance throws an unexpected
-        // TypeError, modelling a publish-path crash AFTER a clean publish.
+        // Injection point — the company-scoped next_due_at advance throws an
+        // unexpected TypeError, modelling a schedule-write crash AFTER a clean
+        // publish. `advanceScheduleForCompany` catches it (best-effort) — the
+        // job must survive and the breaker must stay closed.
         if (/UPDATE[\s\S]*bulletins[\s\S]*SET next_due_at/i.test(sql)) {
           if (throwAt === 'next_due_at') {
             throw new TypeError("Cannot read properties of undefined (reading 'length')");
           }
-          return { rowCount: 1 };
+          // params: 0 new_next_due_at, 1 company_id
+          const matched = bulletins.filter((b) => b.company_id === params[1]);
+          for (const row of matched) row.next_due_at = params[0];
+          return { rowCount: matched.length };
         }
         return { rowCount: 1 };
       },
@@ -446,15 +484,16 @@ function makeThrowingCtx({ throwAt = 'next_due_at' } = {}) {
       async createComment() { return { id: 'c' }; },
     },
   };
-  return { ctx, failures, cycleFailures, jobs };
+  return { ctx, failures, cycleFailures, loggedMessages, jobs, bulletins };
 }
 
 test('Defect D: an unexpected throw in the per-company iteration records a circuit-breaker failure', async () => {
   resetCircuitBreakerState();
-  // throwAt 'next_due_at' — the crash lands after a clean publish, so the
-  // catch-all exercises BOTH the recordFailure and the recordCycleCompileFailure
-  // paths.
-  const { ctx, failures, cycleFailures, jobs } = makeThrowingCtx({ throwAt: 'next_due_at' });
+  // throwAt 'publish_precheck' — the crash lands inside publishBulletin's
+  // un-try-wrapped idempotency pre-check, AFTER `cycleNumber` is set, so the
+  // catch-all exercises BOTH the recordFailure (D-06 breaker) and the
+  // recordCycleCompileFailure (D-22 banner) paths.
+  const { ctx, failures, cycleFailures, jobs } = makeThrowingCtx({ throwAt: 'publish_precheck' });
   registerCompileBulletinJob(ctx);
 
   // The job must NOT throw (per-company isolation) — but it must also NOT
@@ -473,6 +512,36 @@ test('Defect D: an unexpected throw in the per-company iteration records a circu
   assert.ok(
     cycleFailures.length >= 1,
     'the throw must also record a cycle compile failure for the D-22 banner',
+  );
+});
+
+test('v0.6.6 (Bug 1): a next_due_at advance failure after a clean publish is logged + swallowed, breaker stays closed', async () => {
+  resetCircuitBreakerState();
+  // throwAt 'next_due_at' — the schedule-pointer advance throws AFTER the
+  // bulletin has published successfully. `advanceScheduleForCompany` is
+  // best-effort: it must log the failure and let the loop continue, and it
+  // must NOT record a bulletin-compile breaker failure (the compile itself
+  // succeeded — a schedule-write hiccup is not a compile failure).
+  const { ctx, failures, loggedMessages, jobs } = makeThrowingCtx({ throwAt: 'next_due_at' });
+  registerCompileBulletinJob(ctx);
+
+  await assert.doesNotReject(
+    jobs.get('compile-bulletin')(JOB_EVENT),
+    'a schedule-advance failure must not abort the job',
+  );
+
+  // The failure must surface in the log — never silently swallowed.
+  const advanceFailLog = loggedMessages.find((m) =>
+    /failed to advance next_due_at/i.test(m),
+  );
+  assert.ok(advanceFailLog, 'the next_due_at advance failure must be logged');
+
+  // The bulletin-compile breaker must NOT have advanced — the compile + publish
+  // succeeded; only the post-publish schedule write hiccupped.
+  assert.equal(
+    failures.length,
+    0,
+    'a post-publish schedule-write failure must NOT record a bulletin-compile breaker failure',
   );
 });
 

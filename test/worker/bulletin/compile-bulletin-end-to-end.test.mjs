@@ -4,6 +4,18 @@
 // compile-bulletin job. Stub LlmAdapter returns a canned BulletinDraft; the
 // in-memory ctx respects the UNIQUE(next_due_at, content_hash) idempotency
 // constraint so a duplicate fire produces exactly one ctx.issues.create.
+//
+// v0.6.6 (debug bulletin-compile-cadence-runaway):
+//   - Bug 1 — the in-memory `getNextDueAtForCompany` model now prefers a LIVE
+//     in-memory bulletin row over the static seed map, and the `SET next_due_at`
+//     model honours the COMPANY-SCOPED schedule-pointer advance
+//     (`UPDATE bulletins SET next_due_at = $1 WHERE company_id = $2`). This
+//     makes the cadence-settling test (fire twice → second fire is a no-op)
+//     faithful — without it, the fake could not observe the schedule advance.
+//   - Bug 2 — `verifyDraft` no longer re-runs SQL; it checks the draft against
+//     the frozen standing-numbers snapshot. The verifier-rejection cases below
+//     still hold: `sqlMrr` flows into `computeStandingNumbers`, so the frozen
+//     snapshot carries 9999 while the canned draft claims 2475 → mismatch.
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
@@ -20,7 +32,7 @@ const JOB_EVENT = {
 };
 
 // A canned BulletinDraft. standingNumbers values are what the verifier
-// re-checks against the SQL result.
+// checks against the frozen standing-numbers snapshot.
 function cannedDraft({ spend = 2475 } = {}) {
   return {
     masthead: { volume: 'I', number: 1, weekday: 'Thursday', dateText: '2026-05-07', prepareForName: 'Eric G.', cycleNumber: 1 },
@@ -76,16 +88,24 @@ function makeFakeCtx({
     db: {
       namespace: 'plugin_clarity_pack_cdd6bda4bd',
       async query(sql, params) {
-        // getNextDueAtForCompany
+        // getNextDueAtForCompany — v0.6.6 (Bug 1): prefer a LIVE in-memory row
+        // (the schedule pointer the job advances) over the static seed map, so
+        // a second fire observes the freshly-advanced future `next_due_at`.
         if (/SELECT next_due_at/i.test(sql)) {
-          const iso = nextDue[params?.[0]];
+          const cid = params?.[0];
+          const liveRows = bulletins
+            .filter((b) => b.company_id === cid)
+            .sort((a, b) => b.cycle_number - a.cycle_number);
+          if (liveRows.length > 0) return [{ next_due_at: liveRows[0].next_due_at }];
+          const iso = nextDue[cid];
           return iso ? [{ next_due_at: iso }] : [];
         }
         // MAX(cycle_number) derivation in upsertBulletin / job cycle calc
         if (/MAX\(cycle_number\)/i.test(sql)) {
           const cid = params?.[0];
+          const publishedOnly = /compile_status/i.test(sql);
           const max = bulletins
-            .filter((b) => b.company_id === cid)
+            .filter((b) => b.company_id === cid && (!publishedOnly || b.compile_status === 'published'))
             .reduce((m, b) => Math.max(m, b.cycle_number), 0);
           return [{ max_cycle: max, max: max }];
         }
@@ -114,8 +134,12 @@ function makeFakeCtx({
           //   0 cycle_number, 1 company_id, 2 next_due_at, 3 compiled_at,
           //   4 content_hash, 5 lineage_thread_json, 6 draft_json
           // (compile_status is the SQL literal 'attempting' — not a param).
+          // upsertBulletin (bootstrap) INSERT carries a verified_at column, so
+          // the column offsets differ — detect bootstrap by that column name.
+          const isBootstrap = /verified_at/i.test(sql);
           const nextDueAt = params[2];
-          const contentHash = params[4];
+          const contentHash = isBootstrap ? params[8] : params[4];
+          const compileStatus = isBootstrap ? params[7] : 'attempting';
           const dup = bulletins.find((b) => b.next_due_at === nextDueAt && b.content_hash === contentHash);
           if (dup) return { rowCount: 0 }; // ON CONFLICT DO NOTHING
           bulletins.push({
@@ -123,7 +147,7 @@ function makeFakeCtx({
             company_id: params[1],
             next_due_at: nextDueAt,
             compiled_at: params[3],
-            compile_status: 'attempting',
+            compile_status: compileStatus,
             content_hash: contentHash,
             published_issue_id: null,
           });
@@ -140,11 +164,16 @@ function makeFakeCtx({
           }
           return { rowCount: row ? 1 : 0 };
         }
+        // v0.6.6 (Bug 1) — the COMPANY-SCOPED schedule-pointer advance:
+        // `UPDATE bulletins SET next_due_at = $1 WHERE company_id = $2`. It
+        // advances EVERY row for the company so the next fire's
+        // getNextDueAtForCompany (MAX(cycle_number) row) sees a future pointer.
         if (/UPDATE[\s\S]*bulletins[\s\S]*SET next_due_at/i.test(sql)) {
-          // params: new_next_due_at, cycle_number, company_id
-          const row = bulletins.find((b) => b.cycle_number === params[1] && b.company_id === params[2]);
-          if (row) row.next_due_at = params[0];
-          return { rowCount: row ? 1 : 0 };
+          // params: 0 new_next_due_at, 1 company_id
+          const cid = params[1];
+          const matched = bulletins.filter((b) => b.company_id === cid);
+          for (const row of matched) row.next_due_at = params[0];
+          return { rowCount: matched.length };
         }
         if (/bulletin_compile_failures/i.test(sql)) {
           return { rowCount: 1 };
@@ -282,9 +311,83 @@ test('e2e: after publish, next_due_at advances to a future instant', async () =>
   assert.ok(new Date(row.next_due_at).getTime() > Date.now(), 'next_due_at advanced to the future');
 });
 
+// ---- v0.6.6 (debug bulletin-compile-cadence-runaway, Bug 1) ----------------
+//
+// The DAILY bulletin must compile ONCE per 06:30-ET slot. The 2026-05-18 drill
+// saw the every-minute heartbeat re-compile + re-publish a fresh cycle every
+// ~2 minutes. These two tests are the regression net: once a fire publishes (or
+// is rejected), the schedule pointer is advanced to a FUTURE instant, so the
+// very next heartbeat fire is a no-op — no second compile, no second issue.
+
+test('e2e (Bug 1): a successful publish then an immediate re-fire does NOT recompile (cadence settles)', async () => {
+  resetCircuitBreakerState();
+  const { ctx, bulletins, issuesCreated, jobs } = makeFakeCtx({
+    companies: [{ id: 'COU' }],
+    nextDue: { COU: PAST },
+    sqlMrr: 2475,
+  });
+  registerCompileBulletinJob(ctx);
+  const fn = jobs.get('compile-bulletin');
+
+  // Fire 1 — due → compiles + publishes cycle 1, advances next_due_at.
+  await fn(JOB_EVENT);
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 1, 'fire 1 publishes exactly one bulletin');
+  const publishedCount1 = bulletins.filter((b) => b.compile_status === 'published').length;
+  assert.equal(publishedCount1, 1, 'one published bulletins row after fire 1');
+
+  // Fire 2 — immediately after, no time has advanced past the new (future)
+  // next_due_at. The job MUST treat the company as not-due and no-op.
+  await fn(JOB_EVENT);
+  assert.equal(
+    bulletinIssuesOf(issuesCreated).length,
+    1,
+    'fire 2 must NOT publish a second bulletin — the daily cadence has settled',
+  );
+  assert.equal(
+    bulletins.filter((b) => b.compile_status === 'published').length,
+    1,
+    'still exactly one published bulletins row after fire 2 (no runaway cycle)',
+  );
+});
+
+test('e2e (Bug 1): a verifier rejection still advances next_due_at — no every-minute retry', async () => {
+  resetCircuitBreakerState();
+  // sqlMrr 9999 vs the canned draft's 2475 → the frozen snapshot disagrees with
+  // the draft → verifier rejects. The rejected cycle must NOT publish, AND the
+  // schedule pointer must still advance so the next heartbeat fire is a no-op
+  // (the D-22 15-minute retry timer owns the re-attempt, not the cron).
+  const { ctx, bulletins, issuesCreated, jobs } = makeFakeCtx({
+    companies: [{ id: 'COU' }],
+    nextDue: { COU: PAST },
+    sqlMrr: 9999,
+  });
+  registerCompileBulletinJob(ctx);
+  const fn = jobs.get('compile-bulletin');
+
+  await fn(JOB_EVENT);
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 0, 'a rejected cycle does not publish');
+  // The schedule pointer must now be in the future on every bulletins row.
+  for (const b of bulletins) {
+    assert.ok(
+      new Date(b.next_due_at).getTime() > Date.now(),
+      'a verifier-rejected fire must still advance next_due_at to the future',
+    );
+  }
+
+  // A second immediate fire must therefore be a no-op — no new operation issue,
+  // no new compile attempt.
+  const opIssuesBefore = operationIssuesOf(issuesCreated).length;
+  await fn(JOB_EVENT);
+  assert.equal(
+    operationIssuesOf(issuesCreated).length,
+    opIssuesBefore,
+    'fire 2 after a rejection must NOT start another compile (no every-minute retry)',
+  );
+});
+
 test('e2e: verifier rejection (mismatched MRR) -> no bulletin issue, recordFailure called', async () => {
   resetCircuitBreakerState();
-  // canned draft claims agent_spend_mtd=2475 but SQL returns 9999 => mismatch
+  // canned draft claims agent_spend_mtd=2475 but the frozen snapshot is 9999.
   const { ctx, issuesCreated, failures, jobs } = makeFakeCtx({
     companies: [{ id: 'COU' }],
     nextDue: { COU: PAST },

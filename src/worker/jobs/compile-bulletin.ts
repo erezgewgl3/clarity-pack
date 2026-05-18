@@ -18,6 +18,21 @@
 // compile-tldr's, so a bulletin outage cannot pause TL;DR compiles.
 //
 // No `setInterval` — scheduling is the host's job (governance parity, D-12).
+//
+// v0.6.6 — RUNAWAY-CADENCE FIX (debug bulletin-compile-cadence-runaway, Bug 1).
+// The Bulletin is a DAILY artifact (cron `0 6 30 * * *` America/New_York). The
+// every-minute heartbeat cron is only a "is it time yet?" hint — the real
+// schedule pointer is `bulletins.next_due_at`. The 2026-05-18 drill saw the job
+// re-compile + re-publish a new cycle every ~2 minutes, unbounded: the schedule
+// pointer was advanced ONLY on the success/duplicate path AND only on the
+// just-published per-cycle row, so any tick that hit a failure `continue`
+// (verifier rejection, pass-1 throw, publish failure) left a STALE, past
+// `next_due_at` on the row `getNextDueAtForCompany` reads — and the very next
+// heartbeat tick re-compiled. The fix: `advanceScheduleForCompany` moves the
+// pointer to the next genuine 06:30-ET slot strictly after `now`, and it runs
+// on EVERY path that consumed a due tick (success AND every failure path). A
+// failed cycle is retried by the D-22 15-minute retry timer
+// (`bulletin_compile_failures.next_retry_at`), NOT by an every-minute recompile.
 
 import type {
   PluginAgentsClient,
@@ -114,6 +129,53 @@ async function recordCycleCompileFailure(
   });
 }
 
+/**
+ * v0.6.6 (Bug 1) — advance the company's bulletin schedule pointer to the next
+ * genuine 06:30-ET slot strictly after `now`.
+ *
+ * `next_due_at` is the worker-managed source of truth for the DAILY compile
+ * cadence (D-12). `getNextDueAtForCompany` reads it off the `MAX(cycle_number)`
+ * row, so to guarantee the very next heartbeat tick sees a FUTURE pointer this
+ * UPDATE touches EVERY bulletin row for the company — not just the row that
+ * happened to publish. That is safe: `next_due_at` is a schedule pointer, not a
+ * historical fact of any individual cycle, and the published bulletin's
+ * identity is its `cycle_number` + `published_at` (never its `next_due_at`).
+ *
+ * Called on EVERY path that consumed a due tick — a verified publish, an
+ * idempotent duplicate, AND every failure `continue` (verifier rejection,
+ * pass-1 throw, publish failure, an unexpected per-company throw). A failed
+ * cycle is re-attempted by the D-22 retry timer
+ * (`bulletin_compile_failures.next_retry_at`), never by the every-minute cron.
+ *
+ * Best-effort: a throw here is logged and swallowed — failing to advance the
+ * pointer must not abort the per-company loop, and the per-company catch-all
+ * will still record the underlying failure.
+ */
+async function advanceScheduleForCompany(
+  ctx: { db: Pick<PluginDatabaseClient, 'execute'>; logger?: PluginLogger },
+  companyId: string,
+  now: Date,
+): Promise<void> {
+  try {
+    const nextDueAt = computeNextDueAt(now);
+    await ctx.db.execute(
+      `UPDATE plugin_clarity_pack_cdd6bda4bd.bulletins
+         SET next_due_at = $1
+       WHERE company_id = $2`,
+      [nextDueAt.toISOString(), companyId],
+    );
+    ctx.logger?.info?.(
+      `compile-bulletin: advanced next_due_at to ${nextDueAt.toISOString()} ` +
+        `(companyId=${companyId})`,
+    );
+  } catch (e) {
+    ctx.logger?.warn?.(
+      `compile-bulletin: failed to advance next_due_at: ${errText(e)} ` +
+        `(companyId=${companyId})`,
+    );
+  }
+}
+
 async function buildPriorCycleErratumSnapshot(
   ctx: BulletinsRepoCtx,
   companyId: string,
@@ -199,6 +261,13 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
       // `job completed successfully`, the breaker never tripped, and the broken
       // loop created an operation issue every minute forever (v0.6.1 drill).
       let cycleNumber: number | null = null;
+      // v0.6.6 (Bug 1) — set true once the per-company body passes the
+      // `now < next_due_at` gate, i.e. this company genuinely consumed a due
+      // tick. The per-company catch-all uses it to advance the schedule pointer
+      // even when an UNEXPECTED throw bypassed every handled `continue` — so a
+      // throw can never leave a stale past `next_due_at` and trigger the
+      // every-minute recompile runaway.
+      let gatePassed = false;
       // The resolved Editor-Agent UUID, captured so the catch-all `recordFailure`
       // can pause the real agent. Null until reconcile succeeds — when it is
       // still null the catch-all skips `recordFailure` (an un-resolved agent has
@@ -247,6 +316,14 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           continue;
         }
 
+        // v0.6.6 (Bug 1) — the company is past-due; this tick is being
+        // CONSUMED. From here on, EVERY exit path (publish, duplicate, every
+        // failure `continue`, an unexpected throw) MUST advance the schedule
+        // pointer before the loop moves on, or the next heartbeat tick
+        // recompiles. `gatePassed` lets the per-company catch-all honour that
+        // for the unexpected-throw path too.
+        gatePassed = true;
+
         // ---- Plan 03-02 — Real two-pass compile pipeline ----
 
         // Resolve the Editor-Agent id for this company (Phase 2 reconcile output).
@@ -258,12 +335,14 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           ctx.logger?.warn?.(`compile-bulletin: editor-agent reconcile failed: ${errText(e)}`, {
             companyId: company.id,
           });
+          await advanceScheduleForCompany(ctx, company.id, now);
           continue;
         }
         if (!editorAgentId) {
           ctx.logger?.warn?.('compile-bulletin: no editor-agent id', {
             companyId: company.id,
           });
+          await advanceScheduleForCompany(ctx, company.id, now);
           continue;
         }
         editorAgentIdForCatch = editorAgentId;
@@ -291,6 +370,13 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         // `resume` flips `paused → idle` only; a `terminated`/
         // `pending_approval` agent rejects resume (host-enforced) — a real
         // operator-action failure, warned + skipped, not a compile bug.
+        //
+        // v0.6.6 (Bug 1) — note that the breaker-open branch advances the
+        // schedule pointer before `continue`. With the breaker open the
+        // bulletin will not compile until the operator clicks Resume; leaving
+        // `next_due_at` in the past would otherwise have the heartbeat tick
+        // re-enter this branch every minute. The pointer advance plus the
+        // breaker-open warn keeps the cadence at one log line per genuine slot.
         try {
           const agent = await ctx.agents.get(editorAgentId, company.id);
           if (agent?.status === 'paused') {
@@ -300,6 +386,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
                   `circuit breaker is open — not resuming (D-06: operator must click ` +
                   `Resume). companyId=${company.id} agentId=${editorAgentId}`,
               );
+              await advanceScheduleForCompany(ctx, company.id, now);
               continue;
             }
             await ctx.agents.resume(editorAgentId, company.id);
@@ -312,6 +399,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           ctx.logger?.warn?.(`compile-bulletin: editor-agent resume failed: ${errText(e)}`, {
             companyId: company.id,
           });
+          await advanceScheduleForCompany(ctx, company.id, now);
           continue;
         }
 
@@ -385,6 +473,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           ctx.logger?.warn?.(`compile-bulletin: standing-numbers failed: ${errText(e)}`, {
             companyId: company.id,
           });
+          await advanceScheduleForCompany(ctx, company.id, now);
           continue;
         }
 
@@ -450,11 +539,23 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             reason: `pass-1 failed: ${(e as Error).message}`,
             now,
           });
+          await advanceScheduleForCompany(ctx, company.id, now);
           continue;
         }
 
-        // 5. Pass 2 — deterministic verifier re-runs every standing-number SQL.
-        const verdict = await verifyDraft(draft, ctx.db, company.id);
+        // 5. Pass 2 — deterministic verifier.
+        //
+        // v0.6.6 (Bug 2 — debug bulletin-compile-cadence-runaway). The verifier
+        // validates the draft against the FROZEN `standingNumberRows` the
+        // pipeline computed at compile START and HANDED the agent — NOT a fresh
+        // SQL re-run at compile END. The agent takes ~50s; a live re-run would
+        // see Paperclip's own board churn (`stranded_issue_recovery` issues,
+        // a self-counting published bulletin) and lose every compile-window
+        // race. The verifier's job is "did the agent faithfully transcribe the
+        // numbers we gave it" (catches hallucination), not "do the numbers
+        // still match a live re-query" (an unwinnable race). `verifyDraft` is
+        // now a pure, deterministic, I/O-free function.
+        const verdict = verifyDraft(draft, standingNumberRows);
         // Instrumentation (2026-05-17 v0.6.3 drill): the post-readback path used
         // to log NOTHING between `result DOCUMENT received` and the job ending,
         // so a silent publish failure was undiagnosable from the run log. These
@@ -487,6 +588,11 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             reason,
             now,
           });
+          // v0.6.6 (Bug 1) — a verifier rejection consumed a due tick. Advance
+          // the daily schedule pointer so the every-minute heartbeat does NOT
+          // immediately recompile; the D-22 15-minute retry timer owns the
+          // re-attempt of THIS cycle.
+          await advanceScheduleForCompany(ctx, company.id, now);
           continue;
         }
 
@@ -531,6 +637,9 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             reason: publishResult.reason,
             now,
           });
+          // v0.6.6 (Bug 1) — a publish failure consumed a due tick. Advance the
+          // schedule pointer; the D-22 retry timer owns the re-attempt.
+          await advanceScheduleForCompany(ctx, company.id, now);
           continue;
         }
 
@@ -546,14 +655,16 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         // a transient earlier failure does not carry over.
         recordSuccess(BULLETIN_COMPILE_AGENT_KEY);
 
-        // 7. Advance next_due_at to tomorrow's 06:30 ET instant.
-        const newNextDueAt = computeNextDueAt(now);
-        await ctx.db.execute(
-          `UPDATE plugin_clarity_pack_cdd6bda4bd.bulletins
-             SET next_due_at = $1
-           WHERE cycle_number = $2 AND company_id = $3`,
-          [newNextDueAt.toISOString(), cycleNumber, company.id],
-        );
+        // 7. Advance next_due_at to the next genuine 06:30-ET slot.
+        //
+        // v0.6.6 (Bug 1) — `advanceScheduleForCompany` moves the pointer on
+        // EVERY row for the company (the schedule pointer is not a per-cycle
+        // historical fact). The prior implementation updated only the
+        // just-published cycle's own row; combined with the failure paths that
+        // never advanced at all, that left `getNextDueAtForCompany` reading a
+        // stale past pointer and the every-minute cron re-publishing a fresh
+        // cycle every ~2 minutes (the 2026-05-18 drill runaway).
+        await advanceScheduleForCompany(ctx, company.id, now);
       } catch (e) {
         // Defect D — an UNEXPECTED throw reached the per-company catch-all (a
         // render/publish-path TypeError, or any bug not caught by one of the
@@ -595,6 +706,14 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             `compile-bulletin: failed to record the iteration failure: ${errText(recErr)}`,
             { companyId: company.id },
           );
+        }
+        // v0.6.6 (Bug 1) — if the throw happened AFTER the due-gate was passed,
+        // this tick consumed the daily slot. Advance the schedule pointer so an
+        // unexpected throw cannot leave a stale past `next_due_at` and trigger
+        // the every-minute recompile runaway. The advance is itself best-effort
+        // (its own try/catch inside), so it cannot re-throw out of the catch-all.
+        if (gatePassed) {
+          await advanceScheduleForCompany(ctx, company.id, now);
         }
       }
     }

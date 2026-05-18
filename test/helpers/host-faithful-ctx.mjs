@@ -60,6 +60,12 @@
 // The helper SIMULATES the agent by serving the `resultDocuments` fixture.
 // Plan 03-07's Option C tool channel is dead — the `ctx.tools.register` fake
 // and `callTool` helper were removed.
+//
+// v0.6.6 (debug bulletin-compile-cadence-runaway, Bug 1) — the `SET next_due_at`
+// UPDATE the compile job emits is now COMPANY-SCOPED (`WHERE company_id = $2`),
+// advancing the schedule pointer on EVERY bulletin row for the company in one
+// statement. The in-memory model below matches that shape so the
+// cadence-settling test (fire twice → second fire is a no-op) is faithful.
 
 import { wrapHostFaithfulDb } from './host-faithful-db.mjs';
 import { makeHostFaithfulAgents as makeHostFaithfulSessions } from './host-faithful-sessions.mjs';
@@ -250,13 +256,17 @@ export function makeHostFaithfulCompileCtx({
         }
         return { rowCount: row ? 1 : 0 };
       }
+      // v0.6.6 (Bug 1) — `advanceScheduleForCompany` emits a COMPANY-SCOPED
+      // schedule-pointer advance: `UPDATE bulletins SET next_due_at = $1
+      // WHERE company_id = $2`. It moves EVERY row for the company so the next
+      // heartbeat tick's `getNextDueAtForCompany` (which reads the
+      // MAX(cycle_number) row) always sees the freshly-advanced future value.
       if (/UPDATE[\s\S]*bulletins[\s\S]*SET next_due_at/i.test(sql)) {
-        // params: new_next_due_at, cycle_number, company_id
-        const row = bulletins.find(
-          (b) => b.cycle_number === params[1] && b.company_id === params[2],
-        );
-        if (row) row.next_due_at = params[0];
-        return { rowCount: row ? 1 : 0 };
+        // params: 0 new_next_due_at, 1 company_id
+        const cid = params[1];
+        const matched = bulletins.filter((b) => b.company_id === cid);
+        for (const row of matched) row.next_due_at = params[0];
+        return { rowCount: matched.length };
       }
       // clarity_department_membership UPSERT — accepted, not modelled in detail.
       return { rowCount: 1 };

@@ -5,9 +5,13 @@
 // T-03-10: no string concatenation in SQL — companyId is the only bound param.
 //
 // Debug verifier-counts-own-issue (2026-05-17): the three public.issues slots
-// MUST exclude Clarity Pack's own operation issues (origin_kind prefixed
-// `plugin:clarity-pack:operation:`) — otherwise the bulletin-compile pipeline
-// counts its own dispatch issue and verifyDraft pass-2 hard-rejects every cycle.
+// MUST exclude Clarity Pack's own operation issues.
+//
+// Debug bulletin-compile-cadence-runaway (2026-05-18, v0.6.6 Bug 2): the
+// exclusion is BROADENED from the `plugin:clarity-pack:operation:%` operation
+// sub-namespace to the WHOLE `plugin:clarity-pack%` namespace, so a published
+// bulletin issue (plain `origin_kind = 'plugin:clarity-pack'`) can no longer
+// slip past the filter and count itself in `completed_7d`.
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
@@ -52,9 +56,12 @@ test('standing-numbers: every slot format is one of the four NumberFormat values
   }
 });
 
-test('standing-numbers: the three public.issues slots exclude clarity-pack operation issues', () => {
-  // Debug verifier-counts-own-issue — the compile pipeline's own operation
-  // issue (origin_kind `plugin:clarity-pack:operation:%`) must not be counted.
+test('standing-numbers: the three public.issues slots exclude the WHOLE clarity-pack namespace', () => {
+  // Debug bulletin-compile-cadence-runaway (v0.6.6 Bug 2) — the exclusion must
+  // cover BOTH the compile pipeline's operation issues AND a published bulletin
+  // issue (plain `origin_kind = 'plugin:clarity-pack'`), so the broadened
+  // pattern is `plugin:clarity-pack%` — not the narrow
+  // `plugin:clarity-pack:operation:%`.
   for (const key of ['open_issues', 'completed_7d', 'blocked_issues']) {
     const slot = STANDING_NUMBER_SLOTS.find((s) => s.key === key);
     assert.ok(slot, `slot ${key} must exist`);
@@ -63,8 +70,14 @@ test('standing-numbers: the three public.issues slots exclude clarity-pack opera
       `${key} must query public.issues`,
     );
     assert.ok(
-      slot.sql.includes("origin_kind NOT LIKE 'plugin:clarity-pack:operation:%'"),
-      `${key} must exclude clarity-pack operation issues by origin_kind`,
+      slot.sql.includes("origin_kind NOT LIKE 'plugin:clarity-pack%'"),
+      `${key} must exclude the whole clarity-pack origin_kind namespace`,
+    );
+    // The narrow operation-only pattern must NOT be the one in use any more —
+    // a published bulletin issue would slip past it (the 2026-05-18 defect).
+    assert.ok(
+      !slot.sql.includes("NOT LIKE 'plugin:clarity-pack:operation:%'"),
+      `${key} must not use the narrow operation-only exclusion (it misses published bulletins)`,
     );
     // The NULL-safe guard is mandatory: origin_kind is nullable, and a bare
     // `NOT LIKE` would drop every human issue (NULL NOT LIKE → NULL, not TRUE).

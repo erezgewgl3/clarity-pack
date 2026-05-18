@@ -17,38 +17,53 @@
 // catches a per-slot query error and defaults that slot to 0, so a
 // column-not-found never aborts a compile.
 //
-// SELF-COUNT EXCLUSION (debug verifier-counts-own-issue, 2026-05-17). The
+// SELF-COUNT EXCLUSION (debug verifier-counts-own-issue, 2026-05-17; broadened
+// by debug bulletin-compile-cadence-runaway, 2026-05-18 v0.6.6). The
 // bulletin-compile pipeline delivers the compile prompt as an operation issue
 // ASSIGNED to the Editor-Agent (deliverAgentTask, originKind
-// `plugin:clarity-pack:operation:bulletin-compile`). That issue is itself an
-// open `public.issues` row, created AFTER pass-1 freezes `open_issues` into
-// the draft but still open when `verifyDraft` pass-2 re-runs the SQL — so
-// pass-2 counts +1 and the `count`-format tolerance-0 verifier hard-rejects
-// every cycle. Every `public.issues` slot below therefore appends
-// `AND origin_kind NOT LIKE 'plugin:clarity-pack:operation:%'` (origin_kind
-// is the persisted discriminator — see 03-10-SCHEMA-FINDINGS.md §2; the plugin
-// has no `issues.tags`/`metadata` column, and `surfaceVisibility` is not the
-// persisted column name). The LIKE pattern is a static literal inside the
-// module-constant SQL string — `$1` (companyId) remains the SOLE bound
+// `plugin:clarity-pack:operation:bulletin-compile`) and PUBLISHES the bulletin
+// itself as a `public.issues` row whose `origin_kind` is the plain
+// `plugin:clarity-pack` namespace. BOTH are Clarity Pack's OWN issues and
+// neither belongs in an agent-operations count.
+//
+// v0.6.6 broadening: the original exclusion was scoped to the
+// `plugin:clarity-pack:operation:%` SUB-namespace, so a freshly-PUBLISHED
+// bulletin issue (`origin_kind = 'plugin:clarity-pack'`, no `:operation:`
+// segment) slipped past the filter and counted itself in `completed_7d` when it
+// transitioned to `done` mid-compile (the 2026-05-18 drill pinned `a26ea0fb`
+// "Bulletin No. 6" doing exactly this). The filter is therefore widened to the
+// WHOLE `plugin:clarity-pack%` namespace — every Clarity-Pack-origin issue
+// (operation issues AND published bulletins) is excluded. This is defensible
+// regardless: a clarity-pack surface artifact is never an "agent-operations"
+// metric. (Bug 2's verifier re-grounding makes the verifier-race moot on its
+// own; this stays as defence-in-depth so the LIVE numbers the agent is HANDED
+// are themselves clean.)
+//
+// `origin_kind` is the persisted discriminator — see 03-10-SCHEMA-FINDINGS.md
+// §2; the plugin has no `issues.tags`/`metadata` column, and `surfaceVisibility`
+// is not the persisted column name. The LIKE pattern is a static literal inside
+// the module-constant SQL string — `$1` (companyId) remains the SOLE bound
 // parameter, so the T-03-10 SQL-injection invariant holds. The exclusion is
-// scoped to `plugin:clarity-pack:operation:%` and so does NOT touch any
-// human-board issue or another plugin's issues. The prefix MUST stay in sync
-// with OPERATION_ORIGIN_KIND_PREFIX in src/worker/agents/agent-task-delivery.ts.
+// scoped to `plugin:clarity-pack%` and so does NOT touch any human-board issue
+// or another plugin's issues. The prefix MUST stay in sync with
+// OPERATION_ORIGIN_KIND_PREFIX in src/worker/agents/agent-task-delivery.ts.
 
 import type { PluginDatabaseClient } from '@paperclipai/plugin-sdk';
 import type { StandingNumberSlot } from '../../shared/types.ts';
 
 /**
- * SQL fragment excluding Clarity Pack's own operation issues from a
- * `public.issues` count. Kept as a single static module constant so the slot
- * SQL below stays a plain string literal (no template-literal interpolation —
- * T-03-10). MUST match OPERATION_ORIGIN_KIND_PREFIX in agent-task-delivery.ts.
+ * SQL fragment excluding every Clarity-Pack-origin issue (operation issues AND
+ * published bulletins) from a `public.issues` count. Kept as a single static
+ * module constant so the slot SQL below stays a plain string literal (no
+ * template-literal interpolation — T-03-10). The pattern `plugin:clarity-pack%`
+ * covers BOTH the `plugin:clarity-pack:operation:%` operation sub-namespace and
+ * the plain `plugin:clarity-pack` origin a published bulletin issue carries.
  * `origin_kind` is nullable on `public.issues`; `NOT LIKE` evaluates to NULL
  * (not TRUE) for a NULL origin_kind, which would silently DROP every human
  * issue — so the predicate is `(origin_kind IS NULL OR origin_kind NOT LIKE …)`.
  */
 const EXCLUDE_OPERATION_ISSUES_SQL =
-  "AND (origin_kind IS NULL OR origin_kind NOT LIKE 'plugin:clarity-pack:operation:%')";
+  "AND (origin_kind IS NULL OR origin_kind NOT LIKE 'plugin:clarity-pack%')";
 
 /**
  * v1 final 5 slots — agent-operations metrics over public.issues /
