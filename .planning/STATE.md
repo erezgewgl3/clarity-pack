@@ -8,8 +8,8 @@ progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 23
-  percent: 70
+  completed_plans: 24
+  percent: 73
 ---
 
 # State: Clarity Pack
@@ -28,7 +28,37 @@ progress:
 ## Current Position
 
 Phase: 04 (employee-chat) — EXECUTING
-Plan: 4 of 6 (Plan 04-03 COMPLETE 2026-05-18)
+Plan: 5 of 6 (Plan 04-04 COMPLETE 2026-05-18)
+
+**Plan 04-04 — Chat Read + CRUD Handlers: COMPLETE 2026-05-18.** TDD,
+autonomous, 4 tasks / 8 commits (`c203c54..ff9ad5a`). Six worker handlers
+feeding the 04-05 chat UI, all opt-in-guarded (T-04-15). Task A+B —
+`chat-roster.ts` (`chat.roster` data: `ctx.agents.list` minus the Editor-Agent
+resolved via `ctx.agents.managed.get('editor-agent',...)`, D-03; degrades to
+the full roster on a managed-resolution failure rather than 500),
+`chat-topics.ts` (`chat.topics` data list + `chat.topic.create` action — O(1)
+parent resolve-or-create via `getEmployeeParentIssueId`/`insertEmployeeParent`,
+BLOCKER-3 no issue-tree scan; child topic issue assigned to the employee-agent,
+D-02 wake contract, with the D-14 reasoning block + OQ-4 reply-channel
+instruction), `chat-messages.ts` (`chat.messages` data — `listComments` JOIN
+`chat_messages` for supersedes/pin, ordered by SERVER `created_at`, PITFALLS
+11.4; superseded comments marked for UI edit-chain collapse, CHAT-05).
+`chat-search.ts` — `chat.search` data (CHAT-08): the verbatim RESEARCH `ILIKE`
+query over `public.issue_comments` JOIN `chat_topics` `t.company_id=$1`
+(T-04-14/17); exported `escapeLike` backslash-escapes `\`,`%`,`_` so a user
+wildcard char matches literally (T-04-13). `chat-promote.ts` — `chat.promote`
+action (CHAT-09/D-13): company-scoped `getChatMessageByUuid` IS the ownership
+re-check (T-04-16), canonical comment body re-fetched, real issue created
+linked to the topic via `parentId`. `chat-pin.ts` — `chat.pin` action toggles
+`chat_messages.pinned` via `updateChatMessagePinned`. Task D — `worker.ts`
+wires all six after the 04-03 chat block (7 handler keys total, non-exempt).
+Deviations: two Rule-1 test-mock bugs fixed (a `chat_topics` SELECT matcher and
+a `chat_messages` query that ignored `company_id` — the latter masked the
+T-04-16 isolation property). Suite 856 tests / 854 pass / 0 fail / 2 skip;
+typecheck + worker bundle (207.1kb) clean. SUMMARY: `04-04-SUMMARY.md`.
+**NEXT: Plan 04-05 (chat UI surface — pure UI, all six handlers ready).**
+
+---
 
 **Plan 04-03 — Chat Realtime + Persistence Spine: COMPLETE 2026-05-18.** TDD,
 autonomous, 4 tasks / 7 commits (`d6d143d..dede91a`). Task A —
