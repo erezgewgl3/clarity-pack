@@ -88,6 +88,19 @@ import {
   registerChatStreamBridge,
   type ChatStreamBridgeCtx,
 } from './worker/streams/chat-stream-bridge.ts';
+// Plan 04-04 — Employee Chat read + CRUD handlers (UI surface consumes these).
+import { registerChatRoster, type ChatRosterCtx } from './worker/handlers/chat-roster.ts';
+import { registerChatTopics, type ChatTopicsCtx } from './worker/handlers/chat-topics.ts';
+import {
+  registerChatMessages,
+  type ChatMessagesCtx,
+} from './worker/handlers/chat-messages.ts';
+import { registerChatSearch, type ChatSearchCtx } from './worker/handlers/chat-search.ts';
+import {
+  registerChatPromote,
+  type ChatPromoteCtx,
+} from './worker/handlers/chat-promote.ts';
+import { registerChatPin, type ChatPinCtx } from './worker/handlers/chat-pin.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -146,6 +159,25 @@ const plugin = definePlugin({
     // opt-in-guard wrapped (T-04-08).
     registerChatSend(ctx as unknown as ChatSendCtx);
     registerChatEdit(ctx as unknown as ChatEditCtx);
+
+    // ---- Plan 04-04 — Employee Chat read + CRUD handlers --------------------
+    // The six handlers the 04-05 chat UI consumes:
+    //   chat.roster        — employee list, Editor-Agent excluded (CHAT-01)
+    //   chat.topics        — CHT-NN topic strip for a selected employee
+    //   chat.topic.create  — creates a child topic issue + chat_topics row
+    //   chat.messages      — server-ordered thread, supersedes/pin metadata
+    //   chat.search        — ILIKE global search over chat comments (CHAT-08)
+    //   chat.promote       — promote-to-task: real linked issue (CHAT-09)
+    //   chat.pin           — toggles the chat-metadata pin flag (CHAT-09)
+    // All non-exempt — registered AFTER the exempt-key handlers and opt-in-
+    // guard wrapped (T-04-15, OPTIN-04). chat-topics registers both a data
+    // key (chat.topics) and an action key (chat.topic.create).
+    registerChatRoster(ctx as unknown as ChatRosterCtx);
+    registerChatTopics(ctx as unknown as ChatTopicsCtx);
+    registerChatMessages(ctx as unknown as ChatMessagesCtx);
+    registerChatSearch(ctx as unknown as ChatSearchCtx);
+    registerChatPromote(ctx as unknown as ChatPromoteCtx);
+    registerChatPin(ctx as unknown as ChatPinCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
@@ -237,7 +269,7 @@ const plugin = definePlugin({
     registerChatStreamBridge(ctx as unknown as ChatStreamBridgeCtx);
 
     ctx.logger?.info?.(
-      `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status + chat.send/chat.edit + chat-stream-bridge registered`,
+      `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status + chat.send/chat.edit + chat-stream-bridge + chat.roster/topics/messages/search/promote/pin registered`,
     );
   },
 });
