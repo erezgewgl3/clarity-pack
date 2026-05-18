@@ -73,8 +73,8 @@ function makeCtx({
           return pid ? [{ parent_issue_id: pid }] : [];
         }
         if (/chat_topics/i.test(sql)) {
-          // listChatTopicsForEmployee / getChatTopicByIssueId
-          if (/employee_agent_id = \$2/i.test(sql) && !/issue_id/i.test(sql)) {
+          // listChatTopicsForEmployee — WHERE company_id=$1 AND employee_agent_id=$2
+          if (/WHERE company_id = \$1 AND employee_agent_id = \$2/i.test(sql)) {
             const employeeAgentId = params?.[1];
             return topics
               .filter((t) => t.employee_agent_id === employeeAgentId)
