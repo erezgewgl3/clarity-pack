@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-17T13:01:27.678Z",
+  "timestamp": "2026-05-18T13:49:58.492Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -22,10 +22,6 @@
     },
     {
       "status": "M",
-      "path": ".planning/STATE.md"
-    },
-    {
-      "status": "M",
       "path": ".planning/config.json"
     },
     {
@@ -34,7 +30,7 @@
     },
     {
       "status": "??",
-      "path": ".planning/debug/tldr-heartbeat-recursion.md"
+      "path": ".planning/phases/04-employee-chat/"
     },
     {
       "status": "??",
@@ -42,5 +38,5 @@
     }
   ],
   "next_action": "Ready to execute",
-  "context_notes": "Status: Ready to execute\n\nRecent commits:\n1820b60 docs(03-debug): record cycle-2 + TL;DR fix, v0.6.4, point STATE at re-drill\nc375004 chore(03-debug): bump version 0.6.3 -> 0.6.4, pack clarity-pack-0.6.4.tgz\n2b1419f fix(03-debug): cycle-2 publish never fires + TL;DR ctx.issue typo crash\n08d3b8b docs(03-debug): record 4-defect fix + v0.6.3, point STATE at re-drill\n9fdc601 chore(03-debug): bump version 0.6.2 -> 0.6.3, pack clarity-pack-0.6.3.tgz"
+  "context_notes": "Status: Ready to execute\n\nRecent commits:\n7fd70ce docs(03-debug): resolve bulletin-compile-cadence-runaway — v0.6.6 drill PASS\nf30eb4c fix(03-debug): bump manifest.ts version literal 0.6.5 -> 0.6.6\nab1b346 chore(03-debug): bump version 0.6.5 -> 0.6.6, pack clarity-pack-0.6.6.tgz\n5a22d47 fix(03-debug): bulletin compile cadence + verifier frozen-snapshot (v0.6.6)\n5bf175b docs(03-debug): record v0.6.5 drill — recursion+array PROVEN LIVE, new cadence blocker"
 }
