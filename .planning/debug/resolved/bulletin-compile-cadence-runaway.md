@@ -1,13 +1,14 @@
 ---
 slug: bulletin-compile-cadence-runaway
-status: investigating
+status: resolved
 trigger: v0.6.5 closure re-drill (2026-05-18) — compile-bulletin re-fires every ~2 min and publishes a new cycle each time, unbounded; verifier tolerance:0 rejects ~half of attempts
 created: 2026-05-18
 updated: 2026-05-18
+resolved: 2026-05-18
 phase: 03-daily-bulletin
 related_sessions:
   - tldr-heartbeat-recursion.md (v0.6.5 — its two fixes PROVEN LIVE on this same drill; this is a NEW, separate blocker)
-note: surfaced by the v0.6.5 live drill on Countermoves; root cause not yet pinned — this is the v0.6.6 work
+note: RESOLVED — v0.6.6 fixes PROVEN LIVE on the Countermoves re-drill 2026-05-18. Both bugs dead: one clean compile (cycle 8), cadence settled to the next 06:30-ET slot, zero 0.6.6 verifier failures, operation issues flat.
 ---
 
 # Debug: bulletin-compile-cadence-runaway
@@ -112,3 +113,123 @@ The host-faithful local suite cannot model the live compile-window timing (the
 exactly the standing open recommendation in `tldr-heartbeat-recursion.md`. A
 faithful integration test of the compile-bulletin job control flow (fire →
 publish → next_due_at advance → idle) is wanted before the v0.6.6 re-drill.
+
+---
+
+## v0.6.6 Fix Applied (2026-05-18)
+
+Both bugs implemented + the local suite is green (723 pass / 0 fail / 2
+pre-existing skips). `tsc --noEmit` clean; `dist/worker.js` builds (183.5kb).
+
+### Bug 1 — runaway cadence — ROOT CAUSE PINNED + FIXED
+
+The hypothesis ("`computeNextDueAt` leaves `next_due_at` in the past") was
+WRONG — `computeNextDueAt` always returns a future 06:30-ET instant. The actual
+root cause, pinned by reading the full job + `publishBulletin` + repo:
+
+The schedule pointer was advanced **only on the success/duplicate path** (old
+step 7) **and only on the just-published per-cycle row**
+(`UPDATE … WHERE cycle_number = $2`). EVERY failure `continue` — verifier
+rejection, pass-1 throw, publish `failed`, an unexpected per-company throw —
+returned to the loop WITHOUT advancing `next_due_at`. `getNextDueAtForCompany`
+reads the pointer off the `MAX(cycle_number)` row; whenever a tick hit a failure
+path it left a STALE, past `next_due_at` on that row, so the next every-minute
+heartbeat tick re-entered the compile immediately. The scattered per-cycle
+pointer also meant the bootstrap cycle-0 row and prior cycles kept their stale
+values. The verifier rejecting ~half the attempts (Bug 2) is what kept the
+failure paths firing — Bug 1 + Bug 2 were a coupled runaway.
+
+Fix (`src/worker/jobs/compile-bulletin.ts`):
+- New `advanceScheduleForCompany(ctx, companyId, now)` helper —
+  `UPDATE bulletins SET next_due_at = $1 WHERE company_id = $2`. It is
+  COMPANY-SCOPED (advances EVERY row for the company in one statement — the
+  pointer is a schedule fact, not a per-cycle historical fact) and best-effort
+  (its own try/catch; a schedule-write hiccup is logged and never aborts the
+  loop).
+- It is called on EVERY path that consumed a due tick: a verified publish, an
+  idempotent duplicate, AND every failure `continue` (reconcile/resume failure,
+  standing-numbers failure, pass-1 throw, verifier rejection, publish failure,
+  breaker-open skip) AND the per-company catch-all when `gatePassed` is set.
+- A failed cycle is re-attempted by the D-22 15-minute retry timer
+  (`bulletin_compile_failures.next_retry_at`), NOT by the every-minute cron.
+- Old step 7's per-cycle `UPDATE … WHERE cycle_number = $2` is removed.
+
+### Bug 2 — verifier re-run race — FIXED
+
+`verifyDraft` (`src/worker/bulletin/bulletin-verifier.ts`) is rewritten:
+- New signature `verifyDraft(draft, frozenStandingNumbers)` — pure, sync,
+  I/O-free. It compares `draft.standingNumbers` against the FROZEN
+  `StandingNumberRow[]` the pipeline built from `computeStandingNumbers` at
+  compile START and handed to `compilePass1`. No SQL re-run → no compile-window
+  race. Verifies "did the agent faithfully transcribe the numbers we gave it"
+  (still catches hallucination — a drifted or invented value/slot is rejected
+  with the same typed `{slot,claimed,actual,tolerance}` / `UNKNOWN_SLOT`
+  results). Tolerances unchanged (exact for count/currency, ±0.01 pct/ratio).
+- The compile job passes the in-hand `standingNumberRows` array to `verifyDraft`
+  (`compile-bulletin.ts` step 5).
+
+Secondary cleanup (`src/worker/bulletin/standing-numbers.ts`):
+- `EXCLUDE_OPERATION_ISSUES_SQL` broadened from `plugin:clarity-pack:operation:%`
+  to the whole `plugin:clarity-pack%` namespace, so a published bulletin issue
+  (`origin_kind = 'plugin:clarity-pack'`) can no longer count itself in
+  `completed_7d`. NULL-safe guard retained; `$1` stays the sole bound param
+  (T-03-10 holds). Note `stranded_issue_recovery` issues are NOT clarity-pack's
+  and are intentionally still counted — they are real Paperclip board activity;
+  Bug 2's frozen-snapshot verifier is what makes that churn harmless.
+
+### Test coverage added (the process-note ask)
+
+- `compile-bulletin-end-to-end.test.mjs` — two new Bug-1 regression tests:
+  `a successful publish then an immediate re-fire does NOT recompile (cadence
+  settles)` and `a verifier rejection still advances next_due_at — no
+  every-minute retry`. The in-memory db model was made host-faithful for the
+  schedule pointer (`getNextDueAtForCompany` prefers a live row; the
+  `SET next_due_at` UPDATE is company-scoped).
+- `host-faithful-ctx.mjs` — the shared host-faithful db fake's `SET next_due_at`
+  branch updated to the company-scoped shape.
+- `verifier.test.mjs` — rewritten for the frozen-snapshot signature; adds a
+  test proving a faithful transcription passes even when the live count has
+  since drifted (the exact Bug-2 scenario).
+- `standing-numbers.test.mjs` — asserts the broadened `plugin:clarity-pack%`
+  exclusion and that the narrow operation-only pattern is gone.
+- `bulletin-content-defects.test.mjs` — Defect-D `makeThrowingCtx` re-pointed:
+  the post-`cycleNumber` unexpected-crash seam is now `publishBulletin`'s
+  un-try-wrapped idempotency pre-check (`publish_precheck`); a new test asserts
+  the v0.6.6 contract that a `next_due_at`-advance failure after a clean publish
+  is logged + swallowed and does NOT trip the breaker.
+
+## v0.6.6 Re-Drill — PASS (live Countermoves, 2026-05-18)
+
+Bookended per the MemPalace clarity_pack runbook. Pre-install snapshot
+`2026-05-18T11-39-14Z` (DB 3.4 MB + FS 210 MB, sha256-verified at creation;
+restore path already proven end-to-end on this box by the v0.6.5 drill).
+
+OPERATOR GOTCHA surfaced — recorded for the runbook: the first install
+reported `Installed clarity-pack v0.6.5` despite a tarball named `0.6.6.tgz`.
+Two causes: (1) `src/manifest.ts` hardcodes `version` as a literal — `npm version`
+bumps `package.json` only, never the manifest, which is the version Paperclip
+actually reads; (2) `dist/` was stale — `npm run build` had not been re-run
+after the fix (and the aggregate `build` script chains via `pnpm`, which may be
+absent locally — run `build:worker`/`build:ui`/`build:manifest` individually).
+FIX: bump BOTH `package.json` and `src/manifest.ts`, rebuild, repack, verify
+`dist/manifest.js` shows the new version BEFORE shipping the tarball. Also: the
+`test` script `node --test test/` is broken on Node ≥21 — changed to
+`node --test "test/**/*.test.mjs"`.
+
+Drill result (schema `plugin_clarity_pack_cdd6bda4bd`):
+- Bug 1 PROVEN FIXED — v0.6.6 compiled exactly ONE cycle (cycle 8, published
+  11:45:42). `next_due_at` advanced to `2026-05-19 10:30:00+00` (= 06:30
+  America/New_York, the next genuine daily slot). Across a ~12-min watch
+  (5–6 every-minute cron ticks — v0.6.5 would have published 5–6 new cycles)
+  NO cycle 9 fired. Cadence settled to daily.
+- Bug 2 PROVEN FIXED — `editor_agent_failures` carried zero `0.6.6` rows
+  (only pre-existing 0.6.0×3, 0.6.5×2, NULL×3). The frozen-snapshot verifier
+  did not lose the compile-window race.
+- Bounded — operation issues flat at 64 (v0.6.5's 62 + 2 for the one v0.6.6
+  compile); none of v0.6.5's ~9× verifier-retry churn.
+
+Note: the board still carried cycles 0–8 (the v0.6.5-drill rows 2–7 survived
+the non-destructive uninstall — the namespace is plugin-owned). Cosmetic; the
+v0.6.6 verdict rests on cycle 8 and the settled pointer.
+
+Phase 03 (daily-bulletin) closure unblocked — BULL-05/06/09.
