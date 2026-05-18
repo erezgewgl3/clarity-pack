@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-18T17:54:38.354Z"
+last_updated: "2026-05-18T19:05:06.959Z"
 progress:
   total_phases: 5
   completed_phases: 2
@@ -23,12 +23,12 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 04 — Employee Chat (Phase 03 daily-bulletin CLOSED 2026-05-18)
+**Current Focus:** Phase 04 — employee-chat
 
 ## Current Position
 
-Phase: 03 (daily-bulletin) — CLOSED 2026-05-18 ✓  |  Next: Phase 04 — Employee Chat
-Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
+Phase: 04 (employee-chat) — EXECUTING
+Plan: 1 of 6
 03-10 re-drill, all as gap-closure debug sessions (no new plan filed):
 
   1. BULLETIN-VERIFIER-COUNTS-OWN-OPERATION-ISSUE — debug `verifier-counts-own-issue.md`
@@ -174,7 +174,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to execute
+**Status:** Executing Phase 04
 **Progress:** [######    ] 3/5 phases complete (Phase 3 daily-bulletin CLOSED 2026-05-18); next Phase 4 — Employee Chat
 
 ## Performance Metrics

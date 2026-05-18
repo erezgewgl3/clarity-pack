@@ -1,38 +1,72 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-18T17:06:13.185Z",
-  "source": "auto-postool",
+  "timestamp": "2026-05-18T20:47:43.225Z",
+  "source": "gsd:pause-work",
   "partial": false,
-  "phase": null,
-  "phase_name": "03 (daily-bulletin) — CLOSED 2026-05-18 ✓  |  Next: Phase 04 — Employee Chat",
-  "phase_dir": null,
-  "plan": "10",
-  "task": null,
-  "total_tasks": null,
-  "status": "auto-checkpoint",
-  "completed_tasks": [],
-  "remaining_tasks": [],
-  "blockers": [],
-  "human_actions_pending": [],
-  "decisions": [],
-  "uncommitted_files": [
+  "phase": "04",
+  "phase_name": "employee-chat",
+  "phase_dir": ".planning/phases/04-employee-chat",
+  "plan": 1,
+  "task": 2,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [
     {
-      "status": "M",
-      "path": ".planning/HANDOFF.json"
+      "id": 1,
+      "name": "Build the throwaway spike probe harness (scripts/spike/chat-spike-probe.mjs)",
+      "status": "done",
+      "commit": "b91d887",
+      "note": "Route-fixed afterward in d36c81c — per-issue REST routes corrected to flat /api/issues/{id}."
     },
     {
-      "status": "??",
-      "path": ".codex/"
-    },
-    {
-      "status": "??",
-      "path": ".planning/sketches/WRAP-UP-SUMMARY.md"
-    },
-    {
-      "status": "??",
-      "path": "AGENTS.md"
+      "id": 2,
+      "name": "Eric runs the spike probe on live Countermoves (bookended by snapshot)",
+      "status": "in_progress",
+      "progress": "Snapshot bookend taken (2026-05-18T20-15-56Z). Probe ran twice and failed fast both times on wrong REST routes (404). Probe is now route-fixed (d36c81c) and re-deployed to the VPS at ~/chat-spike-probe.mjs. NOT yet re-run with the corrected routes."
     }
   ],
-  "next_action": "Phase 3 closed 2026-05-18 — ready to plan Phase 4",
-  "context_notes": "Status: Phase 3 closed 2026-05-18 — ready to plan Phase 4\n\nRecent commits:\n451d2b0 docs(sketch-002): message states — pending ghost bubble + compact attachment pill .planning/sketches/002-employee-chat-states .planning/sketches/MANIFEST.md\n9f61c4c docs(sketch-001): A Comfortable — title-forward resolved ref chips with click-to-peek .planning/sketches/001-employee-chat-density .planning/sketches/themes .planning/sketches/MANIFEST.md\ne87043a docs(03): close Phase 3 — v0.6.6 closure drill PASS, reconcile ROADMAP/STATE\nced32b6 docs(state): record phase 4 context session .planning/STATE.md\ncf9a986 docs(04): capture phase context .planning/phases/04-employee-chat/04-CONTEXT.md .planning/phases/04-employee-chat/04-DISCUSSION-LOG.md"
+  "remaining_tasks": [
+    {
+      "id": 2,
+      "name": "Re-run the route-fixed probe on live Countermoves and capture the JSON summary",
+      "status": "not_started"
+    },
+    {
+      "id": 3,
+      "name": "Write 04-01-SPIKE-FINDINGS.md (D-01/OQ-1/OQ-2/OQ-3 verdicts + Phase 4 GO/NO-GO gate), add test/phases/04-01-spike-findings.test.mjs, create 04-01-SUMMARY.md",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Task 2 is a checkpoint:human-action gate=blocking — only Eric can SSH into the live Countermoves production VPS and run the probe. An executor agent must not.",
+      "type": "human_action",
+      "workaround": "none — by design"
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "SSH to Countermoves, attach the 'spike' tmux session, re-run the route-fixed chat-spike-probe.mjs (~20-30 min), capture the output and scp it to .planning/phases/04-employee-chat/04-01-probe-output.txt",
+      "context": "The probe proves the four load-bearing Phase 4 assumptions (D-01 native agent wake, OQ-1 attachment path, OQ-2 event payload, OQ-3 auto-reopen re-wake). Waves 2-6 are GATED on its GO verdict.",
+      "blocking": true
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Bookend the probe with a plain (unverified) snapshot, not a full restore-and-smoke verify.",
+      "rationale": "The probe only creates deletable [SPIKE]-tagged issues/comments — no schema migration, install, or agent registration. A plain snapshot is a proportionate restorable safety net.",
+      "phase": "04"
+    },
+    {
+      "decision": "Use the CEO agent (b2a22e50-d772-4b70-bb50-4f4e93c2e984) as the spike employee-agent.",
+      "rationale": "The Countermoves roster has exactly two agents — CEO and the plugin-managed Editor-Agent. The CEO is the only non-Editor org-chart hire, which is what D-01 needs.",
+      "phase": "04"
+    }
+  ],
+  "uncommitted_files": [
+    {"status": "M", "path": ".planning/STATE.md"},
+    {"status": "??", "path": ".planning/phases/04-employee-chat/04-01-probe-output.txt"}
+  ],
+  "next_action": "Run /gsd:resume-work, then have Eric re-run the route-fixed probe on the VPS. The exact run instructions are in .planning/phases/04-employee-chat/.continue-here.md.",
+  "context_notes": "Phase 04 execute, Wave 1 of 6, plan 04-01 (falsify-first spike). 6 plans / 6 waves, fully sequential; only 04-01 is started. config: use_worktrees=false (sequential executor on main tree), auto_advance=true, executor=opus. Plan 04-01 Task 2 is the live-VPS human-action checkpoint. Today: built the probe, took the snapshot bookend, hit and fixed three snapshot-CLI gotchas (now in MemPalace clarity_pack/runbook + local memory countermoves-safety-cli-invocation.md), then discovered the probe's per-issue REST routes were wrong (company-scoped guess; real routes are flat /api/issues/{id}) and fixed them. The probe is re-deployed but not re-run. Tomorrow: re-run probe -> capture output -> spawn continuation agent for Task 3."
 }
