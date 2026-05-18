@@ -15,6 +15,9 @@ import themeCss from './primitives/theme.css';
 // the host does NOT auto-load sibling CSS, so the bundle injects its own
 // <style>. bulletin.css is fully scoped to [data-clarity-surface="bulletin"].
 import bulletinCss from './styles/bulletin.css';
+// Plan 04-05 — Employee Chat surface stylesheet. Same DEV-14 runtime-inject
+// path. chat.css is fully scoped to [data-clarity-surface="chat"].
+import chatCss from './styles/chat.css';
 
 function injectClarityStyles(css: string, marker: string): void {
   if (typeof document === 'undefined') return;
@@ -27,9 +30,10 @@ function injectClarityStyles(css: string, marker: string): void {
 
 injectClarityStyles(themeCss, 'data-clarity-pack-styles');
 injectClarityStyles(bulletinCss, 'data-clarity-pack-bulletin-styles');
+injectClarityStyles(chatCss, 'data-clarity-pack-chat-styles');
 
 export { ReaderView } from './surfaces/reader/index.tsx';
 export { SituationRoom } from './surfaces/situation-room/index.tsx';
 export { BulletinPage } from './surfaces/bulletin/index.tsx';
-export { ChatPage } from './surfaces/chat-stub.tsx';
+export { ChatPage } from './surfaces/chat/index.tsx';
 export { SettingsPage } from './surfaces/settings/index.tsx';
