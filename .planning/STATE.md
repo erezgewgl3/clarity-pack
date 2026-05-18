@@ -6,9 +6,9 @@ status: executing
 last_updated: "2026-05-18T13:51:01.233Z"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 27
-  completed_plans: 21
+  completed_plans: 25
   percent: 78
 ---
 
@@ -23,11 +23,11 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 03 — daily-bulletin
+**Current Focus:** Phase 04 — Employee Chat (Phase 03 daily-bulletin CLOSED 2026-05-18)
 
 ## Current Position
 
-Phase: 03 (daily-bulletin) — EXECUTING
+Phase: 03 (daily-bulletin) — CLOSED 2026-05-18 ✓  |  Next: Phase 04 — Employee Chat
 Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
 03-10 re-drill, all as gap-closure debug sessions (no new plan filed):
 
@@ -97,29 +97,40 @@ Plan: 10 of 10 built. Four live-drill defects debugged + fixed since the failed
      v0.6.5 UNINSTALLED 2026-05-18 ~07:32 to halt the cadence; live Paperclip
      healthy on 3100; fresh bookend snapshot `2026-05-18T06-58-53Z` taken.
 
-**NEXT (new chat): build v0.6.6** — fix the two `bulletin-compile-cadence-runaway.md`
-bugs (verifier checks the draft against the pass-1 frozen facts, NOT a live SQL
-re-run; `next_due_at` advances to the next genuine daily slot after a publish),
-rebuild/pack v0.6.6, then a closure re-drill. The board is already restored +
-clean (clarity-pack uninstalled, cycles 0–1 only); the v0.6.6 drill installs
-straight onto it — no restore needed. On a clean v0.6.6 drill (one bulletin
-publishes, cadence settles to daily, verifier passes), Phase 3 closes
-(BULL-05/06/09).
+  12. **v0.6.6 (2026-05-18) — PHASE 3 CLOSED.** Both `bulletin-compile-cadence-runaway.md`
+     bugs fixed: Bug 1 — `advanceScheduleForCompany` advances `next_due_at` on EVERY
+     path that consumes a due tick (not just the success path), killing the runaway
+     every-minute cron; Bug 2 — `verifyDraft` validates the draft against the FROZEN
+     pass-1 facts snapshot, no live SQL re-run, so board churn during the ~50s
+     compile can no longer lose the race. Version 0.5.0→0.6.6 (`manifest.ts` +
+     `package.json`); suite 721 pass / 0 fail / 2 skip. **v0.6.6 closure re-drill
+     PASSED on live Countermoves 2026-05-18:** Bulletin No. 8 published, exactly one
+     compile fired, `next_due_at` advanced to the next 06:30-ET slot and held (no
+     re-fire across a ~12-min watch), zero `0.6.6` verifier failures, operation
+     issues flat at 64. Debug session RESOLVED →
+     `.planning/debug/resolved/bulletin-compile-cadence-runaway.md`.
 
-Tarball `clarity-pack-0.6.5.tgz` — recursion+array fixes proven, but do NOT
-re-drill as-is (runaway cadence). v0.6.6 supersedes it.
-Open recommendation (now 5 drill rounds deep): the host-faithful suite never
-exercises the live compile-bulletin job control flow (fire → publish →
-`next_due_at` advance → idle) nor the facts-compute↔verify timing gap. A
-faithful integration test of that loop is wanted before the v0.6.6 re-drill.
-Open v1-polish question (non-blocking): masthead `prepareForName` uses the
-company display name with an 'Operations' fallback — no per-recipient config
-exists. If the masthead should name the human operator (Eric), an `instanceConfig`
-field is needed; the org-name default ships otherwise.
-Open recommendation: 4 debug rounds today each shipped a green 700+-test suite
-that broke live anew — the host-faithful fakes don't model the live compile-
-bulletin job / heartbeat control flow. A faithful integration test of the job
-control flow is wanted before further drills.
+**PHASE 3 (daily-bulletin) IS CLOSED — 2026-05-18.** BULL-01..09 delivered;
+clarity-pack v0.6.6 installed and working on live Countermoves. The bulletin
+compile pipeline is proven end-to-end: DST-safe schedule, idempotent publish,
+two-pass verifier (frozen-facts), errata, failed-compile banner, and the
+Editor-Agent compiling under standard Paperclip governance.
+
+**NEXT: Phase 04 — Employee Chat.** 0 plans, needs planning; UI-heavy. Start a
+fresh chat with `/gsd:discuss-phase 4` (or `/gsd:ui-phase 4` first). Depends on
+Phases 2 + 3 — both satisfied.
+
+Carried-forward (non-blocking) recommendations:
+- The host-faithful suite still cannot fully model the live compile-bulletin job
+  control-flow timing; v0.6.6 added two cadence-settling regression tests, but a
+  fuller faithful integration test of the fire→publish→advance→idle loop remains
+  worthwhile.
+- Masthead `prepareForName` uses the company display name with an 'Operations'
+  fallback — no per-recipient config. If the masthead should name the human
+  operator (Eric), an `instanceConfig` field is needed; the org-name default
+  ships otherwise.
+- `02-10-PLAN.md` deferred Phase 2 polish (React-key warnings / Vite-HMR console
+  noise) is still open — non-blocking, can interleave with a later phase.
 **Phase 3 plans:**
 
   - 03-01 — Foundation: **COMPLETE 2026-05-15** — `0004_bulletin.sql` migration (bulletins incl. `draft_json jsonb` + UNIQUE(next_due_at,content_hash) + bulletin_errata + clarity_department_membership + bulletin_compile_failures) + DST-safe `computeNextDueAt` (date-fns-tz) + bulletins repo (8 fns) + manifest `jobs[]`+capabilities+config + self-loop-filter `BULLETIN_TAG_PREFIX` extension + compile-bulletin no-op job. 3 TDD commits ab217b0..e059d8b; suite 455/453-pass/0-fail/2-skip; typecheck+build green. BULL-01, BULL-02 foundation delivered. SUMMARY: `03-01-SUMMARY.md`.
@@ -158,8 +169,8 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to execute
-**Progress:** [###       ] 2/5 phases complete; Phase 3 ~50% by plan count (2/4 — Foundation + Compile Pipeline done)
+**Status:** Phase 3 closed 2026-05-18 — ready to plan Phase 4
+**Progress:** [######    ] 3/5 phases complete (Phase 3 daily-bulletin CLOSED 2026-05-18); next Phase 4 — Employee Chat
 
 ## Performance Metrics
 

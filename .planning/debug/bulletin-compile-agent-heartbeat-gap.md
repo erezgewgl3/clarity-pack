@@ -1,6 +1,6 @@
 # Debug — Bulletin compile: Editor-Agent runs heartbeat logic, never processes the compile prompt
 
-**Status:** OPEN — architecture-level gap. Routed to research → Plan 03-06 gap-closure.
+**Status:** RESOLVED 2026-05-18 — the Option B/C agent-invocation saga this doc tracked (Plans 03-06 through 03-10) concluded; Phase 3 closed on the v0.6.6 closure drill (see `.planning/debug/resolved/bulletin-compile-cadence-runaway.md`). Deliberately kept at this path (NOT moved to `debug/resolved/`) because ROADMAP.md cites this path as an authoritative source for Plans 03-08/03-09.
 **Surfaced:** 2026-05-16, Plan 03-04 Task 3 Phase 3 closure drill on Countermoves Hostinger.
 **Supersedes the framing of:** DEFECT-B ("compilePass1: LLM output was not valid JSON").
 
