@@ -1,0 +1,1018 @@
+/* src/ui/styles/chat.css
+ *
+ * Plan 04-05 — Employee Chat surface stylesheet (SCAF-06 / COEXIST-01).
+ *
+ * EVERY rule selector is prefixed [data-clarity-surface="chat"] so plugin CSS
+ * cannot bleed onto the host page (T-04-20). Warm-dark editorial palette +
+ * Geist / Geist Mono / Instrument Serif fonts. Visual contract:
+ * sketches/paperclip-fix-employee-chat.html.
+ *
+ * The leading @import pulls the three font families from Google Fonts —
+ * matches sketch line 9. This is a font load, NOT a host-CSS coupling.
+ *
+ * Class names from the sketch are kept verbatim (.roster, .topics, .messages,
+ * .bubble, .reasoning, .attach, .decision-msg, composer) but every selector is
+ * scoped under the surface attribute. Sketch line numbers are cited per region.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap");
+
+/* ---- Scope root: warm-dark palette + base typography (sketch ll. 11-33) ---- */
+[data-clarity-surface="chat"] {
+  --bg: #0e0d0a;
+  --bg-2: #15140f;
+  --bg-3: #1b1a14;
+  --bg-4: #222019;
+  --line: #2a2820;
+  --line-bright: #3d3a2e;
+  --ink: #e8e1cf;
+  --ink-2: #b8b0a0;
+  --ink-3: #7e7869;
+  --ink-4: #52503f;
+  --live: #7db47e;
+  --live-soft: #1f3320;
+  --warn: #d9a23e;
+  --warn-soft: #3a2d14;
+  --alert: #e0744a;
+  --alert-soft: #3a1c12;
+  --you: #e5c56f;
+  --you-soft: #3d3318;
+  --idle: #5c6878;
+  --idle-soft: #1b2129;
+  --eric-bubble: #22201a;
+  --agent-bubble: #16140f;
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11";
+}
+
+[data-clarity-surface="chat"] * {
+  box-sizing: border-box;
+}
+
+/* ---- Loading / error states — degraded states always name themselves ---- */
+[data-clarity-surface="chat"] .clarity-chat-loading,
+[data-clarity-surface="chat"] .clarity-chat-error {
+  padding: 28px 22px;
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 16px;
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .clarity-chat-error {
+  color: var(--alert);
+  border-left: 3px solid var(--alert);
+}
+
+/* ---- Shell — 3-column grid 264px 1fr 340px (sketch l. 44) ---- */
+[data-clarity-surface="chat"] .clarity-chat-shell {
+  display: grid;
+  grid-template-columns: 264px 1fr 340px;
+  height: 78vh;
+  min-height: 520px;
+  position: relative;
+  border-top: 1px solid var(--line);
+}
+
+/* ---- LEFT: roster rail (sketch ll. 48-98) ---- */
+[data-clarity-surface="chat"] .roster {
+  border-right: 1px solid var(--line);
+  background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+[data-clarity-surface="chat"] .roster-head {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+[data-clarity-surface="chat"] .roster-head .ttl {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 20px;
+  color: var(--ink);
+}
+[data-clarity-surface="chat"] .roster-head .ct {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+[data-clarity-surface="chat"] .roster-search {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+[data-clarity-surface="chat"] .roster-search input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-family: "Geist Mono", monospace;
+  font-size: 11.5px;
+  padding: 7px 10px;
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .roster-search input::placeholder {
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .roster-search input:focus {
+  outline: none;
+  border-color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .roster-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+  min-height: 0;
+}
+[data-clarity-surface="chat"] .roster-section {
+  padding: 14px 16px 8px;
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  color: var(--ink-4);
+  text-transform: uppercase;
+}
+[data-clarity-surface="chat"] .emp {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  font: inherit;
+  color: inherit;
+}
+[data-clarity-surface="chat"] .emp:hover {
+  background: var(--bg-3);
+}
+[data-clarity-surface="chat"] .emp.active {
+  background: var(--bg-3);
+  border-left-color: var(--you);
+}
+[data-clarity-surface="chat"] .emp .av {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ink-3);
+  display: grid;
+  place-items: center;
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-2);
+  position: relative;
+}
+[data-clarity-surface="chat"] .emp .av::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  bottom: -2px;
+  right: -2px;
+  border: 1.5px solid var(--bg-2);
+}
+[data-clarity-surface="chat"] .emp.s-live .av::after {
+  background: var(--live);
+}
+[data-clarity-surface="chat"] .emp.s-warn .av::after {
+  background: var(--warn);
+}
+[data-clarity-surface="chat"] .emp.s-alert .av::after {
+  background: var(--alert);
+}
+[data-clarity-surface="chat"] .emp.s-idle .av::after {
+  background: var(--idle);
+}
+[data-clarity-surface="chat"] .emp .name {
+  font-size: 13.5px;
+  color: var(--ink);
+  font-weight: 400;
+  letter-spacing: -0.003em;
+}
+[data-clarity-surface="chat"] .emp .name small {
+  display: block;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+[data-clarity-surface="chat"] .emp .badge {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--bg);
+  background: var(--alert);
+  padding: 2px 6px;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  border-radius: 2px;
+}
+[data-clarity-surface="chat"] .emp .badge.muted {
+  background: transparent;
+  color: var(--ink-4);
+  border: 1px solid var(--line);
+}
+
+/* ---- MIDDLE: thread column (sketch ll. 100-138) ---- */
+[data-clarity-surface="chat"] .thread {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+[data-clarity-surface="chat"] .thread-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+[data-clarity-surface="chat"] .who-big {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+[data-clarity-surface="chat"] .who-big .av {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--ink-3);
+  display: grid;
+  place-items: center;
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 18px;
+  color: var(--ink);
+}
+[data-clarity-surface="chat"] .who-big .role {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 22px;
+  color: var(--ink);
+  line-height: 1;
+}
+[data-clarity-surface="chat"] .who-big .role small {
+  display: block;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 4px;
+  font-style: normal;
+}
+[data-clarity-surface="chat"] .global-search {
+  position: relative;
+  max-width: 380px;
+  margin: 0 auto;
+  width: 100%;
+}
+[data-clarity-surface="chat"] .global-search input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line-bright);
+  color: var(--ink);
+  font-family: "Geist Mono", monospace;
+  font-size: 11.5px;
+  padding: 9px 14px 9px 34px;
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .global-search input::placeholder {
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .global-search input:focus {
+  outline: none;
+  border-color: var(--ink-2);
+}
+[data-clarity-surface="chat"] .global-search .icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-family: "Geist Mono", monospace;
+}
+[data-clarity-surface="chat"] .head-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+[data-clarity-surface="chat"] .btn {
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  border: 1px solid var(--ink-2);
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+}
+[data-clarity-surface="chat"] .btn:hover {
+  transform: translateY(-1px);
+}
+[data-clarity-surface="chat"] .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+[data-clarity-surface="chat"] .btn.ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border-color: var(--line-bright);
+}
+[data-clarity-surface="chat"] .btn.ghost:hover {
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+
+/* ---- Topic strip (sketch ll. 139-157) ---- */
+[data-clarity-surface="chat"] .topics {
+  display: flex;
+  gap: 6px;
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+  overflow-x: auto;
+  align-items: center;
+}
+[data-clarity-surface="chat"] .topic-lbl {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+[data-clarity-surface="chat"] .topic {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-family: "Geist Mono", monospace;
+  font-size: 11px;
+  color: var(--ink-2);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+[data-clarity-surface="chat"] .topic:hover {
+  border-color: var(--line-bright);
+  color: var(--ink);
+}
+[data-clarity-surface="chat"] .topic.active {
+  background: var(--bg-3);
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+[data-clarity-surface="chat"] .topic .id {
+  color: var(--ink-3);
+  font-size: 10px;
+}
+[data-clarity-surface="chat"] .topic .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--live);
+}
+[data-clarity-surface="chat"] .topic.warn .dot {
+  background: var(--warn);
+}
+[data-clarity-surface="chat"] .topic.alert .dot {
+  background: var(--alert);
+}
+[data-clarity-surface="chat"] .topics-empty {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* ---- Messages scroller (sketch ll. 159-211) ---- */
+[data-clarity-surface="chat"] .messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 22px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+[data-clarity-surface="chat"] .day-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+  margin: 8px 0;
+}
+[data-clarity-surface="chat"] .day-divider::before,
+[data-clarity-surface="chat"] .day-divider::after {
+  content: "";
+  height: 1px;
+  background: var(--line);
+}
+[data-clarity-surface="chat"] .day-divider span {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+[data-clarity-surface="chat"] .reconnecting {
+  align-self: center;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--warn);
+  border: 1px solid var(--warn-soft);
+  background: var(--warn-soft);
+  padding: 4px 11px;
+  border-radius: 2px;
+}
+[data-clarity-surface="chat"] .pending-row {
+  align-self: flex-start;
+  font-family: "Geist Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  font-style: italic;
+}
+[data-clarity-surface="chat"] .pending-row.quiet {
+  color: var(--ink-4);
+}
+[data-clarity-surface="chat"] .msg {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 14px;
+  max-width: 780px;
+}
+[data-clarity-surface="chat"] .msg.me {
+  justify-self: end;
+  grid-template-columns: 1fr 34px;
+  direction: rtl;
+}
+[data-clarity-surface="chat"] .msg.me > * {
+  direction: ltr;
+}
+[data-clarity-surface="chat"] .msg .av {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--ink-3);
+  display: grid;
+  place-items: center;
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--ink-2);
+  background: var(--bg);
+  align-self: flex-end;
+}
+[data-clarity-surface="chat"] .msg.me .av {
+  background: var(--you-soft);
+  border-color: var(--you);
+  color: var(--you);
+}
+[data-clarity-surface="chat"] .bubble {
+  background: var(--agent-bubble);
+  border: 1px solid var(--line);
+  padding: 13px 16px;
+  border-radius: 2px;
+  position: relative;
+}
+[data-clarity-surface="chat"] .msg.me .bubble {
+  background: var(--eric-bubble);
+  border-color: var(--line-bright);
+}
+[data-clarity-surface="chat"] .bubble.pending {
+  opacity: 0.62;
+}
+[data-clarity-surface="chat"] .bubble.failed {
+  border-color: var(--alert);
+}
+[data-clarity-surface="chat"] .b-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 6px;
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .b-meta .who {
+  color: var(--ink-2);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+[data-clarity-surface="chat"] .msg.me .b-meta .who {
+  color: var(--you);
+}
+[data-clarity-surface="chat"] .b-meta .ts {
+  font-family: "Geist Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+[data-clarity-surface="chat"] .b-text {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  font-weight: 300;
+  letter-spacing: -0.003em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+[data-clarity-surface="chat"] .b-text b {
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .send-failed {
+  margin-top: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alert);
+}
+[data-clarity-surface="chat"] .send-failed .retry {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line-bright);
+  padding: 4px 9px;
+  cursor: pointer;
+}
+[data-clarity-surface="chat"] .send-failed .retry:hover {
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+
+/* ---- Reasoning panel — inline reveal (sketch ll. 213-230) ---- */
+[data-clarity-surface="chat"] .reasoning {
+  margin-top: 10px;
+  border-left: 2px solid var(--line);
+  padding: 6px 12px;
+  background: var(--bg-3);
+}
+[data-clarity-surface="chat"] .reasoning summary {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+[data-clarity-surface="chat"] .reasoning summary::before {
+  content: "\25B8 ";
+  color: var(--ink-4);
+}
+[data-clarity-surface="chat"] .reasoning[open] summary::before {
+  content: "\25BE ";
+}
+[data-clarity-surface="chat"] .reasoning summary::-webkit-details-marker {
+  display: none;
+}
+[data-clarity-surface="chat"] .reasoning .body {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.55;
+  font-weight: 300;
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Attachment in message (sketch ll. 232-268) ---- */
+[data-clarity-surface="chat"] .attach {
+  margin-top: 11px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+}
+[data-clarity-surface="chat"] .attach .ico {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-bright);
+  display: grid;
+  place-items: center;
+  font-family: "Geist Mono", monospace;
+  font-size: 9px;
+  color: var(--ink-2);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .attach .info .nm {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 400;
+}
+[data-clarity-surface="chat"] .attach .info .meta {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+[data-clarity-surface="chat"] .attach-unavailable {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  font-style: italic;
+}
+
+/* ---- Decision pill — resolved outcome (sketch ll. 270-279) ---- */
+[data-clarity-surface="chat"] .resolved {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 11px;
+  border: 1px solid var(--live);
+  background: var(--live-soft);
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  border-radius: 2px;
+}
+[data-clarity-surface="chat"] .resolved b {
+  color: var(--live);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .resolved.warn {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+/* ---- Promote-to-task hover action (sketch ll. 281-291) ---- */
+[data-clarity-surface="chat"] .promote {
+  position: absolute;
+  top: -10px;
+  right: 14px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+[data-clarity-surface="chat"] .bubble:hover .promote {
+  opacity: 1;
+}
+[data-clarity-surface="chat"] .promote .pa {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: var(--bg-2);
+  border: 1px solid var(--line-bright);
+  color: var(--ink-2);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+[data-clarity-surface="chat"] .promote .pa:hover {
+  color: var(--ink);
+  border-color: var(--ink-2);
+  background: var(--bg-3);
+}
+[data-clarity-surface="chat"] .promote .pa:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- One-click decision message (sketch ll. 293-305) ---- */
+[data-clarity-surface="chat"] .decision-msg {
+  align-self: center;
+  max-width: 640px;
+  text-align: center;
+  border: 1px dashed var(--you);
+  background: var(--you-soft);
+  padding: 11px 16px;
+}
+[data-clarity-surface="chat"] .decision-msg .lbl {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--you);
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+[data-clarity-surface="chat"] .decision-msg .txt {
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+[data-clarity-surface="chat"] .decision-msg .meta {
+  margin-top: 6px;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+/* ---- Composer (sketch ll. 307-340) ---- */
+[data-clarity-surface="chat"] .composer {
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
+  padding: 14px 22px 16px;
+}
+[data-clarity-surface="chat"] .composer-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .composer-meta .topic-now {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .composer-meta .topic-now b {
+  color: var(--you);
+}
+[data-clarity-surface="chat"] .composer-box {
+  border: 1px solid var(--line-bright);
+  background: var(--bg);
+  padding: 0;
+  transition: border-color 0.15s ease;
+}
+[data-clarity-surface="chat"] .composer-box:focus-within {
+  border-color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .composer-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--ink);
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 14.5px;
+  padding: 14px 16px 4px;
+  line-height: 1.5;
+  resize: none;
+  min-height: 62px;
+}
+[data-clarity-surface="chat"] .composer-input::placeholder {
+  color: var(--ink-3);
+  font-style: italic;
+}
+[data-clarity-surface="chat"] .composer-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px 10px;
+  border-top: 1px dashed var(--line);
+}
+[data-clarity-surface="chat"] .composer-tools {
+  display: flex;
+  gap: 6px;
+}
+[data-clarity-surface="chat"] .tool-btn {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+[data-clarity-surface="chat"] .tool-btn:hover {
+  color: var(--ink-2);
+  border-color: var(--line);
+}
+[data-clarity-surface="chat"] .tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+[data-clarity-surface="chat"] .composer-foot .send-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+[data-clarity-surface="chat"] .composer-hint {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .composer-hint kbd {
+  border: 1px solid var(--line);
+  padding: 1px 4px;
+  color: var(--ink-2);
+}
+
+/* ---- RIGHT: context rail (sketch ll. 342-392) ---- */
+[data-clarity-surface="chat"] .ctx {
+  border-left: 1px solid var(--line);
+  background: var(--bg-2);
+  overflow-y: auto;
+  padding: 18px 18px 24px;
+  min-height: 0;
+}
+[data-clarity-surface="chat"] .ctx h3 {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  margin-top: 18px;
+}
+[data-clarity-surface="chat"] .ctx h3:first-child {
+  margin-top: 0;
+}
+[data-clarity-surface="chat"] .ctx .agent-card {
+  border: 1px solid var(--line);
+  padding: 14px;
+  background: var(--bg-3);
+}
+[data-clarity-surface="chat"] .ctx .agent-card .role-line {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 22px;
+  color: var(--ink);
+  line-height: 1.05;
+}
+[data-clarity-surface="chat"] .ctx .agent-card .role-line small {
+  display: block;
+  font-family: "Geist Mono", monospace;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 5px;
+}
+[data-clarity-surface="chat"] .ctx .agent-card .stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+[data-clarity-surface="chat"] .ctx .agent-card .stat-row .stat {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+[data-clarity-surface="chat"] .task-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--line);
+}
+[data-clarity-surface="chat"] .task-row:last-child {
+  border-bottom: none;
+}
+[data-clarity-surface="chat"] .task-row .id {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .task-row .ttl {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+[data-clarity-surface="chat"] .task-row .st {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+[data-clarity-surface="chat"] .task-row .st.review {
+  color: var(--warn);
+}
+[data-clarity-surface="chat"] .task-row .st.todo {
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .task-row .st.done {
+  color: var(--live);
+}
+[data-clarity-surface="chat"] .task-row .st.blocked {
+  color: var(--alert);
+}
+[data-clarity-surface="chat"] .pin-row {
+  font-family: "Geist Mono", monospace;
+  font-size: 11px;
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px dashed var(--line);
+  margin-bottom: 6px;
+}
+[data-clarity-surface="chat"] .pin-row b {
+  color: var(--ink);
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .ctx-empty {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .quick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-clarity-surface="chat"] .quick .qa {
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+[data-clarity-surface="chat"] .quick .qa:hover {
+  border-color: var(--line-bright);
+  color: var(--ink);
+}
+
+/* ---- Empty / placeholder thread state ---- */
+[data-clarity-surface="chat"] .thread-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 16px;
+  color: var(--ink-3);
+  padding: 40px;
+  text-align: center;
+}
+
+/* ---- Responsive (sketch ll. 394-401) ---- */
+@media (max-width: 1180px) {
+  [data-clarity-surface="chat"] .clarity-chat-shell {
+    grid-template-columns: 220px 1fr;
+  }
+  [data-clarity-surface="chat"] .ctx {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  [data-clarity-surface="chat"] .clarity-chat-shell {
+    grid-template-columns: 1fr;
+  }
+  [data-clarity-surface="chat"] .roster {
+    display: none;
+  }
+}
