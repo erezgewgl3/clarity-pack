@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // scripts/coexistence-checks/run-all.mjs
 //
-// Plan 02-04 Task 3 — runs all six COEXIST-01..06 checks sequentially, prints
-// a summary table, and exits non-zero if any failed. The .github/workflows/
+// Plan 02-04 Task 3 — runs the COEXIST checks sequentially, prints a summary
+// table, and exits non-zero if any failed. The .github/workflows/
 // coexistence.yml workflow invokes this script on every PR.
+// Plan 03-04 added COEXIST-07 (bulletin-disable); Plan 04-06 added COEXIST-08
+// (chat-disable / CHAT-11).
 
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -19,6 +21,7 @@ const CHECKS = [
   { id: 'COEXIST-05', script: '05-chat-comment-coexistence-stub.mjs' },
   { id: 'COEXIST-06', script: '06-css-bleed-through.mjs' },
   { id: 'COEXIST-07', script: '07-bulletin-disable.mjs' },
+  { id: 'COEXIST-08', script: '08-chat-disable.mjs' },
 ];
 
 const results = [];
