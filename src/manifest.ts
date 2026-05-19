@@ -18,6 +18,19 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.6 (Plan 04-05 Task-4 follow-up — Employee Chat auto-refresh indicator) —
+  // replace the looping auto-refresh countdown in the message thread with a
+  // single, calm, STATIC indicator. Earlier builds rendered a live
+  // "Auto-refreshing · next in Ns" ticker that decremented 15→0 and wrapped
+  // back to 15, looping forever; operators read the perpetual loop as a stuck
+  // spinner and it drew UX complaints three times. The countdown number, the
+  // secondsToRefresh state, and the 1s decrementing setInterval are removed
+  // entirely — the indicator is now a motionless "● Live" badge (role="status",
+  // --ink-3 with a soft still live-green dot). The 15s poll, the usePluginStream
+  // dormant handling, and the PLUGIN_DISABLED terminal-stop are all unchanged —
+  // only the visible perpetual countdown is removed. UI/CSS + test only — no
+  // manifest shape, capability, schema, or worker-contract change.
+  //
   // 0.7.5 (Plan 04-05 Task-4 follow-up — Employee Chat composer keybinding) —
   // adopt the standard chat convention in the message composer: a plain Enter
   // now SENDS the message and Shift+Enter inserts a newline. The previous
@@ -182,7 +195,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.7.5',
+  version: '0.7.6',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

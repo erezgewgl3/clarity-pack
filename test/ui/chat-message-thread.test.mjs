@@ -75,8 +75,9 @@ test('Chat thread: message-thread.tsx runs usePoll as the always-on primary refr
   );
 });
 
-test('Chat thread: message-thread.tsx shows a calm auto-refresh countdown, not an alarm banner (GAP 8)', () => {
+test('Chat thread: message-thread.tsx shows a calm STATIC live indicator, not an alarm banner or a ticking countdown (GAP 8)', () => {
   const src = readChat('message-thread.tsx');
+  const code = readChatCode('message-thread.tsx');
   // The alarming "Reconnecting — live updates paused" banner must be gone.
   assert.doesNotMatch(
     src,
@@ -84,13 +85,25 @@ test('Chat thread: message-thread.tsx shows a calm auto-refresh countdown, not a
     'the alarming "Reconnecting" banner must be replaced',
   );
   assert.doesNotMatch(src, /className="reconnecting"/, 'the .reconnecting element must be gone');
-  // A calm countdown indicator must render with role="status" for a11y.
-  assert.match(src, /Auto-refreshing/, 'a calm auto-refresh indicator must render');
+  // A calm STATIC indicator must render with role="status" for a11y.
   assert.match(src, /auto-refresh/, 'the indicator uses the .auto-refresh class');
   assert.match(
     src,
     /className="auto-refresh"\s+role="status"/,
     'the auto-refresh indicator keeps role="status"',
+  );
+  // The perpetually-looping countdown must be gone — no visible "next in Ns"
+  // number, no countdown state, no decrementing interval. The label is static.
+  assert.doesNotMatch(code, /next in/, 'the visible "next in Ns" countdown text must be removed');
+  assert.doesNotMatch(
+    code,
+    /secondsToRefresh/,
+    'the countdown state (secondsToRefresh) must be removed',
+  );
+  assert.doesNotMatch(
+    code,
+    /setInterval/,
+    'the 1s countdown interval must be removed — the poll runs silently',
   );
 });
 
@@ -419,31 +432,29 @@ test('Chat thread: chat.css styles the .pa-feedback confirmation (GAP 12)', () =
   assert.match(css, /\.pa-feedback\s*\{/, '.pa-feedback must be styled');
 });
 
-// --- GAP 8: the auto-refresh countdown ticks, it is not frozen -------------
+// --- GAP 8: the auto-refresh indicator is static, not a looping ticker -----
 //
-// The round-3 build reset the countdown from a useEffect([poll.data]). But the
-// poll fetcher returns null every tick and usePoll runs dedupeBy:'off' — so
-// poll.data is set to null every tick, its identity never changes, and the
-// reset effect never re-ran. The countdown ticked 15→0 once then froze at 0.
+// Earlier builds rendered a live "Auto-refreshing · next in Ns" countdown that
+// decremented 15→0 and WRAPPED back to 15, looping forever. Operators read the
+// perpetual loop as a stuck spinner; it drew UX complaints three times. The
+// countdown number, its state (secondsToRefresh), and its 1s decrementing
+// interval are removed entirely — the 15s poll runs silently underneath and
+// the indicator is now a single motionless "● Live" badge.
 
-test('Chat thread: the auto-refresh countdown wraps instead of freezing at 0 (GAP 8)', () => {
+test('Chat thread: the auto-refresh indicator carries no countdown state or interval (GAP 8)', () => {
   const code = readChatCode('message-thread.tsx');
-  // The countdown must NOT reset from a useEffect keyed on poll.data — that was
-  // the dead reset (poll.data is null every tick, identity never changes).
+  // No countdown state, no decrementing interval, no wrap logic.
+  assert.doesNotMatch(code, /secondsToRefresh/, 'the countdown state must be gone');
+  assert.doesNotMatch(code, /POLL_SECONDS/, 'the POLL_SECONDS countdown constant must be gone');
+  assert.doesNotMatch(code, /setInterval/, 'the 1s countdown interval must be gone');
   assert.doesNotMatch(
     code,
-    /\}, \[poll\.data\]\)/,
-    'the countdown must not reset from a useEffect([poll.data]) — it never re-fires',
-  );
-  // It must wrap back to the full interval on reaching the floor.
-  assert.match(
-    code,
-    /s > 1 \? s - 1 : POLL_SECONDS/,
-    'the countdown must wrap to POLL_SECONDS instead of sticking at 0',
+    /s > 1 \? s - 1/,
+    'the countdown decrement/wrap expression must be gone',
   );
 });
 
-test('Chat thread: the auto-refresh indicator uses a legible ink token (GAP 8)', () => {
+test('Chat thread: the auto-refresh indicator is a legible, static, muted style (GAP 8)', () => {
   const css = readFileSync(
     path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
     'utf8',
@@ -456,7 +467,14 @@ test('Chat thread: the auto-refresh indicator uses a legible ink token (GAP 8)',
     /color:\s*var\(--ink-4\)/,
     'the auto-refresh indicator must not use the illegibly-dim --ink-4',
   );
-  assert.match(block[1], /color:\s*var\(--ink-2\)/, 'the indicator must use the legible --ink-2');
+  assert.match(
+    block[1],
+    /color:\s*var\(--ink-3\)/,
+    'the static indicator uses the legible-but-muted --ink-3',
+  );
+  // The indicator must carry no animation — a calm, motionless badge.
+  assert.doesNotMatch(block[1], /animation/, 'the indicator must not animate');
+  assert.doesNotMatch(block[1], /transition/, 'the indicator must not transition');
 });
 
 // --- runnable behavioural test of the pure parseReasoning parser ----------

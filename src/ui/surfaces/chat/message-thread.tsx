@@ -6,9 +6,11 @@
 // Realtime model:
 //   - usePluginData('chat.messages', …)  → the initial server thread.
 //   - usePoll → the always-on PRIMARY refresh. It ticks every 15s and re-fetches
-//     the thread; a calm "auto-refreshing · next in Ns" indicator counts down to
-//     the next tick. Visibility-pause is mandatory; a PLUGIN_DISABLED poll error
-//     is a terminal stop.
+//     the thread; a single calm, STATIC "● Live" indicator marks that the thread
+//     auto-updates. There is deliberately NO visible countdown number — a
+//     perpetually-looping ticker read as a stuck spinner and drew repeated UX
+//     complaints. The 15s poll continues silently underneath. Visibility-pause
+//     is mandatory; a PLUGIN_DISABLED poll error is a terminal stop.
 //   - usePluginStream(`chat:${companyId}`) → a DORMANT best-effort bonus. If the
 //     host ever delivers a comment.created event we still refresh — but the
 //     stream is OPTIONAL: stream.error drives NO alarming UI. See the
@@ -166,30 +168,14 @@ export function MessageThread({
   });
   const pollDisabled = poll.error?.kind === 'PLUGIN_DISABLED';
 
-  // GAP 8 — a visibly-ticking countdown to the next auto-refresh.
+  // GAP 8 — the auto-refresh indicator is a single STATIC label, not a ticker.
   //
-  // The old code reset the countdown from a `useEffect([poll.data])`. But the
-  // poll fetcher returns `null` every tick and usePoll runs dedupeBy:'off', so
-  // poll.data is set to `null` on every tick — `null === null`, the state
-  // identity never changes, and the reset effect NEVER re-ran after mount. The
-  // countdown ticked 15→0 once and then froze at 0 ("next in 0s") forever.
-  //
-  // The fix makes the countdown self-contained: a single 1s interval decrements
-  // the counter and, on reaching 0, WRAPS back to the full interval — so the
-  // display perpetually cycles 15→0→15. The wrap is the visual heartbeat of the
-  // 15s poll; it pauses while the tab is hidden, matching usePoll's pauseOnHidden.
-  const POLL_SECONDS = Math.round(REFRESH_INTERVAL_MS / 1000);
-  const [secondsToRefresh, setSecondsToRefresh] = React.useState(POLL_SECONDS);
-  React.useEffect(() => {
-    if (pollDisabled) return;
-    const id = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        return;
-      }
-      setSecondsToRefresh((s) => (s > 1 ? s - 1 : POLL_SECONDS));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [pollDisabled, POLL_SECONDS]);
+  // Earlier builds rendered a live "Auto-refreshing · next in Ns" countdown
+  // that decremented 15→0 and WRAPPED back to 15, looping forever. Operators
+  // read the perpetual loop as a stuck spinner and it drew UX complaints three
+  // times. The countdown number, its state, and its 1s interval are removed
+  // entirely. The 15s poll above is unchanged — it just runs silently. The
+  // visible indicator is now a calm, motionless "● Live" badge (role="status").
 
   const messages: ChatMessage[] =
     data && typeof data === 'object' && 'kind' in data && data.kind === 'messages'
@@ -235,7 +221,7 @@ export function MessageThread({
     <div className="messages" data-clarity-region="messages">
       {!pollDisabled ? (
         <div className="auto-refresh" role="status">
-          Auto-refreshing · next in {secondsToRefresh}s
+          Live
         </div>
       ) : null}
       {pollDisabled ? (

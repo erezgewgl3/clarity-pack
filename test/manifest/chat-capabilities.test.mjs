@@ -24,8 +24,8 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is 0.7.5 (Phase 4 — Employee Chat composer keybinding)', () => {
-  assert.equal(manifest.version, '0.7.5');
+test('manifest version is 0.7.6 (Phase 4 — Employee Chat auto-refresh indicator)', () => {
+  assert.equal(manifest.version, '0.7.6');
 });
 
 test('manifest declares the capabilities the chat handlers need', () => {

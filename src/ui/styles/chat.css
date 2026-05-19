@@ -455,24 +455,26 @@
 }
 /* GAP 8 — auto-refresh indicator. The host returns HTTP 501 for the
  * plugin-streams endpoint, so SSE is a NO-PATH and polling IS the steady
- * state. This indicator must read as calm/normal — NOT the alarm-colored
- * "reconnecting" banner it replaced. But the round-3 build set it at --ink-4
- * (#52503f) — illegibly dim on the warm-dark rail. Raised here to --ink-2
- * (#b8b0a0, clearly legible) with a soft live-green leading dot: calm and
- * unobtrusive, yet plainly readable. Keeps role="status" for a11y. */
+ * state. This indicator is a single STATIC, motionless "● Live" badge — NOT
+ * the perpetually-looping "next in Ns" countdown it replaced (that ticker
+ * read as a stuck spinner and drew UX complaints three times). No number, no
+ * animation, no transition: the 15s poll runs silently underneath. The label
+ * sits in legible-but-muted --ink-3 with a soft, still live-green dot — calm
+ * and unobtrusive, yet plainly readable. Keeps role="status" for a11y.
+ * letter-spacing/uppercase match the day-divider for a quiet, settled look. */
 [data-clarity-surface="chat"] .auto-refresh {
   align-self: center;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-family: "Geist Mono", monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
   background: transparent;
   border: none;
   padding: 3px 9px;
-  font-variant-numeric: tabular-nums;
 }
 [data-clarity-surface="chat"] .auto-refresh::before {
   content: "";
@@ -480,7 +482,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--live);
-  opacity: 0.85;
+  opacity: 0.7;
 }
 
 /* GAP 12 — Promote / Pin confirmation feedback. The action result is no longer
