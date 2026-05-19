@@ -166,25 +166,30 @@ export function MessageThread({
   });
   const pollDisabled = poll.error?.kind === 'PLUGIN_DISABLED';
 
-  // A subtle countdown to the next auto-refresh. Resets to the full interval on
-  // every poll tick (poll.data identity changes) and ticks down once a second.
-  // Pauses when the tab is hidden, matching usePoll's pauseOnHidden.
-  const [secondsToRefresh, setSecondsToRefresh] = React.useState(
-    Math.round(REFRESH_INTERVAL_MS / 1000),
-  );
-  React.useEffect(() => {
-    setSecondsToRefresh(Math.round(REFRESH_INTERVAL_MS / 1000));
-  }, [poll.data]);
+  // GAP 8 — a visibly-ticking countdown to the next auto-refresh.
+  //
+  // The old code reset the countdown from a `useEffect([poll.data])`. But the
+  // poll fetcher returns `null` every tick and usePoll runs dedupeBy:'off', so
+  // poll.data is set to `null` on every tick — `null === null`, the state
+  // identity never changes, and the reset effect NEVER re-ran after mount. The
+  // countdown ticked 15→0 once and then froze at 0 ("next in 0s") forever.
+  //
+  // The fix makes the countdown self-contained: a single 1s interval decrements
+  // the counter and, on reaching 0, WRAPS back to the full interval — so the
+  // display perpetually cycles 15→0→15. The wrap is the visual heartbeat of the
+  // 15s poll; it pauses while the tab is hidden, matching usePoll's pauseOnHidden.
+  const POLL_SECONDS = Math.round(REFRESH_INTERVAL_MS / 1000);
+  const [secondsToRefresh, setSecondsToRefresh] = React.useState(POLL_SECONDS);
   React.useEffect(() => {
     if (pollDisabled) return;
     const id = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         return;
       }
-      setSecondsToRefresh((s) => (s > 0 ? s - 1 : 0));
+      setSecondsToRefresh((s) => (s > 1 ? s - 1 : POLL_SECONDS));
     }, 1000);
     return () => clearInterval(id);
-  }, [pollDisabled]);
+  }, [pollDisabled, POLL_SECONDS]);
 
   const messages: ChatMessage[] =
     data && typeof data === 'object' && 'kind' in data && data.kind === 'messages'
@@ -258,10 +263,19 @@ export function MessageThread({
             <PersistedMessage
               msg={msg}
               ms={ms}
-              isMine={!!msg.authorUserId}
+              // GAP 10 — sender identity comes from sender_kind, NOT
+              // authorUserId. PITFALL #3: ctx.issues.createComment posts the
+              // comment as the plugin WORKER, so an operator-sent message comes
+              // back from listComments with an EMPTY authorUserId — the old
+              // `!!msg.authorUserId` test rendered every operator message as
+              // "Agent". The chat_messages side table stamps sender_kind='user'
+              // on every operator send; an agent reply has no row (senderKind
+              // null) and correctly stays "Agent".
+              isMine={msg.senderKind === 'user'}
               companyId={companyId}
               userId={userId}
               topicIssueId={topicIssueId}
+              onRefresh={refresh}
             />
           </React.Fragment>
         );
@@ -286,6 +300,7 @@ function PersistedMessage({
   companyId,
   userId,
   topicIssueId,
+  onRefresh,
 }: {
   msg: ChatMessage;
   ms: number;
@@ -293,6 +308,8 @@ function PersistedMessage({
   companyId: string;
   userId: string;
   topicIssueId: string;
+  /** Re-fetch the thread — used so a pin's persisted ⚑ marker appears. */
+  onRefresh?: () => void;
 }): React.ReactElement | null {
   // A superseded comment is collapsed out of the edit chain (CHAT-05).
   if (msg.superseded) return null;
@@ -310,6 +327,8 @@ function PersistedMessage({
             companyId={companyId}
             userId={userId}
             topicIssueId={topicIssueId}
+            pinned={msg.pinned}
+            onRefresh={onRefresh}
           />
         )}
         <div className="b-meta">
@@ -329,54 +348,123 @@ function PersistedMessage({
 
 // ---------------------------------------------------------------------------
 // PromoteActions — the hover affordances on an agent bubble (CHAT-09).
+//
+// GAP 12 — host-contract audit fix. Promote and Pin sit on AGENT messages.
+//   - WIRE: both actions now pass `commentId` + `topicIssueId` (the exact keys
+//     the reworked chat.promote / chat.pin handlers consume). The old code
+//     passed `messageUuid: commentId` — a comment id under a message_uuid key —
+//     so the handlers' chat_messages lookup never resolved an agent comment.
+//   - CONFIRMATION UX: the old onPromote/onPin swallowed BOTH success and
+//     failure in an empty catch. Now Promote shows "✓ Task created" (with the
+//     new issue id) on { ok } and a visible error on { error }; Pin flips an
+//     optimistic "⚑ Pinned" marker and triggers a thread refresh so the
+//     persisted marker lands, and surfaces a visible error on { error }.
 // ---------------------------------------------------------------------------
 function PromoteActions({
   commentId,
   companyId,
   userId,
   topicIssueId,
+  pinned,
+  onRefresh,
 }: {
   commentId: string;
   companyId: string;
   userId: string;
   topicIssueId: string;
+  pinned: boolean;
+  onRefresh?: () => void;
 }): React.ReactElement {
   // usePluginAction is imported lazily here to keep the bubble light; the
   // hook itself is cheap and safe to call per-bubble.
   const promote = usePromote();
   const pin = usePin();
   const [busy, setBusy] = React.useState(false);
+  // Visible feedback — replaces the old silent empty-catch (GAP 12).
+  const [feedback, setFeedback] = React.useState<{
+    kind: 'ok' | 'error';
+    text: string;
+  } | null>(null);
+  const [optimisticPinned, setOptimisticPinned] = React.useState(false);
+
+  /** A worker { error: ... } result — actions RETURN errors, they rarely throw. */
+  function resultError(result: unknown): string | null {
+    if (result && typeof result === 'object' && 'error' in result) {
+      return String((result as { error: unknown }).error);
+    }
+    return null;
+  }
 
   const onPromote = React.useCallback(async () => {
     setBusy(true);
+    setFeedback(null);
     try {
-      await promote({ messageUuid: commentId, companyId, userId, topicIssueId });
+      const result = await promote({ commentId, topicIssueId, companyId, userId });
+      const err = resultError(result);
+      if (err) {
+        setFeedback({ kind: 'error', text: `Could not promote (${err})` });
+      } else {
+        const issueId =
+          result && typeof result === 'object' && 'issueId' in result
+            ? String((result as { issueId: unknown }).issueId)
+            : null;
+        setFeedback({
+          kind: 'ok',
+          text: issueId ? `✓ Task created · ${issueId}` : '✓ Task created',
+        });
+      }
     } catch {
-      // chat.promote failed — no task created. The user re-tries.
+      // A genuine transport-level throw (rare — the handler returns errors).
+      setFeedback({ kind: 'error', text: 'Could not promote (CREATE_FAILED)' });
     } finally {
       setBusy(false);
     }
-  }, [promote, commentId, companyId, userId, topicIssueId]);
+  }, [promote, commentId, topicIssueId, companyId, userId]);
 
   const onPin = React.useCallback(async () => {
     setBusy(true);
+    setFeedback(null);
     try {
-      await pin({ messageUuid: commentId, companyId, userId });
+      const result = await pin({
+        commentId,
+        topicIssueId,
+        companyId,
+        userId,
+        pinned: !(pinned || optimisticPinned),
+      });
+      const err = resultError(result);
+      if (err) {
+        setFeedback({ kind: 'error', text: `Could not pin (${err})` });
+      } else {
+        // Optimistic marker now; the thread refresh below makes the persisted
+        // ⚑ Pinned marker on the bubble itself appear.
+        setOptimisticPinned(true);
+        setFeedback({ kind: 'ok', text: '⚑ Pinned' });
+        onRefresh?.();
+      }
     } catch {
-      // chat.pin failed — pin state unchanged.
+      setFeedback({ kind: 'error', text: 'Could not pin (PIN_FAILED)' });
     } finally {
       setBusy(false);
     }
-  }, [pin, commentId, companyId, userId]);
+  }, [pin, commentId, topicIssueId, companyId, userId, pinned, optimisticPinned, onRefresh]);
 
   return (
-    <span className="promote">
+    <span className={`promote${feedback ? ' has-feedback' : ''}`}>
       <button type="button" className="pa" onClick={onPromote} disabled={busy}>
         ↗ Promote to task
       </button>
       <button type="button" className="pa" onClick={onPin} disabled={busy}>
         ⚑ Pin
       </button>
+      {feedback ? (
+        <span
+          className={`pa-feedback ${feedback.kind}`}
+          role={feedback.kind === 'error' ? 'alert' : 'status'}
+        >
+          {feedback.text}
+        </span>
+      ) : null}
     </span>
   );
 }

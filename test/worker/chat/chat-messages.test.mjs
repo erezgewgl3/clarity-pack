@@ -161,6 +161,47 @@ test('chat.messages: pin flag from the side table surfaces on the message', asyn
   assert.equal(result.messages[0].pinned, true);
 });
 
+// GAP 10 — sender identity. PITFALL #3: ctx.issues.createComment posts the
+// comment as the plugin WORKER, so an operator-sent comment comes back from
+// listComments with an EMPTY authorUserId. The UI must derive "is this mine"
+// from the chat_messages side-table sender_kind, NOT authorUserId — so the
+// handler MUST surface senderKind reliably. This test models the live host:
+// the operator comment has no authorUserId, but its chat_messages row carries
+// sender_kind='user'; an agent comment has neither.
+test('chat.messages: surfaces senderKind from the side table — operator vs agent (GAP 10)', async () => {
+  const ctx = makeCtx({
+    comments: [
+      // operator message — host stamped NO authorUserId (posted as the worker)
+      { id: 'c-op', body: 'hello from Eric', createdAt: new Date('2026-01-01T00:00:00Z'), authorUserId: null },
+      // agent reply — no chat_messages row at all
+      { id: 'c-agent', body: 'reply from the agent', createdAt: new Date('2026-01-02T00:00:00Z'), authorUserId: null },
+    ],
+    chatMessages: [
+      {
+        message_uuid: 'u-op',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        comment_id: 'c-op',
+        sender_kind: 'user',
+        supersedes_uuid: null,
+        pinned: false,
+        sent_at: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  const op = result.messages.find((m) => m.commentId === 'c-op');
+  const agent = result.messages.find((m) => m.commentId === 'c-agent');
+  // the operator message's identity comes ONLY from sender_kind — its
+  // authorUserId is empty, so any authorUserId-based test would mislabel it.
+  assert.equal(op.senderKind, 'user', 'an operator message reports senderKind=user');
+  assert.equal(op.authorUserId, null, 'PITFALL #3 — operator comment has empty authorUserId');
+  // the agent reply has no side-table row → senderKind null (stays "Agent").
+  assert.equal(agent.senderKind, null, 'an agent comment has no chat_messages row → senderKind null');
+});
+
 test('chat.messages: missing companyId → { error: COMPANY_ID_REQUIRED }', async () => {
   const ctx = makeCtx();
   registerChatMessages(ctx);

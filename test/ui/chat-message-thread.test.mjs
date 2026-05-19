@@ -268,6 +268,152 @@ test('Chat thread: composer send({...}) uses exactly the keys chat-send.ts requi
   assert.ok(passed.has('messageUuid'), 'composer send({...}) must pass `messageUuid`');
 });
 
+// --- GAP 10: operator messages render as "Eric · You", not "AGENT" ---------
+//
+// PITFALL #3 — ctx.issues.createComment posts the comment as the plugin worker,
+// so an operator-sent message comes back from listComments with an EMPTY
+// authorUserId. The old `isMine={!!msg.authorUserId}` therefore rendered every
+// operator message as "Agent". isMine must derive from senderKind === 'user'.
+
+test('Chat thread: isMine derives from senderKind === "user", not authorUserId (GAP 10)', () => {
+  const code = readChatCode('message-thread.tsx');
+  // The fixed test: senderKind === 'user'.
+  assert.match(
+    code,
+    /isMine=\{msg\.senderKind === 'user'\}/,
+    'isMine must be derived from senderKind, not authorUserId (PITFALL #3)',
+  );
+  // The old authorUserId-based test must be gone.
+  assert.doesNotMatch(
+    code,
+    /isMine=\{!!msg\.authorUserId\}/,
+    'the !!authorUserId isMine test mislabels operator messages as Agent',
+  );
+});
+
+// --- GAP 12: Promote / Pin wire contract + confirmation UX -----------------
+//
+// PITFALL #4 — chat_messages is operator-write-only; an agent comment has NO
+// row. The reworked chat.promote / chat.pin resolve the message by commentId +
+// topicIssueId. The UI's PromoteActions MUST pass exactly those keys (the old
+// code passed `messageUuid: commentId` — a comment id under the wrong key).
+
+/** Extract the keys required via reqStr(params,'KEY') in a worker handler. */
+function handlerRequiredKeys(file) {
+  const src = readFileSync(path.join(WORKER_DIR, file), 'utf8');
+  const keys = new Set();
+  for (const m of src.matchAll(/reqStr\(\s*params\s*,\s*['"]([A-Za-z0-9_]+)['"]\s*\)/g)) {
+    keys.add(m[1]);
+  }
+  return keys;
+}
+
+test('Chat thread: PromoteActions promote({...}) passes commentId + topicIssueId (GAP 12)', () => {
+  const code = readChatCode('message-thread.tsx');
+  const call = code.match(/await\s+promote\(\{([\s\S]*?)\}\)/);
+  assert.ok(call, 'message-thread.tsx must contain an `await promote({ ... })` call');
+  const body = call[1];
+  assert.match(body, /commentId/, 'promote must pass commentId');
+  assert.match(body, /topicIssueId/, 'promote must pass topicIssueId');
+  // The GAP 12 drift: a comment id passed under a `messageUuid` key.
+  assert.doesNotMatch(
+    body,
+    /messageUuid/,
+    'promote must not pass a `messageUuid` — chat.promote resolves by commentId now',
+  );
+});
+
+test('Chat thread: chat.promote handler requires commentId + topicIssueId (GAP 12)', () => {
+  const required = handlerRequiredKeys('chat-promote.ts');
+  assert.deepEqual(
+    [...required].sort(),
+    ['commentId', 'companyId', 'topicIssueId', 'userId'],
+    'chat-promote.ts must require commentId + topicIssueId (not messageUuid)',
+  );
+});
+
+test('Chat thread: PromoteActions pin({...}) passes commentId + topicIssueId (GAP 12)', () => {
+  const code = readChatCode('message-thread.tsx');
+  const call = code.match(/await\s+pin\(\{([\s\S]*?)\}\)/);
+  assert.ok(call, 'message-thread.tsx must contain an `await pin({ ... })` call');
+  const body = call[1];
+  assert.match(body, /commentId/, 'pin must pass commentId');
+  assert.match(body, /topicIssueId/, 'pin must pass topicIssueId');
+  assert.doesNotMatch(
+    body,
+    /messageUuid/,
+    'pin must not pass a `messageUuid` — chat.pin resolves by commentId now',
+  );
+});
+
+test('Chat thread: chat.pin handler reads commentId + topicIssueId, not messageUuid (GAP 12)', () => {
+  const src = readFileSync(path.join(WORKER_DIR, 'chat-pin.ts'), 'utf8');
+  assert.match(src, /params\?\.commentId/, 'chat-pin.ts must read commentId');
+  assert.match(src, /params\?\.topicIssueId/, 'chat-pin.ts must read topicIssueId');
+  assert.doesNotMatch(
+    src,
+    /params\?\.messageUuid/,
+    'chat-pin.ts must not read messageUuid — it resolves by commentId now',
+  );
+});
+
+test('Chat thread: PromoteActions surfaces visible promote/pin feedback (GAP 12)', () => {
+  const code = readChatCode('message-thread.tsx');
+  // The old empty catch swallowed success AND failure — now there is visible
+  // feedback state surfaced through a .pa-feedback element.
+  assert.match(code, /pa-feedback/, 'a .pa-feedback element must render the action outcome');
+  assert.match(code, /Task created/, 'a successful promote shows a "Task created" confirmation');
+  assert.match(code, /setFeedback\(/, 'the action result must drive a visible feedback state');
+});
+
+test('Chat thread: chat.css styles the .pa-feedback confirmation (GAP 12)', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  assert.match(css, /\.pa-feedback\s*\{/, '.pa-feedback must be styled');
+});
+
+// --- GAP 8: the auto-refresh countdown ticks, it is not frozen -------------
+//
+// The round-3 build reset the countdown from a useEffect([poll.data]). But the
+// poll fetcher returns null every tick and usePoll runs dedupeBy:'off' — so
+// poll.data is set to null every tick, its identity never changes, and the
+// reset effect never re-ran. The countdown ticked 15→0 once then froze at 0.
+
+test('Chat thread: the auto-refresh countdown wraps instead of freezing at 0 (GAP 8)', () => {
+  const code = readChatCode('message-thread.tsx');
+  // The countdown must NOT reset from a useEffect keyed on poll.data — that was
+  // the dead reset (poll.data is null every tick, identity never changes).
+  assert.doesNotMatch(
+    code,
+    /\}, \[poll\.data\]\)/,
+    'the countdown must not reset from a useEffect([poll.data]) — it never re-fires',
+  );
+  // It must wrap back to the full interval on reaching the floor.
+  assert.match(
+    code,
+    /s > 1 \? s - 1 : POLL_SECONDS/,
+    'the countdown must wrap to POLL_SECONDS instead of sticking at 0',
+  );
+});
+
+test('Chat thread: the auto-refresh indicator uses a legible ink token (GAP 8)', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  const block = css.match(/\.auto-refresh\s*\{([^}]*)\}/);
+  assert.ok(block, '.auto-refresh must be styled');
+  // --ink-4 (#52503f) was illegibly dim; the indicator must use a brighter ink.
+  assert.doesNotMatch(
+    block[1],
+    /color:\s*var\(--ink-4\)/,
+    'the auto-refresh indicator must not use the illegibly-dim --ink-4',
+  );
+  assert.match(block[1], /color:\s*var\(--ink-2\)/, 'the indicator must use the legible --ink-2');
+});
+
 // --- runnable behavioural test of the pure parseReasoning parser ----------
 test('parseReasoning: a body with no block returns it unchanged', async () => {
   const { parseReasoning } = await import(
