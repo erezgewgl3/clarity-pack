@@ -23,6 +23,17 @@ const FILES = [
   'src/ui/surfaces/situation-room/index.tsx',
   'src/ui/surfaces/situation-room/critical-path-strip.tsx',
   'src/ui/surfaces/situation-room/artifacts-shipped-shelf.tsx',
+  // GAP 7 (Plan 04-05 round 3) — the live re-drill console flooded with
+  // "Each child in a list should have a unique key" warnings attributed to
+  // ChatPageBody / RosterRail / Composer / ContextRail / PersistedMessage.
+  // Every Array.prototype.map(...) callback in the Employee Chat surface that
+  // returns JSX must carry an explicit stable key= so the warnings stay gone.
+  'src/ui/surfaces/chat/index.tsx',
+  'src/ui/surfaces/chat/roster-rail.tsx',
+  'src/ui/surfaces/chat/topic-strip.tsx',
+  'src/ui/surfaces/chat/context-rail.tsx',
+  'src/ui/surfaces/chat/composer.tsx',
+  'src/ui/surfaces/chat/message-thread.tsx',
 ];
 
 function readSrc(rel) {
@@ -30,22 +41,42 @@ function readSrc(rel) {
 }
 
 for (const rel of FILES) {
-  test(`${rel}: every Array.prototype.map callback has an explicit key={...} (DEV-07)`, () => {
+  test(`${rel}: every Array.prototype.map callback returning JSX has an explicit key={...} (DEV-07)`, () => {
     const src = readSrc(rel);
-    // Find every .map( occurrence and look ahead 400 chars for the callback
-    // body. If the callback returns JSX (we detect a `<` followed by an
-    // identifier within those 400 chars), there must be a `key={` somewhere
-    // before the matching closing of the callback.
-    const mapRe = /\.map\(/g;
+    // Find every .map( occurrence whose callback DIRECTLY RETURNS JSX, and
+    // require a key={ in that callback body.
+    //
+    // A JSX-returning map callback starts, immediately after the `=>`, with
+    // either `<` (concise JSX) or `(` then `<` (parenthesised JSX) — e.g.
+    // `.map((emp) => (<button …`. State-update / projection maps such as
+    // `prev.map((o) => (o.x ? {…} : o))` or `xs.map((m) => m.body.trim())`
+    // start with `(<ident>` or `(<cond>` — NOT `(<` — so they are correctly
+    // excluded. This avoids the false positives the old crude 600-char
+    // window scan produced on non-JSX maps.
+    const mapRe = /\.map\(\s*(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*/g;
     let m;
     let offenders = [];
     while ((m = mapRe.exec(src)) !== null) {
-      const window = src.slice(m.index, m.index + 600);
-      // Heuristic: callback returns JSX if a `<Capitalized` or `<lowercase-tag`
-      // appears within the window AND no `key=` precedes the matching `)`.
-      const hasJsxReturn = /<[A-Za-z][\w-]*\b/.test(window);
-      const hasKey = /key=\{/.test(window);
-      if (hasJsxReturn && !hasKey) {
+      // Position just after the `=>` and its whitespace.
+      const afterArrow = mapRe.lastIndex;
+      let bodyStart = afterArrow;
+      let returnsJsx = false;
+      if (src[bodyStart] === '{') {
+        // Block body — JSX-returning iff a `return (<` (modulo whitespace)
+        // appears inside the block.
+        const block = src.slice(bodyStart, bodyStart + 800);
+        returnsJsx = /return\s*\(\s*<[A-Za-z]/.test(block);
+      } else {
+        // Concise body — peek past an optional opening paren.
+        if (src[bodyStart] === '(') {
+          bodyStart += 1;
+          while (/\s/.test(src[bodyStart] ?? '')) bodyStart += 1;
+        }
+        returnsJsx = /^<[A-Za-z]/.test(src.slice(bodyStart, bodyStart + 2));
+      }
+      if (!returnsJsx) continue;
+      const window = src.slice(m.index, m.index + 800);
+      if (!/key=\{/.test(window)) {
         offenders.push({ index: m.index, snippet: window.slice(0, 200) });
       }
     }
