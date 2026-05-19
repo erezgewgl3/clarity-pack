@@ -162,13 +162,18 @@ export async function allocateChtNumber(
   ctx: ChatTopicsRepoCtx,
   companyId: string,
 ): Promise<string> {
-  const rows = await ctx.db.query<{ max_n: number | null }>(
+  const rows = await ctx.db.query<{ max_n: number | string | null }>(
     `SELECT MAX(CAST(substring(topic_id FROM 5) AS bigint)) AS max_n
      FROM plugin_clarity_pack_cdd6bda4bd.chat_topics
      WHERE company_id = $1`,
     [companyId],
   );
-  const next = (rows[0]?.max_n ?? 0) + 1;
+  // GAP 5 — the SELECT CASTs to `bigint`, and the node-postgres driver returns
+  // bigint columns as STRINGS. A bare `(rows[0]?.max_n ?? 0) + 1` then does
+  // string concatenation: "1" + 1 = "11", "11" + 1 = "111" — CHT-1, CHT-11,
+  // CHT-111 instead of CHT-1, CHT-2, CHT-3. Number(...) coerces the
+  // string-or-number-or-null max into a real number before the increment.
+  const next = Number(rows[0]?.max_n ?? 0) + 1;
   return `CHT-${next}`;
 }
 

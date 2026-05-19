@@ -136,13 +136,20 @@ function makeFakeDbCtx(seed = {}) {
       calls.push({ kind: 'query', sql, params });
 
       // CHT-NN allocator — SELECT MAX over company-scoped topic_id suffixes.
+      // The SELECT CASTs to `bigint`; node-postgres returns bigint columns as
+      // STRINGS, never numbers. This fake returns max_n host-faithfully — as a
+      // string when a row matched — so the allocator's Number(...) coercion
+      // (GAP 5) is exercised exactly as it runs against the live host. A
+      // permissive number-returning fake hid the "1"+1="11" concat bug.
       if (/SELECT[\s\S]*max[\s\S]*FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics/i.test(sql)) {
         const [companyId] = params;
         const nums = topics
           .filter((t) => t.company_id === companyId)
           .map((t) => Number(String(t.topic_id).replace(/^CHT-/, '')))
           .filter((n) => Number.isFinite(n));
-        const max = nums.length ? Math.max(...nums) : null;
+        // Postgres MAX over an empty set is SQL NULL; over a non-empty set the
+        // bigint comes back as a string (the node-postgres bigint contract).
+        const max = nums.length ? String(Math.max(...nums)) : null;
         return [{ max_n: max }];
       }
 
@@ -264,6 +271,29 @@ test('allocateChtNumber is company-scoped (another company does not bump the cou
   });
   const id = await allocateChtNumber(ctx, 'COU');
   assert.equal(id, 'CHT-1', 'COU has no topics of its own');
+});
+
+// GAP 5 — the live re-drill saw CHT-1, CHT-11, CHT-111, CHT-1111 because the
+// bigint MAX returns as a STRING and `"1" + 1` concatenates. Allocate four
+// topics in sequence (inserting each so the next MAX sees it) and assert the
+// suffix counts 1, 2, 3, 4 — string concatenation would give 1, 11, 111, 1111.
+test('allocateChtNumber counts 1,2,3,4 across sequential creates (GAP 5 — no string concat)', async () => {
+  const { ctx } = makeFakeDbCtx();
+  const allocated = [];
+  for (let i = 0; i < 4; i += 1) {
+    const id = await allocateChtNumber(ctx, 'COU');
+    allocated.push(id);
+    await insertChatTopic(ctx, {
+      ...TOPIC,
+      topic_id: id,
+      issue_id: `issue-seq-${i}`,
+    });
+  }
+  assert.deepEqual(
+    allocated,
+    ['CHT-1', 'CHT-2', 'CHT-3', 'CHT-4'],
+    'sequential allocation must increment numerically, not concatenate strings',
+  );
 });
 
 // ---------------------------------------------------------------------------
