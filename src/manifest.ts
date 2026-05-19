@@ -18,6 +18,19 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.1 (Plan 04-05 Task-4 drill gap-closure) — four Employee Chat UI gaps
+  // the live Countermoves visual-fidelity drill surfaced: (1) handleNewTopic
+  // ignored the chat.topic.create return value, so a new topic never opened —
+  // it now inspects the { ok, topicId, issueId, parentIssueId } | { error }
+  // result, setTopic()s the new topic, and surfaces a returned error visibly;
+  // (2) the new topic did not appear in the strip until the employee was
+  // re-selected — a refreshKey folded into the TopicStrip key now forces a
+  // fresh chat.topics fetch on create; (3a) the context rail leaned on --ink-3
+  // (~4.3:1, below WCAG AA) — promoted to --ink-2, scoped to .ctx; (3b) the
+  // agent card rendered "STATUSIDLE"/"TOPICHELLO" — the label is now its own
+  // .stat-label span over a block <b> value. UI/CSS only — no manifest shape,
+  // capability, schema, or worker-contract change.
+  //
   // 0.7.0 (Plan 04-02 — Employee Chat data layer) — opens Phase 4. Adds the
   // 0006_chat.sql migration (chat_topics + chat_messages + chat_employee_parents
   // in the plugin namespace, additive-only) and the typed chat-topics-repo.
@@ -94,7 +107,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.7.0',
+  version: '0.7.1',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
