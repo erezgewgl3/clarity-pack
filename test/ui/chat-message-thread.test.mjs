@@ -179,6 +179,51 @@ test('Chat thread: OptimisticBubble renders a "sent" confirmation affordance (GA
   );
 });
 
+// --- composer keybinding: plain Enter sends, Shift+Enter inserts a newline --
+//
+// Standard chat convention. The old composer sent only on ⌘/Ctrl+Enter and let
+// a plain Enter fall through as a newline — the opposite of what operators
+// expect. handleKeyDown now: on Enter without Shift → preventDefault + send;
+// on Shift+Enter → return early so the textarea's default newline happens.
+
+test('Chat thread: composer.tsx sends on plain Enter (no Shift)', () => {
+  const code = readChatCode('composer.tsx');
+  // The handler must branch on Enter and call handleSend for the no-Shift path.
+  assert.match(code, /e\.key\s*!==\s*'Enter'/, 'handleKeyDown must gate on the Enter key');
+  assert.match(code, /handleSend\(\)/, 'plain Enter must call handleSend()');
+  assert.match(code, /e\.preventDefault\(\)/, 'plain Enter must preventDefault the newline');
+});
+
+test('Chat thread: composer.tsx lets Shift+Enter insert a newline (does NOT send)', () => {
+  const code = readChatCode('composer.tsx');
+  // Shift+Enter must return early — no preventDefault, no handleSend — so the
+  // textarea inserts its default newline.
+  assert.match(
+    code,
+    /e\.shiftKey\)\s*return/,
+    'Shift+Enter must return early so the default newline happens (no send)',
+  );
+  // The old ⌘/Ctrl+Enter-ONLY send gate must be gone as the primary path.
+  assert.doesNotMatch(
+    code,
+    /\(e\.metaKey \|\| e\.ctrlKey\) && e\.key === 'Enter'/,
+    'the old ⌘/Ctrl+Enter-only send gate must be replaced by the Enter-to-send convention',
+  );
+});
+
+test('Chat thread: composer.tsx copy reflects Enter-to-send / Shift+Enter-for-newline', () => {
+  const src = readChat('composer.tsx');
+  // The placeholder and the .composer-hint foot text must describe the new
+  // behaviour — no lingering "⌘+Enter to send" operator-facing copy.
+  assert.match(src, /Enter to send/, 'the placeholder must say "Enter to send"');
+  assert.match(src, /Shift\+Enter for newline/, 'the placeholder must mention Shift+Enter for newline');
+  assert.doesNotMatch(
+    src,
+    /⌘\+Enter to send/,
+    'the stale "⌘+Enter to send" placeholder copy must be gone',
+  );
+});
+
 test('Chat thread: reasoning-panel.tsx renders a <details> element', () => {
   const src = readChat('reasoning-panel.tsx');
   assert.match(src, /<details/);

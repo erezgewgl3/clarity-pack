@@ -135,11 +135,13 @@ export function Composer({
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // ⌘+Enter (or Ctrl+Enter) sends.
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleSend();
-      }
+      // Standard chat convention: plain Enter SENDS; Shift+Enter inserts a
+      // newline (the textarea's default — we don't preventDefault for it).
+      // ⌘/Ctrl+Enter is kept as a harmless secondary send shortcut.
+      if (e.key !== 'Enter') return;
+      if (e.shiftKey) return; // Shift+Enter → let the newline through.
+      e.preventDefault();
+      handleSend();
     },
     [handleSend],
   );
@@ -162,7 +164,7 @@ export function Composer({
         <div className="composer-box">
           <textarea
             className="composer-input"
-            placeholder="Message this employee… ⌘+Enter to send"
+            placeholder="Message this employee… Enter to send, Shift+Enter for newline"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -196,7 +198,7 @@ export function Composer({
             </div>
             <div className="send-row">
               <span className="composer-hint">
-                <kbd>⌘</kbd>+<kbd>↵</kbd> to send
+                <kbd>↵</kbd> to send · <kbd>⇧</kbd>+<kbd>↵</kbd> for newline
               </span>
               <button
                 type="button"

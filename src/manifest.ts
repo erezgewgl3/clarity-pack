@@ -18,6 +18,18 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.5 (Plan 04-05 Task-4 follow-up — Employee Chat composer keybinding) —
+  // adopt the standard chat convention in the message composer: a plain Enter
+  // now SENDS the message and Shift+Enter inserts a newline. The previous
+  // build was the opposite-ish — ⌘/Ctrl+Enter sent and a plain Enter fell
+  // through as a newline. handleKeyDown now preventDefaults + sends on Enter
+  // without Shift, returns early on Shift+Enter so the textarea's default
+  // newline happens, and keeps ⌘/Ctrl+Enter as a harmless secondary send
+  // shortcut. The operator-facing copy was updated to match: the textarea
+  // placeholder ("Enter to send, Shift+Enter for newline") and the
+  // .composer-hint foot text ("↵ to send · ⇧+↵ for newline"). UI only — no
+  // manifest shape, capability, schema, or worker-contract change.
+  //
   // 0.7.4 (Plan 04-05 Task-4 — Employee Chat host-contract audit pass) — a
   // single THOROUGH audit of every chat handler + UI file against the five
   // real-Paperclip-host pitfalls the TDD fakes hid (bigint-as-string, UI↔handler
@@ -170,7 +182,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.7.4',
+  version: '0.7.5',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
