@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
-status: phase-complete
-last_updated: "2026-05-19T23:59:00.000Z"
+status: executing
+last_updated: "2026-05-19T20:59:40.582Z"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 3
   total_plans: 33
-  completed_plans: 26
-  percent: 79
+  completed_plans: 27
+  percent: 82
 ---
 
 # State: Clarity Pack
@@ -54,10 +54,12 @@ plugin re-enabled → `ready`; CI checklist 36/36 pass incl. `08-chat-disable`.
 Operator approved Phase 4 closure. SUMMARY: `04-06-SUMMARY.md`.
 
 **Phase 4 verifier notes:**
+
 - **CHAT-04** (real-time, no polling) is **host-blocked** — plugin streams
   return HTTP 501 on this Paperclip host (confirmed live); chat runs on 15s
   polling. Phase 4 verification must RECONCILE CHAT-04 as host-blocked, not
   fail it.
+
 - Three follow-ups surfaced during the drill, routed to Phase 4.1 / runbook:
   (a) the VPS `cli.mjs snapshot` wrapper is broken (stale `~/clarity-pack`
   partial repo copy) — re-sync `~/clarity-pack/scripts/`; (b) the Employee Chat
@@ -77,7 +79,9 @@ the TDD fakes had hidden — all fixed across versions 0.7.0→0.7.8 (final comm
 `93e7982`; suite 941 tests / 0 fail; `clarity-pack-0.7.8.tgz` packed). The chat
 conversation surface works (send + "Eric · You" identity + "✓ Sent" + optimistic
 send + Enter-to-send + attach graceful-degrade + reasoning/promote/pin affordances
+
 + a truthful sticky pulsing live indicator). CHAT-07 + CHAT-10 met for the UI.
+
 DEFERRED to Phase 4.1: a real operator "true task" capability and the chat-topic/
 agent-task-lifecycle fix (multi-turn conversation is currently unreliable — the
 agent stops re-waking after the first reply). Also recorded: CHAT-04 real-time
@@ -401,7 +405,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-18T21:47:28Z — Plan 04-03 COMPLETE (chat realtime + persistence spine: chat.send / chat.edit / chat-stream-bridge wired into worker.ts)
+**Last session:** 2026-05-19T20:59:40.566Z
 
 **Last session (extended):** 2026-05-14 evening through 2026-05-15 early morning — Plan 02-08 Task 4 drill against Countermoves Hostinger. 12 of 14 Phase 2 reqs proven; Situation Room visual fidelity APPROVED on /COU/situation-room (side-by-side with sketches/paperclip-fix-situation-room.html); OPTIN-01..05 all proven. Reader tab on /COU/issues/COU-4 stays stuck in loading state — DEV-15-STRUCTURAL diagnosed: `useHostContext().userId` returns null in detail-tab slots, exact-shape replay of the 02-03c companyId issue. opt-in-guard fails closed for every wrapped Reader handler (issue.reader / flatten-blocker-chain / editor.pause-status / resolve-refs) when params.userId is missing → bridge returns `{error:'OPT_IN_REQUIRED'}` → Reader can't render its data branch. 12 mid-drill defect-fix commits landed (aa70e82 → f1d911d): DEV-04 migration validator + regression test, DEV-06 CSS chrome (theme.css 353→755 lines), DEV-07/08/10/13 polish cluster, DEV-11 humanizeChain helper, DEV-12 now_doing fallback, DEV-14 runtime CSS injection (host doesn't auto-load sibling CSS), DEV-15 partial UI defense-in-depth (AnchoredToCards/AcChecklist/ActivityTimeline null-safety) and structural opt-in-guard accepts viewerUserId fallback + Reader threads userId. Test count 269→365 (+96; 363 pass / 0 fail / 2 skipped). Tarball shasum 7b8ecc3f at 30.7 KB. Plan 02-09 FILED with full Task 1-4 breakdown for useResolvedUserId resolver hook + DEV-16 issue-reader degradation contract tightening.
 
