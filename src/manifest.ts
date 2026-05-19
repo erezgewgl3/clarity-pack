@@ -18,6 +18,28 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.7 (Plan 04-05 Task-4 follow-up — Employee Chat live indicator rework) —
+  // the static "Live" label from 0.7.6 had three operator-flagged problems:
+  // (1) it never pulsed, so there was no glanceable sign anything was alive;
+  // (2) it rendered inline at the top of the scrolling .messages container so
+  // it scrolled out of view in a multi-turn chat; (3) it was a hardcoded
+  // string — it claimed "Live" even after polling had silently stopped. All
+  // three are fixed. usePoll now exposes a GENUINE liveness signal —
+  // `lastSuccessAt`, the epoch-ms of the most recent SUCCESSFUL refresh — and
+  // a pure `deriveLiveness()` helper that turns poll.error + lastSuccessAt
+  // into 'healthy' | 'stalled' | 'disabled'. The message-thread indicator
+  // derives its state from that: HEALTHY → a calm ~1.8s ease-in-out pulsing
+  // green "● Live"; STALLED (transient poll error, or no successful refresh
+  // within 2x the 15s interval — a silently-dead timer) → a NON-pulsing amber
+  // "● Updates delayed"; PLUGIN_DISABLED → a NON-pulsing amber "● Updates
+  // stopped". It is `position: sticky` pinned to the top of the messages
+  // scroller so it stays visible no matter how far the operator has scrolled.
+  // role="status" text speaks the same truth. The 15s poll cadence, the
+  // usePluginStream dormant handling, and the PLUGIN_DISABLED terminal-stop
+  // are all UNCHANGED — only the indicator and the usePoll liveness signal
+  // change. UI/CSS + use-poll primitive + tests — no manifest shape,
+  // capability, schema, or worker-contract change.
+  //
   // 0.7.6 (Plan 04-05 Task-4 follow-up — Employee Chat auto-refresh indicator) —
   // replace the looping auto-refresh countdown in the message thread with a
   // single, calm, STATIC indicator. Earlier builds rendered a live
@@ -195,7 +217,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.7.6',
+  version: '0.7.7',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
