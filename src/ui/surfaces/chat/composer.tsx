@@ -90,7 +90,11 @@ export function Composer({
         const result = await send({
           topicIssueId,
           body,
-          message_uuid: messageUuid,
+          // GAP 6 — the chat.send handler reads `messageUuid` (camelCase) via
+          // reqStr; a snake_case `message_uuid` left params.messageUuid
+          // undefined and threw `chat.send: messageUuid required` on EVERY
+          // send. The handler's reqStr key is the contract — match it here.
+          messageUuid,
           companyId,
           userId,
         });
@@ -156,6 +160,12 @@ export function Composer({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             aria-label="Message composer"
+            // GAP 1 — the Composer is keyed `composer-${topic.issueId}` in
+            // index.tsx, so it remounts whenever a topic opens. autoFocus
+            // therefore lands the cursor in the input on every topic open —
+            // including a just-created topic — so the user is dropped
+            // straight into a place to type.
+            autoFocus
           />
           <div className="composer-foot">
             <div className="composer-tools">

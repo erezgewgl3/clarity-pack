@@ -103,6 +103,77 @@ test('Chat thread: no chat surface file calls raw fetch()', () => {
   }
 });
 
+// --- GAP 6: composer ↔ chat-send.ts param-name wire contract --------------
+//
+// The live re-drill saw chat.send fail on EVERY send: composer.tsx passed
+// `message_uuid` (snake_case) in its send({...}) call, but the chat.send
+// handler reads `messageUuid` (camelCase) via reqStr — params.messageUuid was
+// undefined, so reqStr threw `chat.send: messageUuid required`. The per-side
+// TDD tests never caught it because each side was tested in isolation. This
+// is a cross-file WIRE-CONTRACT test: the exact set of param keys the
+// composer's send({...}) call passes MUST equal the exact set of keys the
+// chat-send.ts handler requires via reqStr.
+
+const WORKER_DIR = path.resolve(HERE, '..', '..', 'src', 'worker', 'handlers');
+
+/** Extract every key required by `reqStr(params, 'KEY')` in chat-send.ts. */
+function chatSendRequiredKeys() {
+  const src = readFileSync(path.join(WORKER_DIR, 'chat-send.ts'), 'utf8');
+  const keys = new Set();
+  for (const m of src.matchAll(/reqStr\(\s*params\s*,\s*['"]([A-Za-z0-9_]+)['"]\s*\)/g)) {
+    keys.add(m[1]);
+  }
+  return keys;
+}
+
+/** Extract the param keys passed in the composer's `send({ ... })` call. */
+function composerSendKeys() {
+  const code = readChatCode('composer.tsx');
+  // Match `await send({ ... })` and pull the object body.
+  const call = code.match(/await\s+send\(\{([\s\S]*?)\}\)/);
+  assert.ok(call, 'composer.tsx must contain an `await send({ ... })` call');
+  const body = call[1];
+  const keys = new Set();
+  // Object keys appear at the start of a line (the call object is
+  // pretty-printed one key per line): optional leading whitespace, the
+  // identifier, then `,` `:` or end-of-line. Comment lines were already
+  // stripped by readChatCode.
+  for (const m of body.matchAll(/^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\s*(?=[,:}\r\n]|$)/gm)) {
+    keys.add(m[1]);
+  }
+  return keys;
+}
+
+test('Chat thread: composer send({...}) uses exactly the keys chat-send.ts requires (GAP 6)', () => {
+  const required = chatSendRequiredKeys();
+  const passed = composerSendKeys();
+
+  // The handler's reqStr set is the contract.
+  assert.deepEqual(
+    [...required].sort(),
+    ['body', 'companyId', 'messageUuid', 'topicIssueId', 'userId'],
+    'chat-send.ts must require exactly these five params',
+  );
+
+  // Every required key must be passed by the composer.
+  for (const key of required) {
+    assert.ok(
+      passed.has(key),
+      `composer send({...}) is missing required param "${key}" — ` +
+        `the handler's reqStr will throw "chat.send: ${key} required"`,
+    );
+  }
+
+  // And the composer must not pass a snake_case `message_uuid` — the exact
+  // GAP 6 drift. The handler reads camelCase `messageUuid`.
+  assert.ok(
+    !passed.has('message_uuid'),
+    'composer send({...}) must not pass snake_case `message_uuid` — ' +
+      'chat-send.ts reads camelCase `messageUuid`',
+  );
+  assert.ok(passed.has('messageUuid'), 'composer send({...}) must pass `messageUuid`');
+});
+
 // --- runnable behavioural test of the pure parseReasoning parser ----------
 test('parseReasoning: a body with no block returns it unchanged', async () => {
   const { parseReasoning } = await import(
