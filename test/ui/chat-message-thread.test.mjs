@@ -43,16 +43,73 @@ for (const f of FILES) {
   });
 }
 
-test('Chat thread: message-thread.tsx subscribes usePluginStream', () => {
+test('Chat thread: message-thread.tsx keeps usePluginStream as a dormant bonus', () => {
   const src = readChat('message-thread.tsx');
   assert.match(src, /usePluginStream/);
-  assert.match(src, /chat:\$\{companyId\}/, 'must subscribe the chat:<companyId> channel');
+  assert.match(src, /chat:\$\{companyId\}/, 'must still subscribe the chat:<companyId> channel');
 });
 
-test('Chat thread: message-thread.tsx references usePoll as the fallback', () => {
+// --- GAP 8: the host 501s the plugin-streams endpoint — polling is PRIMARY ---
+//
+// The live re-drill confirmed the Paperclip host returns HTTP 501 for the
+// plugin-streams endpoint, so usePluginStream is a NO-PATH. The old code set
+// `degraded = stream.error != null` (permanently true) which kept an alarming
+// "Reconnecting — live updates paused" banner on screen forever and gated
+// usePoll behind it. Polling must now be the calm always-on PRIMARY refresh.
+
+test('Chat thread: message-thread.tsx runs usePoll as the always-on primary refresh (GAP 8)', () => {
+  const code = readChatCode('message-thread.tsx');
+  assert.match(code, /usePoll\b/, 'usePoll must drive the ongoing refresh');
+  // The poll must NOT be gated on a `degraded` stream-error flag — that was the
+  // permanently-true condition. The fetcher always calls refresh().
+  assert.doesNotMatch(
+    code,
+    /degraded/,
+    'the poll must not be gated on a `degraded` stream-error flag (GAP 8)',
+  );
+  // The poll key must be the always-on per-topic key, not an idle sentinel.
+  assert.match(
+    code,
+    /key:\s*`chat\.messages\.refresh:\$\{topicIssueId\}`/,
+    'the poll key must be the always-on per-topic refresh key',
+  );
+});
+
+test('Chat thread: message-thread.tsx shows a calm auto-refresh countdown, not an alarm banner (GAP 8)', () => {
   const src = readChat('message-thread.tsx');
-  assert.match(src, /usePoll\b/);
-  assert.match(src, /reconnecting/i, 'a reconnecting indicator must show while degraded');
+  // The alarming "Reconnecting — live updates paused" banner must be gone.
+  assert.doesNotMatch(
+    src,
+    /Reconnecting/,
+    'the alarming "Reconnecting" banner must be replaced',
+  );
+  assert.doesNotMatch(src, /className="reconnecting"/, 'the .reconnecting element must be gone');
+  // A calm countdown indicator must render with role="status" for a11y.
+  assert.match(src, /Auto-refreshing/, 'a calm auto-refresh indicator must render');
+  assert.match(src, /auto-refresh/, 'the indicator uses the .auto-refresh class');
+  assert.match(
+    src,
+    /className="auto-refresh"\s+role="status"/,
+    'the auto-refresh indicator keeps role="status"',
+  );
+});
+
+test('Chat thread: message-thread.tsx documents the host streams NO-PATH (GAP 8)', () => {
+  const src = readChat('message-thread.tsx');
+  // A NO-PATH comment near usePluginStream marks the future re-enable point,
+  // mirroring composer.tsx's ATTACHMENTS_AVAILABLE comment style.
+  assert.match(src, /STREAMS_AVAILABLE/, 'a STREAMS_AVAILABLE NO-PATH comment must document the 501');
+  assert.match(src, /501/, 'the comment must cite the host HTTP 501');
+});
+
+test('Chat thread: chat.css replaces the alarm banner with a calm auto-refresh style (GAP 8)', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  assert.match(css, /\.auto-refresh\s*\{/, '.auto-refresh must be styled');
+  // The old .reconnecting alarm rule must be gone.
+  assert.doesNotMatch(css, /\.reconnecting\s*\{/, 'the .reconnecting alarm rule must be removed');
 });
 
 test('Chat thread: message-thread.tsx orders by server created_at, not client time', () => {
@@ -83,6 +140,43 @@ test('Chat thread: composer.tsx keeps a Retry affordance on a failed send', () =
   const src = readChat('composer.tsx');
   assert.match(src, /onRetry/);
   assert.match(src, /status:\s*'failed'/);
+});
+
+// --- GAP 9: a successful send confirms immediately, not at the next poll ----
+//
+// The old composer did nothing to the optimistic bubble on a { ok } result —
+// it lingered on "sending…" until MessageThread's body-match reconciliation
+// dropped it on the next 15s poll. A 'sent' status now gives instant feedback.
+
+test('Chat thread: OptimisticMessage has a three-state status incl. "sent" (GAP 9)', () => {
+  const src = readChat('message-thread.tsx');
+  assert.match(
+    src,
+    /status:\s*'pending'\s*\|\s*'sent'\s*\|\s*'failed'/,
+    "OptimisticMessage.status must be 'pending' | 'sent' | 'failed'",
+  );
+});
+
+test('Chat thread: composer.tsx flips the bubble to "sent" on a successful send (GAP 9)', () => {
+  const code = readChatCode('composer.tsx');
+  // On the success path (not { error }) the optimistic entry's status is set
+  // to 'sent'. The old code left it 'pending'.
+  assert.match(
+    code,
+    /status:\s*'sent'/,
+    'a successful chat.send must set the optimistic bubble status to sent',
+  );
+});
+
+test('Chat thread: OptimisticBubble renders a "sent" confirmation affordance (GAP 9)', () => {
+  const src = readChat('message-thread.tsx');
+  // A clear "✓ sent" / "✓ Sent" affordance renders for the 'sent' status.
+  assert.match(src, /send-confirmed/, 'a .send-confirmed affordance must render for sent');
+  assert.match(
+    src,
+    /optimistic\.status === 'sent'/,
+    'OptimisticBubble must branch on the sent status',
+  );
 });
 
 test('Chat thread: reasoning-panel.tsx renders a <details> element', () => {

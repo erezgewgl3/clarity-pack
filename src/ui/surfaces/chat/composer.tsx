@@ -102,8 +102,15 @@ export function Composer({
         if (result && typeof result === 'object' && 'error' in result) {
           throw new Error(String((result as { error: unknown }).error));
         }
-        // Success — leave the optimistic bubble in place; MessageThread drops
-        // it once the re-fetched server thread contains the comment.
+        // GAP 9 — success: flip the bubble to 'sent' so Eric sees an immediate
+        // "✓ sent" confirmation instead of "sending…" lingering until the next
+        // 15s poll. MessageThread still drops the bubble once the reconciled
+        // server comment arrives on that poll.
+        setOptimistic((prev) =>
+          prev.map((o) =>
+            o.messageUuid === messageUuid ? { ...o, status: 'sent' } : o,
+          ),
+        );
       } catch {
         // Failure — the optimistic bubble STAYS, marked failed, with Retry.
         setOptimistic((prev) =>
