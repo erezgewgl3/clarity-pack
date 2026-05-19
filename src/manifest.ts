@@ -18,6 +18,31 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.4 (Plan 04-05 Task-4 — Employee Chat host-contract audit pass) — a
+  // single THOROUGH audit of every chat handler + UI file against the five
+  // real-Paperclip-host pitfalls the TDD fakes hid (bigint-as-string, UI↔handler
+  // param-name match, createComment-not-stamping-authorUserId, the operator-only
+  // chat_messages side table, plugin-streams 501). Bugs found + fixed:
+  // (GAP 8) the auto-refresh countdown froze at "next in 0s" — it reset from a
+  // useEffect([poll.data]) but the poll fetcher returns null every tick and
+  // usePoll runs dedupeBy:'off', so poll.data identity never changed and the
+  // reset effect never re-ran; the countdown is now a self-contained 15→0→15
+  // wrap. The indicator was also illegibly dim (--ink-4) — raised to --ink-2
+  // with a soft live-green dot. (GAP 10) operator-sent messages rendered as
+  // "AGENT" — PITFALL #3: ctx.issues.createComment posts as the plugin worker so
+  // operator comments come back with an EMPTY authorUserId; isMine now derives
+  // from senderKind === 'user' (the chat_messages side-table stamp), not
+  // authorUserId. (GAP 12) Promote-to-task and Pin did nothing on agent messages
+  // — PITFALL #4: chat_messages is operator-write-only so an agent comment has
+  // NO row, and the UI passed a comment id under a `messageUuid` key. chat.promote
+  // now resolves the comment directly via ctx.issues.listComments by commentId +
+  // topicIssueId (no getChatMessageByUuid); chat.pin UPSERTs a pin-only
+  // chat_messages row for an agent comment (sender_kind 'agent', no body). Both
+  // UI actions pass commentId + topicIssueId and surface visible confirmation
+  // ("✓ Task created" / "⚑ Pinned") or a visible error — the old empty catch
+  // swallowed both. UI/CSS + two worker handlers + one repo helper — no manifest
+  // shape, capability, or schema change.
+  //
   // 0.7.3 (Plan 04-05 Task-4 drill gap-closure round 3) — three Employee Chat
   // defects the live Countermoves re-drill surfaced once the host's realtime
   // posture was confirmed: the Paperclip host returns HTTP 501 (Not Implemented)
@@ -145,7 +170,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.7.3',
+  version: '0.7.4',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
