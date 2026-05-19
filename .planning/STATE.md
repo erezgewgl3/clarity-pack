@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-19T21:35:31.193Z"
+last_updated: "2026-05-19T22:16:54.784Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 33
+  total_plans: 40
   completed_plans: 27
-  percent: 82
+  percent: 68
 ---
 
 # State: Clarity Pack
@@ -104,7 +104,9 @@ instruction), `chat-messages.ts` (`chat.messages` data — `listComments` JOIN
 `chat_messages` for supersedes/pin, ordered by SERVER `created_at`, PITFALLS
 11.4; superseded comments marked for UI edit-chain collapse, CHAT-05).
 `chat-search.ts` — `chat.search` data (CHAT-08): the verbatim RESEARCH `ILIKE`
-query over `public.issue_comments` JOIN `chat_topics` `t.company_id=$1`
+query over `public.issue_comments` JOIN `chat_topics` `t.company_id=## Current Position
+
+`
 (T-04-14/17); exported `escapeLike` backslash-escapes `\`,`%`,`_` so a user
 wildcard char matches literally (T-04-13). `chat-promote.ts` — `chat.promote`
 action (CHAT-09/D-13): company-scoped `getChatMessageByUuid` IS the ownership
@@ -155,7 +157,7 @@ three additive plugin-namespace tables — `chat_topics` (CHT-NN topic metadata)
 `chat_messages` (the D-09 id-map side table: `message_uuid -> comment_id`,
 supersedes link, pin flag — NO `body` column, CHAT-02 invariant), and
 `chat_employee_parents` (D-05 per-employee parent-issue map, composite PK,
-race-safe). Validator-clean (fully-qualified, no CREATE INDEX, no DO $$,
+race-safe). Validator-clean (fully-qualified, no CREATE INDEX, no DO $,
 apostrophe-free, ;-terminated). Task B — `src/worker/db/chat-topics-repo.ts`:
 typed CRUD mirroring `bulletins-repo.ts` — `insertChatTopic`,
 `getChatTopicByIssueId`, `listChatTopicsForEmployee`, `allocateChtNumber`
@@ -317,7 +319,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Executing Phase 04 — Plan 04-03 COMPLETE (chat send/edit/stream spine); next Plan 04-04
+**Status:** Ready to execute
 **Progress:** [######    ] 2/5 phases complete; Phase 4 Employee Chat 3/6 plans done
 
 ## Performance Metrics

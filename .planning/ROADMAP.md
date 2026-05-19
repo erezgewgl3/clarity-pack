@@ -111,14 +111,23 @@ Plans:
 **Goal**: From the Employee Chat surface, the operator can turn an intention into a TRUE task — a real Paperclip issue that is **assigned** to an employee-agent who will act on it, **tracked** with a status lifecycle, and **findable** in the Issues list — and a chat topic can be used for sustained back-and-forth without the agent-task lifecycle corrupting it (no runtime bookkeeping leaking into the thread, no stranded topic issue, and the agent reliably re-wakes on every operator message — not just the first).
 **Depends on**: Phase 4 (the Employee Chat conversation surface)
 **Origin**: Inserted 2026-05-19 from Phase 4 live drilling on Countermoves — operator decision to defer the design-level "true task" gap out of Plan 04-05. Full problem statement, evidence, and open design questions: `phases/04-employee-chat/04-FOLLOWUP-chat-true-task.md`.
-**Requirements**: derived during spec/plan (extends CHAT-09; "operator → assigned task" + multi-turn-wake reliability were not Phase 4 requirements).
+**Requirements**: CTT-01, CTT-02, CTT-03, CTT-04, CTT-05, CTT-06, CTT-07, CTT-08 (coined 2026-05-20 during phase planning; extend CHAT-09; new IDs registered in REQUIREMENTS.md by Plan 04.1-01).
 **Success Criteria** (what must be TRUE):
   1. The operator can create a true task from a chat message/intent; the resulting issue is assigned to an employee-agent, has a status lifecycle, and appears in the Issues list (not buried under chat-topic plumbing, not left unassigned).
   2. A chat topic supports sustained multi-turn conversation — the assigned agent reliably re-wakes on every operator message, not only the first.
   3. The chat thread shows genuine conversation only — Paperclip agent-task-lifecycle / system bookkeeping (`disposition`, `recovery owner`, `finish_successful_run_handoff`) never appears as chat messages.
   4. A chat topic issue is never stranded in a stuck task-completion state ("blocked on a recovery owner").
-**Plans**: TBD — research → design → plan → implement.
+**Plans**: 7 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 04.1-01-PLAN.md — Falsify-first spike on Countermoves (D-12 requestWakeup gate strings + D-14 runtime-comment discriminator + OQ-1/OQ-2/FLAG-1/FLAG-2 evidence) + CTT-01..CTT-08 registered in REQUIREMENTS.md. Wave 1, non-autonomous.
+- [ ] 04.1-02-PLAN.md — createTrueTask shared helper + chat.createTrueTask handler + chat.promote D-04 unification rewrite. Wave 2, autonomous TDD. (CTT-01, CTT-02)
+- [ ] 04.1-03-PLAN.md — Chat-topic lifecycle: ensureTopicWakeable + isTopicStuck + chat.send wake nudge + chat-topics D-11 converse-only description + in_progress initial status. Wave 2, autonomous TDD. (CTT-03, CTT-05, CTT-06)
+- [ ] 04.1-04-PLAN.md — classifyComment pure function + chat.messages runtime-noise filter + watchdog hook + topicStuck/recoveryOwner fields. Wave 2, autonomous TDD. (CTT-04, CTT-06)
+- [ ] 04.1-05-PLAN.md — chat.topic.archive action handler + chat.taskOwned data handler + setChatTopicArchived repo helper. Wave 3, autonomous TDD. (CTT-07, CTT-08)
+- [ ] 04.1-06-PLAN.md — UI build (7 new affordances per UI-SPEC Patterns A-G) + version 0.8.0 + Countermoves visual-fidelity drill. Wave 4, non-autonomous.
+- [ ] 04.1-07-PLAN.md — Coexistence (09-true-task.mjs CI check) + 04.1 traceability test + REQUIREMENTS/ROADMAP/STATE updates + 04.1-VERIFICATION.md + Countermoves closure drill. Wave 5, non-autonomous.
 
 ### Phase 5: Distribution & Polish
 **Goal**: clarity-pack ships as a public npm package installable via `pnpm paperclipai plugin install clarity-pack` with a documented runbook, AC auto-status promoted from Phase 2's manual checklist to event-derived without breaking the manual UX, full-fidelity previewers replacing Phase 2's placeholder (xlsx -> grid, pdf -> embed, md -> rendered, png -> img), and lockfile audit + a11y pass + visual-regression baseline locked into CI.
@@ -141,7 +150,7 @@ Plans:
 | 2. Scaffold + Primitives + Reader + Room + Editor + Opt-In | 4/5 (02-04+02-08 PARTIAL paired) | Plan 02-08 Tasks 1-3 complete 2026-05-14T23:00Z; Task 4 re-drill awaiting Eric on Countermoves | - |
 | 3. Daily Bulletin | 10/10 | Plans 03-01+03-02 COMPLETE 2026-05-15; 03-03/03-04/03-05/03-06 BUILD COMPLETE; 03-07 closure drill DID NOT PASS (Option C live-disproved); 03-08 (Option B document readback) auto Tasks 1-3 complete `d50fda2..ae529f5`. 03-09 (readback structure-only validator fix) auto Tasks 1-2 COMPLETE 2026-05-17 (`c2b55b9..b43f249`): `validateDraftSchema` split into the exported structure-only `validateDraftStructure` + the slot-resolution pass, the Option B readback re-pointed at `validateDraftStructure`, `{{NUMBER:key}}` regression fixture added, version 0.4.0→0.5.0, `clarity-pack-0.5.0.tgz` packed. Suite 690 (688 pass/0 fail/2 skip). **03-09 Task 3 closure re-drill RUN 2026-05-17 — DID NOT PASS.** The readback fix is PROVEN live (worker accepted the agent's placeholder-bearing `compile-result` document, no timeout), but a NEW, unrelated gap blocks closure: `verifyDraft` pass-2's 5 standing-number `ctx.db.query` calls all fail against the live Paperclip schema (`standing-numbers.ts`/`facts-table.ts` reference columns — `active_subscription_cents`, `issues.tags` — that do not exist on Countermoves). Routed to gap-closure Plan 03-10 (standing-number / facts-table SQL schema-drift fix). **→ SUPERSEDED: 03-10 executed, then v0.6.1→v0.6.6 gap-closure debug drills resolved all post-03-10 live defects; the v0.6.6 closure re-drill PASSED on live Countermoves 2026-05-18 — Phase 3 CLOSED.** | 2026-05-18 |
 | 4. Employee Chat | 6/6 | COMPLETE & VERIFIED 2026-05-19 — 04-VERIFICATION.md PASSED, 11/11 CHAT requirements (CHAT-04 host-blocked / CHAT-07 degraded, both reconciled per operator decision). Closure drill PASSED on live Countermoves (CHAT-11: 907 issue_comments before disable = 907 after). | 2026-05-19 |
-| 4.1 Chat → True Task | 0/0 | Not started — inserted 2026-05-19 from Phase 4 live drilling; operator-designated immediate priority after Phase 4 | - |
+| 4.1 Chat → True Task | 0/7 | Planned 2026-05-20 (gsd-planner) — 7 plans, CTT-01..CTT-08 coined; Plan 04.1-01 spike awaiting Eric on Countermoves | - |
 | 5. Distribution & Polish | 0/0 | Not started | - |
 
 ## Coverage Summary
@@ -187,3 +196,4 @@ Per the research synthesis, three conflicts must be resolved before Phase 2 code
 ---
 *Roadmap defined: 2026-05-07*
 *Last updated: 2026-05-19 — Phase 4 executing. Plan 04-05 (chat UI surface) CLOSED on its UI scope: the four-region chat shell built and live-drilled across versions 0.7.0→0.7.8 (final `clarity-pack-0.7.8.tgz`, suite 941 / 0 fail); the conversation surface works (send, identity, optimistic send, Enter-to-send, attach graceful-degrade, reasoning/promote/pin affordances, a truthful sticky pulsing live indicator). The live drilling surfaced a design-level gap beyond Plan 04-05's scope — no operator-side "true task" creation, and a chat-topic/agent-task-lifecycle collision that makes multi-turn conversation unreliable — deferred by operator decision to the newly-inserted **Phase 4.1 (Chat → True Task)**, the immediate priority after Phase 4. Next: Plan 04-06 (coexistence check + Phase 4 closure drill), then Phase 4 verification.*
+
