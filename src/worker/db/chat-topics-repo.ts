@@ -252,6 +252,101 @@ export async function updateChatMessagePinned(
   );
 }
 
+/**
+ * Read a chat_messages row by (company_id, comment_id). PITFALL #4: the
+ * chat_messages side table is operator-write-only — chat.send inserts a row for
+ * every operator message, but AGENT comments have NO row. So this lookup
+ * returns null for an agent comment. Used by chat.pin / chat.promote which
+ * resolve a message from the UI-supplied comment_id, not a message_uuid.
+ */
+export async function getChatMessageByCommentId(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  commentId: string,
+): Promise<ChatMessageRow | null> {
+  const rows = await ctx.db.query<ChatMessageRow>(
+    `SELECT ${CHAT_MESSAGE_COLS}
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_messages
+     WHERE comment_id = $1 AND company_id = $2
+     LIMIT 1`,
+    [commentId, companyId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Pin (or un-pin) a chat message identified by its host comment_id, host-
+ * faithfully across BOTH message kinds (GAP 12):
+ *
+ *   - OPERATOR comment — chat.send already inserted a chat_messages row, so an
+ *     UPDATE WHERE comment_id flips its pin flag.
+ *   - AGENT comment — has NO chat_messages row (PITFALL #4). The UPDATE matches
+ *     0 rows, so we UPSERT a fresh row: a generated message_uuid, the comment_id,
+ *     sender_kind 'agent', and the pin flag. The row exists only to carry the
+ *     D-13 pin metadata — it stores no body (CHAT-02).
+ *
+ * Returns the surviving row so the caller can confirm the pin landed.
+ */
+export async function pinChatMessageByCommentId(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  topicIssueId: string,
+  commentId: string,
+  pinned: boolean,
+): Promise<ChatMessageRow> {
+  // 1. Try to update an existing row (the operator-message path).
+  const updated = await ctx.db.execute(
+    `UPDATE plugin_clarity_pack_cdd6bda4bd.chat_messages
+     SET pinned = $1
+     WHERE comment_id = $2 AND company_id = $3`,
+    [pinned, commentId, companyId],
+  );
+
+  if (!updated || (updated.rowCount ?? 0) === 0) {
+    // 2. No row — an agent comment. Insert a pin-only side-table row.
+    const row: ChatMessageRow = {
+      message_uuid: `pin-${commentId}`,
+      company_id: companyId,
+      topic_issue_id: topicIssueId,
+      comment_id: commentId,
+      sender_kind: 'agent',
+      supersedes_uuid: null,
+      pinned,
+      sent_at: new Date().toISOString(),
+    };
+    await ctx.db.execute(
+      `INSERT INTO plugin_clarity_pack_cdd6bda4bd.chat_messages
+         (${CHAT_MESSAGE_COLS})
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (message_uuid) DO UPDATE SET pinned = EXCLUDED.pinned`,
+      [
+        row.message_uuid,
+        row.company_id,
+        row.topic_issue_id,
+        row.comment_id,
+        row.sender_kind,
+        row.supersedes_uuid,
+        row.pinned,
+        row.sent_at,
+      ],
+    );
+  }
+
+  const surviving = await getChatMessageByCommentId(ctx, companyId, commentId);
+  return (
+    surviving ?? {
+      message_uuid: `pin-${commentId}`,
+      company_id: companyId,
+      topic_issue_id: topicIssueId,
+      comment_id: commentId,
+      sender_kind: 'agent',
+      supersedes_uuid: null,
+      pinned,
+      sent_at: new Date().toISOString(),
+    }
+  );
+}
+
 // ---------------------------------------------------------------------------
 // chat_employee_parents — D-05 / BLOCKER-3 parent-issue resolution
 // ---------------------------------------------------------------------------

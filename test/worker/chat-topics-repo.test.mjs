@@ -28,6 +28,8 @@ import {
   insertChatMessage,
   getChatMessageByUuid,
   updateChatMessagePinned,
+  getChatMessageByCommentId,
+  pinChatMessageByCommentId,
   getEmployeeParentIssueId,
   insertEmployeeParent,
 } from '../../src/worker/db/chat-topics-repo.ts';
@@ -87,8 +89,14 @@ function makeFakeDbCtx(seed = {}) {
           pinned,
           sent_at,
         ] = params;
-        // ON CONFLICT (message_uuid) DO NOTHING
-        if (!messages.some((m) => m.message_uuid === message_uuid)) {
+        const existing = messages.find((m) => m.message_uuid === message_uuid);
+        if (existing) {
+          // ON CONFLICT (message_uuid) DO UPDATE SET pinned = EXCLUDED.pinned
+          // (pinChatMessageByCommentId) vs DO NOTHING (insertChatMessage).
+          if (/ON CONFLICT[\s\S]*DO UPDATE/i.test(sql)) {
+            existing.pinned = pinned;
+          }
+        } else {
           messages.push({
             message_uuid,
             company_id,
@@ -104,9 +112,14 @@ function makeFakeDbCtx(seed = {}) {
       }
 
       if (/UPDATE\s+plugin_clarity_pack_cdd6bda4bd\.chat_messages/i.test(sql)) {
-        const [pinned, messageUuid, companyId] = params;
+        const [pinned, key, companyId] = params;
+        // updateChatMessagePinned keys on message_uuid; pinChatMessageByCommentId
+        // keys on comment_id — the SQL WHERE clause says which.
+        const byComment = /WHERE\s+comment_id\s*=\s*\$2/i.test(sql);
         const row = messages.find(
-          (m) => m.message_uuid === messageUuid && m.company_id === companyId,
+          (m) =>
+            (byComment ? m.comment_id === key : m.message_uuid === key) &&
+            m.company_id === companyId,
         );
         if (row) row.pinned = pinned;
         return { rowCount: row ? 1 : 0 };
@@ -170,9 +183,14 @@ function makeFakeDbCtx(seed = {}) {
       }
 
       if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_messages/i.test(sql)) {
-        const [messageUuid, companyId] = params;
+        const [key, companyId] = params;
+        // getChatMessageByUuid keys on message_uuid; getChatMessageByCommentId
+        // keys on comment_id — the SQL WHERE clause says which.
+        const byComment = /WHERE\s+comment_id\s*=\s*\$1/i.test(sql);
         return messages.filter(
-          (m) => m.message_uuid === messageUuid && m.company_id === companyId,
+          (m) =>
+            (byComment ? m.comment_id === key : m.message_uuid === key) &&
+            m.company_id === companyId,
         );
       }
 
@@ -359,6 +377,63 @@ test('updateChatMessagePinned flips the pin flag and is company-scoped', async (
   assert.equal(messages[0].pinned, true);
   await updateChatMessagePinned(ctx, 'COU', 'uuid-aaa', false);
   assert.equal(messages[0].pinned, false);
+});
+
+// ---------------------------------------------------------------------------
+// chat_messages — GAP 12 comment-id resolution + agent-comment pin UPSERT
+// ---------------------------------------------------------------------------
+
+test('getChatMessageByCommentId returns the row for a known comment_id', async () => {
+  const { ctx } = makeFakeDbCtx({ messages: [MSG] });
+  const hit = await getChatMessageByCommentId(ctx, 'COU', 'comment-1');
+  assert.ok(hit, 'returns a row for a known (company_id, comment_id)');
+  assert.equal(hit.message_uuid, 'uuid-aaa');
+  // PITFALL #4 — an agent comment has no chat_messages row, so an unknown
+  // comment_id resolves to null exactly as it would for an agent reply.
+  const miss = await getChatMessageByCommentId(ctx, 'COU', 'comment-AGENT');
+  assert.equal(miss, null);
+});
+
+test('getChatMessageByCommentId is company-scoped', async () => {
+  const { ctx } = makeFakeDbCtx({ messages: [MSG] });
+  const wrongCompany = await getChatMessageByCommentId(ctx, 'OTHER', 'comment-1');
+  assert.equal(wrongCompany, null);
+});
+
+// GAP 12 — pinning an OPERATOR message updates its existing chat_messages row.
+test('pinChatMessageByCommentId updates an existing operator-message row', async () => {
+  const { ctx, messages } = makeFakeDbCtx({ messages: [{ ...MSG, pinned: false }] });
+  const row = await pinChatMessageByCommentId(ctx, 'COU', 'issue-101', 'comment-1', true);
+  assert.equal(row.pinned, true);
+  assert.equal(messages.length, 1, 'no new row — the existing operator row was updated');
+  assert.equal(messages[0].sender_kind, 'user');
+  assert.equal(messages[0].pinned, true);
+});
+
+// GAP 12 — pinning an AGENT comment (PITFALL #4: no chat_messages row) must
+// UPSERT a pin-only row so the pin lands.
+test('pinChatMessageByCommentId UPSERTs a pin-only row for an agent comment (GAP 12)', async () => {
+  const { ctx, messages } = makeFakeDbCtx({ messages: [] });
+  const row = await pinChatMessageByCommentId(
+    ctx,
+    'COU',
+    'issue-101',
+    'comment-AGENT',
+    true,
+  );
+  assert.equal(row.pinned, true);
+  assert.equal(row.comment_id, 'comment-AGENT');
+  assert.equal(row.sender_kind, 'agent', 'an agent-comment pin row is stamped sender_kind=agent');
+  assert.equal(messages.length, 1, 'one pin-only row was inserted');
+  assert.equal(messages[0].topic_issue_id, 'issue-101');
+});
+
+test('pinChatMessageByCommentId on an agent comment is idempotent (ON CONFLICT DO UPDATE)', async () => {
+  const { ctx, messages } = makeFakeDbCtx({ messages: [] });
+  await pinChatMessageByCommentId(ctx, 'COU', 'issue-101', 'comment-AGENT', true);
+  const second = await pinChatMessageByCommentId(ctx, 'COU', 'issue-101', 'comment-AGENT', false);
+  assert.equal(messages.length, 1, 'still exactly one row — the conflict updated in place');
+  assert.equal(second.pinned, false, 'the re-pin call flipped the flag, not duplicated the row');
 });
 
 // ---------------------------------------------------------------------------
