@@ -28,11 +28,29 @@ progress:
 ## Current Position
 
 Phase: 04 (employee-chat) — EXECUTING
-Plan: 6 of 6 (Plan 04-05 CLOSED on UI scope 2026-05-19)
+Plan: 6 of 6 — Plan 04-06 Tasks 1-2 COMPLETE 2026-05-19; **Task 3 BLOCKED on a
+human-verify checkpoint** (Phase 4 closure drill on live Countermoves).
 
-**NEXT: Wave 6 — Plan 04-06** (coexistence check + Phase 4 closure drill,
-non-autonomous), then Phase 4 verification. After Phase 4 closes, **Phase 4.1
-(Chat → True Task)** is the operator-designated immediate priority — see
+**Plan 04-06 — Coexistence + Phase 4 closure: Tasks 1-2 COMPLETE, Task 3
+PENDING CHECKPOINT (2026-05-19).** Non-autonomous. Task 1 (`175d042`) — built
+the CHAT-11 coexistence check `scripts/coexistence-checks/08-chat-disable.mjs`
+(static defense-in-depth: chat messages survive plugin disable as ordinary
+`public.issue_comments` threaded comments because content lives only there per
+CHAT-02/D-02; the plugin-namespace `chat_topics`/`chat_messages`/
+`chat_employee_parents` tables are not dropped on disable per COEXIST-03) plus
+`test/ci/coexistence-chat-disable.test.mjs` and the checklist + run-all
+extensions so a regression fails CI. Task 2 (`06b53bc`) — created
+`test/phases/04-traceability.test.mjs` (RED→GREEN) pinning every CHAT-01..11
+traceability row as Implemented; marked all 11 CHAT rows Implemented in
+REQUIREMENTS.md with their delivering plan refs; updated ROADMAP.md (04-06
+Tasks 1-2 done, Phase Progress row, the two Phase 4 scope corrections — D-07
+"private" dropped, CHAT-07 ships degraded per OQ-1 NO-PATH). Manifest version
+confirmed at the real shipped value 0.7.8 (the plan text's "0.7.0" is stale —
+NOT downgraded). Full suite 957 tests / 955 pass / 0 fail / 2 skip — no
+regressions. **NEXT: Task 3 — Phase 4 closure drill on live Countermoves
+(blocking human-verify checkpoint; bookended-by-snapshots rule applies). On
+PASS: create 04-06-SUMMARY.md, close Phase 4.** After Phase 4 closes, **Phase
+4.1 (Chat → True Task)** is the operator-designated immediate priority — see
 `.planning/phases/04-employee-chat/04-FOLLOWUP-chat-true-task.md`.
 
 **Plan 04-05 — Employee Chat UI Surface: CLOSED on UI scope 2026-05-19.**
