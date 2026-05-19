@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-18T21:36:00.000Z"
+last_updated: "2026-05-19T23:00:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 24
-  percent: 73
+  completed_plans: 25
+  percent: 76
 ---
 
 # State: Clarity Pack
@@ -28,7 +28,29 @@ progress:
 ## Current Position
 
 Phase: 04 (employee-chat) — EXECUTING
-Plan: 5 of 6 (Plan 04-04 COMPLETE 2026-05-18)
+Plan: 6 of 6 (Plan 04-05 CLOSED on UI scope 2026-05-19)
+
+**NEXT: Wave 6 — Plan 04-06** (coexistence check + Phase 4 closure drill,
+non-autonomous), then Phase 4 verification. After Phase 4 closes, **Phase 4.1
+(Chat → True Task)** is the operator-designated immediate priority — see
+`.planning/phases/04-employee-chat/04-FOLLOWUP-chat-true-task.md`.
+
+**Plan 04-05 — Employee Chat UI Surface: CLOSED on UI scope 2026-05-19.**
+Non-autonomous (Eric Countermoves visual-fidelity drill). Tasks 1-3 built the
+four-region chat shell (commits `33f781f..e5d5c10`); the Task-4 live checkpoint
+drill + operator re-tests then surfaced a long run of host-faithfulness defects
+the TDD fakes had hidden — all fixed across versions 0.7.0→0.7.8 (final commit
+`93e7982`; suite 941 tests / 0 fail; `clarity-pack-0.7.8.tgz` packed). The chat
+conversation surface works (send + "Eric · You" identity + "✓ Sent" + optimistic
+send + Enter-to-send + attach graceful-degrade + reasoning/promote/pin affordances
++ a truthful sticky pulsing live indicator). CHAT-07 + CHAT-10 met for the UI.
+DEFERRED to Phase 4.1: a real operator "true task" capability and the chat-topic/
+agent-task-lifecycle fix (multi-turn conversation is currently unreliable — the
+agent stops re-waking after the first reply). Also recorded: CHAT-04 real-time
+streaming is host-blocked (plugin streams 501) — chat runs on polling. SUMMARY:
+`04-05-SUMMARY.md`; problem statement: `04-FOLLOWUP-chat-true-task.md`.
+
+---
 
 **Plan 04-04 — Chat Read + CRUD Handlers: COMPLETE 2026-05-18.** TDD,
 autonomous, 4 tasks / 8 commits (`c203c54..ff9ad5a`). Six worker handlers
