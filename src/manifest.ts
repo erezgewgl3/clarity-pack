@@ -18,6 +18,22 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.2 (Plan 04-05 Task-4 drill gap-closure round 2) — four more Employee
+  // Chat defects the live Countermoves re-drill surfaced: (GAP 6) chat.send
+  // failed on EVERY send — composer.tsx passed snake_case `message_uuid` but
+  // the chat-send.ts handler reads camelCase `messageUuid` via reqStr, so
+  // params.messageUuid was undefined and reqStr threw; the composer now sends
+  // `messageUuid` (a cross-file wire-contract test guards the param names).
+  // (GAP 5) the CHT-NN allocator produced CHT-1, CHT-11, CHT-111 — the bigint
+  // MAX returns as a STRING from node-postgres, so `"1" + 1` concatenated;
+  // allocateChtNumber now coerces via Number(...). (GAP 1) a new topic opened
+  // but did not focus the message input — the composer textarea is now
+  // autoFocus, and since the Composer is keyed per topic-issue it focuses on
+  // every topic open. (GAP 3a) the context-rail frame borders leaned on
+  // --line (too faint over the rail backgrounds) — a rail-scoped --ctx-line
+  // token brightens them; --line is not globally redefined. UI/CSS + one
+  // worker repo coercion — no manifest shape, capability, or schema change.
+  //
   // 0.7.1 (Plan 04-05 Task-4 drill gap-closure) — four Employee Chat UI gaps
   // the live Countermoves visual-fidelity drill surfaced: (1) handleNewTopic
   // ignored the chat.topic.create return value, so a new topic never opened —
@@ -107,7 +123,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.7.1',
+  version: '0.7.2',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
