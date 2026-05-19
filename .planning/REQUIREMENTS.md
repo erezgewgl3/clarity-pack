@@ -236,17 +236,17 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | BULL-07 | Phase 3 | Pending |
 | BULL-08 | Phase 3 | Pending |
 | BULL-09 | Phase 3 | Partial (Plan 03-02 — persists as Paperclip issue + survives disable; page-slot rendering pending Plan 03-03) |
-| CHAT-01 | Phase 4 | Pending |
-| CHAT-02 | Phase 4 | Pending |
-| CHAT-03 | Phase 4 | Pending |
-| CHAT-04 | Phase 4 | Pending |
-| CHAT-05 | Phase 4 | Pending |
-| CHAT-06 | Phase 4 | Pending |
-| CHAT-07 | Phase 4 | Pending |
-| CHAT-08 | Phase 4 | Pending |
-| CHAT-09 | Phase 4 | Pending |
-| CHAT-10 | Phase 4 | Pending |
-| CHAT-11 | Phase 4 | Pending |
+| CHAT-01 | Phase 4 | Implemented (Plan 04-04 read/CRUD handlers + Plan 04-05 four-region chat UI shell) |
+| CHAT-02 | Phase 4 | Implemented (Plan 04-03 — chat.send writes canonical to public.issue_comments; chat_messages side table has no body column) |
+| CHAT-03 | Phase 4 | Implemented (Plan 04-02 — 0006_chat.sql chat_topics maps each CHT-NN topic to one issue, metadata only) |
+| CHAT-04 | Phase 4 | Implemented (Plan 04-03 — chat-stream-bridge; CHAT-04 streaming host-blocked at plugin-streams 501, chat runs on the Plan 04-05 15s polling fallback) |
+| CHAT-05 | Phase 4 | Implemented (Plan 04-03 — chat.edit append-with-supersedes, original comment never mutated) |
+| CHAT-06 | Phase 4 | Implemented (Plan 04-03 — client message_uuid idempotency key; Plan 04-05 optimistic render + rollback) |
+| CHAT-07 | Phase 4 | Implemented (Plan 04-01 attachment-path spike — OQ-1 NO-PATH verdict; Plan 04-05 degraded-state composer UI: attach disabled with explicit unavailable message) |
+| CHAT-08 | Phase 4 | Implemented (Plan 04-04 — chat.search ILIKE over issue_comments JOIN chat_topics, wildcard-safe escapeLike) |
+| CHAT-09 | Phase 4 | Implemented (Plan 04-04 — chat.promote linked issue + chat.pin; Plan 04-05 Promote/Pin affordances on agent messages) |
+| CHAT-10 | Phase 4 | Implemented (Plan 04-05 — reasoning panel, collapsed by default, shows agent sources + reasoning bullets) |
+| CHAT-11 | Phase 4 | Implemented (Plan 04-06 — 08-chat-disable.mjs automated coexistence check in the CI checklist) |
 | COEXIST-01 | Phase 2 | Pending |
 | COEXIST-02 | Phase 2 | Pending |
 | COEXIST-03 | Phase 2 | Pending |
@@ -273,4 +273,4 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 
 ---
 *Requirements defined: 2026-05-07*
-*Last updated: 2026-05-07 after roadmap creation (traceability populated; READER-05/READER-07/DIST-03/DIST-04 phase references corrected to Phase 5)*
+*Last updated: 2026-05-19 — Plan 04-06 Task 2: CHAT-01..CHAT-11 traceability rows marked Implemented with their delivering Phase 4 plan references (Phase 4 closure).*
