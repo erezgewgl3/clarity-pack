@@ -6,8 +6,10 @@
 // Realtime model:
 //   - usePluginData('chat.messages', …)  → the initial server thread.
 //   - usePoll → the always-on PRIMARY refresh. It ticks every 15s and re-fetches
-//     the thread; a single calm, STATIC "● Live" indicator marks that the thread
-//     auto-updates. There is deliberately NO visible countdown number — a
+//     the thread; a single calm "Live" indicator marks that the thread
+//     auto-updates. The lone dot is the CSS `.auto-refresh::before` pseudo-
+//     element — the pulsing, state-colored dot — NOT a glyph in the label
+//     string. There is deliberately NO visible countdown number — a
 //     perpetually-looping ticker read as a stuck spinner and drew repeated UX
 //     complaints. The 15s poll continues silently underneath. Visibility-pause
 //     is mandatory; a PLUGIN_DISABLED poll error is a terminal stop.
@@ -178,9 +180,11 @@ export function MessageThread({
   // The fix: derive a REAL liveness state from the poll's genuine signals
   // (poll.error + poll.lastSuccessAt — the 0.7.7 usePoll addition: the epoch
   // ms of the most recent SUCCESSFUL refresh). deriveLiveness() in use-poll.ts
-  // turns those into 'healthy' | 'stalled' | 'disabled'. The indicator pulses
-  // ONLY when healthy; a stalled poll (a transient error, or no successful
-  // refresh within 2x the 15s interval — i.e. the timer silently died) shows a
+  // turns those into 'healthy' | 'stalled' | 'disabled'. The single dot is the
+  // CSS `.auto-refresh::before` pseudo-element — it pulses and carries the
+  // per-state color; the label strings carry NO glyph. The dot pulses ONLY
+  // when healthy; a stalled poll (a transient error, or no successful refresh
+  // within 2x the 15s interval — i.e. the timer silently died) shows a
   // non-pulsing amber "Updates delayed"; a terminal PLUGIN_DISABLED shows
   // "Updates stopped". The 15s poll cadence, the usePluginStream dormant
   // handling, and the PLUGIN_DISABLED terminal-stop are all UNCHANGED — only
@@ -226,13 +230,13 @@ export function MessageThread({
   // map is keyed on every LivenessState so a healthy poll is the ONLY state
   // that ever shows the word "Live".
   const INDICATOR_BY_STATE: Record<LivenessState, { label: string; statusText: string }> = {
-    healthy: { label: '● Live', statusText: 'Live — updates are refreshing.' },
+    healthy: { label: 'Live', statusText: 'Live — updates are refreshing.' },
     stalled: {
-      label: '● Updates delayed',
+      label: 'Updates delayed',
       statusText: 'Updates delayed — reconnecting.',
     },
     disabled: {
-      label: '● Updates stopped',
+      label: 'Updates stopped',
       statusText: 'Updates stopped — the plugin is disabled.',
     },
   };

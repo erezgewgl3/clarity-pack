@@ -24,8 +24,8 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is 0.7.7 (Phase 4 — Employee Chat live indicator rework)', () => {
-  assert.equal(manifest.version, '0.7.7');
+test('manifest version is 0.7.8 (Phase 4 — Employee Chat live indicator polish)', () => {
+  assert.equal(manifest.version, '0.7.8');
 });
 
 test('manifest declares the capabilities the chat handlers need', () => {

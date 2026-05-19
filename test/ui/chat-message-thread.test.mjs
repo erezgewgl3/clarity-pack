@@ -144,8 +144,83 @@ test('Chat thread: the live indicator covers all three honest states incl. a non
   // entry — a degraded state never claims liveness.
   assert.match(
     code,
-    /healthy\s*:\s*\{\s*label:\s*'● Live'/,
+    /healthy\s*:\s*\{\s*label:\s*'Live'/,
     'only the healthy state may carry the "Live" label',
+  );
+  // FIX 1 — the label strings must carry NO leading "● " glyph. The single
+  // visible dot is the CSS .auto-refresh::before pseudo-element; a glyph in
+  // the label string is a SECOND, dead dot (the duplicate-dot bug).
+  assert.doesNotMatch(
+    code,
+    /label:\s*'●/,
+    'INDICATOR_BY_STATE labels must not start with a "● " glyph — the dot is the CSS ::before',
+  );
+});
+
+// --- FIX 1: exactly one dot — the CSS ::before, not a label glyph ----------
+//
+// The indicator briefly showed TWO dots: the CSS .auto-refresh::before dot
+// (the real pulsing, state-colored one) AND a literal "● " glyph prefixing
+// every INDICATOR_BY_STATE label string. The label glyph is removed; the CSS
+// ::before is the single, correct dot.
+
+test('Chat thread: the indicator has exactly one dot — the CSS ::before, no label glyph (FIX 1)', () => {
+  const code = readChatCode('message-thread.tsx');
+  // None of the three label strings may carry the ● glyph.
+  assert.doesNotMatch(code, /'●[^']*'/, 'no INDICATOR_BY_STATE label may contain a ● glyph');
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  // The CSS ::before dot — the single real dot — must still be defined.
+  assert.match(
+    css,
+    /\.auto-refresh::before\s*\{[^}]*border-radius:\s*50%/,
+    'the .auto-refresh::before dot must remain — it is the single, correct dot',
+  );
+});
+
+// --- FIX 2: a genuinely-healthy "Live" reads as a confident affirmative -----
+//
+// When liveness is healthy the word "Live" should read as a positive "yes,
+// this is working" — clearly more prominent than the muted stalled/disabled
+// states. The healthy rule uses an affirmative live-green (not the muted
+// --ink-3) and a slightly stronger font-weight; stalled/disabled stay
+// muted/amber.
+
+test('Chat thread: the healthy "Live" state is styled distinctly from stalled/disabled (FIX 2)', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  // The healthy rule must use the affirmative live-green, NOT the muted
+  // --ink-3 the stalled/disabled-adjacent states sit near.
+  const healthy = css.match(
+    /\.auto-refresh\[data-liveness="healthy"\]\s*\{([^}]*)\}/,
+  );
+  assert.ok(healthy, 'a .auto-refresh[data-liveness="healthy"] rule must be styled');
+  assert.match(
+    healthy[1],
+    /color:\s*var\(--live\)/,
+    'the healthy state must read in the affirmative live-green, not the muted --ink-3',
+  );
+  assert.doesNotMatch(
+    healthy[1],
+    /color:\s*var\(--ink-3\)/,
+    'the healthy state must not use the muted --ink-3 — that is the un-emphasized look',
+  );
+  // A slightly stronger weight makes "Live" read confident, not garish.
+  assert.match(
+    healthy[1],
+    /font-weight:\s*[5-9]\d\d/,
+    'the healthy state carries a slightly stronger font-weight',
+  );
+  // The stalled / disabled states stay muted/amber — they must NOT borrow the
+  // healthy emphasis.
+  assert.match(
+    css,
+    /\.auto-refresh\[data-liveness="stalled"\][\s\S]*?color:\s*var\(--warn\)/,
+    'the stalled state stays muted/amber, not the affirmative green',
   );
 });
 

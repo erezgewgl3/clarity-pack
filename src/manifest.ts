@@ -18,6 +18,20 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.8 (Plan 04-05 Task-4 follow-up — Employee Chat live indicator polish) —
+  // two small fixes to the 0.7.7 indicator. (1) DUPLICATE DOT — the indicator
+  // showed TWO dots: the CSS `.auto-refresh::before` pseudo-element (the real
+  // pulsing, state-colored dot) AND a literal "● " glyph prefixing every
+  // INDICATOR_BY_STATE label string. The label glyph was a dead, un-pulsing
+  // second dot. The "● " prefix is removed from all three labels ('Live',
+  // 'Updates delayed', 'Updates stopped'); the CSS ::before stays as the
+  // single, correct dot. (2) EMPHASIZED HEALTHY "LIVE" — a genuinely-healthy
+  // poll now reads as a confident, affirmative "yes, this is working": the
+  // healthy-state label is the clear live-green (was the muted --ink-3) with a
+  // slightly stronger font-weight. The stalled / disabled states stay
+  // muted/amber, deliberately quieter. UI/CSS + test only — no manifest shape,
+  // capability, schema, or worker-contract change.
+  //
   // 0.7.7 (Plan 04-05 Task-4 follow-up — Employee Chat live indicator rework) —
   // the static "Live" label from 0.7.6 had three operator-flagged problems:
   // (1) it never pulsed, so there was no glanceable sign anything was alive;
@@ -217,7 +231,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.7.7',
+  version: '0.7.8',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

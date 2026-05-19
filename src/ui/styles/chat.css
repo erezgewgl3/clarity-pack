@@ -467,10 +467,12 @@
  *       messages scrolling under it are fully covered (no awkward peek).
  *   (3) TRUTHFUL — the data-liveness attribute, set from the REAL derived
  *       poll state, drives the colour + whether the dot pulses at all:
- *         healthy  → pulsing live-green "● Live"
- *         stalled  → still amber "● Updates delayed" (NO pulse)
- *         disabled → still amber "● Updates stopped"  (NO pulse)
- * Keeps role="status" for a11y; the .sr-only span carries the honest text. */
+ *         healthy  → pulsing live-green dot + affirmative green "Live"
+ *         stalled  → still amber dot + muted "Updates delayed" (NO pulse)
+ *         disabled → still amber dot + muted "Updates stopped"  (NO pulse)
+ * The single visible dot is the .auto-refresh::before pseudo-element — the
+ * label strings carry NO glyph. Keeps role="status" for a11y; the .sr-only
+ * span carries the honest text. */
 [data-clarity-surface="chat"] .auto-refresh {
   position: sticky;
   top: 0;
@@ -500,9 +502,17 @@
 }
 
 /* Truthful colour states — the data-liveness attribute is set from the real
- * derived poll state in message-thread.tsx, never a hardcoded assumption. */
+ * derived poll state in message-thread.tsx, never a hardcoded assumption.
+ *
+ * A genuinely-healthy poll should READ as a confident, affirmative "yes, this
+ * is working": the word "Live" is in the clear live-green (not the muted
+ * --ink-3) with a slightly stronger weight, so a glance reads it as positive —
+ * not garish, just unmistakably affirmative. The stalled / disabled states
+ * stay muted/amber, deliberately quieter, so a degraded poll never competes
+ * with the healthy state for attention. */
 [data-clarity-surface="chat"] .auto-refresh[data-liveness="healthy"] {
-  color: var(--ink-3);
+  color: var(--live);
+  font-weight: 600;
 }
 [data-clarity-surface="chat"] .auto-refresh[data-liveness="healthy"]::before {
   background: var(--live);
@@ -545,7 +555,9 @@
 }
 
 /* Visually-hidden text — the honest status string a screen reader announces
- * (the ● glyph label is aria-hidden; this span carries the real sentence). */
+ * (the visible label span is aria-hidden; this span carries the real
+ * sentence). The single visible dot is the .auto-refresh::before pseudo-
+ * element — there is no glyph in the label text. */
 [data-clarity-surface="chat"] .auto-refresh .sr-only {
   position: absolute;
   width: 1px;
