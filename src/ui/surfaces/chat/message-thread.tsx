@@ -5,11 +5,14 @@
 //
 // Realtime model:
 //   - usePluginData('chat.messages', …)  → the initial server thread.
-//   - usePluginStream(`chat:${companyId}`) → the realtime PRIMARY. On every
-//     comment.created event for this topic we re-fetch the thread.
-//   - usePoll → the FALLBACK. It only ticks while the stream is errored; a
-//     small "reconnecting" indicator shows while degraded. Visibility-pause
-//     is mandatory; a PLUGIN_DISABLED poll error is a terminal stop.
+//   - usePoll → the always-on PRIMARY refresh. It ticks every 15s and re-fetches
+//     the thread; a calm "auto-refreshing · next in Ns" indicator counts down to
+//     the next tick. Visibility-pause is mandatory; a PLUGIN_DISABLED poll error
+//     is a terminal stop.
+//   - usePluginStream(`chat:${companyId}`) → a DORMANT best-effort bonus. If the
+//     host ever delivers a comment.created event we still refresh — but the
+//     stream is OPTIONAL: stream.error drives NO alarming UI. See the
+//     STREAMS_AVAILABLE NO-PATH comment near the usePluginStream call.
 //
 // Optimistic send (D-10 / CHAT-06): the Composer hands optimistic messages
 // down via the `optimistic` prop, keyed by message_uuid. The thread renders
@@ -69,7 +72,11 @@ export type OptimisticMessage = {
   messageUuid: string;
   body: string;
   createdAt: number;
-  status: 'pending' | 'failed';
+  // 'pending'  — the chat.send round-trip is in flight ("sending…").
+  // 'sent'     — chat.send returned ok; the bubble shows "✓ sent" until the
+  //              reconciled server comment arrives on the next poll (GAP 9).
+  // 'failed'   — chat.send failed; the bubble keeps a Retry affordance.
+  status: 'pending' | 'sent' | 'failed';
   /** Re-send the same message_uuid (dedup-safe). */
   onRetry: () => void;
 };
@@ -117,12 +124,21 @@ export function MessageThread({
     userId,
   });
 
-  // Realtime PRIMARY — the per-company chat SSE channel (04-03 bridge).
+  // STREAMS_AVAILABLE — host NO-PATH. The live Countermoves re-drill confirmed
+  // the Paperclip host returns HTTP 501 (Not Implemented) for the plugin-streams
+  // endpoint (`/api/plugins/<plugin-id>`) — `usePluginStream` / `ctx.streams`
+  // has no path on this host. This is NOT a plugin bug and NOT a channel-naming
+  // bug. Polling is the v1 realtime reality (see usePoll below). The
+  // usePluginStream call is kept as a DORMANT best-effort: if a future host
+  // implements plugin streams, comment.created events will resume driving
+  // refresh() with no further change. `stream.error` must NEVER drive alarming
+  // UI — the stream is optional/bonus. Mirrors composer.tsx's ATTACHMENTS_
+  // AVAILABLE NO-PATH switch — this comment is the known re-enable point.
   const stream = usePluginStream<ChatStreamEvent>(`chat:${companyId}`);
-  const degraded = stream.error != null;
 
-  // On any comment.created event for THIS topic, re-fetch the thread. The
-  // event payload is opaque (04-01 OQ-2) so we re-fetch rather than splice.
+  // DORMANT bonus — on any comment.created event for THIS topic, re-fetch the
+  // thread. On the current host the stream never delivers (501), so this
+  // effect is inert; it is a no-cost re-enable seam for a future host.
   const lastEventRef = React.useRef<ChatStreamEvent | null>(null);
   React.useEffect(() => {
     const ev = stream.lastEvent;
@@ -133,20 +149,42 @@ export function MessageThread({
     }
   }, [stream.lastEvent, topicIssueId, refresh]);
 
-  // FALLBACK — poll only while the stream is degraded. usePoll owns the
-  // visibility-pause + PLUGIN_DISABLED terminal-stop semantics.
+  // PRIMARY refresh — always-on 15s poll. usePluginData does the initial fetch;
+  // this poll drives every ongoing refresh. usePoll owns the visibility-pause +
+  // PLUGIN_DISABLED terminal-stop semantics. This is the calm steady-state, not
+  // a degraded fallback.
+  const REFRESH_INTERVAL_MS = 15_000;
   const poll = usePoll<MessagesResult>({
-    key: degraded ? `chat.messages.fallback:${topicIssueId}` : 'chat.messages.fallback:idle',
+    key: `chat.messages.refresh:${topicIssueId}`,
     fetcher: async () => {
-      if (!degraded) return null;
       void refresh?.();
       return null;
     },
-    intervalMs: 15_000,
+    intervalMs: REFRESH_INTERVAL_MS,
     dedupeBy: 'off',
     pauseOnHidden: true,
   });
   const pollDisabled = poll.error?.kind === 'PLUGIN_DISABLED';
+
+  // A subtle countdown to the next auto-refresh. Resets to the full interval on
+  // every poll tick (poll.data identity changes) and ticks down once a second.
+  // Pauses when the tab is hidden, matching usePoll's pauseOnHidden.
+  const [secondsToRefresh, setSecondsToRefresh] = React.useState(
+    Math.round(REFRESH_INTERVAL_MS / 1000),
+  );
+  React.useEffect(() => {
+    setSecondsToRefresh(Math.round(REFRESH_INTERVAL_MS / 1000));
+  }, [poll.data]);
+  React.useEffect(() => {
+    if (pollDisabled) return;
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      setSecondsToRefresh((s) => (s > 0 ? s - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [pollDisabled]);
 
   const messages: ChatMessage[] =
     data && typeof data === 'object' && 'kind' in data && data.kind === 'messages'
@@ -190,9 +228,9 @@ export function MessageThread({
 
   return (
     <div className="messages" data-clarity-region="messages">
-      {degraded && !pollDisabled ? (
-        <div className="reconnecting" role="status">
-          Reconnecting — live updates paused, polling every 15s
+      {!pollDisabled ? (
+        <div className="auto-refresh" role="status">
+          Auto-refreshing · next in {secondsToRefresh}s
         </div>
       ) : null}
       {pollDisabled ? (
@@ -352,12 +390,18 @@ function OptimisticBubble({
   optimistic: OptimisticMessage;
 }): React.ReactElement {
   const failed = optimistic.status === 'failed';
+  const sent = optimistic.status === 'sent';
+  // GAP 9 — a successful chat.send flips the bubble to 'sent' so Eric gets
+  // immediate confirmation. The bubble still drops on the next 15s poll once
+  // the reconciled server comment arrives; 'sent' fills the gap until then.
+  const bubbleClass = failed ? 'failed' : sent ? 'sent' : 'pending';
+  const tsLabel = failed ? 'failed' : sent ? '✓ sent' : 'sending…';
   return (
     <article className="msg me">
-      <div className={`bubble ${failed ? 'failed' : 'pending'}`}>
+      <div className={`bubble ${bubbleClass}`}>
         <div className="b-meta">
           <span className="who">Eric · You</span>
-          <span className="ts">{failed ? 'failed' : 'sending…'}</span>
+          <span className="ts">{tsLabel}</span>
         </div>
         <div className="b-text">
           <ProseWithRefChips body={optimistic.body} />
@@ -370,6 +414,7 @@ function OptimisticBubble({
             </button>
           </div>
         ) : null}
+        {sent ? <div className="send-confirmed">✓ Sent</div> : null}
       </div>
       <div className="av">E</div>
     </article>

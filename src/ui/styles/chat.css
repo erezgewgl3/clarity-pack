@@ -453,17 +453,21 @@
   color: var(--ink-3);
   text-transform: uppercase;
 }
-[data-clarity-surface="chat"] .reconnecting {
+/* GAP 8 — auto-refresh indicator. The host returns HTTP 501 for the
+ * plugin-streams endpoint, so SSE is a NO-PATH and polling IS the steady
+ * state. This indicator must read as calm/normal — NOT the alarm-colored
+ * "reconnecting" banner it replaced. Muted ink, no border, no fill, lowercase:
+ * an unobtrusive countdown, not a warning. Keeps role="status" for a11y. */
+[data-clarity-surface="chat"] .auto-refresh {
   align-self: center;
   font-family: "Geist Mono", monospace;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--warn);
-  border: 1px solid var(--warn-soft);
-  background: var(--warn-soft);
-  padding: 4px 11px;
-  border-radius: 2px;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-4);
+  background: transparent;
+  border: none;
+  padding: 2px 8px;
+  font-variant-numeric: tabular-nums;
 }
 [data-clarity-surface="chat"] .pending-row {
   align-self: flex-start;
@@ -521,6 +525,9 @@
 }
 [data-clarity-surface="chat"] .bubble.pending {
   opacity: 0.62;
+}
+[data-clarity-surface="chat"] .bubble.sent {
+  opacity: 1;
 }
 [data-clarity-surface="chat"] .bubble.failed {
   border-color: var(--alert);
@@ -586,6 +593,18 @@
 [data-clarity-surface="chat"] .send-failed .retry:hover {
   color: var(--ink);
   border-color: var(--ink-2);
+}
+
+/* GAP 9 — send confirmation. A successful chat.send flips the optimistic
+ * bubble to 'sent' and shows a calm "✓ sent" affordance until the reconciled
+ * server comment lands on the next poll. Live-green, unobtrusive. */
+[data-clarity-surface="chat"] .send-confirmed {
+  margin-top: 7px;
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--live);
 }
 
 /* ---- Reasoning panel — inline reveal (sketch ll. 213-230) ---- */
