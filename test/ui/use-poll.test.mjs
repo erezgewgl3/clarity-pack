@@ -119,9 +119,15 @@ test('WORKER_UNAVAILABLE transient backoff — next setTimeout fires at interval
   assert.equal(snapshot.error?.kind, 'WORKER_UNAVAILABLE');
 });
 
-test('Content-hash dedupe — two consecutive fetches returning the same payload emit only ONE state change', async () => {
+test('Content-hash dedupe — an identical payload never changes `data` identity across ticks', async () => {
+  // 0.7.7 NOTE: the loop now emits on EVERY successful tick so the genuine
+  // liveness signal (lastSuccessAt) always advances — even on a quiet thread
+  // returning an identical payload. Content-hash dedupe is therefore no longer
+  // an "emit count" contract; it is a `data`-identity contract: an identical
+  // payload must NOT produce a new `data` reference (so React skips the
+  // unnecessary data re-render). lastSuccessAt is what advances every tick.
   const sched = makeMockScheduler();
-  let stateChanges = 0;
+  const seen = [];
   const fixed = { id: 'BEAAA-1', count: 42 };
   const loop = createPollLoop({
     key: 'test',
@@ -130,16 +136,113 @@ test('Content-hash dedupe — two consecutive fetches returning the same payload
     setTimeoutImpl: sched.setTimeoutImpl,
     clearTimeoutImpl: sched.clearTimeoutImpl,
     visibilityState: () => 'visible',
-    onStateChange: () => {
-      stateChanges += 1;
+    onStateChange: (s) => {
+      seen.push(s);
     },
   });
 
-  await loop.tick(); // first fetch — emits
-  await loop.tick(); // second fetch (same hash) — does NOT emit
-  await loop.tick(); // third fetch (same hash) — does NOT emit
+  await loop.tick(); // first fetch — data set
+  await loop.tick(); // second fetch (same hash) — data NOT replaced
+  await loop.tick(); // third fetch (same hash) — data NOT replaced
 
-  assert.equal(stateChanges, 1, `expected exactly one state change; got ${stateChanges}`);
+  // `data` identity is stable across the deduped ticks.
+  const firstData = seen[0].data;
+  for (const s of seen) {
+    assert.equal(s.data, firstData, 'deduped identical payload must keep the same data reference');
+  }
+  // But every successful tick advances the genuine liveness timestamp.
+  assert.equal(seen.length, 3, 'every successful tick emits so lastSuccessAt can advance');
+  for (const s of seen) {
+    assert.equal(typeof s.lastSuccessAt, 'number', 'every success carries a lastSuccessAt timestamp');
+  }
+});
+
+// --- 0.7.7: genuine liveness signal — lastSuccessAt + deriveLiveness --------
+test('createPollLoop — lastSuccessAt stamps on success and the snapshot exposes it', async () => {
+  const sched = makeMockScheduler();
+  let clock = 5_000;
+  const loop = createPollLoop({
+    key: 'test',
+    intervalMs: 100,
+    fetcher: async () => ({ ok: true }),
+    setTimeoutImpl: sched.setTimeoutImpl,
+    clearTimeoutImpl: sched.clearTimeoutImpl,
+    visibilityState: () => 'visible',
+    now: () => clock,
+  });
+
+  assert.equal(loop.snapshot().lastSuccessAt, null, 'no success yet → lastSuccessAt is null');
+  await loop.tick();
+  assert.equal(loop.snapshot().lastSuccessAt, 5_000, 'a successful tick stamps lastSuccessAt');
+  clock = 9_000;
+  await loop.tick();
+  assert.equal(loop.snapshot().lastSuccessAt, 9_000, 'a later success advances lastSuccessAt');
+});
+
+test('createPollLoop — a transient failure does NOT advance lastSuccessAt', async () => {
+  const sched = makeMockScheduler();
+  let clock = 5_000;
+  let mode = 'ok';
+  const loop = createPollLoop({
+    key: 'test',
+    intervalMs: 100,
+    fetcher: async () => {
+      if (mode === 'fail') {
+        const err = new Error('worker down');
+        err.code = 'WORKER_UNAVAILABLE';
+        throw err;
+      }
+      return { ok: true };
+    },
+    setTimeoutImpl: sched.setTimeoutImpl,
+    clearTimeoutImpl: sched.clearTimeoutImpl,
+    visibilityState: () => 'visible',
+    now: () => clock,
+  });
+
+  await loop.tick(); // success at t=5000
+  assert.equal(loop.snapshot().lastSuccessAt, 5_000);
+  clock = 9_000;
+  mode = 'fail';
+  await loop.tick(); // transient failure — lastSuccessAt must NOT move
+  assert.equal(loop.snapshot().lastSuccessAt, 5_000, 'a failed tick must not advance lastSuccessAt');
+  assert.equal(loop.snapshot().error?.kind, 'WORKER_UNAVAILABLE');
+});
+
+test('deriveLiveness — honest healthy / stalled / disabled mapping', async () => {
+  const { deriveLiveness } = await import('../../src/ui/primitives/use-poll.ts');
+  const interval = 15_000;
+  const now = 1_000_000;
+  assert.equal(
+    deriveLiveness({ error: { kind: 'PLUGIN_DISABLED' }, lastSuccessAt: now, intervalMs: interval, now }),
+    'disabled',
+    'a terminal PLUGIN_DISABLED error is the disabled state',
+  );
+  assert.equal(
+    deriveLiveness({ error: null, lastSuccessAt: null, intervalMs: interval, now }),
+    'stalled',
+    'before the first success liveness is unproven → stalled',
+  );
+  assert.equal(
+    deriveLiveness({ error: null, lastSuccessAt: now - 4_000, intervalMs: interval, now }),
+    'healthy',
+    'a recent success with no error is healthy',
+  );
+  assert.equal(
+    deriveLiveness({ error: null, lastSuccessAt: now - 31_000, intervalMs: interval, now }),
+    'stalled',
+    'no success within 2x the interval (dead timer) → stalled',
+  );
+  assert.equal(
+    deriveLiveness({
+      error: { kind: 'TIMEOUT' },
+      lastSuccessAt: now - 1_000,
+      intervalMs: interval,
+      now,
+    }),
+    'stalled',
+    'a transient error on the last tick → stalled even if a success was recent',
+  );
 });
 
 test('Visibility guard — pauseOnHidden=true (default) skips fetcher invocation when document is hidden', async () => {

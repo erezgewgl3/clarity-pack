@@ -61,6 +61,22 @@ function parseRules(css) {
       }
       const prelude = stripped.slice(lookback + 1, cursor).trim();
       if (prelude.startsWith('@')) {
+        // @keyframes has inner step preludes (`0%`, `50%`) that are NOT
+        // surface-scoped selectors and never can be — skip the WHOLE block so
+        // the scope check does not flag the animation steps. @media keeps the
+        // descend-into-inner behaviour (its inner rules ARE real selectors and
+        // must stay surface-scoped).
+        if (/^@keyframes\b/.test(prelude)) {
+          let scan = cursor + 1;
+          let depth = 1;
+          while (scan < stripped.length && depth > 0) {
+            if (stripped[scan] === '{') depth += 1;
+            else if (stripped[scan] === '}') depth -= 1;
+            scan += 1;
+          }
+          cursor = scan;
+          continue;
+        }
         cursor += 1;
         continue;
       }

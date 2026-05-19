@@ -43,7 +43,52 @@ export type UsePollResult<T> = {
   error: PollError | null;
   stale: boolean;
   isLeader: boolean | null; // null until 02-04 wraps with leader-election
+  // Plan 04-05 follow-up (0.7.7) — GENUINE liveness signal. `lastSuccessAt` is
+  // the epoch-ms timestamp of the most recent SUCCESSFUL fetcher resolution
+  // (set inside the loop's success branch, BEFORE dedupe — a deduped identical
+  // payload is still a successful poll round-trip and still proves the timer
+  // is alive). It is null until the first success. A consumer derives real
+  // liveness from this: "did a refresh actually land recently?" — not a
+  // hardcoded "Live" string. See `deriveLiveness` below.
+  lastSuccessAt: number | null;
 };
+
+// ---------------------------------------------------------------------------
+// Liveness derivation (Plan 04-05 follow-up, 0.7.7) — turns the raw poll
+// signals into a single honest state for a UI "live" indicator. Pure and
+// exported so it is unit-testable without React.
+//
+//   - 'disabled'  — terminal PLUGIN_DISABLED error: the loop has stopped for
+//                   good, no further polling will happen.
+//   - 'stalled'   — the poll is degraded: either it is currently in a
+//                   transient error state, OR no successful refresh has
+//                   landed within `stallAfterMs` (default 2x the interval —
+//                   long enough that one missed tick is forgiven, short
+//                   enough that a silently-dead timer is caught). Before the
+//                   FIRST success (lastSuccessAt == null) the indicator is
+//                   'stalled' too — we have not yet proven liveness.
+//   - 'healthy'   — a refresh succeeded inside the freshness window and there
+//                   is no outstanding error: the poll is genuinely cycling.
+// ---------------------------------------------------------------------------
+export type LivenessState = 'healthy' | 'stalled' | 'disabled';
+
+export function deriveLiveness(args: {
+  error: PollError | null;
+  lastSuccessAt: number | null;
+  intervalMs: number;
+  now: number;
+  /** Override the staleness window; defaults to 2x intervalMs. */
+  stallAfterMs?: number;
+}): LivenessState {
+  if (args.error?.kind === 'PLUGIN_DISABLED') return 'disabled';
+  if (args.lastSuccessAt == null) return 'stalled';
+  const stallAfter = args.stallAfterMs ?? args.intervalMs * 2;
+  if (args.now - args.lastSuccessAt > stallAfter) return 'stalled';
+  // A transient (non-terminal) error means the LAST tick failed — even if a
+  // success landed recently, the poll is degraded right now.
+  if (args.error != null) return 'stalled';
+  return 'healthy';
+}
 
 // ---------------------------------------------------------------------------
 // Synchronous murmur3-32. Public-domain reference implementation. Returns the
@@ -155,8 +200,15 @@ export type CreatePollLoopOptions<T> = UsePollOptions<T> & {
   setTimeoutImpl?: (cb: () => void, ms: number) => unknown;
   clearTimeoutImpl?: (h: unknown) => void;
   visibilityState?: () => 'visible' | 'hidden';
-  onStateChange?: (state: { data: T | null; error: PollError | null; stale: boolean }) => void;
+  onStateChange?: (state: {
+    data: T | null;
+    error: PollError | null;
+    stale: boolean;
+    lastSuccessAt: number | null;
+  }) => void;
   maxBackoffMs?: number;
+  /** Injectable clock for deterministic tests; defaults to Date.now. */
+  now?: () => number;
 };
 
 export type PollLoop<T> = {
@@ -169,6 +221,7 @@ export type PollLoop<T> = {
     stale: boolean;
     stopped: boolean;
     nextDelayMs: number | null;
+    lastSuccessAt: number | null;
   };
 };
 
@@ -186,6 +239,7 @@ export function createPollLoop<T>(opts: CreatePollLoopOptions<T>): PollLoop<T> {
   const pauseOnHidden = opts.pauseOnHidden !== false; // default true
   const dedupeBy = opts.dedupeBy ?? 'content-hash';
   const maxBackoff = opts.maxBackoffMs ?? 5 * 60_000;
+  const now = opts.now ?? (() => Date.now());
 
   let stopped = false;
   let timerHandle: unknown = null;
@@ -194,9 +248,12 @@ export function createPollLoop<T>(opts: CreatePollLoopOptions<T>): PollLoop<T> {
   let data: T | null = null;
   let error: PollError | null = null;
   let nextDelayMs: number | null = null;
+  // Plan 04-05 follow-up (0.7.7) — epoch-ms of the most recent SUCCESSFUL
+  // fetcher resolution. The genuine liveness signal.
+  let lastSuccessAt: number | null = null;
 
   function emit(): void {
-    opts.onStateChange?.({ data, error, stale: false });
+    opts.onStateChange?.({ data, error, stale: false, lastSuccessAt });
   }
 
   function schedule(delay: number): void {
@@ -216,19 +273,24 @@ export function createPollLoop<T>(opts: CreatePollLoopOptions<T>): PollLoop<T> {
     }
     try {
       const next = await opts.fetcher();
+      // A resolved fetch is a successful poll round-trip — it proves the timer
+      // is alive — REGARDLESS of whether the payload is new or deduped. Stamp
+      // lastSuccessAt and clear any prior error on every success, then emit so
+      // a liveness consumer always sees a fresh timestamp. (Before 0.7.7 the
+      // content-hash branch skipped emit() entirely on an identical payload,
+      // which would have starved the liveness signal on a quiet thread.)
+      lastSuccessAt = now();
+      error = null;
       if (dedupeBy === 'content-hash') {
         const hash = murmur3_32(JSON.stringify(next));
         if (hash !== lastHash) {
           lastHash = hash;
           data = next;
-          error = null;
-          emit();
         }
       } else {
         data = next;
-        error = null;
-        emit();
       }
+      emit();
       backoffMs = opts.intervalMs; // reset on success
       schedule(opts.intervalMs);
     } catch (e) {
@@ -262,7 +324,7 @@ export function createPollLoop<T>(opts: CreatePollLoopOptions<T>): PollLoop<T> {
     },
     tick,
     snapshot() {
-      return { data, error, stale: false, stopped, nextDelayMs };
+      return { data, error, stale: false, stopped, nextDelayMs, lastSuccessAt };
     },
   };
 }
@@ -274,6 +336,9 @@ export function createPollLoop<T>(opts: CreatePollLoopOptions<T>): PollLoop<T> {
 export function usePoll<T>(opts: UsePollOptions<T>): UsePollResult<T> {
   const [data, setData] = React.useState<T | null>(null);
   const [error, setError] = React.useState<PollError | null>(null);
+  // Plan 04-05 follow-up (0.7.7) — surface the genuine liveness timestamp so a
+  // consumer (the chat thread's live indicator) can derive a TRUTHFUL state.
+  const [lastSuccessAt, setLastSuccessAt] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const loop = createPollLoop<T>({
@@ -281,6 +346,7 @@ export function usePoll<T>(opts: UsePollOptions<T>): UsePollResult<T> {
       onStateChange: (s) => {
         setData(s.data);
         setError(s.error);
+        setLastSuccessAt(s.lastSuccessAt);
       },
     });
     loop.start();
@@ -289,5 +355,5 @@ export function usePoll<T>(opts: UsePollOptions<T>): UsePollResult<T> {
     // / intervalMs changes do NOT restart polling. Callers should memoize.
   }, [opts.key]);
 
-  return { data, error, stale: false, isLeader: null };
+  return { data, error, stale: false, isLeader: null, lastSuccessAt };
 }

@@ -37,7 +37,7 @@ import {
   usePluginStream,
 } from '@paperclipai/plugin-sdk/ui/hooks';
 
-import { usePoll } from '../../primitives/use-poll.ts';
+import { deriveLiveness, usePoll, type LivenessState } from '../../primitives/use-poll.ts';
 import { ProseWithRefChips } from '../reader/prose-with-ref-chips.tsx';
 import { parseReasoning, ReasoningPanel } from './reasoning-panel.tsx';
 
@@ -168,14 +168,75 @@ export function MessageThread({
   });
   const pollDisabled = poll.error?.kind === 'PLUGIN_DISABLED';
 
-  // GAP 8 — the auto-refresh indicator is a single STATIC label, not a ticker.
+  // GAP 8 (0.7.7 rework) — the live indicator is now PULSING, STICKY, and
+  // TRUTHFUL. Three earlier-flagged problems with the static "Live" label:
+  //   (1) it never pulsed — no glanceable sign anything was alive;
+  //   (2) it rendered inline at the top of the scrolling .messages container,
+  //       so it scrolled out of view in a multi-turn chat;
+  //   (3) it was a hardcoded string — it claimed "Live" even after polling
+  //       had silently died.
+  // The fix: derive a REAL liveness state from the poll's genuine signals
+  // (poll.error + poll.lastSuccessAt — the 0.7.7 usePoll addition: the epoch
+  // ms of the most recent SUCCESSFUL refresh). deriveLiveness() in use-poll.ts
+  // turns those into 'healthy' | 'stalled' | 'disabled'. The indicator pulses
+  // ONLY when healthy; a stalled poll (a transient error, or no successful
+  // refresh within 2x the 15s interval — i.e. the timer silently died) shows a
+  // non-pulsing amber "Updates delayed"; a terminal PLUGIN_DISABLED shows
+  // "Updates stopped". The 15s poll cadence, the usePluginStream dormant
+  // handling, and the PLUGIN_DISABLED terminal-stop are all UNCHANGED — only
+  // the indicator is reworked.
   //
-  // Earlier builds rendered a live "Auto-refreshing · next in Ns" countdown
-  // that decremented 15→0 and WRAPPED back to 15, looping forever. Operators
-  // read the perpetual loop as a stuck spinner and it drew UX complaints three
-  // times. The countdown number, its state, and its 1s interval are removed
-  // entirely. The 15s poll above is unchanged — it just runs silently. The
-  // visible indicator is now a calm, motionless "● Live" badge (role="status").
+  // Liveness is time-dependent: a poll whose timer silently died emits no
+  // further state change, so a render driven only by poll events would never
+  // notice the stall. A self-rescheduling setTimeout (NOT a fast setInterval
+  // ticker — it re-evaluates once per poll interval, the calm cadence) nudges
+  // a re-render so deriveLiveness re-runs against a fresh clock and a dead
+  // timer is caught. No countdown number, no decrement, no wrap.
+  const [livenessTick, setLivenessTick] = React.useState(0);
+  React.useEffect(() => {
+    if (pollDisabled) return; // terminal — nothing left to re-evaluate
+    let handle: ReturnType<typeof setTimeout>;
+    const reschedule = (): void => {
+      handle = setTimeout(() => {
+        setLivenessTick((n) => n + 1);
+        reschedule();
+      }, REFRESH_INTERVAL_MS);
+    };
+    reschedule();
+    return () => clearTimeout(handle);
+  }, [pollDisabled]);
+
+  const liveness: LivenessState = React.useMemo(
+    () =>
+      deriveLiveness({
+        error: poll.error,
+        lastSuccessAt: poll.lastSuccessAt,
+        intervalMs: REFRESH_INTERVAL_MS,
+        now: Date.now(),
+      }),
+    // livenessTick is an intentional dependency — it forces a re-derivation
+    // against a fresh Date.now() so a silently-dead poll timer flips the
+    // indicator to 'stalled' even though no poll event fired.
+    [poll.error, poll.lastSuccessAt, livenessTick],
+  );
+
+  // The honest indicator label + status text per derived state. The amber /
+  // green styling is carried by the data-liveness attribute (see chat.css);
+  // role="status" text must speak the SAME truth a sighted operator sees. The
+  // map is keyed on every LivenessState so a healthy poll is the ONLY state
+  // that ever shows the word "Live".
+  const INDICATOR_BY_STATE: Record<LivenessState, { label: string; statusText: string }> = {
+    healthy: { label: '● Live', statusText: 'Live — updates are refreshing.' },
+    stalled: {
+      label: '● Updates delayed',
+      statusText: 'Updates delayed — reconnecting.',
+    },
+    disabled: {
+      label: '● Updates stopped',
+      statusText: 'Updates stopped — the plugin is disabled.',
+    },
+  };
+  const indicator = INDICATOR_BY_STATE[liveness];
 
   const messages: ChatMessage[] =
     data && typeof data === 'object' && 'kind' in data && data.kind === 'messages'
@@ -219,11 +280,19 @@ export function MessageThread({
 
   return (
     <div className="messages" data-clarity-region="messages">
-      {!pollDisabled ? (
-        <div className="auto-refresh" role="status">
-          Live
-        </div>
-      ) : null}
+      {/* GAP 8 (0.7.7) — the live indicator is `position: sticky` pinned to the
+          top of the .messages scroll container (see chat.css) so it stays
+          visible no matter how far down a multi-turn conversation the operator
+          has scrolled. It is a thin strip; it pulses ONLY when healthy; its
+          label + role="status" text reflect the REAL derived poll state. */}
+      <div
+        className="auto-refresh"
+        role="status"
+        data-liveness={liveness}
+      >
+        <span aria-hidden="true">{indicator.label}</span>
+        <span className="sr-only">{indicator.statusText}</span>
+      </div>
       {pollDisabled ? (
         <div className="clarity-chat-error">
           Plugin disabled. Reload after re-enabling.

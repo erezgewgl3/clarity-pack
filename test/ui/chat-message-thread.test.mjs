@@ -75,7 +75,7 @@ test('Chat thread: message-thread.tsx runs usePoll as the always-on primary refr
   );
 });
 
-test('Chat thread: message-thread.tsx shows a calm STATIC live indicator, not an alarm banner or a ticking countdown (GAP 8)', () => {
+test('Chat thread: message-thread.tsx shows a calm live indicator, not an alarm banner or a ticking countdown (GAP 8)', () => {
   const src = readChat('message-thread.tsx');
   const code = readChatCode('message-thread.tsx');
   // The alarming "Reconnecting — live updates paused" banner must be gone.
@@ -85,15 +85,16 @@ test('Chat thread: message-thread.tsx shows a calm STATIC live indicator, not an
     'the alarming "Reconnecting" banner must be replaced',
   );
   assert.doesNotMatch(src, /className="reconnecting"/, 'the .reconnecting element must be gone');
-  // A calm STATIC indicator must render with role="status" for a11y.
+  // The indicator must render with role="status" for a11y.
   assert.match(src, /auto-refresh/, 'the indicator uses the .auto-refresh class');
   assert.match(
     src,
     /className="auto-refresh"\s+role="status"/,
     'the auto-refresh indicator keeps role="status"',
   );
-  // The perpetually-looping countdown must be gone — no visible "next in Ns"
-  // number, no countdown state, no decrementing interval. The label is static.
+  // No "next in Ns" countdown text, no countdown state, no 1s decrementing
+  // interval. The 0.7.7 rework keeps the poll cadence but the indicator does
+  // NOT count anything down.
   assert.doesNotMatch(code, /next in/, 'the visible "next in Ns" countdown text must be removed');
   assert.doesNotMatch(
     code,
@@ -105,6 +106,90 @@ test('Chat thread: message-thread.tsx shows a calm STATIC live indicator, not an
     /setInterval/,
     'the 1s countdown interval must be removed — the poll runs silently',
   );
+});
+
+// --- GAP 8 (0.7.7): the live indicator pulses, is sticky, and is truthful ---
+//
+// Three operator-flagged problems with the static "Live" label: (1) it never
+// pulsed; (2) it scrolled out of view in a multi-turn chat; (3) it was a
+// hardcoded string that claimed "Live" even after polling had died. The 0.7.7
+// rework derives a REAL liveness state from the poll's genuine signals.
+
+test('Chat thread: the live indicator derives a REAL state from the poll, not a hardcoded string (GAP 8 0.7.7)', () => {
+  const code = readChatCode('message-thread.tsx');
+  // The indicator state must come from deriveLiveness against the poll's
+  // genuine signals — poll.error AND poll.lastSuccessAt (the new usePoll
+  // liveness timestamp). A hardcoded literal "Live" string is the bug.
+  assert.match(code, /deriveLiveness\(/, 'the indicator state must derive from deriveLiveness()');
+  assert.match(code, /poll\.lastSuccessAt/, 'liveness must be derived from the real lastSuccessAt signal');
+  assert.match(code, /poll\.error/, 'liveness must factor in the real poll error');
+  // The data-liveness attribute carries the real state into the CSS.
+  assert.match(code, /data-liveness=\{liveness\}/, 'the indicator must expose data-liveness for styling');
+});
+
+test('Chat thread: the live indicator covers all three honest states incl. a non-Live degraded label (GAP 8 0.7.7)', () => {
+  const src = readChat('message-thread.tsx');
+  const code = readChatCode('message-thread.tsx');
+  // healthy → "Live"; stalled → a NON-"Live" delayed label; disabled → a
+  // NON-"Live" stopped label. The indicator must NEVER say "Live" when the
+  // poll is not actually healthy — the label map is keyed on every state.
+  assert.match(code, /\bhealthy\s*:/, 'the indicator map must carry the healthy state');
+  assert.match(code, /\bstalled\s*:/, 'the indicator map must carry the stalled state');
+  assert.match(code, /\bdisabled\s*:/, 'the indicator map must carry the disabled state');
+  assert.match(src, /Updates delayed/, 'a stalled poll must show a "Updates delayed" label, not "Live"');
+  assert.match(src, /Updates stopped/, 'a disabled poll must show a "Updates stopped" label, not "Live"');
+  // role="status" text must speak the truth too — a status sentence per state.
+  assert.match(code, /statusText/, 'the role="status" text must update per derived state');
+  // The only place the literal word "Live" appears as a label is the healthy
+  // entry — a degraded state never claims liveness.
+  assert.match(
+    code,
+    /healthy\s*:\s*\{\s*label:\s*'● Live'/,
+    'only the healthy state may carry the "Live" label',
+  );
+});
+
+test('Chat thread: the live indicator is sticky/always-visible regardless of scroll (GAP 8 0.7.7)', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  const block = css.match(/\.auto-refresh\s*\{([^}]*)\}/);
+  assert.ok(block, '.auto-refresh must be styled');
+  // position: sticky pinned to the top keeps it visible in a multi-turn chat.
+  assert.match(block[1], /position:\s*sticky/, 'the indicator must be position: sticky');
+  assert.match(block[1], /top:\s*0/, 'the sticky indicator must pin to the top of the scroller');
+});
+
+test('Chat thread: the live indicator pulses when healthy and is motionless otherwise (GAP 8 0.7.7)', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  // A pulse keyframe + an animation applied ONLY to the healthy-state dot.
+  assert.match(css, /@keyframes\s+clarity-chat-live-pulse/, 'a calm pulse keyframe must be defined');
+  assert.match(
+    css,
+    /\.auto-refresh\[data-liveness="healthy"\]::before\s*\{[^}]*animation:\s*clarity-chat-live-pulse/,
+    'the pulse animation must apply only to the healthy-state dot',
+  );
+  // The degraded states carry the warn colour and must NOT pulse — a frozen
+  // poll must never look alive.
+  assert.match(
+    css,
+    /\.auto-refresh\[data-liveness="stalled"\][\s\S]*?color:\s*var\(--warn\)/,
+    'a stalled indicator must be amber (--warn)',
+  );
+});
+
+test('Chat thread: use-poll.ts exposes a genuine liveness signal (lastSuccessAt) (GAP 8 0.7.7)', () => {
+  const src = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'primitives', 'use-poll.ts'),
+    'utf8',
+  );
+  // usePoll must surface lastSuccessAt and export a deriveLiveness helper.
+  assert.match(src, /lastSuccessAt/, 'use-poll must track a lastSuccessAt timestamp');
+  assert.match(src, /export function deriveLiveness/, 'use-poll must export deriveLiveness');
 });
 
 test('Chat thread: message-thread.tsx documents the host streams NO-PATH (GAP 8)', () => {
@@ -123,6 +208,43 @@ test('Chat thread: chat.css replaces the alarm banner with a calm auto-refresh s
   assert.match(css, /\.auto-refresh\s*\{/, '.auto-refresh must be styled');
   // The old .reconnecting alarm rule must be gone.
   assert.doesNotMatch(css, /\.reconnecting\s*\{/, 'the .reconnecting alarm rule must be removed');
+});
+
+// --- use-poll deriveLiveness — the genuine liveness derivation (0.7.7) ------
+test('use-poll: deriveLiveness reports healthy / stalled / disabled honestly (GAP 8 0.7.7)', async () => {
+  const { deriveLiveness } = await import('../../src/ui/primitives/use-poll.ts');
+  const interval = 15_000;
+  const now = 1_000_000;
+  // A terminal PLUGIN_DISABLED error → 'disabled'.
+  assert.equal(
+    deriveLiveness({ error: { kind: 'PLUGIN_DISABLED' }, lastSuccessAt: now, intervalMs: interval, now }),
+    'disabled',
+  );
+  // Never a success yet → 'stalled' (liveness unproven).
+  assert.equal(
+    deriveLiveness({ error: null, lastSuccessAt: null, intervalMs: interval, now }),
+    'stalled',
+  );
+  // A recent success, no error → 'healthy'.
+  assert.equal(
+    deriveLiveness({ error: null, lastSuccessAt: now - 5_000, intervalMs: interval, now }),
+    'healthy',
+  );
+  // No success within 2x the interval (the timer silently died) → 'stalled'.
+  assert.equal(
+    deriveLiveness({ error: null, lastSuccessAt: now - 40_000, intervalMs: interval, now }),
+    'stalled',
+  );
+  // A recent success but the LAST tick errored transiently → 'stalled'.
+  assert.equal(
+    deriveLiveness({
+      error: { kind: 'WORKER_UNAVAILABLE' },
+      lastSuccessAt: now - 2_000,
+      intervalMs: interval,
+      now,
+    }),
+    'stalled',
+  );
 });
 
 test('Chat thread: message-thread.tsx orders by server created_at, not client time', () => {
@@ -432,18 +554,18 @@ test('Chat thread: chat.css styles the .pa-feedback confirmation (GAP 12)', () =
   assert.match(css, /\.pa-feedback\s*\{/, '.pa-feedback must be styled');
 });
 
-// --- GAP 8: the auto-refresh indicator is static, not a looping ticker -----
+// --- GAP 8: the live indicator carries no looping countdown ticker ---------
 //
 // Earlier builds rendered a live "Auto-refreshing · next in Ns" countdown that
 // decremented 15→0 and WRAPPED back to 15, looping forever. Operators read the
 // perpetual loop as a stuck spinner; it drew UX complaints three times. The
 // countdown number, its state (secondsToRefresh), and its 1s decrementing
-// interval are removed entirely — the 15s poll runs silently underneath and
-// the indicator is now a single motionless "● Live" badge.
+// interval stay removed. The 0.7.7 rework adds a calm pulse on the dot — a
+// genuine "this is live" idiom — but NO ticking number.
 
-test('Chat thread: the auto-refresh indicator carries no countdown state or interval (GAP 8)', () => {
+test('Chat thread: the live indicator carries no countdown state or 1s ticker (GAP 8)', () => {
   const code = readChatCode('message-thread.tsx');
-  // No countdown state, no decrementing interval, no wrap logic.
+  // No countdown state, no decrementing 1s interval, no wrap logic.
   assert.doesNotMatch(code, /secondsToRefresh/, 'the countdown state must be gone');
   assert.doesNotMatch(code, /POLL_SECONDS/, 'the POLL_SECONDS countdown constant must be gone');
   assert.doesNotMatch(code, /setInterval/, 'the 1s countdown interval must be gone');
@@ -454,7 +576,7 @@ test('Chat thread: the auto-refresh indicator carries no countdown state or inte
   );
 });
 
-test('Chat thread: the auto-refresh indicator is a legible, static, muted style (GAP 8)', () => {
+test('Chat thread: the live indicator is a legible, calm style with a pulse on the dot (GAP 8 0.7.7)', () => {
   const css = readFileSync(
     path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
     'utf8',
@@ -467,14 +589,18 @@ test('Chat thread: the auto-refresh indicator is a legible, static, muted style 
     /color:\s*var\(--ink-4\)/,
     'the auto-refresh indicator must not use the illegibly-dim --ink-4',
   );
+  // The healthy-state dot pulses — a calm slow breath, the standard live idiom.
   assert.match(
-    block[1],
-    /color:\s*var\(--ink-3\)/,
-    'the static indicator uses the legible-but-muted --ink-3',
+    css,
+    /animation:\s*clarity-chat-live-pulse\s+1\.8s\s+ease-in-out\s+infinite/,
+    'the healthy dot must pulse with a calm ~1.8s ease-in-out breath',
   );
-  // The indicator must carry no animation — a calm, motionless badge.
-  assert.doesNotMatch(block[1], /animation/, 'the indicator must not animate');
-  assert.doesNotMatch(block[1], /transition/, 'the indicator must not transition');
+  // reduced-motion users get the truthful colour without the motion.
+  assert.match(
+    css,
+    /prefers-reduced-motion[\s\S]*?animation:\s*none/,
+    'the pulse must be dropped under prefers-reduced-motion',
+  );
 });
 
 // --- runnable behavioural test of the pure parseReasoning parser ----------
