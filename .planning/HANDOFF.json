@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-19T21:34:52.398Z",
+  "timestamp": "2026-05-19T21:43:05.777Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -22,6 +22,10 @@
     },
     {
       "status": "M",
+      "path": ".planning/STATE.md"
+    },
+    {
+      "status": "M",
       "path": "CLAUDE.md"
     },
     {
@@ -30,9 +34,13 @@
     },
     {
       "status": "??",
+      "path": ".planning/phases/04.1-chat-true-task/04.1-PATTERNS.md"
+    },
+    {
+      "status": "??",
       "path": "AGENTS.md"
     }
   ],
   "next_action": "Executing Phase 04 — Plan 04-03 COMPLETE (chat send/edit/stream spine); next Plan 04-04",
-  "context_notes": "Status: Executing Phase 04 — Plan 04-03 COMPLETE (chat send/edit/stream spine); next Plan 04-04\n\nRecent commits:\n9f3d5b7 docs(04.1): UI-SPEC revision 2 — typography active-weights clause, runtime-noise 9.5->10px, gutter carve-out, archive KEEP TOPIC\nd7fef44 docs(04.1): UI-SPEC revision -- multiples-of-4 paddings, dialog heading 18px, cancel-to-keep editing\n4d21bd4 docs(04.1): UI design contract — 7 new affordances on existing chat surface\n3765ef6 docs(04.1): phase research .planning/phases/04.1-chat-true-task/04.1-RESEARCH.md\nb5967fc docs(state): record phase 4.1 context session .planning/STATE.md"
+  "context_notes": "Status: Executing Phase 04 — Plan 04-03 COMPLETE (chat send/edit/stream spine); next Plan 04-04\n\nRecent commits:\nd978a8c docs(04.1): UI-SPEC approved (status frontmatter) .planning/phases/04.1-chat-true-task/04.1-UI-SPEC.md\n9f3d5b7 docs(04.1): UI-SPEC revision 2 — typography active-weights clause, runtime-noise 9.5->10px, gutter carve-out, archive KEEP TOPIC\nd7fef44 docs(04.1): UI-SPEC revision -- multiples-of-4 paddings, dialog heading 18px, cancel-to-keep editing\n4d21bd4 docs(04.1): UI design contract — 7 new affordances on existing chat surface\n3765ef6 docs(04.1): phase research .planning/phases/04.1-chat-true-task/04.1-RESEARCH.md"
 }
