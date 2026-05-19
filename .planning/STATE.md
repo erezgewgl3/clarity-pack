@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-19T23:00:00.000Z"
+last_updated: "2026-05-19T23:59:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 25
-  percent: 76
+  completed_plans: 26
+  percent: 79
 ---
 
 # State: Clarity Pack
@@ -27,30 +27,46 @@ progress:
 
 ## Current Position
 
-Phase: 04 (employee-chat) — EXECUTING
-Plan: 6 of 6 — Plan 04-06 Tasks 1-2 COMPLETE 2026-05-19; **Task 3 BLOCKED on a
-human-verify checkpoint** (Phase 4 closure drill on live Countermoves).
+Phase: 04 (employee-chat) — EXECUTION FINISHED, PENDING VERIFICATION
+Plan: 6 of 6 — **Plan 04-06 COMPLETE 2026-05-19; all 6 Phase 4 plans done.**
 
-**Plan 04-06 — Coexistence + Phase 4 closure: Tasks 1-2 COMPLETE, Task 3
-PENDING CHECKPOINT (2026-05-19).** Non-autonomous. Task 1 (`175d042`) — built
-the CHAT-11 coexistence check `scripts/coexistence-checks/08-chat-disable.mjs`
-(static defense-in-depth: chat messages survive plugin disable as ordinary
-`public.issue_comments` threaded comments because content lives only there per
-CHAT-02/D-02; the plugin-namespace `chat_topics`/`chat_messages`/
-`chat_employee_parents` tables are not dropped on disable per COEXIST-03) plus
+**Plan 04-06 — Coexistence + Phase 4 closure: COMPLETE 2026-05-19.**
+Non-autonomous. Task 1 (`175d042`) — built the CHAT-11 coexistence check
+`scripts/coexistence-checks/08-chat-disable.mjs` (static defense-in-depth: chat
+messages survive plugin disable as ordinary `public.issue_comments` threaded
+comments because content lives only there per CHAT-02/D-02; the
+plugin-namespace `chat_topics`/`chat_messages`/`chat_employee_parents` tables
+are not dropped on disable per COEXIST-03) plus
 `test/ci/coexistence-chat-disable.test.mjs` and the checklist + run-all
 extensions so a regression fails CI. Task 2 (`06b53bc`) — created
 `test/phases/04-traceability.test.mjs` (RED→GREEN) pinning every CHAT-01..11
 traceability row as Implemented; marked all 11 CHAT rows Implemented in
-REQUIREMENTS.md with their delivering plan refs; updated ROADMAP.md (04-06
-Tasks 1-2 done, Phase Progress row, the two Phase 4 scope corrections — D-07
-"private" dropped, CHAT-07 ships degraded per OQ-1 NO-PATH). Manifest version
-confirmed at the real shipped value 0.7.8 (the plan text's "0.7.0" is stale —
-NOT downgraded). Full suite 957 tests / 955 pass / 0 fail / 2 skip — no
-regressions. **NEXT: Task 3 — Phase 4 closure drill on live Countermoves
-(blocking human-verify checkpoint; bookended-by-snapshots rule applies). On
-PASS: create 04-06-SUMMARY.md, close Phase 4.** After Phase 4 closes, **Phase
-4.1 (Chat → True Task)** is the operator-designated immediate priority — see
+REQUIREMENTS.md with their delivering plan refs; updated ROADMAP.md. Manifest
+version confirmed at the real shipped 0.7.8 (the plan text's "0.7.0" is stale —
+NOT downgraded). **Task 3 — Phase 4 closure drill on live Countermoves: PASSED.**
+Pre-drill snapshot bookend `2026-05-19T19-56-33Z`; gated 0.7.7→0.7.8 plugin
+upgrade (`gate --gate-bypass` → `✓ Installed clarity-pack v0.7.8 (ready)`);
+post-install smoke PASSED 4/4; chat works live (CEO employee-agent replied
+in-thread); chat topics surface as ordinary `COU-####` issues in classic
+Paperclip; **CHAT-11 proof: `issue_comments` count 907 before
+`plugin disable clarity-pack` = 907 after** → zero comment rows destroyed;
+plugin re-enabled → `ready`; CI checklist 36/36 pass incl. `08-chat-disable`.
+Operator approved Phase 4 closure. SUMMARY: `04-06-SUMMARY.md`.
+
+**Phase 4 verifier notes:**
+- **CHAT-04** (real-time, no polling) is **host-blocked** — plugin streams
+  return HTTP 501 on this Paperclip host (confirmed live); chat runs on 15s
+  polling. Phase 4 verification must RECONCILE CHAT-04 as host-blocked, not
+  fail it.
+- Three follow-ups surfaced during the drill, routed to Phase 4.1 / runbook:
+  (a) the VPS `cli.mjs snapshot` wrapper is broken (stale `~/clarity-pack`
+  partial repo copy) — re-sync `~/clarity-pack/scripts/`; (b) the Employee Chat
+  surface at `/COU/chat` overflows the viewport horizontally — chat-polish
+  defect for Phase 4.1; (c) three harmless leftover instance dirs in
+  `~/.paperclip/instances/` on the VPS — ops cleanup.
+
+**NEXT: Phase 4 verification, then Phase 4.1 (Chat → True Task)** — the
+operator-designated immediate priority; see
 `.planning/phases/04-employee-chat/04-FOLLOWUP-chat-true-task.md`.
 
 **Plan 04-05 — Employee Chat UI Surface: CLOSED on UI scope 2026-05-19.**
