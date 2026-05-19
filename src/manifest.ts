@@ -18,6 +18,28 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.7.3 (Plan 04-05 Task-4 drill gap-closure round 3) — three Employee Chat
+  // defects the live Countermoves re-drill surfaced once the host's realtime
+  // posture was confirmed: the Paperclip host returns HTTP 501 (Not Implemented)
+  // for the plugin-streams endpoint — usePluginStream / ctx.streams is a host
+  // NO-PATH (browser console: repeated 501 on /api/plugins/<clarity-pack-id>).
+  // (GAP 8) the realtime banner was permanently stuck: `degraded =
+  // stream.error != null` was always true (the stream 501s forever), so the
+  // alarming "Reconnecting — live updates paused" banner showed permanently and
+  // usePoll was framed as a degraded fallback. Polling is now the calm,
+  // always-on PRIMARY refresh (every 15s, no longer gated on `degraded`); the
+  // banner is replaced by a subtle "Auto-refreshing · next in Ns" countdown
+  // (role="status", unobtrusive styling). usePluginStream is kept DORMANT as a
+  // best-effort bonus — stream.error drives no UI; a STREAMS_AVAILABLE NO-PATH
+  // comment marks the future re-enable point, mirroring ATTACHMENTS_AVAILABLE.
+  // (GAP 9) a sent message sat on "sending…" until the next poll — Optimistic
+  // Message gained a 'sent' status; a successful chat.send flips the bubble to
+  // 'sent' with an immediate "✓ sent" affordance until the reconciled server
+  // comment lands. (GAP 7) React "missing key" warnings flooded the console —
+  // the chat surface files are now covered by the no-react-key-warnings
+  // source-grep test. UI/CSS + test only — no manifest shape, capability,
+  // schema, or worker-contract change.
+  //
   // 0.7.2 (Plan 04-05 Task-4 drill gap-closure round 2) — four more Employee
   // Chat defects the live Countermoves re-drill surfaced: (GAP 6) chat.send
   // failed on EVERY send — composer.tsx passed snake_case `message_uuid` but
@@ -123,7 +145,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.7.2',
+  version: '0.7.3',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
