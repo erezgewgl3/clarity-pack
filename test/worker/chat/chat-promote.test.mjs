@@ -1,19 +1,18 @@
 // test/worker/chat/chat-promote.test.mjs
 //
-// Plan 04-04 Task B RED — chat.promote action handler (CHAT-09 / D-13).
+// Plan 04-04 Task B / 04-05 host-contract audit — chat.promote (CHAT-09 / D-13).
 //
-// chat.promote turns a chat message into a real Paperclip task issue:
-//   - The source message is looked up via getChatMessageByUuid → its
-//     comment_id, then the comment body via ctx.issues.listComments on the
-//     topic issue.
-//   - ctx.issues.create makes a real issue pre-filled from the message body,
-//     linked back to the topic issue via parentId (D-13).
-//   - Returns the new issue id.
+// GAP 12 audit fix. chat.promote turns a chat message into a real Paperclip
+// task issue. The promote button sits on AGENT messages, and PITFALL #4 says
+// the chat_messages side table is operator-write-only — an agent comment has
+// NO chat_messages row. The reworked handler therefore takes `commentId` +
+// `topicIssueId` and resolves the comment STRAIGHT from the topic thread via
+// ctx.issues.listComments — there is NO getChatMessageByUuid dependency. These
+// tests model an agent comment host-faithfully: it appears in listComments but
+// has no chat_messages row, and promote must still succeed.
 //
-// Ownership re-check (T-04-16): a message the caller cannot see — an unknown
-// message_uuid, or one in another company — returns { error: 'NOT_FOUND' } /
-// { error: 'NOT_OWNED' }. getChatMessageByUuid is company-scoped, so a
-// cross-company uuid simply does not resolve.
+// Ownership scoping (T-04-16): ctx.issues.listComments is company-scoped by the
+// host. A comment id not present in the named topic thread → { error: NOT_FOUND }.
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
@@ -23,13 +22,12 @@ import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 function makeCtx({
   optedIn = true,
-  chatMessages = [],
   comments = [],
   createIssueThrows = false,
+  listCommentsThrows = false,
 } = {}) {
   const handlers = new Map();
   const createdIssues = [];
-  const messageStore = new Map(chatMessages.map((r) => [r.message_uuid, r]));
 
   const ctx = {
     logger: { warn() {}, info() {} },
@@ -49,20 +47,14 @@ function makeCtx({
       async listComments(issueId, companyId) {
         void issueId;
         void companyId;
+        if (listCommentsThrows) throw new Error('host listComments 503');
         return comments;
       },
     },
     db: {
-      async query(sql, params) {
+      async query(sql) {
         if (/clarity_user_prefs/i.test(sql)) {
           return optedIn ? [{ opted_in_at: '2026-01-01T00:00:00.000Z' }] : [];
-        }
-        if (/chat_messages/i.test(sql)) {
-          // getChatMessageByUuid — WHERE message_uuid = $1 AND company_id = $2.
-          const uuid = params?.[0];
-          const companyId = params?.[1];
-          const row = messageStore.get(uuid);
-          return row && row.company_id === companyId ? [row] : [];
         }
         return [];
       },
@@ -77,22 +69,12 @@ function makeCtx({
   return ctx;
 }
 
-const SEEDED_MESSAGE = {
-  message_uuid: 'uuid-msg-1',
-  company_id: 'co-1',
-  topic_issue_id: 'issue-topic-1',
-  comment_id: 'c-1',
-  sender_kind: 'user',
-  supersedes_uuid: null,
-  pinned: false,
-  sent_at: '2026-01-01T00:00:00.000Z',
-};
-
 function promoteParams(overrides = {}) {
   return {
     companyId: 'co-1',
     userId: 'user-eric',
-    messageUuid: 'uuid-msg-1',
+    commentId: 'c-agent-1',
+    topicIssueId: 'issue-topic-1',
     ...overrides,
   };
 }
@@ -103,66 +85,66 @@ test('chat.promote: handler registers under key chat.promote', () => {
   assert.ok(ctx._handlers.has('chat.promote'));
 });
 
-test('chat.promote: creates a real issue pre-filled from the message body, linked to the topic', async () => {
+// GAP 12 — the message being promoted is an AGENT comment: it is present in
+// the topic thread but has NO chat_messages row. The old getChatMessageByUuid
+// path could never resolve it; resolving by commentId straight from the thread
+// must succeed.
+test('chat.promote: promotes an AGENT comment (no chat_messages row) — GAP 12', async () => {
   const ctx = makeCtx({
-    chatMessages: [SEEDED_MESSAGE],
-    comments: [{ id: 'c-1', body: 'Ship the pricing page by Friday' }],
+    comments: [
+      { id: 'c-agent-1', body: 'Ship the pricing page by Friday' },
+      { id: 'c-other', body: 'unrelated' },
+    ],
   });
   registerChatPromote(ctx);
   const result = await ctx._handlers.get('chat.promote')(promoteParams());
 
   assert.equal(ctx._createdIssues.length, 1);
   const issue = ctx._createdIssues[0];
-  // pre-filled from the message body
+  // pre-filled from the agent comment body
   assert.match(issue.title + (issue.description ?? ''), /pricing page/i);
   // linked back to the topic issue (D-13)
   assert.equal(issue.parentId, 'issue-topic-1');
   assert.equal(result.ok, true);
   assert.equal(result.issueId, issue.id);
+  assert.equal(result.topicIssueId, 'issue-topic-1');
 });
 
-test('chat.promote: unknown messageUuid → { error: NOT_FOUND }, no issue created', async () => {
-  const ctx = makeCtx({ chatMessages: [] });
+test('chat.promote: comment id not in the topic thread → { error: NOT_FOUND }', async () => {
+  const ctx = makeCtx({ comments: [{ id: 'c-different', body: 'a different comment' }] });
   registerChatPromote(ctx);
   const result = await ctx._handlers.get('chat.promote')(promoteParams());
   assert.equal(result.error, 'NOT_FOUND');
   assert.equal(ctx._createdIssues.length, 0);
 });
 
-test('chat.promote: a message from another company does not resolve → NOT_FOUND', async () => {
-  // The seeded message is company co-1; the caller queries as co-OTHER.
-  const ctx = makeCtx({
-    chatMessages: [SEEDED_MESSAGE],
-    comments: [{ id: 'c-1', body: 'cross-company' }],
-  });
+test('chat.promote: listComments failure → { error: NOT_FOUND }, no issue created', async () => {
+  const ctx = makeCtx({ listCommentsThrows: true });
   registerChatPromote(ctx);
-  const result = await ctx._handlers.get('chat.promote')(
-    promoteParams({ companyId: 'co-OTHER' }),
-  );
-  // getChatMessageByUuid is WHERE message_uuid=$1 AND company_id=$2 — a
-  // mismatched company yields no row.
+  const result = await ctx._handlers.get('chat.promote')(promoteParams());
   assert.equal(result.error, 'NOT_FOUND');
   assert.equal(ctx._createdIssues.length, 0);
 });
 
-test('chat.promote: source comment not found in the thread → { error: NOT_FOUND }', async () => {
-  const ctx = makeCtx({
-    chatMessages: [SEEDED_MESSAGE],
-    comments: [{ id: 'c-OTHER', body: 'a different comment' }],
-  });
-  registerChatPromote(ctx);
-  const result = await ctx._handlers.get('chat.promote')(promoteParams());
-  assert.equal(result.error, 'NOT_FOUND');
-});
-
-test('chat.promote: missing messageUuid → throws (action-handler convention)', async () => {
+test('chat.promote: missing commentId → throws (action-handler convention)', async () => {
   const ctx = makeCtx();
   registerChatPromote(ctx);
   const params = promoteParams();
-  delete params.messageUuid;
+  delete params.commentId;
   await assert.rejects(
     () => ctx._handlers.get('chat.promote')(params),
-    /messageUuid/i,
+    /commentId/i,
+  );
+});
+
+test('chat.promote: missing topicIssueId → throws', async () => {
+  const ctx = makeCtx();
+  registerChatPromote(ctx);
+  const params = promoteParams();
+  delete params.topicIssueId;
+  await assert.rejects(
+    () => ctx._handlers.get('chat.promote')(params),
+    /topicIssueId/i,
   );
 });
 
@@ -178,7 +160,7 @@ test('chat.promote: missing companyId → throws', async () => {
 });
 
 test('chat.promote: opted-out caller → OPT_IN_REQUIRED, no issue created', async () => {
-  const ctx = makeCtx({ optedIn: false, chatMessages: [SEEDED_MESSAGE] });
+  const ctx = makeCtx({ optedIn: false, comments: [{ id: 'c-agent-1', body: 'x' }] });
   registerChatPromote(ctx);
   const result = await ctx._handlers.get('chat.promote')(promoteParams());
   assert.equal(result.error, 'OPT_IN_REQUIRED');
@@ -187,8 +169,7 @@ test('chat.promote: opted-out caller → OPT_IN_REQUIRED, no issue created', asy
 
 test('chat.promote: issues.create failure → { error: PROMOTE_FAILED }', async () => {
   const ctx = makeCtx({
-    chatMessages: [SEEDED_MESSAGE],
-    comments: [{ id: 'c-1', body: 'something' }],
+    comments: [{ id: 'c-agent-1', body: 'something' }],
     createIssueThrows: true,
   });
   registerChatPromote(ctx);
