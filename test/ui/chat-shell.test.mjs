@@ -200,3 +200,74 @@ test('Chat shell: index.tsx wires + New topic to chat.topic.create', () => {
   assert.match(src, /chat\.topic\.create/);
   assert.match(src, /\+ New topic/);
 });
+
+// --- GAP 1: a successful chat.topic.create drops the user into the new topic.
+test('Chat shell: index.tsx inspects the chat.topic.create result (GAP 1)', () => {
+  const code = readChatCode('index.tsx');
+  // The create result is awaited into a variable and inspected — the old
+  // bug awaited createTopic(...) and discarded the return value.
+  assert.match(
+    code,
+    /const\s+result\s*=\s*await\s+createTopic\(/,
+    'handleNewTopic must capture the chat.topic.create result',
+  );
+});
+
+test('Chat shell: index.tsx setTopic()s the just-created topic (GAP 1)', () => {
+  const code = readChatCode('index.tsx');
+  // On a successful create the new topic is opened immediately so the
+  // composer renders for the first message.
+  assert.match(code, /setTopic\(\{/, 'a successful create must setTopic the new topic');
+  assert.match(code, /issueId:\s*created\.issueId/, 'the opened topic uses the created issueId');
+});
+
+test('Chat shell: index.tsx surfaces a chat.topic.create { error } visibly (GAP 1)', () => {
+  const code = readChatCode('index.tsx');
+  // chat.topic.create RETURNS { error } — it does not throw — so a returned
+  // error must be detected and surfaced, never silently swallowed.
+  assert.match(code, /setCreateError\(/, 'a returned { error } must set a visible error state');
+  const src = readChat('index.tsx');
+  assert.match(src, /topic-create-error/, 'a visible create-error element must render');
+});
+
+// --- GAP 2: a created topic appears in the strip without re-selecting.
+test('Chat shell: index.tsx bumps a refreshKey folded into the TopicStrip key (GAP 2)', () => {
+  const code = readChatCode('index.tsx');
+  assert.match(code, /refreshKey/, 'a refreshKey state must exist');
+  assert.match(
+    code,
+    /setRefreshKey\(\(k\)\s*=>\s*k\s*\+\s*1\)/,
+    'a successful create must bump refreshKey',
+  );
+  assert.match(
+    code,
+    /key=\{`\$\{employee\?\.id\s*\?\?\s*'none'\}:\$\{refreshKey\}`\}/,
+    'the TopicStrip key must fold in refreshKey so chat.topics re-fetches',
+  );
+});
+
+// --- GAP 3b: the agent card label and value render as separate elements.
+test('Chat shell: context-rail.tsx separates the stat label from its value (GAP 3b)', () => {
+  const code = readChatCode('context-rail.tsx');
+  // The label must be its own element — not text directly adjacent to <b>,
+  // which CSS uppercased into "STATUSIDLE" / "TOPICHELLO".
+  assert.match(code, /<span className="stat-label">Status<\/span>/);
+  assert.match(code, /<span className="stat-label">Topic<\/span>/);
+  // The mashed-together form must be gone.
+  assert.doesNotMatch(
+    code,
+    /Status<b>/,
+    'Status must not be directly adjacent to the <b> value',
+  );
+  assert.doesNotMatch(code, /Topic<b>/, 'Topic must not be directly adjacent to the <b> value');
+});
+
+test('Chat shell: chat.css gives .stat-label its own block layout (GAP 3b)', () => {
+  const css = readFileSync(CHAT_CSS, 'utf8');
+  assert.match(css, /\.stat-label\s*\{[^}]*display:\s*block/);
+  assert.match(
+    css,
+    /\.stat-row\s+\.stat\s+b\s*\{[^}]*display:\s*block/,
+    'the stat value <b> must render on its own line under the label',
+  );
+});

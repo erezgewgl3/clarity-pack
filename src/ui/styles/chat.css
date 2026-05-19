@@ -915,12 +915,31 @@
   padding-top: 12px;
   border-top: 1px dashed var(--line);
 }
+/* GAP 3b — the label and value are now separate elements (.stat-label span
+ * over a block <b> value) so the agent card renders "Status" / "idle"
+ * legibly instead of the run-together "STATUSIDLE". Matches the sketch's
+ * stat layout (sketches/paperclip-fix-employee-chat.html ll. 361-366). */
 [data-clarity-surface="chat"] .ctx .agent-card .stat-row .stat {
   font-family: "Geist Mono", monospace;
   font-size: 10px;
   letter-spacing: 0.06em;
+}
+[data-clarity-surface="chat"] .ctx .agent-card .stat-row .stat .stat-label {
+  display: block;
   color: var(--ink-2); /* GAP 3a — was --ink-3, below WCAG AA on --bg-3 */
   text-transform: uppercase;
+}
+[data-clarity-surface="chat"] .ctx .agent-card .stat-row .stat b {
+  display: block;
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 2px;
+  word-break: break-word;
 }
 [data-clarity-surface="chat"] .task-row {
   display: grid;

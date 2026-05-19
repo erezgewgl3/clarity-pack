@@ -35,10 +35,12 @@ export function ContextRail({
           </div>
           <div className="stat-row">
             <div className="stat">
-              Status<b>{employee.status || '—'}</b>
+              <span className="stat-label">Status</span>
+              <b>{employee.status || '—'}</b>
             </div>
             <div className="stat">
-              Topic<b>{topic ? topic.title : '—'}</b>
+              <span className="stat-label">Topic</span>
+              <b>{topic ? topic.title : '—'}</b>
             </div>
           </div>
         </div>
