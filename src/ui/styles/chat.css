@@ -410,6 +410,19 @@
   color: var(--ink-3);
 }
 
+/* New-topic create failure — non-blocking inline alert (GAP 1). */
+[data-clarity-surface="chat"] .topic-create-error {
+  margin: 8px 22px 0;
+  padding: 7px 12px;
+  font-family: "Geist Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--alert);
+  border: 1px solid var(--alert);
+  background: var(--alert-soft);
+  border-radius: 2px;
+}
+
 /* ---- Messages scroller (sketch ll. 159-211) ---- */
 [data-clarity-surface="chat"] .messages {
   flex: 1;

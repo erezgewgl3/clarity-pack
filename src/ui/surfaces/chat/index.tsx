@@ -103,6 +103,13 @@ function ChatPageBody({
 }): React.ReactElement {
   const [employee, setEmployee] = React.useState<RosterEmployee | null>(null);
   const [topic, setTopic] = React.useState<ChatTopic | null>(null);
+  // Bumped after a successful chat.topic.create so the TopicStrip's key
+  // changes and its usePluginData('chat.topics') re-fetches the new topic in
+  // (GAP 2 — the strip otherwise never re-fetches after a create).
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  // A non-blocking error surfaced when chat.topic.create returns { error }
+  // (GAP 1 — the create handler RETURNS errors, it does not throw).
+  const [createError, setCreateError] = React.useState<string | null>(null);
 
   // The roster rail hands back the full employee row — used for the active
   // highlight, the thread head, and the context rail. Switching employee
@@ -125,18 +132,56 @@ function ChatPageBody({
     const title = (typeof window !== 'undefined' ? window.prompt('New topic title') : null)?.trim();
     if (!title) return;
     setCreating(true);
+    setCreateError(null);
     try {
-      await createTopic({
+      // chat.topic.create RETURNS its outcome — { ok, topicId, issueId,
+      // parentIssueId } on success or { error } on failure. It does NOT throw
+      // on a worker-side failure, so the result must be inspected (GAP 1).
+      const result = await createTopic({
         employeeAgentId: employee.id,
         title,
         companyId,
         userId,
       });
-      // The topic strip's usePluginData re-fetches on its own cadence; the new
-      // topic surfaces there. We do not optimistically inject it here.
+
+      if (
+        result &&
+        typeof result === 'object' &&
+        'ok' in result &&
+        (result as { ok: unknown }).ok === true
+      ) {
+        const created = result as {
+          ok: true;
+          topicId: string;
+          issueId: string;
+          parentIssueId: string;
+        };
+        // GAP 1 — drop the user straight into the just-created topic so the
+        // composer opens for the first message immediately.
+        setTopic({
+          topicId: created.topicId,
+          issueId: created.issueId,
+          parentIssueId: created.parentIssueId,
+          employeeAgentId: employee.id,
+          title,
+          lastActivityAt: new Date().toISOString(),
+          archived: false,
+        });
+        // GAP 2 — force the TopicStrip to re-fetch so the new topic appears in
+        // the strip without re-selecting the employee.
+        setRefreshKey((k) => k + 1);
+      } else {
+        // GAP 1 — the create RETURNED an error. Surface it visibly; never
+        // silently swallow it (the old empty catch could not even see this).
+        const errCode =
+          result && typeof result === 'object' && 'error' in result
+            ? String((result as { error: unknown }).error)
+            : 'CREATE_FAILED';
+        setCreateError(errCode);
+      }
     } catch {
-      // chat.topic.create failed — the strip simply won't show a new topic.
-      // No silent data loss: the user re-tries via the same button.
+      // A genuine transport-level throw (rare — the handler returns errors).
+      setCreateError('CREATE_FAILED');
     } finally {
       setCreating(false);
     }
@@ -187,8 +232,14 @@ function ChatPageBody({
           employeeAgentId={employee?.id ?? ''}
           activeTopicIssueId={topic?.issueId ?? null}
           onSelectTopic={handleSelectTopic}
-          key={employee?.id ?? 'none'}
+          key={`${employee?.id ?? 'none'}:${refreshKey}`}
         />
+
+        {createError ? (
+          <div className="topic-create-error" role="alert" data-clarity-error="topic-create">
+            Could not start the topic ({createError}). Try + New topic again.
+          </div>
+        ) : null}
 
         {!employee ? (
           <div className="thread-empty">
