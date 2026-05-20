@@ -32,9 +32,10 @@ import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import { RosterRail, type RosterEmployee } from './roster-rail.tsx';
-import { TopicStrip, type ChatTopic } from './topic-strip.tsx';
+import { TopicStrip, type ChatTopic, chtLabel } from './topic-strip.tsx';
 import { ContextRail } from './context-rail.tsx';
 import { Composer } from './composer.tsx';
+import { DiagnosticsToggle } from './diagnostics-toggle.tsx';
 
 export function ChatPage(_props?: PluginPageProps): React.ReactElement {
   // OPTIN — gate BEFORE resolution.
@@ -110,6 +111,9 @@ function ChatPageBody({
   // A non-blocking error surfaced when chat.topic.create returns { error }
   // (GAP 1 — the create handler RETURNS errors, it does not throw).
   const [createError, setCreateError] = React.useState<string | null>(null);
+  // Plan 04.1-06 Pattern F — D-16 diagnostics toggle (header). Local React
+  // state — does NOT persist across reloads (UI-SPEC §Persistence).
+  const [diagnostics, setDiagnostics] = React.useState(false);
 
   // The roster rail hands back the full employee row — used for the active
   // highlight, the thread head, and the context rail. Switching employee
@@ -215,6 +219,12 @@ function ChatPageBody({
             />
           </div>
           <div className="head-actions">
+            {/* Plan 04.1-06 Pattern F — D-16 diagnostics toggle. Sits to
+                the LEFT of "+ New topic" per UI-SPEC §"Diagnostics toggle". */}
+            <DiagnosticsToggle
+              armed={diagnostics}
+              onToggle={() => setDiagnostics((a) => !a)}
+            />
             <button
               type="button"
               className="btn"
@@ -252,17 +262,39 @@ function ChatPageBody({
         ) : (
           // Composer owns the optimistic-send state and renders the
           // MessageThread itself (the thread reads the optimistic overlay).
+          // Plan 04.1-06 — Composer now needs topicId / assigneeAgentId /
+          // employeeName / employeeRole / diagnostics so the TrueTaskDialog
+          // and PromoteActions can call chat.createTrueTask / chat.promote
+          // with the new D-06/D-07 required params, and so MessageThread
+          // can pass includeDiagnostics: through to chat.messages.
           <Composer
             companyId={companyId}
             userId={userId}
             topicIssueId={topic.issueId}
             topicTitle={topic.title}
+            topicId={chtLabel(topic)}
+            assigneeAgentId={employee.id}
+            employeeName={employee.name}
+            employeeRole={employee.role}
+            diagnostics={diagnostics}
             key={`composer-${topic.issueId}`}
           />
         )}
       </main>
 
-      <ContextRail employee={employee} topic={topic} />
+      <ContextRail
+        employee={employee}
+        topic={topic}
+        companyId={companyId}
+        userId={userId}
+        onArchived={() => {
+          // Plan 04.1-06 Pattern E — after a successful archive, drop the
+          // archived topic from the active view and force the strip to
+          // re-fetch so the "+N archived" pill reflects the new count.
+          setTopic(null);
+          setRefreshKey((k) => k + 1);
+        }}
+      />
     </div>
   );
 }
