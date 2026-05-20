@@ -1,44 +1,44 @@
 // src/ui/surfaces/chat/true-task/true-task-dialog.tsx
 //
-// Plan 04.1-06 Task 1 — Pattern B (UI-SPEC §"Confirm dialog (D-02)").
+// Plan 04.1-08 — RESHAPED dual-mode dialog. The Plan 04.1-06 single-mode
+// confirm-dialog (UI-SPEC §"Confirm dialog (D-02)") is replaced by a
+// COLD + PROMOTE shared shell:
 //
-// Native <dialog>-element confirm modal. NO shadcn / radix import — the
-// UI-SPEC §"Registry Safety" pin keeps the plugin bundle free of radix.
-// React 19's native dialog support is sufficient; opening/closing goes
-// through dialog.showModal() / dialog.close() inside a useEffect.
+//   COLD mode    — heading "Create a task". Title is autofocused + empty.
+//                  Topic dropdown defaults to "Standalone (not linked to any
+//                  topic)" (value `null`). NO FROM-MESSAGE block. Submit
+//                  invokes chat.createTrueTask with topicIssueId: null →
+//                  worker takes the cold-task originId path (Task 4).
 //
-// Focus-trap is provided for free by the <dialog> API; Escape closes
-// (= Keep editing); clicking the backdrop does NOT close — the only
-// exits are Create or Keep editing (UI-SPEC: "small modal, deliberate
-// friction").
+//   PROMOTE mode — heading "Promote message to task". Title is pre-filled
+//                  with titleFromBody(sourceMessage.body). Topic dropdown
+//                  defaults to sourceTopic.topicIssueId. FROM-MESSAGE block
+//                  renders the source body with the gold left-rule eyebrow.
+//                  Submit invokes chat.createTrueTask with the source
+//                  topicIssueId + sourceCommentId → chat-task originId path.
 //
-// Wires:
-//   - Title field: controlled <input>, defaults to first ~80 chars of body,
-//     max 200 chars (UX bound — not a security bound; the host stores as
-//     text and React text-rendering downstream prevents HTML injection).
-//   - Assignee select: options from chat.roster (re-fetched at dialog
-//     open), default selection = the chatted employee. The Editor-Agent
-//     is excluded from the dropdown (D-03 from Phase 4 — reuse).
-//   - FROM MESSAGE preview: the full composer body in a read-only
-//     quote-block.
-//   - Create button: usePluginAction('chat.createTrueTask') with the
-//     locked param shape; on { ok, issueId } the parent's onSuccess
-//     closes the dialog, disarms the toggle, and clears the composer.
+// Native <dialog>-element shell: focus-trap + Escape via the platform.
+// ⌘+Enter / Ctrl+Enter from anywhere inside the dialog submits.
 //
-// Error pattern: matches message-thread.tsx PromoteActions.resultError —
-// worker action handlers RETURN { error } structures rather than throw.
-// A genuine transport-level throw falls into the catch with a static
-// CREATE_FAILED code.
+// SECURITY (T-04-18): every field renders as untrusted React text. NO
+// dangerouslySetInnerHTML. No raw fetch — chat.createTrueTask goes through
+// usePluginAction.
 
 import * as React from 'react';
 import { usePluginAction, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { RosterEmployee } from '../roster-rail.tsx';
+import type { ChatTopic } from '../topic-strip.tsx';
 
 type RosterResult =
   | RosterEmployee[]
   | { error: string }
   | { employees: RosterEmployee[] }
+  | null;
+
+type TopicsResult =
+  | { kind: 'topics'; employeeAgentId: string; topics: ChatTopic[] }
+  | { error: string }
   | null;
 
 function normalizeRoster(data: RosterResult): RosterEmployee[] {
@@ -48,69 +48,117 @@ function normalizeRoster(data: RosterResult): RosterEmployee[] {
   return [];
 }
 
+function normalizeTopics(data: TopicsResult): ChatTopic[] {
+  if (!data || typeof data !== 'object') return [];
+  if ('kind' in data && data.kind === 'topics') return data.topics ?? [];
+  return [];
+}
+
+/** Title pre-fill from a message body (matches the worker's titleFromBody). */
+function titleFromBody(body: string): string {
+  const firstLine = body.split('\n')[0]?.trim() ?? '';
+  if (firstLine.length <= 80) return firstLine || 'Promoted chat message';
+  return `${firstLine.slice(0, 77)}...`;
+}
+
+/** Format HH:MM from an ISO string (used in the FROM-MESSAGE eyebrow). */
+function clock(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+export type TrueTaskDialogMode = 'cold' | 'promote';
+
+export type PromoteSourceMessage = {
+  /** Full message body — rendered into the FROM-MESSAGE block. */
+  body: string;
+  /** Source comment id — used as sourceCommentId for the chat-task originId. */
+  commentId: string;
+  /** Display name of the message author (e.g. "CEO"). */
+  employeeName: string;
+  /** ISO timestamp; used to render the HH:MM in the FROM-MESSAGE eyebrow. */
+  occurredAt: string | null;
+};
+
 export function TrueTaskDialog({
   open,
+  mode,
   onClose,
   onSuccess,
-  defaultTitle,
-  body,
-  topicIssueId,
-  topicTitle,
-  topicId,
-  assigneeAgentId: defaultAssigneeAgentId,
-  employeeName: defaultEmployeeName,
+  sourceMessage = null,
+  sourceTopic = null,
+  defaultAssigneeAgentId,
+  defaultEmployeeName,
   companyId,
   userId,
+  employeeAgentId,
 }: {
   open: boolean;
+  mode: TrueTaskDialogMode;
   onClose: () => void;
-  onSuccess: (result: { issueId: string }) => void;
-  /** First ~80 chars of the composer body, trimmed. */
-  defaultTitle: string;
-  /** Full composer body — rendered into the read-only FROM MESSAGE block. */
-  body: string;
-  topicIssueId: string;
-  topicTitle: string;
-  /** CHT-NNN style id used in the dialog eyebrow. */
-  topicId: string;
-  assigneeAgentId: string;
-  employeeName: string;
+  onSuccess: (result: { issueId: string; mode: TrueTaskDialogMode }) => void;
+  /** Required for PROMOTE mode. Ignored in COLD. */
+  sourceMessage?: PromoteSourceMessage | null;
+  /** Required for PROMOTE mode (the source topic). Ignored in COLD. */
+  sourceTopic?: ChatTopic | null;
+  /** Default assignee (the currently-chatted employee). */
+  defaultAssigneeAgentId: string;
+  defaultEmployeeName: string;
   companyId: string;
   userId: string;
+  /** The currently-chatted employee's agent id — used to scope the topics dropdown. */
+  employeeAgentId: string;
 }): React.ReactElement {
   const createTrueTask = usePluginAction('chat.createTrueTask');
   const dialogRef = React.useRef<HTMLDialogElement | null>(null);
 
-  // Re-fetch the roster only when the dialog opens — chat.roster is cheap
-  // (~5 employees) but the empty-params object is the no-op shape the
-  // opt-in-guard returns OPT_IN_REQUIRED for, so a closed dialog short-
-  // circuits before reaching the worker.
+  // Re-fetch the roster only when the dialog opens.
   const { data: rosterData } = usePluginData<RosterResult>(
     'chat.roster',
     open ? { companyId, userId } : {},
   );
   const roster = normalizeRoster(rosterData);
 
-  const [title, setTitle] = React.useState(defaultTitle);
+  // Topics scoped to the chatted employee — populates the Topic dropdown.
+  const { data: topicsData } = usePluginData<TopicsResult>(
+    'chat.topics',
+    open && employeeAgentId ? { employeeAgentId, companyId, userId } : {},
+  );
+  const topics = normalizeTopics(topicsData).filter((t) => !t.archived);
+
+  // Compute defaults from mode.
+  const initialTitle =
+    mode === 'promote' && sourceMessage ? titleFromBody(sourceMessage.body) : '';
+  const initialTopicIssueId: string | null =
+    mode === 'promote' && sourceTopic ? sourceTopic.issueId : null;
+
+  const [title, setTitle] = React.useState(initialTitle);
   const [assigneeAgentId, setAssigneeAgentId] = React.useState(defaultAssigneeAgentId);
+  /** `null` = Standalone (cold tasks default). String = host issue id of the topic. */
+  const [topicIssueId, setTopicIssueId] = React.useState<string | null>(initialTopicIssueId);
+  const [details, setDetails] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [feedback, setFeedback] = React.useState<{ kind: 'ok' | 'error'; text: string } | null>(
     null,
   );
 
-  // Sync defaults each time the dialog opens — the parent rebuilds these
-  // from a fresh composer draft + active employee on every Send-as-task.
+  // Reset every time the dialog opens — caller may have changed mode / source.
   React.useEffect(() => {
     if (open) {
-      setTitle(defaultTitle);
+      setTitle(initialTitle);
       setAssigneeAgentId(defaultAssigneeAgentId);
+      setTopicIssueId(initialTopicIssueId);
+      setDetails('');
       setFeedback(null);
     }
-  }, [open, defaultTitle, defaultAssigneeAgentId]);
+    // We intentionally don't include initialTitle/initialTopicIssueId — they
+    // are derived from props that don't change while the dialog is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultAssigneeAgentId, mode]);
 
-  // Open / close via the imperative dialog API. Native <dialog>.showModal()
-  // gives us focus-trap + Escape-to-close for free; click-outside is a no-op
-  // (UI-SPEC §"Confirm dialog (D-02)" — deliberate friction).
+  // Open / close via the imperative dialog API.
   React.useEffect(() => {
     const node = dialogRef.current;
     if (!node) return;
@@ -118,9 +166,7 @@ export function TrueTaskDialog({
     if (!open && node.open) node.close();
   }, [open]);
 
-  // Escape pressed inside the native dialog fires a 'close' event — wire it
-  // back up to the parent so the toggle stays armed (operator was adjusting,
-  // not abandoning).
+  // Native dialog `close` event (Esc, browser-driven close) wires back to parent.
   React.useEffect(() => {
     const node = dialogRef.current;
     if (!node) return;
@@ -144,9 +190,20 @@ export function TrueTaskDialog({
     setBusy(true);
     setFeedback(null);
     try {
+      // Plan 04.1-08 — topicIssueId is `null` for cold tasks. The worker
+      // takes the cold-task originId path (cold-task:<userId>:<unix-ms>) and
+      // skips the marker-comment + chat_topic_tasks side-table writes (Task 4).
+      // For promote we pass the source topic id + comment id so the existing
+      // chat-task originId path runs unchanged.
+      const sourceCommentId =
+        mode === 'promote' && sourceMessage ? sourceMessage.commentId : null;
+      const body =
+        mode === 'promote' && sourceMessage
+          ? sourceMessage.body
+          : details.trim() || trimmedTitle;
       const result = await createTrueTask({
         topicIssueId,
-        sourceCommentId: null,
+        sourceCommentId,
         title: trimmedTitle,
         body,
         assigneeAgentId,
@@ -163,7 +220,7 @@ export function TrueTaskDialog({
         result && typeof result === 'object' && 'issueId' in result
           ? String((result as { issueId: unknown }).issueId)
           : '';
-      onSuccess({ issueId });
+      onSuccess({ issueId, mode });
     } catch {
       setFeedback({ kind: 'error', text: 'Could not create task (CREATE_FAILED). Try again.' });
     } finally {
@@ -171,43 +228,60 @@ export function TrueTaskDialog({
     }
   }, [
     canSubmit,
-    createTrueTask,
+    mode,
+    sourceMessage,
     topicIssueId,
     trimmedTitle,
-    body,
+    details,
     assigneeAgentId,
     resolvedEmployeeName,
     companyId,
     userId,
+    createTrueTask,
     onSuccess,
   ]);
 
-  const titleCount = trimmedTitle.length;
+  // ⌘+Enter (Mac) / Ctrl+Enter (Windows) submits from anywhere in the dialog.
+  const onKeyDown = React.useCallback(
+    (e: React.KeyboardEvent): void => {
+      if (e.key !== 'Enter') return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      void onCreate();
+    },
+    [onCreate],
+  );
+
+  const heading = mode === 'promote' ? 'Promote message to task' : 'Create a task';
+  const topicHelper =
+    mode === 'promote'
+      ? "This task will appear in the source topic's Active tasks owned rail."
+      : "Standalone tasks won't appear in any topic's Active tasks owned rail.";
 
   return (
-    <dialog ref={dialogRef} className="true-task-dialog" aria-labelledby="true-task-dialog-heading">
-      <div className="true-task-dialog-eyebrow">
-        FROM CHAT · {topicTitle} · {topicId}
-      </div>
+    <dialog
+      ref={dialogRef}
+      className="true-task-dialog"
+      aria-labelledby="true-task-dialog-heading"
+      onKeyDown={onKeyDown}
+      data-clarity-mode={mode}
+    >
       <h2 id="true-task-dialog-heading" className="true-task-dialog-heading">
-        Create task for {resolvedEmployeeName}
+        {heading}
       </h2>
 
       <div className="true-task-dialog-field">
-        <label htmlFor="true-task-dialog-title">
-          TITLE
-          {titleCount > 160 ? (
-            <span style={{ marginLeft: 8, color: 'var(--ink-3)', fontFamily: 'Geist Mono', fontSize: 10 }}>
-              {titleCount}/200
-            </span>
-          ) : null}
-        </label>
+        <label htmlFor="true-task-dialog-title">TITLE</label>
         <input
           id="true-task-dialog-title"
           type="text"
           value={title}
           maxLength={200}
-          placeholder="One-line summary of what to do"
+          placeholder={
+            mode === 'promote'
+              ? 'Title (pre-filled from message)'
+              : 'What needs to get done?'
+          }
           onChange={(e) => setTitle(e.target.value)}
           aria-label="Task title"
           autoFocus
@@ -215,20 +289,15 @@ export function TrueTaskDialog({
       </div>
 
       <div className="true-task-dialog-field">
-        <label htmlFor="true-task-dialog-assignee">ASSIGNEE</label>
+        <label htmlFor="true-task-dialog-assignee">ASSIGN TO</label>
         <select
           id="true-task-dialog-assignee"
           value={assigneeAgentId}
           onChange={(e) => setAssigneeAgentId(e.target.value)}
           aria-label="Task assignee"
         >
-          {/* If the default assignee is not (yet) in the loaded roster, still
-              keep the option present so the dialog never starts with an empty
-              select — defense-in-depth for a slow chat.roster round-trip. */}
           {roster.find((e) => e.id === defaultAssigneeAgentId) ? null : (
-            <option value={defaultAssigneeAgentId}>
-              {defaultEmployeeName}
-            </option>
+            <option value={defaultAssigneeAgentId}>{defaultEmployeeName}</option>
           )}
           {roster.map((emp) => (
             <option key={emp.id} value={emp.id}>
@@ -237,20 +306,56 @@ export function TrueTaskDialog({
             </option>
           ))}
         </select>
-        <p
-          id="true-task-dialog-helper"
-          className="true-task-dialog-helper"
-        >
-          The task will appear in the Issues list, assigned to this employee.
-        </p>
       </div>
 
       <div className="true-task-dialog-field">
-        <label>FROM MESSAGE</label>
-        <div className="true-task-dialog-source" aria-readonly="true">
-          {body}
-        </div>
+        <label htmlFor="true-task-dialog-topic">TOPIC (OPTIONAL)</label>
+        <select
+          id="true-task-dialog-topic"
+          value={topicIssueId ?? ''}
+          onChange={(e) => setTopicIssueId(e.target.value || null)}
+          aria-label="Linked topic"
+        >
+          {/* Cold default — Standalone always first. */}
+          <option value="">Standalone (not linked to any topic)</option>
+          {topics.map((t) => (
+            <option key={t.issueId} value={t.issueId}>
+              {t.title}
+              {t.topicId ? ` · ${t.topicId}` : ''}
+              {sourceTopic && t.issueId === sourceTopic.issueId ? ' (from message)' : ''}
+            </option>
+          ))}
+        </select>
+        <p className="true-task-dialog-helper">{topicHelper}</p>
       </div>
+
+      {mode === 'cold' ? (
+        <div className="true-task-dialog-field">
+          <label htmlFor="true-task-dialog-details">DETAILS (OPTIONAL)</label>
+          <input
+            id="true-task-dialog-details"
+            type="text"
+            value={details}
+            onChange={(e) => setDetails(e.target.value)}
+            placeholder="Add context, acceptance criteria, links…"
+            aria-label="Task details"
+          />
+        </div>
+      ) : null}
+
+      {mode === 'promote' && sourceMessage ? (
+        <div
+          className="true-task-dialog-from-msg"
+          role="note"
+          aria-label="Source message"
+        >
+          <span className="true-task-dialog-from-msg-label">
+            FROM THIS MESSAGE · {sourceMessage.employeeName}
+            {sourceMessage.occurredAt ? ` · ${clock(sourceMessage.occurredAt)}` : ''}
+          </span>
+          {sourceMessage.body}
+        </div>
+      ) : null}
 
       {feedback ? (
         <div
@@ -262,12 +367,16 @@ export function TrueTaskDialog({
       ) : null}
 
       <div className="true-task-dialog-actions">
+        <span className="true-task-dialog-foot-hint" aria-hidden="true">
+          <kbd>⌘</kbd>
+          <kbd>⏎</kbd> create · <kbd>Esc</kbd> cancel
+        </span>
         <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
-          Keep editing
+          Cancel
         </button>
         <button
           type="button"
-          className="btn"
+          className="btn primary"
           onClick={() => void onCreate()}
           disabled={!canSubmit}
         >

@@ -1,6 +1,12 @@
 // src/ui/surfaces/chat/composer.tsx
 //
 // Plan 04-05 Task 2 — CHAT-06 / CHAT-07 — the message composer.
+// Plan 04.1-08 STRIPPED — single-purpose chat textarea. The Send-as-task
+// TOGGLE is REMOVED entirely. The send button always says SEND. The placeholder
+// is `Message {employee}…`. Cold task creation lives in the new actions row
+// (`+ Create task` primary button); promote-from-message lives in the per-bubble
+// hover affordance. This component is no longer responsible for opening any
+// task dialog.
 //
 // Send model (D-10 / CHAT-06 / RESEARCH Pattern 3):
 //   - On send, the composer generates a crypto.randomUUID() message_uuid
@@ -14,26 +20,25 @@
 //     dedup makes the retry idempotent. Eric's typed text is never silently
 //     lost (T-04-21).
 //
+// Disabled state (Plan 04.1-08): when the active topic is archived, the
+// parent passes `disabled={true}`. The textarea becomes read-only, the send
+// button is disabled, the wrapper picks up `.composer--disabled` (dashed
+// border + dim text), and the placeholder flips to "Unarchive to send
+// messages." No chat.send call can fire from a disabled composer.
+//
 // Attachment graceful-degrade (CHAT-07): the 04-01 spike OQ-1 verdict is
 // NO-PATH — there is no plugin-accessible upload route on the live host. The
 // 📎 Attach button is therefore rendered DISABLED with the explicit inline
-// message "Attachments are temporarily unavailable". This is a valid,
-// requirement-satisfying implementation of CHAT-07's graceful-degrade clause
-// (see ATTACHMENTS_AVAILABLE below — the single switch a future PATH-FOUND
-// build flips).
+// message "Attachments are temporarily unavailable".
 //
 // SECURITY: no raw fetch — chat.send goes through usePluginAction. The
 // composed text is plain user input; it is rendered downstream as untrusted
-// text by MessageThread (no dangerouslySetInnerHTML anywhere).
-//
-// Visual contract: sketches/paperclip-fix-employee-chat.html ll. 307-340.
+// text by MessageThread.
 
 import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { MessageThread, type OptimisticMessage } from './message-thread.tsx';
-import { TrueTaskToggle } from './true-task/true-task-toggle.tsx';
-import { TrueTaskDialog } from './true-task/true-task-dialog.tsx';
 
 // 04-01 spike OQ-1 verdict: NO-PATH. No plugin-accessible attachment-upload
 // route exists on the live host. CHAT-07 ships degraded. A future PATH-FOUND
@@ -57,47 +62,48 @@ export function Composer({
   userId,
   topicIssueId,
   topicTitle,
-  topicId,
   assigneeAgentId,
   employeeName,
   employeeRole,
   diagnostics = false,
+  disabled = false,
+  pendingTaskCard = null,
 }: {
   companyId: string;
   userId: string;
   topicIssueId: string;
   topicTitle: string;
-  /** CHT-NNN id rendered in the TrueTaskDialog eyebrow (Pattern B). */
-  topicId: string;
-  /** D-06 default assignee for chat.createTrueTask — the chatted employee. */
+  /** D-06 default assignee for chat.send — the chatted employee. Plan 04.1-08
+   *  removed the dialog wiring from this component; the composer no longer
+   *  passes assigneeAgentId to a child dialog. Threaded down to MessageThread
+   *  for PromoteActions (per-bubble hover). */
   assigneeAgentId: string;
-  /** Locked copywriting — used in Send-as-task placeholder + dialog defaults. */
+  /** Locked copywriting — the placeholder reads `Message {employeeName}…`. */
   employeeName: string;
-  /** Optional role suffix used by InlineTaskCard's "Assigned to …" line. */
+  /** Optional employee role suffix for downstream components. */
   employeeRole?: string | null;
   /** Plan 04.1-06 — threaded down from index.tsx so chat.messages receives
    *  includeDiagnostics:true and MessageThread renders runtime-noise inline. */
   diagnostics?: boolean;
+  /** Plan 04.1-08 — true when the active topic is archived. Disables sending
+   *  and applies `.composer--disabled` styling. */
+  disabled?: boolean;
+  /** Plan 04.1-08 — optimistic InlineTaskCard shown in the thread until the
+   *  marker comment lands on the next poll. Now driven by the parent (the
+   *  + Create task / Promote dialog opens at the index.tsx level). */
+  pendingTaskCard?: { issueId: string; title: string } | null;
 }): React.ReactElement {
   const send = usePluginAction('chat.send');
   const [draft, setDraft] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   // The optimistic overlay — messages sent this session, keyed by uuid.
   const [optimistic, setOptimistic] = React.useState<OptimisticMessage[]>([]);
-  // Plan 04.1-06 D-01/D-02 — Send-as-task toggle + confirm dialog state.
-  const [taskArmed, setTaskArmed] = React.useState(false);
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  // Locally-shown inline task card (UI-SPEC §"Interaction Flow" step 6 — the
-  // optimistic post-create state before chat.taskOwned has caught up).
-  const [pendingTaskCard, setPendingTaskCard] =
-    React.useState<{ issueId: string; title: string } | null>(null);
 
   // doSend is shared by the initial send and Retry. Retry passes the SAME
   // uuid + body so chat.send's message_uuid dedup makes it idempotent.
   const doSend = React.useCallback(
     async (messageUuid: string, body: string) => {
       setBusy(true);
-      // Mark this uuid pending (insert on first send, reset on retry).
       setOptimistic((prev) => {
         const existing = prev.find((o) => o.messageUuid === messageUuid);
         const entry: OptimisticMessage = {
@@ -115,29 +121,19 @@ export function Composer({
         const result = await send({
           topicIssueId,
           body,
-          // GAP 6 — the chat.send handler reads `messageUuid` (camelCase) via
-          // reqStr; a snake_case `message_uuid` left params.messageUuid
-          // undefined and threw `chat.send: messageUuid required` on EVERY
-          // send. The handler's reqStr key is the contract — match it here.
           messageUuid,
           companyId,
           userId,
         });
-        // A worker { error } result is a failed send too (D-10).
         if (result && typeof result === 'object' && 'error' in result) {
           throw new Error(String((result as { error: unknown }).error));
         }
-        // GAP 9 — success: flip the bubble to 'sent' so Eric sees an immediate
-        // "✓ sent" confirmation instead of "sending…" lingering until the next
-        // 15s poll. MessageThread still drops the bubble once the reconciled
-        // server comment arrives on that poll.
         setOptimistic((prev) =>
           prev.map((o) =>
             o.messageUuid === messageUuid ? { ...o, status: 'sent' } : o,
           ),
         );
       } catch {
-        // Failure — the optimistic bubble STAYS, marked failed, with Retry.
         setOptimistic((prev) =>
           prev.map((o) =>
             o.messageUuid === messageUuid ? { ...o, status: 'failed' } : o,
@@ -151,39 +147,29 @@ export function Composer({
   );
 
   const handleSend = React.useCallback(() => {
+    // Plan 04.1-08 — disabled state hard-blocks send.
+    if (disabled) return;
     const body = draft.trim();
     if (!body || busy) return;
-    // Plan 04.1-06 D-01 — armed → open the confirm dialog instead of sending.
-    // The composer keeps the draft body until the dialog closes via either
-    // Keep editing (preserves draft + stays armed) or a successful Create
-    // task (the dialog's onSuccess callback clears + disarms).
-    if (taskArmed) {
-      setDialogOpen(true);
-      return;
-    }
     const messageUuid = newMessageUuid();
     setDraft('');
     void doSend(messageUuid, body);
-  }, [draft, busy, taskArmed, doSend]);
+  }, [draft, busy, doSend, disabled]);
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Standard chat convention: plain Enter SENDS; Shift+Enter inserts a
-      // newline (the textarea's default — we don't preventDefault for it).
-      // ⌘/Ctrl+Enter is kept as a harmless secondary send shortcut.
+      if (disabled) return;
       if (e.key !== 'Enter') return;
-      if (e.shiftKey) return; // Shift+Enter → let the newline through.
+      if (e.shiftKey) return; // Shift+Enter → newline.
       e.preventDefault();
       handleSend();
     },
-    [handleSend],
+    [handleSend, disabled],
   );
 
-  // Placeholder + Send-button label flip on armed state (UI-SPEC Pattern A).
-  const placeholder = taskArmed
-    ? `Task for ${employeeName}… Enter to open the task form`
-    : 'Message this employee… Enter to send, Shift+Enter for newline';
-  const sendLabel = taskArmed ? 'Open task form' : 'Send';
+  const placeholder = disabled
+    ? 'Unarchive to send messages.'
+    : `Message ${employeeName}…`;
 
   return (
     <>
@@ -198,7 +184,11 @@ export function Composer({
         diagnostics={diagnostics}
         pendingTaskCard={pendingTaskCard}
       />
-      <div className="composer" data-clarity-region="composer">
+      <div
+        className={`composer${disabled ? ' composer--disabled' : ''}`}
+        data-clarity-region="composer"
+        data-clarity-disabled={disabled ? 'true' : 'false'}
+      >
         <div className="composer-meta">
           <span className="topic-now">
             Topic · <b>{topicTitle}</b>
@@ -213,27 +203,19 @@ export function Composer({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             aria-label="Message composer"
-            // GAP 1 — the Composer is keyed `composer-${topic.issueId}` in
-            // index.tsx, so it remounts whenever a topic opens. autoFocus
-            // therefore lands the cursor in the input on every topic open —
-            // including a just-created topic — so the user is dropped
-            // straight into a place to type.
-            autoFocus
+            readOnly={disabled}
+            disabled={disabled}
+            // GAP 1 — Composer is keyed `composer-${topic.issueId}` in
+            // index.tsx, so it remounts on every topic open — autoFocus drops
+            // the cursor in the textarea.
+            autoFocus={!disabled}
           />
           <div className="composer-foot">
             <div className="composer-tools">
-              {/* Plan 04.1-06 Pattern A — Send-as-task toggle REPLACES the
-                  old "↗ New task" stub. The toggle owns its visual armed-state
-                  styling; the parent owns the boolean. */}
-              <TrueTaskToggle
-                armed={taskArmed}
-                disabled={!assigneeAgentId}
-                onToggle={() => setTaskArmed((a) => !a)}
-              />
               <button
                 type="button"
                 className="tool-btn"
-                disabled={!ATTACHMENTS_AVAILABLE}
+                disabled={!ATTACHMENTS_AVAILABLE || disabled}
                 title={
                   ATTACHMENTS_AVAILABLE
                     ? 'Attach a file'
@@ -256,44 +238,14 @@ export function Composer({
                 type="button"
                 className="btn"
                 onClick={handleSend}
-                disabled={busy || draft.trim().length === 0}
+                disabled={busy || disabled || draft.trim().length === 0}
               >
-                {sendLabel}
+                SEND
               </button>
             </div>
           </div>
         </div>
       </div>
-      {/* Plan 04.1-06 Pattern B — confirm dialog. Mounted once at the JSX
-          tree's end; the native <dialog> imperative API opens/closes via
-          dialogRef inside the component. */}
-      <TrueTaskDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        onSuccess={(result) => {
-          setDialogOpen(false);
-          setTaskArmed(false);
-          // Show an immediate optimistic InlineTaskCard until chat.taskOwned
-          // catches up (UI-SPEC §"Interaction Flow" step 6); cleared whenever
-          // a new send starts so it never lingers across topics.
-          if (result.issueId) {
-            setPendingTaskCard({
-              issueId: result.issueId,
-              title: draft.trim().slice(0, 200) || 'New task',
-            });
-          }
-          setDraft('');
-        }}
-        defaultTitle={draft.trim().slice(0, 80)}
-        body={draft.trim()}
-        topicIssueId={topicIssueId}
-        topicTitle={topicTitle}
-        topicId={topicId}
-        assigneeAgentId={assigneeAgentId}
-        employeeName={employeeName}
-        companyId={companyId}
-        userId={userId}
-      />
     </>
   );
 }

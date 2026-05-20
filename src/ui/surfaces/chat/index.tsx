@@ -32,7 +32,7 @@ import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import { RosterRail, type RosterEmployee } from './roster-rail.tsx';
-import { TopicStrip, type ChatTopic, chtLabel } from './topic-strip.tsx';
+import { TopicStrip, type ChatTopic } from './topic-strip.tsx';
 import { ContextRail } from './context-rail.tsx';
 import { Composer } from './composer.tsx';
 import { DiagnosticsToggle } from './diagnostics-toggle.tsx';
@@ -272,7 +272,6 @@ function ChatPageBody({
             userId={userId}
             topicIssueId={topic.issueId}
             topicTitle={topic.title}
-            topicId={chtLabel(topic)}
             assigneeAgentId={employee.id}
             employeeName={employee.name}
             employeeRole={employee.role}

@@ -46,6 +46,21 @@ import { parseReasoning, ReasoningPanel } from './reasoning-panel.tsx';
 import { InlineTaskCard } from './true-task/inline-task-card.tsx';
 import { HostStuckBanner } from './host-stuck-banner.tsx';
 
+/**
+ * Plan 04.1-08 — when the operator clicks "→ Promote to task" on an agent
+ * reply bubble, the parent (index.tsx) opens the dialog in PROMOTE mode.
+ * The source message is threaded up via this callback shape. The old
+ * inline chat.promote call (Plan 04.1-06) is REPLACED by this hand-off so
+ * the operator gets the full dual-mode dialog (title pre-fill, topic
+ * dropdown, etc.).
+ */
+export type PromoteSourceMessagePayload = {
+  body: string;
+  commentId: string;
+  employeeName: string;
+  occurredAt: string | null;
+};
+
 /** A persisted message as chat.messages returns it. */
 export type ChatMessage = {
   commentId: string;
@@ -149,6 +164,7 @@ export function MessageThread({
   employeeRole = null,
   diagnostics = false,
   pendingTaskCard = null,
+  onPromoteMessage = null,
 }: {
   companyId: string;
   userId: string;
@@ -166,6 +182,10 @@ export function MessageThread({
   diagnostics?: boolean;
   /** Optimistic InlineTaskCard rendered until chat.taskOwned catches up. */
   pendingTaskCard?: { issueId: string; title: string } | null;
+  /** Plan 04.1-08 — opens the dual-mode dialog in PROMOTE mode at index.tsx.
+   *  When null, the PromoteActions falls back to its in-place chat.promote
+   *  fire-and-forget (used by older mount points). */
+  onPromoteMessage?: ((src: PromoteSourceMessagePayload) => void) | null;
 }): React.ReactElement {
   const { data, loading, refresh } = usePluginData<MessagesResult>('chat.messages', {
     topicIssueId,
@@ -465,6 +485,7 @@ export function MessageThread({
               assigneeAgentId={assigneeAgentId ?? ''}
               employeeName={employeeName ?? ''}
               onRefresh={refresh}
+              onPromoteMessage={onPromoteMessage}
             />
           </React.Fragment>
         );
@@ -508,6 +529,7 @@ function PersistedMessage({
   assigneeAgentId,
   employeeName,
   onRefresh,
+  onPromoteMessage,
 }: {
   msg: ChatMessage;
   ms: number;
@@ -522,6 +544,8 @@ function PersistedMessage({
   employeeName: string;
   /** Re-fetch the thread — used so a pin's persisted ⚑ marker appears. */
   onRefresh?: () => void;
+  /** Plan 04.1-08 — wire up to opening the dual-mode dialog at index.tsx. */
+  onPromoteMessage?: ((src: PromoteSourceMessagePayload) => void) | null;
 }): React.ReactElement | null {
   // A superseded comment is collapsed out of the edit chain (CHAT-05).
   if (msg.superseded) return null;
@@ -543,6 +567,13 @@ function PersistedMessage({
             employeeName={employeeName}
             pinned={msg.pinned}
             onRefresh={onRefresh}
+            sourceBody={msg.body}
+            occurredAt={
+              typeof msg.createdAt === 'string'
+                ? msg.createdAt
+                : new Date(ms).toISOString()
+            }
+            onPromoteMessage={onPromoteMessage}
           />
         )}
         <div className="b-meta">
@@ -583,6 +614,9 @@ function PromoteActions({
   employeeName,
   pinned,
   onRefresh,
+  sourceBody,
+  occurredAt,
+  onPromoteMessage,
 }: {
   commentId: string;
   companyId: string;
@@ -595,6 +629,14 @@ function PromoteActions({
   employeeName: string;
   pinned: boolean;
   onRefresh?: () => void;
+  /** Plan 04.1-08 — full source body for the dialog's FROM-MESSAGE block. */
+  sourceBody?: string;
+  /** Plan 04.1-08 — ISO timestamp for the FROM-MESSAGE eyebrow's HH:MM. */
+  occurredAt?: string | null;
+  /** Plan 04.1-08 — when provided, click opens the PROMOTE dialog at the
+   *  index.tsx level (the new flow). When null, falls back to the old
+   *  fire-and-forget chat.promote (legacy path). */
+  onPromoteMessage?: ((src: PromoteSourceMessagePayload) => void) | null;
 }): React.ReactElement {
   // usePluginAction is imported lazily here to keep the bubble light; the
   // hook itself is cheap and safe to call per-bubble.
@@ -617,13 +659,25 @@ function PromoteActions({
   }
 
   const onPromote = React.useCallback(async () => {
+    // Plan 04.1-08 — when the parent provided onPromoteMessage, open the
+    // dual-mode dialog in PROMOTE mode at index.tsx (the operator gets to
+    // see title pre-fill + topic dropdown + FROM-MESSAGE block). The dialog
+    // itself dispatches chat.createTrueTask; this component no longer fires
+    // chat.promote inline.
+    if (onPromoteMessage) {
+      onPromoteMessage({
+        body: sourceBody ?? '',
+        commentId,
+        employeeName,
+        occurredAt: occurredAt ?? null,
+      });
+      return;
+    }
+    // Legacy path: when no parent handler is wired, fall back to the
+    // inline fire-and-forget chat.promote — same behaviour as Plan 04.1-06.
     setBusy(true);
     setFeedback(null);
     try {
-      // Plan 04.1-02 — D-04 unification: chat.promote requires the new
-      // assigneeAgentId + employeeName params. The handler reads them via
-      // reqStr and THROWS if missing. They are threaded from index.tsx via
-      // Composer + MessageThread.
       const result = await promote({
         commentId,
         topicIssueId,
@@ -646,12 +700,22 @@ function PromoteActions({
         });
       }
     } catch {
-      // A genuine transport-level throw (rare — the handler returns errors).
       setFeedback({ kind: 'error', text: 'Could not promote (CREATE_FAILED)' });
     } finally {
       setBusy(false);
     }
-  }, [promote, commentId, topicIssueId, companyId, userId, assigneeAgentId, employeeName]);
+  }, [
+    onPromoteMessage,
+    sourceBody,
+    occurredAt,
+    promote,
+    commentId,
+    topicIssueId,
+    companyId,
+    userId,
+    assigneeAgentId,
+    employeeName,
+  ]);
 
   const onPin = React.useCallback(async () => {
     setBusy(true);

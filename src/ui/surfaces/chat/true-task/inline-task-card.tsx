@@ -1,21 +1,19 @@
 // src/ui/surfaces/chat/true-task/inline-task-card.tsx
 //
-// Plan 04.1-06 Task 1 — Pattern C (UI-SPEC §"Inline task card (D-03)").
+// Plan 04.1-06 Task 1 — Pattern C — D-07 marker comment intercepted and
+// rendered as an inline provenance card in the messages scroller.
+// Plan 04.1-08 TONED DOWN per the visual-fidelity drill: the card is no
+// longer a hero element. New treatment (chat.css):
+//   - 2px LEFT-RULE in --you (no full border, no gradient, no background fill)
+//   - 13px weight-400 --ink-2 title (was 15px weight-500 --ink)
+//   - ref-chip renders as a gold UNDERLINED LINK (not a chip box)
+//   - status pill is outlined-only (no background fill)
+// The wrapper class stays `.inline-task-card` so CSS owns the visual change.
+// Reads as a quiet "X happened" event, not a message.
 //
-// Renders inside `.messages` at the marker comment's place, ordered with
-// the rest of the thread. NOT a `.bubble` — distinct visual idiom so a
-// sighted operator never confuses a spun-off task with a sent message.
-//
-// Visual cite point: chat.css:872-901 `.decision-msg` (the closest
-// existing centered-typeform idiom). The new `.inline-task-card` rule
-// in chat.css's Phase 4.1 section extends that with task-specific
-// affordances + the gold "TASK CREATED" eyebrow (UI-SPEC §Color accent
-// reservation).
-//
-// SECURITY (T-04-18): every field renders as untrusted React text. NO
-// dangerouslySetInnerHTML. The BEAAA-NNN identifier renders via the
-// existing RefChip primitive — Plan 02 already established the safe
-// resolve-refs round-trip.
+// SECURITY (T-04-18): every field renders as React text. NO
+// dangerouslySetInnerHTML. The BEAAA-NNN ref renders via the RefChip
+// primitive (Plan 02 resolve-refs round-trip is safe).
 
 import * as React from 'react';
 
@@ -66,9 +64,11 @@ export function InlineTaskCard({
           {role ? ` · ${role}` : ''}
         </div>
         <div className="inline-task-card-meta">
+          {/* Plan 04.1-08 — the ref-chip is a real underlined anchor (rendered
+              by the RefChip primitive's resolve-refs round-trip). The card no
+              longer renders a status badge with a background fill — the CSS
+              now makes .st outlined-only. */}
           {identifier && issueId ? (
-            // The RefChip primitive runs its own usePluginData('resolve-refs')
-            // round-trip; we hand it the BEAAA-NNN identifier as a refId.
             <RefChip refId={identifier} />
           ) : (
             <span className="clarity-ref-chip clarity-ref-chip--loading">…</span>
