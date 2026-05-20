@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-19T22:16:54.784Z"
+last_updated: "2026-05-20T00:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 40
-  completed_plans: 27
-  percent: 68
+  total_plans: 47
+  completed_plans: 28
+  percent: 60
 ---
 
 # State: Clarity Pack
@@ -23,12 +23,57 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4 COMPLETE & VERIFIED (11/11 CHAT requirements) — next: Phase 4.1 (Chat → True Task)
+**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 1 CLOSED 2026-05-20 with Gate Verdict GO; Plans 04.1-02 / 04.1-03 / 04.1-04 (Wave 2, autonomous TDD) unblocked.
 
 ## Current Position
 
-Phase: 04 (employee-chat) — COMPLETE & VERIFIED 2026-05-19 (11/11 CHAT requirements; CHAT-04 host-blocked & CHAT-07 degraded, both reconciled)
-Plan: 6 of 6 — **Plan 04-06 COMPLETE 2026-05-19; all 6 Phase 4 plans done.**
+Phase: 04.1 (chat-true-task) — Wave 1 CLOSED 2026-05-20 (Plan 04.1-01 falsify-first spike landed on live Countermoves; Gate Verdict GO).
+Plan: 1 of 7 complete — **Plan 04.1-01 COMPLETE 2026-05-20; 6 plans remaining.**
+
+**Plan 04.1-01 — Falsify-First Spike: COMPLETE 2026-05-20.**
+Non-autonomous. **Phase 4.1 Gate Verdict: GO.** Multi-turn native re-wake
+PROVEN live on Countermoves: a bare comment alone re-wakes the assigned
+employee-agent on turn N>1 (PROBE-OQ3 PASS-NATIVE; all three legal
+`requestWakeup` REST calls returned HTTP 404 — `ctx.issues.requestWakeup` has
+no public REST surface on this host — but the bait comments themselves
+natively woke the agent, making the wake nudge unnecessary). D-14 runtime-noise
+discriminator captured verbatim on a real provoked recovery notice
+(`fa25ef4d-...`): dual-keyed on `authorType === 'system'` AND
+`presentation.kind === 'system_notice'`, with a structured `metadata.sections`
+envelope (typed `issue_link` / `agent_link` / `key_value` / `run_link` rows
+that Plan 04.1-06 D-16 diagnostics view can render directly), plus a 5-phrase
+body-pattern fallback (RESEARCH's 4 + the new `"Paperclip needs a disposition
+before this issue can continue"`). OQ1: the agent leaves the chat-topic at
+`in_progress` after a successful run — D-11 watchdog is the defensive
+flip-off-done path only, with no agent-set status to override. OQ2 WEAK
+(REST-LIMIT): REST `issues.list` silently ignores `originId`/`originIdPrefix`
+filters (returns 500-row cap regardless; exact-match returns 0 even when the
+row exists) — Plan 04.1-05 ships `migrations/0007_chat_topic_tasks.sql` as
+the defensive default. FLAG-1 reconciles as `caught-by-watchdog` (the host
+disposition-recovery service does engage, evidence captured under D-14;
+D-11's defensive sweep catches the flip). FLAG-2 PASS (Situation Room reads
+`current_task_summary`, never does `issues.list({assigneeAgentId})`).
+
+3 tasks, 4 commits `9703dbe..db29504`:
+- `9703dbe` (Task 1) — built `scripts/spike/chat-true-task-spike-probe.mjs` + STUB findings doc + CTT-01..CTT-08 traceability rows in REQUIREMENTS.md.
+- `eb44303` (Task 2) — Eric ran the probe on Countermoves 2026-05-20T08:23:41Z; continuation agent replaced the STUB with the locked findings (status: locked, verdict: GO).
+- `30cba12` (Task 3 part A) — `test/phases/04.1-01-spike-findings.test.mjs` RED→GREEN; 9 tests pinning the findings contract; all GREEN.
+- `db29504` (Task 3 part B) — `04.1-01-SUMMARY.md` written with plan-impact cross-reference table for Plans 04.1-02..04.1-07.
+
+**Plans 04.1-02 / 04.1-03 / 04.1-04 (Wave 2, autonomous TDD) UNBLOCKED.** All
+load-bearing design inputs locked in `04.1-01-SPIKE-FINDINGS.md`:
+- Plan 04.1-03 DROPS the `requestWakeup` call entirely; `ensureTopicWakeable` keeps only the defensive D-11 status-flip-off-done check; topic issues created at `in_progress`.
+- Plan 04.1-04 `classifyComment` primary on `authorType === 'system'`, secondary on `presentation.kind === 'system_notice'`; body-pattern fallback = 5 phrases.
+- Plan 04.1-04 `topic-watchdog.ts` is defensive-only; `topicStuck` triggers on N≥2 failed flips.
+- Plan 04.1-05 ships `migrations/0007_chat_topic_tasks.sql`; `chat.taskOwned` queries the side table, NOT `issues.list`.
+- Plan 04.1-06 D-16 diagnostics view renders `presentation.metadata.sections` as typed rows.
+
+**Followups (non-blocking, for Eric):** 4 `[SPIKE 04.1]`-tagged probe issues
+on Countermoves to clean up (`0dc3bea1-...`, `67f53651-...`, `496474c9-...`,
+`1958673d-...`); stale `cli.mjs gate` comment in probe header lines 49/56;
+contaminated-codex artifact on the VPS (safe to delete after Wave 5 closes).
+
+---
 
 **Plan 04-06 — Coexistence + Phase 4 closure: COMPLETE 2026-05-19.**
 Non-autonomous. Task 1 (`175d042`) — built the CHAT-11 coexistence check
@@ -337,6 +382,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 | Plan 03-02 | ~42 min, 4 TDD commits, 15 files (13 created), suite 455→504 (+49; 502 pass / 0 fail / 2 skip) |
 | Plan 04-02 | ~12 min, 7 commits (6 TDD + 1 deviation fix), 8 files (5 created), suite 762→767 (+5; 765 pass / 0 fail / 2 skip) |
 | Plan 04-03 | ~7 min, 7 commits (6 TDD + 1 wiring), 7 files (6 created), suite 767→798 (+31; 796 pass / 0 fail / 2 skip) |
+| Plan 04.1-01 | 3 tasks across 2 sessions (Task 1 autonomous build + Task 2 Eric Countermoves live drill 4 min + Task 3 continuation lock), 4 commits `9703dbe..db29504`, 3 files created (probe + findings + traceability test), 3 modified (REQUIREMENTS + STATE + ROADMAP), 9 new tests RED→GREEN; Phase 4.1 Gate Verdict GO |
 
 ## Accumulated Context
 
@@ -360,6 +406,14 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 17. **Phase 4 chat handlers need no new manifest capability strings** (Plan 04-02) - posting a chat message uses `issue.comments.create`, the stream bridge uses `events.subscribe`, the roster uses `agents.read`, `+ New topic` uses `issues.create`, and D-06 auto-reopen calls `ctx.issues.update` — all covered by capabilities Phase 2/3 declared and proved live on Countermoves (`bulletin-action-approve` exercises `ctx.issues.update` with the current set). An unrecognized capability string would risk the host install validator, so `issues.update` is deliberately NOT added.
 
 18. **Chat send/edit/realtime contract** (Plan 04-03) - `chat.send` is the canonical-write path: dedup on `message_uuid` (a resend returns the original `commentId`, never re-posts — CHAT-06), then `ctx.issues.createComment` writes the body to `public.issue_comments` (CHAT-02), then `insertChatMessage` records only the id-map. D-06 auto-reopen flips a `done` topic to `in_progress` for UX/status only and is **best-effort** (its own try/catch — a failed flip must not fail a landed send); `requestWakeup` is NOT called (04-01 OQ-3 STATUS-FLIP-NOT-NEEDED — a posted comment alone wakes the agent). `chat.edit` is append-with-supersedes (D-11/CHAT-05): a NEW comment + a `chat_messages` row whose `supersedes_uuid` points at the prior message; the original comment is never mutated, and a server-side ownership re-check rejects agent/unknown messages (`NOT_OWNED`). Realtime (D-08) is a worker stream bridge: `ctx.events.on('issue.comment.created')` re-emits chat-topic comments on the `chat:<companyId>` plugin SSE channel via `ctx.streams.emit`; the `issue.comment.created` payload is opaque (04-01 OQ-2) so the bridge re-fetches via `listComments` and emits the newest comment id. `userId` missing on `chat.send`/`chat.edit` short-circuits to `OPT_IN_REQUIRED` (opt-in-guard consumes it before the inner handler), NOT a throw.
+
+19. **Chat true-task wake mechanism = native, not requestWakeup** (Plan 04.1-01) - the SDK's `ctx.issues.requestWakeup` has NO public REST surface on the host version installed on Countermoves (all three legal `reason` values return HTTP 404 "API route not found"). It does NOT matter, because multi-turn native re-wake works: a bare comment posted on a chat-topic issue re-wakes the assigned employee-agent on turn N>1 (PROBE-OQ3 PASS-NATIVE, 2026-05-20). Plan 04.1-03's `ensureTopicWakeable` therefore DROPS the wake-nudge call entirely and keeps only the defensive D-11 status-flip-off-done check; topic issues are created at `in_progress`; `chat.send` does not call `requestWakeup`. `issues.wakeup` capability stays declared but unused.
+
+20. **Chat runtime-noise discriminator = dual-keyed** (Plan 04.1-01) - `classifyComment` (Plan 04.1-04) is primary on `authorType === 'system'` (RESEARCH HIGH-confidence prediction, host-stamped, would-have-to-change-public-API to defeat), secondary on `presentation.kind === 'system_notice'` (correlated; provides the structured envelope D-16 diagnostics view renders). Body-pattern fallback list = 5 phrases: RESEARCH.md's 4 existing runtime phrases PLUS the new disposition phrase `"Paperclip needs a disposition before this issue can continue"` captured verbatim from the live provoked notice `fa25ef4d-78ee-4143-a527-c23227721eec`. The structured `metadata.sections` envelope (typed `issue_link` / `agent_link` / `key_value` / `run_link` rows) is the preferred D-16 render path (Plan 04.1-06), not raw body parsing.
+
+21. **Chat active-tasks query path = side table, not issues.list filter** (Plan 04.1-01) - the REST `issues.list` surface silently ignores `originId`/`originIdPrefix` filters on this host version (returns 500-row cap regardless of filter; exact-match returns 0 even when the row exists — verified 2026-05-20 against Countermoves). Plan 04.1-05 ships `migrations/0007_chat_topic_tasks.sql` as the defensive default (additive, plugin-namespace, race-safe `topic_issue_id → task_issue_id` map). `chat.taskOwned` data handler queries the side table, NOT `issues.list`. Client-side `originId.startsWith(...)` filter kept as belt-and-braces fallback for upgrade-path topics that pre-date the migration. `createTrueTask` (Plan 04.1-02) MUST insert into `chat_topic_tasks` immediately after `ctx.issues.create`.
+
+22. **Chat-topic watchdog is defensive-only** (Plan 04.1-01) - the assigned employee-agent leaves chat-topic issues at `in_progress` after a successful run (PROBE-OQ1-STATUS AGENT-LEAVES-IN-PROGRESS, 2026-05-20); there is no agent-set status the watchdog must override on every poll. Plan 04.1-04's `topic-watchdog.ts` is a defensive sweep that flips status from `done`/`cancelled`/`blocked` back to `in_progress` ONLY when something else (the host's disposition-recovery service per the OQ3 attempt-2 evidence) has parked the topic terminally. `topicStuck` (Plan 04.1-04) triggers ONLY when the watchdog has attempted N≥2 flips in the last M poll cycles without success — CTT-05 is the steady-state path; CTT-06 banner is last-resort only.
 
 15. **Standing-number SQL is column-bound to a live-introspected schema** (Plan 03-10) - the 5 `STANDING_NUMBER_SLOTS` are agent-operations metrics (`open_issues`, `completed_7d`, `blocked_issues`, `agent_spend_mtd`, `budget_used_pct`) over `public.issues`/`public.companies`; every column is verified present by a live `\d` introspection capture (`03-10-SCHEMA-FINDINGS.md §2`), never extrapolated from the host repo or a CRM mental model. Paperclip has no customer/revenue/sales data — the original CRM-model slots (MRR, cold-email reply rate, refunds) referenced columns that do not exist. Per 03-CONTEXT.md line 92 only the registry SHAPE + BULL-05 (SQL-derived, grep-able, never LLM-generated) are locked; the specific numbers are planner's discretion. The local host-faithful test suite returns canned `db.query` results and CANNOT catch schema drift — a live Countermoves drill is the only valid proof.
 
@@ -407,7 +461,11 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-19T21:35:31.176Z
+**Last session:** 2026-05-20T00:00:00.000Z — Plan 04.1-01 Tasks 2 + 3 continuation. Eric ran the falsify-first spike probe on Countermoves and pasted the JSON summary; continuation agent replaced the STUB findings doc with the locked findings (status: locked, verdict: GO), wrote the traceability test (`test/phases/04.1-01-spike-findings.test.mjs`, 9 tests RED→GREEN), and produced the SUMMARY. Phase 4.1 Wave 1 CLOSED with Gate Verdict GO. Plans 04.1-02 / 04.1-03 / 04.1-04 (Wave 2, autonomous TDD) unblocked. 4 commits `9703dbe..db29504` (Task 1 build `9703dbe`, Task 2 lock findings `eb44303`, Task 3 test `30cba12`, Task 3 SUMMARY `db29504`).
+
+**Stopped at:** Completed Plan 04.1-01 (Wave 1, falsify-first spike). Next: Plan 04.1-02 (createTrueTask shared helper + chat.createTrueTask handler + chat.promote D-04 unification rewrite — Wave 2, autonomous TDD).
+
+**Last session (prior):** 2026-05-19T21:35:31.176Z
 
 **Last session (extended):** 2026-05-14 evening through 2026-05-15 early morning — Plan 02-08 Task 4 drill against Countermoves Hostinger. 12 of 14 Phase 2 reqs proven; Situation Room visual fidelity APPROVED on /COU/situation-room (side-by-side with sketches/paperclip-fix-situation-room.html); OPTIN-01..05 all proven. Reader tab on /COU/issues/COU-4 stays stuck in loading state — DEV-15-STRUCTURAL diagnosed: `useHostContext().userId` returns null in detail-tab slots, exact-shape replay of the 02-03c companyId issue. opt-in-guard fails closed for every wrapped Reader handler (issue.reader / flatten-blocker-chain / editor.pause-status / resolve-refs) when params.userId is missing → bridge returns `{error:'OPT_IN_REQUIRED'}` → Reader can't render its data branch. 12 mid-drill defect-fix commits landed (aa70e82 → f1d911d): DEV-04 migration validator + regression test, DEV-06 CSS chrome (theme.css 353→755 lines), DEV-07/08/10/13 polish cluster, DEV-11 humanizeChain helper, DEV-12 now_doing fallback, DEV-14 runtime CSS injection (host doesn't auto-load sibling CSS), DEV-15 partial UI defense-in-depth (AnchoredToCards/AcChecklist/ActivityTimeline null-safety) and structural opt-in-guard accepts viewerUserId fallback + Reader threads userId. Test count 269→365 (+96; 363 pass / 0 fail / 2 skipped). Tarball shasum 7b8ecc3f at 30.7 KB. Plan 02-09 FILED with full Task 1-4 breakdown for useResolvedUserId resolver hook + DEV-16 issue-reader degradation contract tightening.
 
