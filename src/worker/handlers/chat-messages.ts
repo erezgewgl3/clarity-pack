@@ -76,6 +76,21 @@ type ThreadMessage = {
   pinned: boolean;
   superseded: boolean;
   supersedesUuid: string | null;
+  // Plan 04.1-06 cross-plan retrofit — D-16 diagnostics view. Always
+  // populated (or null) so the UI can branch on system-classified rows
+  // without a second host round-trip.
+  authorType: string | null;
+  presentation: {
+    kind: string | null;
+    title: string | null;
+    tone: string | null;
+  } | null;
+  metadata: {
+    sections: Array<{
+      title: string | null;
+      rows: Array<Record<string, unknown>>;
+    }>;
+  } | null;
 };
 
 /**
@@ -83,6 +98,12 @@ type ThreadMessage = {
  * extensions add `authorType` (D-14 PRIMARY discriminator) +
  * `presentation.kind` (D-14 SECONDARY) so `classifyComment` has the host
  * fields it needs.
+ *
+ * Plan 04.1-06 cross-plan retrofit — the D-16 diagnostics view
+ * (RuntimeNoiseRow) renders structured `metadata.sections` envelopes when
+ * the host populates them on system_notice comments (Wave 1 spike capture
+ * 04.1-01-SPIKE-FINDINGS PROBE-D14-DISCRIM). Pulled through into the
+ * response shape so the UI does not need a second host round-trip.
  */
 type CommentLike = {
   id?: string;
@@ -91,7 +112,18 @@ type CommentLike = {
   authorUserId?: string | null;
   authorAgentId?: string | null;
   authorType?: string | null;
-  presentation?: { kind?: string | null } | null;
+  presentation?: {
+    kind?: string | null;
+    title?: string | null;
+    tone?: string | null;
+  } | null;
+  metadata?: {
+    version?: number;
+    sections?: Array<{
+      title?: string;
+      rows?: Array<Record<string, unknown>>;
+    }>;
+  } | null;
 };
 
 /** Coerce a Date | ISO string | undefined to epoch ms (NaN-guarded). */
@@ -231,6 +263,28 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
             : typeof c.createdAt === 'string'
               ? c.createdAt
               : null;
+        // Plan 04.1-06 retrofit — pass through host's authorType +
+        // presentation + metadata.sections so the D-16 diagnostics view
+        // can render the structured envelope without a second round-trip.
+        // Defensive copy: only fields we know the shape of land in the
+        // response; unknown nested keys are dropped.
+        const presentation = c.presentation
+          ? {
+              kind: c.presentation.kind ?? null,
+              title: c.presentation.title ?? null,
+              tone: c.presentation.tone ?? null,
+            }
+          : null;
+        const sections = c.metadata?.sections;
+        const metadata =
+          Array.isArray(sections) && sections.length > 0
+            ? {
+                sections: sections.map((s) => ({
+                  title: s.title ?? null,
+                  rows: Array.isArray(s.rows) ? s.rows : [],
+                })),
+              }
+            : null;
         return {
           commentId: c.id as string,
           body: c.body ?? '',
@@ -241,6 +295,9 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
           pinned: meta?.pinned ?? false,
           superseded: !!(meta && supersededUuids.has(meta.message_uuid)),
           supersedesUuid: meta?.supersedes_uuid ?? null,
+          authorType: c.authorType ?? null,
+          presentation,
+          metadata,
         };
       });
 
