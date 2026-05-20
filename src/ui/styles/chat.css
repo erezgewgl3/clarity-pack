@@ -1201,3 +1201,391 @@
     display: none;
   }
 }
+
+/* ---- Phase 4.1 — chat → true task ---------------------------------------
+ *
+ * Additive only. Every selector is scoped under [data-clarity-surface="chat"]
+ * (SCAF-06 / T-04-20). Class-by-analog table per .planning/phases/
+ * 04.1-chat-true-task/04.1-PATTERNS.md §"chat.css (MODIFIED — append Phase
+ * 4.1 block)". UI-SPEC §"CSS additions" enumerates the 26 class names.
+ *
+ * New-component token set (all multiples of 4): xs=4, sm=8, md=12, lg=16,
+ * xl=20, 2xl=24. The single inherited carve-out is the 22px gutter on
+ * `.runtime-noise-comment padding-left` so revealed runtime comments align
+ * with the existing thread bubble gutter (UI-SPEC §Spacing).
+ *
+ * Active weights on new components: 400 (body) + 500 (meta-labels). No 600.
+ * ----------------------------------------------------------------------- */
+
+/* Pattern A — composer Send-as-task toggle (UI-SPEC §"Composer mode toggle"). */
+[data-clarity-surface="chat"] .true-task-toggle {
+  /* Inherits .tool-btn base (chat.css:964-982). Off-state is already
+   * `border: 1px solid transparent` from .tool-btn. The armed selector
+   * below overrides border/color/background only. */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+[data-clarity-surface="chat"] .true-task-toggle[data-armed="true"] {
+  border-color: var(--you);
+  color: var(--you);
+  background: var(--you-soft);
+}
+[data-clarity-surface="chat"] .true-task-toggle[data-armed="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--you);
+  margin-right: 4px;
+}
+[data-clarity-surface="chat"] .true-task-toggle:focus-visible {
+  outline: 1px solid var(--ink-2);
+  outline-offset: 2px;
+}
+
+/* Pattern B — confirm dialog (UI-SPEC §"Confirm dialog (D-02)").
+ * Native <dialog> — no shadcn / radix import. */
+[data-clarity-surface="chat"] .true-task-dialog {
+  background: var(--bg-2);
+  color: var(--ink);
+  border: 1px solid var(--line-bright);
+  padding: 16px 20px 16px;
+  max-width: 480px;
+  width: 90vw;
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+}
+[data-clarity-surface="chat"] .true-task-dialog::backdrop {
+  background: rgba(14, 13, 10, 0.78);
+}
+[data-clarity-surface="chat"] .true-task-dialog-eyebrow {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+[data-clarity-surface="chat"] .true-task-dialog-heading {
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink);
+  margin: 0 0 16px;
+  line-height: 1.2;
+}
+[data-clarity-surface="chat"] .true-task-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+[data-clarity-surface="chat"] .true-task-dialog-field > label {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .true-task-dialog-field input,
+[data-clarity-surface="chat"] .true-task-dialog-field select {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 14.5px;
+  width: 100%;
+}
+[data-clarity-surface="chat"] .true-task-dialog-field input:focus,
+[data-clarity-surface="chat"] .true-task-dialog-field select:focus {
+  outline: 1px solid var(--ink-2);
+  outline-offset: 1px;
+  border-color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .true-task-dialog-helper {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  margin: 0;
+  text-transform: none;
+}
+[data-clarity-surface="chat"] .true-task-dialog-source {
+  border-left: 2px solid var(--line);
+  background: var(--bg);
+  color: var(--ink-2);
+  padding: 8px 12px;
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 14.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+}
+[data-clarity-surface="chat"] .true-task-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Pattern C — inline task card (UI-SPEC §"Inline task card (D-03)"). */
+[data-clarity-surface="chat"] .inline-task-card {
+  align-self: center;
+  max-width: 520px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+[data-clarity-surface="chat"] .inline-task-card-eyebrow {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--you);
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .inline-task-card-title {
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.4;
+}
+[data-clarity-surface="chat"] .inline-task-card-assignee {
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+[data-clarity-surface="chat"] .inline-task-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+[data-clarity-surface="chat"] .inline-task-card-meta .ts {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  margin-left: auto;
+}
+[data-clarity-surface="chat"] .inline-task-card-meta .st {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .inline-task-card-meta .st.review {
+  color: var(--warn);
+}
+[data-clarity-surface="chat"] .inline-task-card-meta .st.todo {
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .inline-task-card-meta .st.done {
+  color: var(--live);
+}
+[data-clarity-surface="chat"] .inline-task-card-meta .st.blocked {
+  color: var(--alert);
+}
+
+/* Pattern D — active tasks owned empty state (UI-SPEC §"Active tasks owned").
+ * Row layout reuses the existing .task-row from chat.css:1092-1132. */
+[data-clarity-surface="chat"] .active-tasks-owned-empty {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+/* Pattern E — archive topic affordance (UI-SPEC §"Archive topic affordance").
+ * .archive-topic-button uses .qa base (chat.css:1158-1172); the in-row
+ * confirm pill is its own block when armed. */
+[data-clarity-surface="chat"] .archive-topic-button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+[data-clarity-surface="chat"] .archive-topic-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line-bright);
+  padding: 8px 12px;
+  background: var(--bg-3);
+}
+[data-clarity-surface="chat"] .archive-topic-confirm-prompt {
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+[data-clarity-surface="chat"] .archive-topic-confirm-prompt b {
+  color: var(--ink);
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .archive-topic-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Pattern E tail — +N archived strip pill (UI-SPEC §"+N archived pill"). */
+[data-clarity-surface="chat"] .archived-topics-pill {
+  border: 1px dashed var(--line);
+  font-style: italic;
+  color: var(--ink-4);
+  margin-left: 8px;
+}
+[data-clarity-surface="chat"] .archived-topics-pill:hover {
+  color: var(--ink-3);
+  border-color: var(--ink-4);
+}
+[data-clarity-surface="chat"] .archived-topics-pill.active {
+  color: var(--ink-2);
+  border-color: var(--ink-3);
+}
+/* Archived-topic row when the pill is expanded (UI-SPEC: "opacity 0.6
+ * with an inline Unarchive hover action"). */
+[data-clarity-surface="chat"] .archived-topic-row {
+  opacity: 0.6;
+}
+[data-clarity-surface="chat"] .archived-topic-row:hover {
+  opacity: 0.85;
+}
+[data-clarity-surface="chat"] .archived-topic-suffix {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-left: 4px;
+}
+
+/* Pattern F — diagnostics toggle (UI-SPEC §"Runtime-noise diagnostics
+ * toggle"). The OFF state inherits .btn.ghost; ARMED inherits the solid
+ * .btn. The data-armed selector exists purely for the ESLint a11y
+ * assertion; no per-state visual override is strictly required, but a
+ * subtle accent helps a sighted operator. */
+[data-clarity-surface="chat"] .diagnostics-toggle[data-armed="true"] {
+  border-color: var(--ink-2);
+}
+
+/* Pattern F revealed comments — runtime-noise styling. Dashed border, dim
+ * Geist Mono, 22px left padding to align with the thread bubble gutter
+ * (UI-SPEC §"Gutter-alignment carve-out"). NEVER a bubble. */
+[data-clarity-surface="chat"] .runtime-noise-comment {
+  font-family: "Geist Mono", monospace;
+  color: var(--ink-4);
+  border: 1px dashed var(--line);
+  background: var(--bg-2);
+  padding: 8px 12px 8px 22px;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+[data-clarity-surface="chat"] .runtime-noise-comment-header {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+[data-clarity-surface="chat"] .runtime-noise-comment-details > summary {
+  cursor: pointer;
+  color: var(--ink-3);
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 12px;
+}
+[data-clarity-surface="chat"] .runtime-noise-comment-section {
+  margin-top: 8px;
+}
+[data-clarity-surface="chat"] .runtime-noise-comment-section-title {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+[data-clarity-surface="chat"] .runtime-noise-comment-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .runtime-noise-comment-row-label {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  min-width: 96px;
+}
+[data-clarity-surface="chat"] .runtime-noise-comment-row-value {
+  color: var(--ink-2);
+}
+[data-clarity-surface="chat"] .runtime-noise-comment-body {
+  white-space: pre-wrap;
+  color: var(--ink-3);
+  font-family: "Geist Mono", monospace;
+  font-size: 12px;
+}
+
+/* Pattern G — host-stuck banner (UI-SPEC §"Host-stuck notice (D-13)").
+ * Sticky inside .messages BELOW the existing .auto-refresh strip. */
+[data-clarity-surface="chat"] .host-stuck-banner {
+  position: sticky;
+  /* Pin BELOW the existing .auto-refresh (its padding is 7px 9px + a
+   * sticky top:0 inside .messages); 28px is roughly the .auto-refresh
+   * footprint so this strip lands flush under it. */
+  top: 28px;
+  z-index: 4;
+  margin: 4px -22px 12px;
+  padding: 12px 22px;
+  background: var(--warn-soft);
+  border-left: 3px solid var(--alert);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+[data-clarity-surface="chat"] .host-stuck-banner-heading {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink);
+}
+[data-clarity-surface="chat"] .host-stuck-banner-body {
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 14.5px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+[data-clarity-surface="chat"] .host-stuck-banner-body b {
+  color: var(--ink);
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .host-stuck-banner-action {
+  align-self: flex-start;
+  margin-top: 8px;
+  text-decoration: none;
+}
