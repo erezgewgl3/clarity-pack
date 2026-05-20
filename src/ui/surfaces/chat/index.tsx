@@ -32,7 +32,7 @@ import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
 import { useOptIn } from '../../primitives/use-opt-in.ts';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
-import { ToastProvider } from '../../primitives/toast.tsx';
+import { ToastProvider, useToast } from '../../primitives/toast.tsx';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import { RosterRail, type RosterEmployee } from './roster-rail.tsx';
@@ -135,6 +135,12 @@ function ChatPageBody({
   companyId: string;
   userId: string;
 }): React.ReactElement {
+  // Plan 04.1-10 drill fix #1 — useToast must be called INSIDE the
+  // <ToastProvider> tree; ChatPageBody is the first descendant guaranteed
+  // wrapped (ChatPageOptedIn mounts the provider above it). The hook fires
+  // the bottom-right toast for task-created + the right-rail's pause/resume.
+  const { showToast } = useToast();
+
   const [employee, setEmployee] = React.useState<RosterEmployee | null>(null);
   const [topic, setTopic] = React.useState<ChatTopic | null>(null);
   // Bumped after a successful chat.topic.create or chat.topic.archive flip
@@ -156,6 +162,21 @@ function ChatPageBody({
     sourceTopic: ChatTopic | null;
   }>({ open: false, mode: 'cold', sourceMessage: null, sourceTopic: null });
 
+  // Plan 04.1-10 drill fix #1 — pendingTaskCard state lifted to the index.tsx
+  // level (was previously expected by Composer/MessageThread as a fallback
+  // prop but never written by onDialogSuccess; on the 04.1-09 live drill it
+  // was always null, so the inline card NEVER appeared for promote-mode tasks
+  // until the 15s chat.taskOwned poll caught up). Setting this on dialog
+  // success renders the optimistic InlineTaskCard immediately for promote
+  // mode; cleared on (i) marker-arrival in chat.messages (via the callback
+  // threaded down to MessageThread), (ii) topic switch, (iii) employee
+  // switch. For cold mode the pendingTaskCard stays null (cold tasks are
+  // not topic-anchored — no inline-card surface exists).
+  const [pendingTaskCard, setPendingTaskCard] = React.useState<{
+    issueId: string;
+    title: string;
+  } | null>(null);
+
   // Plan 04.1-09 — chat.taskOwned fetch lifted to this level so both
   // ContextRail (right rail's "Active tasks owned") AND MessageThread
   // (inline-task-card title lookup, Plan 04.1-08 drill fix #2b) share one
@@ -170,11 +191,18 @@ function ChatPageBody({
     setEmployee(next);
     setTopic(null);
     setArchivePanelOpen(false);
+    // Plan 04.1-10 — defensive clear so a stale pending card from a prior
+    // employee's topic doesn't bleed onto a fresh employee's first topic.
+    setPendingTaskCard(null);
   }, []);
 
   const handleSelectTopic = React.useCallback((next: ChatTopic) => {
     setTopic(next);
     setArchivePanelOpen(false);
+    // Plan 04.1-10 — clear pending card on topic switch (the optimistic card
+    // was bound to the previous topic's marker; the next topic has its own
+    // life-cycle).
+    setPendingTaskCard(null);
   }, []);
 
   const createTopic = usePluginAction('chat.topic.create');
@@ -339,14 +367,68 @@ function ChatPageBody({
     setDialogState((s) => ({ ...s, open: false }));
   }, []);
 
+  // Plan 04.1-10 drill fix #1 — onDialogSuccess REWRITTEN. The Plan 04.1-09
+  // build did exactly two things (close + bump refreshKey) and threw away the
+  // dialog's success payload via `void result`. The two consequences caught on
+  // Eric's 2026-05-20 drill: (a) the optimistic inline task card NEVER lit up
+  // because pendingTaskCard was never set — the operator only saw the new
+  // task ~15s later when the chat.messages poll surfaced the marker comment;
+  // (b) cold-mode tasks have NO marker comment by spec (not topic-anchored)
+  // and NO inline-card surface, so cold tasks vanished into the void with
+  // zero operator confirmation. The new shape:
+  //   1. Close the dialog (unchanged).
+  //   2. Bump refreshKey so any caches keyed on it re-fire (unchanged).
+  //   3. For PROMOTE mode only — set pendingTaskCard so the MessageThread
+  //      renders the optimistic InlineTaskCard immediately, with the title
+  //      the operator just typed (NOT a UUID, NOT a skeleton). The card
+  //      transitions to its activeTasks-sourced render once chat.taskOwned
+  //      catches up on the next 15s poll.
+  //   4. For BOTH modes — fire a creation toast at bottom-right with the
+  //      8-char short-id and the assignee name. This is the ONLY operator
+  //      confirmation in cold mode and a defense-in-depth confirmation in
+  //      promote mode (a toast is glanceable even when the inline card
+  //      scrolls off-screen).
   const onDialogSuccess = React.useCallback(
-    (result: { issueId: string; mode: TrueTaskDialogMode }) => {
-      void result;
+    (result: { issueId: string; mode: TrueTaskDialogMode; title: string }) => {
       setDialogState((s) => ({ ...s, open: false }));
-      // Refresh — the chat.taskOwned rail + the messages thread (marker
-      // comment) pick up the new task on the next poll. A bump here makes
-      // any cached query keyed on refreshKey re-fire.
       setRefreshKey((k) => k + 1);
+
+      const titleForCard = result.title?.trim() || '(untitled task)';
+
+      // PROMOTE — render the optimistic inline card immediately. COLD tasks
+      // are not topic-anchored (no marker comment is posted by the worker by
+      // spec, see chat-true-task handler), so no inline card path exists;
+      // the toast below is the sole confirmation.
+      if (result.mode === 'promote') {
+        setPendingTaskCard({ issueId: result.issueId, title: titleForCard });
+      }
+
+      // BOTH modes — confirmation toast. Truncated 8-char issueId is the
+      // short id until v4.2 wires the proper BEAAA-NNN identifier through
+      // the worker success payload (today the createTrueTask handler returns
+      // only { ok: true, issueId } — identifier lookup would require a
+      // follow-up read).
+      const shortId = result.issueId ? result.issueId.slice(0, 8) : '—';
+      const employeeName = employee?.name ?? 'employee';
+      showToast({
+        message: `↗ Task created — ${shortId}, assigned to ${employeeName}.`,
+        duration: 6000,
+      });
+    },
+    [employee, showToast],
+  );
+
+  // Plan 04.1-10 drill fix #1 — clear-on-marker-arrival. When the
+  // chat.messages 15s poll surfaces the marker comment that matches the
+  // optimistic pendingTaskCard.issueId, MessageThread fires this callback
+  // so we drop the pending state (the activeTasks lookup path now owns the
+  // render — no double card). Idempotent: a second arrival for the same id
+  // is a no-op (pendingTaskCard is null after the first call).
+  const handlePendingResolved = React.useCallback(
+    (issueId: string) => {
+      setPendingTaskCard((cur) =>
+        cur && cur.issueId === issueId ? null : cur,
+      );
     },
     [],
   );
@@ -447,6 +529,14 @@ function ChatPageBody({
             // MessageThread inline-task-card branch can look up real
             // titles by issueId from the marker comment's first capture.
             activeTasks={activeTasks}
+            // Plan 04.1-10 drill fix #1 — pendingTaskCard now written by
+            // onDialogSuccess at this level (was always null in 04.1-09
+            // because the dialog payload was discarded via `void result`).
+            // onPendingResolved fires when MessageThread spots a marker
+            // whose issueId matches the pending card; we clear so the
+            // activeTasks render path takes over with no double-card race.
+            pendingTaskCard={pendingTaskCard}
+            onPendingResolved={handlePendingResolved}
             // Plan 04.1-08 — when the active topic is archived, the
             // composer goes read-only with the dashed border + "Unarchive
             // to send messages" placeholder. The ArchivedBanner sits at

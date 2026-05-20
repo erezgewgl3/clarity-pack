@@ -169,6 +169,7 @@ export function MessageThread({
   diagnostics = false,
   activeTasks = [],
   pendingTaskCard = null,
+  onPendingResolved = null,
   onPromoteMessage = null,
   archivedBanner = null,
 }: {
@@ -194,6 +195,13 @@ export function MessageThread({
   activeTasks?: ChatActiveTask[];
   /** Optimistic InlineTaskCard rendered until chat.taskOwned catches up. */
   pendingTaskCard?: { issueId: string; title: string } | null;
+  /** Plan 04.1-10 — fired when the chat.messages poll surfaces a marker
+   *  comment whose issueId matches the optimistic pendingTaskCard. The
+   *  parent (index.tsx) clears its pending state so the activeTasks render
+   *  path takes over — no double card render. Fires AT MOST once per
+   *  matching marker (the parent's clear races but the firing is bounded
+   *  by the messages list iteration on the next poll). */
+  onPendingResolved?: ((issueId: string) => void) | null;
   /** Plan 04.1-08 — opens the dual-mode dialog in PROMOTE mode at index.tsx.
    *  When null, the PromoteActions falls back to its in-place chat.promote
    *  fire-and-forget (used by older mount points). */
@@ -353,6 +361,25 @@ export function MessageThread({
     () => [...messages].sort((a, b) => toEpoch(a.createdAt) - toEpoch(b.createdAt)),
     [messages],
   );
+
+  // Plan 04.1-10 drill fix #1 — clear-on-marker-arrival. When chat.messages
+  // surfaces a marker comment whose first capture (the issueId) matches the
+  // optimistic pendingTaskCard.issueId, fire onPendingResolved so the parent
+  // (index.tsx) clears its pending state. The activeTasks-sourced render
+  // path then owns the InlineTaskCard with no double-render race. We scan
+  // the ordered list each poll; the firing is idempotent on the parent
+  // side (the parent's setPendingTaskCard guards by issueId match).
+  React.useEffect(() => {
+    if (!pendingTaskCard || !onPendingResolved) return;
+    const pendingId = pendingTaskCard.issueId;
+    const matched = ordered.some((m) => {
+      const match = /^Task created — ([^,]+), assigned to .+\.$/.exec(
+        (m.body ?? '').trim(),
+      );
+      return match?.[1] === pendingId;
+    });
+    if (matched) onPendingResolved(pendingId);
+  }, [ordered, pendingTaskCard, onPendingResolved]);
 
   // An optimistic message is reconciled once a server message with the same
   // trimmed body authored by this user exists. We drop reconciled ones.

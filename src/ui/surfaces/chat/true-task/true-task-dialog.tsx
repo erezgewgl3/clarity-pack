@@ -111,7 +111,7 @@ export function TrueTaskDialog({
   open: boolean;
   mode: TrueTaskDialogMode;
   onClose: () => void;
-  onSuccess: (result: { issueId: string; mode: TrueTaskDialogMode }) => void;
+  onSuccess: (result: { issueId: string; mode: TrueTaskDialogMode; title: string }) => void;
   /** Required for PROMOTE mode. Ignored in COLD. */
   sourceMessage?: PromoteSourceMessage | null;
   /** Required for PROMOTE mode (the source topic). Ignored in COLD. */
@@ -229,7 +229,11 @@ export function TrueTaskDialog({
         result && typeof result === 'object' && 'issueId' in result
           ? String((result as { issueId: unknown }).issueId)
           : '';
-      onSuccess({ issueId, mode });
+      // Plan 04.1-10 — title threaded back to the parent so index.tsx can
+      // (a) set pendingTaskCard for the optimistic inline card render
+      // (promote mode), (b) compose the creation toast with a human-
+      // readable label that survives the 15s chat.taskOwned poll race.
+      onSuccess({ issueId, mode, title: trimmedTitle });
     } catch {
       setFeedback({ kind: 'error', text: 'Could not create task (CREATE_FAILED). Try again.' });
     } finally {
@@ -353,13 +357,19 @@ export function TrueTaskDialog({
       {mode === 'cold' ? (
         <div className="true-task-dialog-field">
           <label htmlFor="true-task-dialog-details">DETAILS (OPTIONAL)</label>
-          <input
+          {/* Plan 04.1-10 drill fix #2a — DETAILS was an <input type="text">
+              which capped the operator's primary content (task body) at a
+              single line. Promoted to a <textarea> with min-height 140px,
+              max-height 40vh, vertical resize, and overflow-y auto (CSS in
+              chat.css under [data-clarity-surface="chat"] .true-task-dialog
+              textarea). */}
+          <textarea
             id="true-task-dialog-details"
-            type="text"
             value={details}
             onChange={(e) => setDetails(e.target.value)}
             placeholder="Add context, acceptance criteria, links…"
             aria-label="Task details"
+            rows={6}
           />
         </div>
       ) : null}

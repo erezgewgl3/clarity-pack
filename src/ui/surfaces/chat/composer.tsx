@@ -74,6 +74,7 @@ export function Composer({
   disabled = false,
   activeTasks = [],
   pendingTaskCard = null,
+  onPendingResolved = null,
   onPromoteMessage = null,
   archivedBanner = null,
 }: {
@@ -104,6 +105,12 @@ export function Composer({
    *  marker comment lands on the next poll. Now driven by the parent (the
    *  + Create task / Promote dialog opens at the index.tsx level). */
   pendingTaskCard?: { issueId: string; title: string } | null;
+  /** Plan 04.1-10 — fired by MessageThread when the chat.messages poll
+   *  surfaces a marker comment whose issueId matches the optimistic
+   *  pendingTaskCard. index.tsx clears the pending state so the
+   *  activeTasks-sourced render owns the card from then on (no double
+   *  render race). */
+  onPendingResolved?: ((issueId: string) => void) | null;
   /** Plan 04.1-08 — threaded from index.tsx through to the per-bubble
    *  PromoteActions; clicking "→ Promote to task" opens the dual-mode
    *  dialog in PROMOTE mode at the index.tsx level. */
@@ -209,6 +216,7 @@ export function Composer({
         diagnostics={diagnostics}
         activeTasks={activeTasks}
         pendingTaskCard={pendingTaskCard}
+        onPendingResolved={onPendingResolved}
         onPromoteMessage={onPromoteMessage}
         archivedBanner={archivedBanner}
       />
