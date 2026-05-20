@@ -1123,6 +1123,18 @@
   font-size: 13px;
   color: var(--ink-2);
   line-height: 1.4;
+  /* Plan 04.1-09 — word-wrap fix (drill: chars wrapped line-by-line). Wraps
+   * at WORD boundaries with hyphenation hints, NOT character-by-character;
+   * 3-line clamp keeps rows predictable; full title surfaces on hover via
+   * the title= attribute on .ttl (active-tasks-owned.tsx). */
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 [data-clarity-surface="chat"] .task-row .st {
   font-family: "Geist Mono", monospace;
@@ -2119,17 +2131,10 @@
  * (set in active-tasks-owned.tsx). */
 [data-clarity-surface="chat"] .task-row {
   /* Plan 04.1-09 override — was `auto 1fr auto`. The middle column now uses
-   * minmax(0, 1fr) so it can shrink below its content's intrinsic width. */
+   * minmax(0, 1fr) so it can shrink below its content's intrinsic width.
+   * The .task-row .ttl word-wrap rules are folded into the original
+   * .ttl rule above (chat.css:1122) so a single block carries the full
+   * contract for the right-rail task-row title. */
   grid-template-columns: auto minmax(0, 1fr) auto;
-}
-[data-clarity-surface="chat"] .task-row .ttl {
-  word-break: normal;
-  overflow-wrap: break-word;
-  hyphens: auto;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 

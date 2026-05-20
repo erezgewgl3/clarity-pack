@@ -122,3 +122,119 @@ test('true-task-dialog.tsx: no raw fetch / no dangerouslySetInnerHTML', () => {
   assert.doesNotMatch(c, /fetch\(/);
   assert.doesNotMatch(c, /dangerouslySetInnerHTML/);
 });
+
+// ---------------------------------------------------------------------------
+// Plan 04.1-09 — DIALOG SHELL REWORKED. Drill fix #4 from 2026-05-20.
+// The Plan 04.1-08 build used the native <dialog> element with showModal();
+// the existing CSS forced position:fixed inset:0 width:480px margin:0 which
+// fought native auto-centering and the dialog rendered TOP-LEFT. The shell
+// is now a custom backdrop + body pair: the backdrop centers the body via
+// flex; backdrop click closes; click inside the body stops propagation;
+// Escape closes via a window listener.
+// ---------------------------------------------------------------------------
+
+test('true-task-dialog.tsx (Plan 04.1-09): renders .true-task-dialog-backdrop wrapper', () => {
+  assert.match(
+    SRC,
+    /true-task-dialog-backdrop/,
+    'the dialog must wrap its body in a .true-task-dialog-backdrop element',
+  );
+});
+
+test('true-task-dialog.tsx (Plan 04.1-09): backdrop click invokes onClose', () => {
+  const c = code(SRC);
+  // The outer wrapper's onClick is bound to onClose.
+  assert.match(
+    c,
+    /className="true-task-dialog-backdrop"[\s\S]*?onClick=\{onClose\}/,
+    'backdrop onClick must invoke onClose',
+  );
+});
+
+test('true-task-dialog.tsx (Plan 04.1-09): dialog body uses e.stopPropagation to swallow inner clicks', () => {
+  const c = code(SRC);
+  // The inner body element's onClick stops propagation so a click on the
+  // dialog itself (inputs / buttons / etc.) does NOT bubble up and close.
+  assert.match(
+    c,
+    /onClick=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/,
+    'inner dialog body must stop click propagation so clicks inside do not close',
+  );
+});
+
+test('true-task-dialog.tsx (Plan 04.1-09): Escape is bound via window keydown listener', () => {
+  const c = code(SRC);
+  // The Plan 04.1-08 build relied on the native <dialog> Escape semantics.
+  // The new shell needs an explicit window listener that fires regardless of
+  // focus location. The handler checks e.key === 'Escape' and calls onClose.
+  assert.match(
+    c,
+    /window\.addEventListener\(['"]keydown['"]/,
+    'must register a window keydown listener',
+  );
+  assert.match(
+    c,
+    /e\.key\s*[!=]==?\s*['"]Escape['"]/,
+    'must check the Escape key',
+  );
+});
+
+test('true-task-dialog.tsx (Plan 04.1-09): the native <dialog> + showModal/close shell is gone', () => {
+  const c = code(SRC);
+  // The new shell is a div pair — no more imperative dialog API.
+  assert.doesNotMatch(
+    c,
+    /\.showModal\(\)/,
+    'showModal() must not be called any more — the new shell is a div pair',
+  );
+  assert.doesNotMatch(
+    c,
+    /HTMLDialogElement/,
+    'the HTMLDialogElement ref type must be gone',
+  );
+});
+
+test('chat.css (Plan 04.1-09): .true-task-dialog-backdrop is fixed inset 0 with flex centering', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  const block = css.match(/\.true-task-dialog-backdrop\s*\{([^}]*)\}/);
+  assert.ok(block, '.true-task-dialog-backdrop must be styled');
+  assert.match(block[1], /position:\s*fixed/, 'backdrop is position: fixed');
+  assert.match(block[1], /inset:\s*0/, 'backdrop covers the viewport (inset: 0)');
+  assert.match(block[1], /display:\s*flex/, 'backdrop is a flex container');
+  assert.match(
+    block[1],
+    /align-items:\s*center/,
+    'backdrop centers vertically',
+  );
+  assert.match(
+    block[1],
+    /justify-content:\s*center/,
+    'backdrop centers horizontally',
+  );
+});
+
+test('chat.css (Plan 04.1-09): .true-task-dialog is position:relative (not the stale position:fixed top-left)', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  // The first .true-task-dialog rule (the BASE rule — not the per-mode
+  // overrides that follow) must set position: relative explicitly so the
+  // backdrop's flex centering wins.
+  const block = css.match(/\.true-task-dialog\s*\{([^}]*)\}/);
+  assert.ok(block, '.true-task-dialog must be styled');
+  assert.match(
+    block[1],
+    /position:\s*relative/,
+    '.true-task-dialog must be position: relative (was position: fixed in Plan 04.1-08)',
+  );
+  assert.match(
+    block[1],
+    /max-width:\s*560px/,
+    '.true-task-dialog max-width 560px (was 480px)',
+  );
+});
+

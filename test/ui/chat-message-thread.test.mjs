@@ -785,3 +785,76 @@ test('Chat thread (Plan 04.1-08): the legacy in-place chat.promote fall-back is 
   const c = readChatCode('message-thread.tsx');
   assert.match(c, /usePluginAction\(['"]chat\.promote['"]\)/);
 });
+
+// ---------------------------------------------------------------------------
+// Plan 04.1-09 — TITLE LOOKUP FIXED. Drill fix #2b from 2026-05-20.
+// The Plan 04.1-08 build extracted `markerMatch[1]` (the issueId) and used
+// it as the title — which is why the inline card rendered a raw UUID as
+// its title. The first capture is the issueId, NOT the title. The title
+// must be looked up from chat.taskOwned (`activeTasks` prop) by issueId.
+// ---------------------------------------------------------------------------
+
+test('Chat thread (Plan 04.1-09): MessageThread accepts activeTasks prop threaded from index.tsx', () => {
+  const c = readChatCode('message-thread.tsx');
+  // The activeTasks prop is declared in MessageThread's destructured args.
+  assert.match(c, /activeTasks\s*=\s*\[\]/, 'activeTasks default to []');
+  assert.match(
+    c,
+    /activeTasks\?:\s*ChatActiveTask\[\]/,
+    'activeTasks prop type is ChatActiveTask[]',
+  );
+});
+
+test('Chat thread (Plan 04.1-09): marker-comment branch looks up title from activeTasks (NOT marker body)', () => {
+  const c = readChatCode('message-thread.tsx');
+  // The new branch calls activeTasks.find(t => t.issueId === parsedIssueId).
+  assert.match(
+    c,
+    /activeTasks\.find\(/,
+    'marker branch must call activeTasks.find(...) to resolve the title',
+  );
+  // The first capture is named parsedIssueId, NOT parsedTitle (the old name).
+  assert.match(
+    c,
+    /parsedIssueId/,
+    'the first capture is the issueId (not the title)',
+  );
+  // The Plan 04.1-08 mistake — `parsedTitle = markerMatch[1]` — must be gone.
+  assert.doesNotMatch(
+    c,
+    /const parsedTitle\s*=\s*markerMatch\[1\]/,
+    'must NOT use markerMatch[1] as the title — that capture is the issueId',
+  );
+});
+
+test('Chat thread (Plan 04.1-09): title falls back to pendingTaskCard then null (skeleton) when activeTasks misses', () => {
+  const c = readChatCode('message-thread.tsx');
+  // The resolved title is `matchedTask?.title ?? (pendingTaskCard?.issueId
+  // === parsedIssueId ? pendingTaskCard.title : null)`. The ?? operator
+  // signals the precedence chain.
+  assert.match(
+    c,
+    /matchedTask\?\.title\s*\?\?/,
+    'title precedence: activeTasks hit first',
+  );
+  assert.match(
+    c,
+    /pendingTaskCard\?\.issueId\s*===\s*parsedIssueId/,
+    'fallback to pendingTaskCard when issueIds match',
+  );
+});
+
+test('Chat thread (Plan 04.1-09): identifier + status threaded from matchedTask (not null when resolved)', () => {
+  const c = readChatCode('message-thread.tsx');
+  // identifier and status fields on InlineTaskCard now read from matchedTask.
+  assert.match(
+    c,
+    /identifier=\{matchedTask\?\.identifier\s*\?\?\s*null\}/,
+    'identifier passes matchedTask.identifier when present',
+  );
+  assert.match(
+    c,
+    /status=\{matchedTask\?\.status\s*\?\?\s*null\}/,
+    'status passes matchedTask.status when present',
+  );
+});
