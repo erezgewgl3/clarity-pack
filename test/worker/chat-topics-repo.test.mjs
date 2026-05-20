@@ -32,6 +32,12 @@ import {
   pinChatMessageByCommentId,
   getEmployeeParentIssueId,
   insertEmployeeParent,
+  // Plan 04.1-05 — D-10 plugin-side archive + D-08 chat_topic_tasks side table
+  // (Wave 1 lock: REST originId filters do not work; side table is the
+  // steady-state D-08 lookup path).
+  setChatTopicArchived,
+  insertChatTopicTask,
+  listChatTopicTasksForTopic,
 } from '../../src/worker/db/chat-topics-repo.ts';
 import { wrapHostFaithfulDb } from '../helpers/host-faithful-db.mjs';
 
@@ -42,10 +48,49 @@ function makeFakeDbCtx(seed = {}) {
   const topics = [...(seed.topics ?? [])];
   const messages = [...(seed.messages ?? [])];
   const parents = [...(seed.parents ?? [])];
+  // Plan 04.1-05 D-08 — the chat_topic_tasks side table seed slot. Each row:
+  // { id, company_id, topic_issue_id, task_issue_id, created_at }.
+  const chatTopicTasks = [...(seed.chatTopicTasks ?? [])];
 
   const fake = {
     async execute(sql, params) {
       calls.push({ kind: 'execute', sql, params });
+
+      // Plan 04.1-05 D-10 — UPDATE chat_topics SET archived = $1 WHERE issue_id = $2 AND company_id = $3
+      if (/UPDATE\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics/i.test(sql)) {
+        const [archived, issueId, companyId] = params;
+        const row = topics.find(
+          (t) => t.issue_id === issueId && t.company_id === companyId,
+        );
+        if (row) row.archived = archived;
+        return { rowCount: row ? 1 : 0 };
+      }
+
+      // Plan 04.1-05 D-08 — INSERT INTO chat_topic_tasks ... ON CONFLICT DO NOTHING
+      if (
+        /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_topic_tasks/i.test(sql)
+      ) {
+        const [company_id, topic_issue_id, task_issue_id] = params;
+        const clash = chatTopicTasks.some(
+          (r) =>
+            r.company_id === company_id &&
+            r.topic_issue_id === topic_issue_id &&
+            r.task_issue_id === task_issue_id,
+        );
+        if (!clash) {
+          chatTopicTasks.push({
+            id: chatTopicTasks.length + 1,
+            company_id,
+            topic_issue_id,
+            task_issue_id,
+            created_at:
+              params[3] && typeof params[3] === 'string'
+                ? params[3]
+                : new Date().toISOString(),
+          });
+        }
+        return { rowCount: clash ? 0 : 1 };
+      }
 
       if (/INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics/i.test(sql)) {
         const [
@@ -202,11 +247,33 @@ function makeFakeDbCtx(seed = {}) {
         );
       }
 
+      // Plan 04.1-05 D-08 — SELECT task_issue_id FROM chat_topic_tasks
+      //   WHERE company_id = $1 AND topic_issue_id = $2
+      //   ORDER BY created_at DESC LIMIT 50
+      if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_topic_tasks/i.test(sql)) {
+        const [companyId, topicIssueId] = params;
+        return chatTopicTasks
+          .filter(
+            (r) =>
+              r.company_id === companyId && r.topic_issue_id === topicIssueId,
+          )
+          .slice()
+          .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+          .map((r) => ({ task_issue_id: r.task_issue_id }));
+      }
+
       return [];
     },
   };
 
-  return { ctx: { db: wrapHostFaithfulDb(fake) }, calls, topics, messages, parents };
+  return {
+    ctx: { db: wrapHostFaithfulDb(fake) },
+    calls,
+    topics,
+    messages,
+    parents,
+    chatTopicTasks,
+  };
 }
 
 const TOPIC = {
@@ -478,5 +545,127 @@ test('insertEmployeeParent on a duplicate (company_id, employee_agent_id) is a n
   assert.match(
     insert.sql,
     /ON CONFLICT\s*\(\s*company_id\s*,\s*employee_agent_id\s*\)\s*DO NOTHING/i,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Plan 04.1-05 — D-10 setChatTopicArchived
+// ---------------------------------------------------------------------------
+//
+// Mirrors the updateChatMessagePinned analog (chat-topics-repo.ts:241-253):
+// one UPDATE, company-scoped, no read-back. Per the D-10 invariant the
+// archive write is plugin-side only — the helper does NOT touch the host
+// issue (chat-topic-archive.test.mjs Test 6 pins the no-ctx.issues.update
+// invariant at the handler tier).
+
+test('R1: setChatTopicArchived calls execute ONCE with the locked UPDATE SQL and param order', async () => {
+  const { ctx, calls } = makeFakeDbCtx({
+    topics: [{ ...TOPIC, archived: false }],
+  });
+  await setChatTopicArchived(ctx, 'COU', 'issue-101', true);
+  const writes = calls.filter((c) => c.kind === 'execute');
+  assert.equal(writes.length, 1, 'exactly one execute() call');
+  const w = writes[0];
+  assert.match(
+    w.sql,
+    /UPDATE\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics/i,
+    'targets the namespaced chat_topics table',
+  );
+  assert.match(w.sql, /SET\s+archived\s*=\s*\$1/i, 'SET archived = $1');
+  assert.match(
+    w.sql,
+    /WHERE\s+issue_id\s*=\s*\$2\s+AND\s+company_id\s*=\s*\$3/i,
+    'WHERE issue_id = $2 AND company_id = $3 (company-scoped)',
+  );
+  // Param order: [archived, topicIssueId, companyId].
+  assert.deepEqual(w.params, [true, 'issue-101', 'COU']);
+});
+
+test('R2: setChatTopicArchived passes the boolean through (true and false both land)', async () => {
+  const { ctx, topics } = makeFakeDbCtx({
+    topics: [{ ...TOPIC, archived: false }],
+  });
+  // Archive.
+  await setChatTopicArchived(ctx, 'COU', 'issue-101', true);
+  assert.equal(topics[0].archived, true, 'archived=true persisted');
+  // Un-archive — same shape, false flips back.
+  await setChatTopicArchived(ctx, 'COU', 'issue-101', false);
+  assert.equal(topics[0].archived, false, 'archived=false persisted (un-archive)');
+});
+
+// ---------------------------------------------------------------------------
+// Plan 04.1-05 — D-08 chat_topic_tasks side table (Wave 1 lock: REST originId
+// filters do not work; this is the steady-state lookup path).
+// ---------------------------------------------------------------------------
+
+test('R3: insertChatTopicTask INSERT carries ON CONFLICT DO NOTHING and writes the row', async () => {
+  const { ctx, calls, chatTopicTasks } = makeFakeDbCtx();
+  await insertChatTopicTask(ctx, 'COU', 'issue-topic-1', 'task-1');
+  const insert = calls.find(
+    (c) =>
+      c.kind === 'execute' &&
+      /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_topic_tasks/i.test(c.sql),
+  );
+  assert.ok(insert, 'the INSERT was issued via execute');
+  assert.match(
+    insert.sql,
+    /ON CONFLICT[\s\S]*DO NOTHING/i,
+    'ON CONFLICT DO NOTHING for race-safety (cross-plan retrofit best-effort)',
+  );
+  assert.equal(chatTopicTasks.length, 1);
+  assert.equal(chatTopicTasks[0].company_id, 'COU');
+  assert.equal(chatTopicTasks[0].topic_issue_id, 'issue-topic-1');
+  assert.equal(chatTopicTasks[0].task_issue_id, 'task-1');
+});
+
+test('R4: insertChatTopicTask on a duplicate (company_id, topic_issue_id, task_issue_id) is a no-op', async () => {
+  const { ctx, chatTopicTasks } = makeFakeDbCtx();
+  await insertChatTopicTask(ctx, 'COU', 'issue-topic-1', 'task-1');
+  await insertChatTopicTask(ctx, 'COU', 'issue-topic-1', 'task-1');
+  assert.equal(
+    chatTopicTasks.length,
+    1,
+    'the second insert is a no-op (ON CONFLICT DO NOTHING)',
+  );
+});
+
+test('R5: listChatTopicTasksForTopic returns task ids ordered newest-first, company+topic scoped', async () => {
+  const { ctx } = makeFakeDbCtx({
+    chatTopicTasks: [
+      {
+        id: 1,
+        company_id: 'COU',
+        topic_issue_id: 'issue-topic-1',
+        task_issue_id: 'task-OLD',
+        created_at: '2026-05-18T10:00:00Z',
+      },
+      {
+        id: 2,
+        company_id: 'COU',
+        topic_issue_id: 'issue-topic-1',
+        task_issue_id: 'task-NEW',
+        created_at: '2026-05-19T10:00:00Z',
+      },
+      {
+        id: 3,
+        company_id: 'COU',
+        topic_issue_id: 'issue-topic-OTHER',
+        task_issue_id: 'task-X',
+        created_at: '2026-05-20T10:00:00Z',
+      },
+      {
+        id: 4,
+        company_id: 'OTHER-CO',
+        topic_issue_id: 'issue-topic-1',
+        task_issue_id: 'task-CROSS-CO',
+        created_at: '2026-05-20T10:00:00Z',
+      },
+    ],
+  });
+  const ids = await listChatTopicTasksForTopic(ctx, 'COU', 'issue-topic-1');
+  assert.deepEqual(
+    ids,
+    ['task-NEW', 'task-OLD'],
+    'newest-first; cross-topic and cross-company rows excluded',
   );
 });
