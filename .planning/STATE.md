@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-20T09:35:00Z"
+last_updated: "2026-05-20T09:41:00Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 47
-  completed_plans: 30
-  percent: 64
+  completed_plans: 31
+  percent: 66
 ---
 
 # State: Clarity Pack
@@ -23,12 +23,25 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 2 in progress 2026-05-20. Plans 04.1-02 + 04.1-03 COMPLETE; Plan 04.1-04 (Wave 2, autonomous TDD) ready to run next.
+**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 2 in progress 2026-05-20. Plans 04.1-02 + 04.1-03 + 04.1-04 COMPLETE; Plan 04.1-05 (Wave 2, autonomous TDD) ready to run next.
 
 ## Current Position
 
 Phase: 04.1 (chat-true-task) — Wave 2 in progress 2026-05-20 (Wave 1 CLOSED with Gate Verdict GO).
-Plan: 3 of 7 complete — **Plan 04.1-03 COMPLETE 2026-05-20; 4 plans remaining.**
+Plan: 4 of 7 complete — **Plan 04.1-04 COMPLETE 2026-05-20; 3 plans remaining.**
+
+**Plan 04.1-04 — classifyComment + chat.messages runtime-noise filter + watchdog-on-poll + host-stuck signal: COMPLETE 2026-05-20.**
+Autonomous TDD. 2 tasks / 4 commits `1f42a9c..31ac0a4`:
+- `1f42a9c` (Task 1 RED) — `test(04.1-04): RED — classifyComment pure function tests` (17 tests covering PRIMARY authorType / SECONDARY presentation.kind / FALLBACK 5-phrase RUNTIME_PHRASES / Pitfall-4 marker pin / defensive null-empty / contract assertion).
+- `0b9d154` (Task 1 GREEN) — `feat(04.1-04): classifyComment pure function (D-14 host-field-first + body fallback)` — new `src/worker/chat/comment-classify.ts` exports `classifyComment` (pure I/O-free function; PRIMARY `authorType === 'system'` → SECONDARY `presentation?.kind === 'system_notice'` → FALLBACK case-insensitive body match against `RUNTIME_PHRASES`); `CommentClass` type; frozen `RUNTIME_PHRASES: readonly string[]` (5 entries — RESEARCH.md's 4 + the verbatim 5th phrase `"Paperclip needs a disposition before this issue can continue"` captured live on Countermoves COU-1757 comment fa25ef4d-... per 04.1-01-SPIKE-FINDINGS PROBE-D14-DISCRIM).
+- `53c40ff` (Task 2 RED) — `test(04.1-04): RED — chat.messages runtime-noise filter + watchdog + topicStuck` (13 new U1..U13 cases; 10 failing on the new contract).
+- `31ac0a4` (Task 2 GREEN) — `feat(04.1-04): chat.messages runtime-noise filter + watchdog cadence + host-stuck signal (D-11/D-13/D-14/D-15)` — `src/worker/handlers/chat-messages.ts` EXTENDED in place at the five precise places per PATTERNS.md DELTA: (1) imports `classifyComment` + `ensureTopicWakeable` + `isTopicStuck`; (2) extends local `CommentLike` with `authorType` + `presentation.kind`; (3) reads optional `params.includeDiagnostics === true` (D-16 default OFF); (4) fires `void ensureTopicWakeable(ctx, topicIssueId, companyId)` at handler head AFTER opt-in gate, BEFORE listComments — D-11 watchdog cadence on every poll; (5) adds a second `.filter((c) => includeDiagnostics || classifyComment(c) === 'conversation')` to the message pipeline; (6) reads topic issue once for `isTopicStuck(topicIssue)` + `activeRecoveryAction.recoveryOwnerName` extraction (best-effort with graceful degrade); (7) response shape grows `topicStuck: boolean` + `recoveryOwner: string | null` (kind/topicIssueId/messages preserved — Plan 04-05 UI continues to work; Plan 04.1-06's HostStuckBanner reads the new fields).
+
+Suite: 1024 → 1055 tests (+31; 1053 pass / 0 fail / 2 pre-existing skip). CTT-04 (runtime noise filtered) + CTT-06 (host-stuck signal) worker-tier data path satisfied (UI rendering ships in Plan 04.1-06). **Zero deviations recorded** — plan executed exactly as written with the Wave 1 scope refinements applied verbatim (dual-keyed discriminator + 5th body phrase). One small implementation choice noted: an `body.length > 0 &&` short-circuit before the body-pattern fallback scan (defensive against any future empty-string entry in RUNTIME_PHRASES that would match everything; Tests 13 + 14 verify the right behaviour on empty bodies). SUMMARY: `04.1-04-SUMMARY.md`.
+
+**Plan 04.1-05 (chat_topic_tasks side table + chat.taskOwned data handler) UNBLOCKED.** Independent on `files_modified` from this plan. Plan 04.1-06 (UI surfaces) reads `topicStuck` / `recoveryOwner` from this plan's response shape for the HostStuckBanner.
+
+---
 
 **Plan 04.1-03 — topic-watchdog (D-09/D-11) + chat.send fire-and-forget + chat-topics converse-only: COMPLETE 2026-05-20.**
 Autonomous TDD. 3 tasks / 6 commits `aa75677..dc7438e`:
