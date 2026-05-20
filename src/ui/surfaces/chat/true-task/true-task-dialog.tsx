@@ -17,7 +17,20 @@
 //                  Submit invokes chat.createTrueTask with the source
 //                  topicIssueId + sourceCommentId → chat-task originId path.
 //
-// Native <dialog>-element shell: focus-trap + Escape via the platform.
+// Plan 04.1-09 — DIALOG SHELL REWORKED. The Plan 04.1-08 build used the
+// native `<dialog>` element + showModal(). On the live Countermoves drill the
+// dialog rendered TOP-LEFT instead of centered — the existing CSS forced
+// `position: fixed; inset: 0; width: 480px; margin: 0` which fought the
+// native auto-centering. The dialog now renders as a custom backdrop +
+// body pair: an outer `<div className="true-task-dialog-backdrop">` covers
+// the viewport (fixed inset 0, flex centered) and the inner
+// `<div className="true-task-dialog">` is `position: relative` with
+// `max-width: 560px`. Backdrop click closes; click inside the dialog body
+// uses stopPropagation so it does NOT close. Escape is a window listener
+// so it fires regardless of focus location. The `open` prop guards render —
+// the entire backdrop returns null when closed (no more imperative
+// showModal/close calls).
+//
 // ⌘+Enter / Ctrl+Enter from anywhere inside the dialog submits.
 //
 // SECURITY (T-04-18): every field renders as untrusted React text. NO
@@ -112,7 +125,6 @@ export function TrueTaskDialog({
   employeeAgentId: string;
 }): React.ReactElement {
   const createTrueTask = usePluginAction('chat.createTrueTask');
-  const dialogRef = React.useRef<HTMLDialogElement | null>(null);
 
   // Re-fetch the roster only when the dialog opens.
   const { data: rosterData } = usePluginData<RosterResult>(
@@ -158,23 +170,20 @@ export function TrueTaskDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultAssigneeAgentId, mode]);
 
-  // Open / close via the imperative dialog API.
+  // Plan 04.1-09 — Escape closes via a window listener so it fires regardless
+  // of focus location. The Plan 04.1-08 build relied on the native <dialog>
+  // element's built-in Esc-close; the new backdrop+body shell needs an
+  // explicit listener. Mounted only while open so a closed dialog does not
+  // intercept Esc for other surfaces.
   React.useEffect(() => {
-    const node = dialogRef.current;
-    if (!node) return;
-    if (open && !node.open) node.showModal();
-    if (!open && node.open) node.close();
-  }, [open]);
-
-  // Native dialog `close` event (Esc, browser-driven close) wires back to parent.
-  React.useEffect(() => {
-    const node = dialogRef.current;
-    if (!node) return;
-    const handleClose = (): void => {
-      if (open) onClose();
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      onClose();
     };
-    node.addEventListener('close', handleClose);
-    return () => node.removeEventListener('close', handleClose);
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
   }, [open, onClose]);
 
   const resolvedEmployeeName = React.useMemo(() => {
@@ -258,17 +267,29 @@ export function TrueTaskDialog({
       ? "This task will appear in the source topic's Active tasks owned rail."
       : "Standalone tasks won't appear in any topic's Active tasks owned rail.";
 
+  // Plan 04.1-09 — when closed, render nothing. The Plan 04.1-08 build kept
+  // the <dialog> element mounted and toggled via showModal/close; the new
+  // backdrop+body shell mounts only while open.
+  if (!open) return <></>;
+
   return (
-    <dialog
-      ref={dialogRef}
-      className="true-task-dialog"
-      aria-labelledby="true-task-dialog-heading"
-      onKeyDown={onKeyDown}
-      data-clarity-mode={mode}
+    <div
+      className="true-task-dialog-backdrop"
+      role="presentation"
+      onClick={onClose}
     >
-      <h2 id="true-task-dialog-heading" className="true-task-dialog-heading">
-        {heading}
-      </h2>
+      <div
+        className="true-task-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="true-task-dialog-heading"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={onKeyDown}
+        data-clarity-mode={mode}
+      >
+        <h2 id="true-task-dialog-heading" className="true-task-dialog-heading">
+          {heading}
+        </h2>
 
       <div className="true-task-dialog-field">
         <label htmlFor="true-task-dialog-title">TITLE</label>
@@ -383,6 +404,7 @@ export function TrueTaskDialog({
           {busy ? 'Creating…' : 'Create task'}
         </button>
       </div>
-    </dialog>
+      </div>
+    </div>
   );
 }

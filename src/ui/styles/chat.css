@@ -1238,18 +1238,46 @@
  * the placeholder is always `Message {employee}…`. */
 
 /* Pattern B — confirm dialog (UI-SPEC §"Confirm dialog (D-02)").
- * Native <dialog> — no shadcn / radix import. */
+ * Plan 04.1-09 — DIALOG SHELL REWORKED. The Plan 04.1-08 build used the
+ * native <dialog> element + showModal() which the existing CSS broke by
+ * forcing `position: fixed; inset: 0; width: 480px; margin: 0` — the dialog
+ * rendered TOP-LEFT (operator drill console output 2026-05-20 confirmed:
+ * `position:'fixed', top:'0px', left:'0px', width:'480px'`). The dialog
+ * is now a centered modal via a custom backdrop + body pair: the backdrop
+ * is a fixed-inset flex container that centers the body in the viewport;
+ * the body is `position: relative` with `max-width: 560px`. Backdrop click
+ * closes (via onClick in true-task-dialog.tsx); click inside the body
+ * stops propagation. The Plan 04.1-08 `::backdrop` pseudo-element rule is
+ * dead — the new backdrop is a real DOM element. */
+[data-clarity-surface="chat"] .true-task-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 7, 5, 0.75);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  z-index: 200;
+}
 [data-clarity-surface="chat"] .true-task-dialog {
   background: var(--bg-2);
   color: var(--ink);
   border: 1px solid var(--line-bright);
   padding: 16px 20px 16px;
-  max-width: 480px;
-  width: 90vw;
+  /* Plan 04.1-09 — was max-width 480px + width 90vw (native <dialog> shell).
+   * Now position: relative + max-width 560px (bumped for breathing room);
+   * the backdrop's flex container does the centering. Explicit
+   * top/left/right/bottom resets defeat any stale `inset: 0` cascade. */
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  max-width: 560px;
+  width: 100%;
+  margin: 0;
   font-family: "Geist", "Helvetica Neue", sans-serif;
-}
-[data-clarity-surface="chat"] .true-task-dialog::backdrop {
-  background: rgba(14, 13, 10, 0.78);
 }
 [data-clarity-surface="chat"] .true-task-dialog-eyebrow {
   font-family: "Geist Mono", monospace;
