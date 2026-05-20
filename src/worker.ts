@@ -114,6 +114,10 @@ import {
   registerChatTopicArchive,
   type ChatTopicArchiveCtx,
 } from './worker/handlers/chat-topic-archive.ts';
+import {
+  registerChatActiveTasks,
+  type ChatActiveTasksCtx,
+} from './worker/handlers/chat-active-tasks.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -199,6 +203,12 @@ const plugin = definePlugin({
     // attempt-2 evidence shows the host's disposition-recovery service
     // engages on terminal chat-topic issues).
     registerChatTopicArchive(ctx as unknown as ChatTopicArchiveCtx);
+    // Plan 04.1-05 — D-08 active-tasks-per-topic data handler. Reads the
+    // chat_topic_tasks side table (populated by createTrueTask's retrofit
+    // best-effort write) + enriches per-row via ctx.issues.get. Never
+    // calls ctx.issues.list (Wave 1 lock: REST originId filters do not
+    // work; the side table is the steady-state lookup path).
+    registerChatActiveTasks(ctx as unknown as ChatActiveTasksCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
