@@ -728,3 +728,60 @@ test('parseReasoning: a missing closing fence treats the rest as reasoning', asy
   assert.equal(r.visible, 'Answer.');
   assert.equal(r.reasoning, 'dangling reasoning');
 });
+
+// ---------------------------------------------------------------------------
+// Plan 04.1-08 — message-thread extensions:
+//   - → Promote hover affordance on agent bubbles (opacity 0 → 1 on hover)
+//   - ArchivedBanner mounts when archivedBanner prop is supplied
+//   - onPromoteMessage callback fired by PromoteActions when wired up
+// ---------------------------------------------------------------------------
+
+test('Chat thread (Plan 04.1-08): PromoteActions consumes onPromoteMessage when provided', () => {
+  const src = readChat('message-thread.tsx');
+  const c = readChatCode('message-thread.tsx');
+  // The PromoteActions component accepts an optional onPromoteMessage
+  // callback; when set, clicking Promote calls it (the parent opens the
+  // dual-mode dialog in PROMOTE mode at index.tsx).
+  assert.match(src, /onPromoteMessage/);
+  assert.match(
+    c,
+    /if\s*\(onPromoteMessage\)\s*\{[\s\S]*?onPromoteMessage\(\{/,
+    'Promote click invokes onPromoteMessage when supplied',
+  );
+});
+
+test('Chat thread (Plan 04.1-08): MessageThread renders ArchivedBanner when archivedBanner prop is set', () => {
+  const src = readChat('message-thread.tsx');
+  assert.match(src, /import\s*\{?\s*ArchivedBanner/);
+  // The render call passes through the topicTitle / messageCount / etc.
+  assert.match(src, /<ArchivedBanner\s+/);
+  assert.match(src, /archivedBanner\.topicTitle/);
+});
+
+test('Chat thread (Plan 04.1-08): → Promote button hover affordance (CSS opacity 0 by default)', () => {
+  // The .promote action affordance CSS controls the opacity-0 → opacity-1
+  // on-hover transition.
+  const HERE_LOCAL = path.dirname(fileURLToPath(import.meta.url));
+  const css = readFileSync(
+    path.resolve(HERE_LOCAL, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  assert.match(
+    css,
+    /\.promote\b[\s\S]*?opacity:\s*0/,
+    '.promote default opacity is 0 (hidden until hover)',
+  );
+  assert.match(
+    css,
+    /\.bubble:hover\s+\.promote\b[\s\S]*?opacity:\s*1/,
+    '.bubble:hover surfaces .promote (opacity 1)',
+  );
+});
+
+test('Chat thread (Plan 04.1-08): the legacy in-place chat.promote fall-back is kept', () => {
+  // When the parent did NOT wire onPromoteMessage (e.g. an older mount
+  // point), the component must still fire chat.promote inline (defensive
+  // backwards compat).
+  const c = readChatCode('message-thread.tsx');
+  assert.match(c, /usePluginAction\(['"]chat\.promote['"]\)/);
+});
