@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-20T09:41:00Z"
+last_updated: "2026-05-20T10:04:28Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 47
-  completed_plans: 31
-  percent: 66
+  completed_plans: 32
+  percent: 68
 ---
 
 # State: Clarity Pack
@@ -23,12 +23,29 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 2 in progress 2026-05-20. Plans 04.1-02 + 04.1-03 + 04.1-04 COMPLETE; Plan 04.1-05 (Wave 2, autonomous TDD) ready to run next.
+**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 3 in progress 2026-05-20. Plans 04.1-02 + 04.1-03 + 04.1-04 + 04.1-05 COMPLETE; Plan 04.1-06 (Wave 3 UI surfaces) ready to run next; Plan 04.1-07 (closure) follows.
 
 ## Current Position
 
-Phase: 04.1 (chat-true-task) — Wave 2 in progress 2026-05-20 (Wave 1 CLOSED with Gate Verdict GO).
-Plan: 4 of 7 complete — **Plan 04.1-04 COMPLETE 2026-05-20; 3 plans remaining.**
+Phase: 04.1 (chat-true-task) — Wave 3 in progress 2026-05-20 (Wave 1 CLOSED with Gate Verdict GO; Wave 2 worker tier complete).
+Plan: 5 of 7 complete — **Plan 04.1-05 COMPLETE 2026-05-20; 2 plans remaining.**
+
+**Plan 04.1-05 — chat-topic archive (D-10) + chat.taskOwned (D-08) + chat_topic_tasks side table + createTrueTask cross-plan retrofit: COMPLETE 2026-05-20.**
+Autonomous TDD. 2 tasks + 1 cross-plan retrofit / 8 commits `f0e1862..bc2e26e`:
+- `f0e1862` (Task 1 RED) — `test(04.1-05): RED -- setChatTopicArchived + chat_topic_tasks repo helpers` (R1-R5: setChatTopicArchived UPDATE shape + boolean pass-through; insertChatTopicTask ON CONFLICT DO NOTHING + idempotency; listChatTopicTasksForTopic newest-first + scoping).
+- `b821796` (Task 1 GREEN, repo + migration) — `feat(04.1-05): setChatTopicArchived + chat_topic_tasks side table (D-10 + D-08)` — migrations/0007_chat_topic_tasks.sql (additive plugin-namespace; validator-conformant per 0006 precedent: no procedural blocks, no standalone CREATE INDEX, apostrophe-free comments, ends on a semicolon-terminated statement) + repo helpers (setChatTopicArchived mirrors updateChatMessagePinned; insertChatTopicTask race-safe; listChatTopicTasksForTopic LIMIT 50 bounded).
+- `3468234` (Task 1 RED, handler) — `test(04.1-05): RED -- chat.topic.archive handler tests` (8 cases incl. D-10 critical Test 6: spy on ctx.issues.update, zero invocations across both paths).
+- `3cc126b` (Task 1 GREEN, handler) — `feat(04.1-05): chat.topic.archive action handler (D-10 -- plugin-side, never touches host status)` — new `src/worker/handlers/chat-topic-archive.ts` exports `registerChatTopicArchive`. The handler does NOT import the host issue-mutation API (no ctx.issues.update import or call); the load-bearing D-10 invariant is pinned by construction AND by the Test 6 spy. Registered in src/worker.ts alongside the existing chat handlers.
+- `b99e3fe` (Task 2 RED) — `test(04.1-05): RED -- chat.taskOwned handler tests` (14 cases incl. Test 10 Pitfall-5 anti-regression: spy on ctx.issues.list, zero invocations across populated + empty paths).
+- `ae67356` (Task 2 GREEN) — `feat(04.1-05): chat.taskOwned data handler (D-08 -- side-table lookup, no N+1)` — new `src/worker/handlers/chat-active-tasks.ts` exports `registerChatActiveTasks`. Reads chat_topic_tasks via listChatTopicTasksForTopic (LIMIT 50), enriches per-row via ctx.issues.get; per-row failures + null returns are SKIPPED (not failed). SELECT failure -> { error: 'TASKS_FAILED' } + warn-log. Defensive defaults (identifier/title/status/createdAt) for sparse host rows.
+- `3cb1c83` (cross-plan retrofit RED) — `test(04.1-05): RED -- createTrueTask cross-plan retrofit (side-table back-link)` (4 tests: writes back-link / failure doesn't bubble / write skipped if create itself throws / write still issued if marker fails).
+- `bc2e26e` (cross-plan retrofit GREEN) — `feat(04.1-05): createTrueTask cross-plan retrofit (chat_topic_tasks back-link)` — TrueTaskCtx grows an optional `db` field; insertChatTopicTask is called post-create in best-effort symmetry with the marker comment (try/catch + warn-log; never bubbles). Production callers (chat-true-task handler + chat-promote handler) thread ctx.db through PluginContext transparently; older test fixtures without db simply skip.
+
+Suite: 1055 → 1091 tests (+36; 1089 pass / 0 fail / 2 pre-existing skip). CTT-07 (plugin-side archive — host issue untouched) + CTT-08 (live task-status tracking data path) worker-tier complete (UI rendering ships in Plan 04.1-06). **Four deviations recorded** (all anticipated by the prompt's `<scope_refinement_from_wave1>` block or authoring-time clarifications): (1) **[Rule 3 — Cross-plan retrofit per Wave 1 lock]** the createTrueTask side-table write touches src/worker/chat/true-task.ts which is in Plan 04.1-02's files_modified set, not 04.1-05's — the retrofit is the cross-plan glue without which chat.taskOwned would always return empty; pinned by 4 new tests; (2) **[Rule 3 — Blocking, anticipated]** acceptance grep `grep -c "ctx.issues.update" chat-topic-archive.ts == 0` is met SUBSTANTIVELY (0 function calls — `grep -nE "ctx\.issues\.update\("`) but not literally (1 explanatory comment hit naming the spied function in the regression-guard docstring); (3) **[Rule 3 — Blocking, anticipated]** acceptance grep `grep -c "ctx.issues.list" chat-active-tasks.ts == 1` was written for the original (non-Wave-1) plan path; the actual count is 0 CALLS + 2 explanatory comments per the Wave 1 scope refinement (Test 10 cross-pins the invariant with a runtime spy); (4) **[Rule 1 — Bug]** an authoring-time test-ordering confusion about missing-companyId vs missing-userId (opt-in-guard reads userId first) resolved during RED. SUMMARY: `04.1-05-SUMMARY.md`.
+
+**Plan 04.1-06 (UI surfaces — chat shell + archive button + active-tasks rail + diagnostics view + host-stuck banner) UNBLOCKED.** Consumes both new handlers via `usePluginAction('chat.topic.archive')` + `usePluginData('chat.taskOwned')`. Independent on `files_modified` from this plan; Wave 3 sole remaining plan before closure (04.1-07).
+
+---
 
 **Plan 04.1-04 — classifyComment + chat.messages runtime-noise filter + watchdog-on-poll + host-stuck signal: COMPLETE 2026-05-20.**
 Autonomous TDD. 2 tasks / 4 commits `1f42a9c..31ac0a4`:
@@ -39,7 +56,7 @@ Autonomous TDD. 2 tasks / 4 commits `1f42a9c..31ac0a4`:
 
 Suite: 1024 → 1055 tests (+31; 1053 pass / 0 fail / 2 pre-existing skip). CTT-04 (runtime noise filtered) + CTT-06 (host-stuck signal) worker-tier data path satisfied (UI rendering ships in Plan 04.1-06). **Zero deviations recorded** — plan executed exactly as written with the Wave 1 scope refinements applied verbatim (dual-keyed discriminator + 5th body phrase). One small implementation choice noted: an `body.length > 0 &&` short-circuit before the body-pattern fallback scan (defensive against any future empty-string entry in RUNTIME_PHRASES that would match everything; Tests 13 + 14 verify the right behaviour on empty bodies). SUMMARY: `04.1-04-SUMMARY.md`.
 
-**Plan 04.1-05 (chat_topic_tasks side table + chat.taskOwned data handler) UNBLOCKED.** Independent on `files_modified` from this plan. Plan 04.1-06 (UI surfaces) reads `topicStuck` / `recoveryOwner` from this plan's response shape for the HostStuckBanner.
+**Plan 04.1-05 (chat_topic_tasks side table + chat.taskOwned data handler) COMPLETE 2026-05-20** (see entry above). Plan 04.1-06 (UI surfaces) reads `topicStuck` / `recoveryOwner` from this plan's response shape for the HostStuckBanner.
 
 ---
 
