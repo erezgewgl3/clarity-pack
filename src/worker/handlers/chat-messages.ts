@@ -19,11 +19,45 @@
 // the chain is the live one.
 //
 // Wrapped via opt-in-guard's wrapDataHandler. Data handlers RETURN structured
-// errors; they never throw.
+// errors; they never throw. The opt-in gate fires BEFORE any host call so an
+// opted-out user can never trigger a watchdog wake or a thread read.
+//
+// ---------------------------------------------------------------------------
+// Plan 04.1-04 EXTENSIONS (2026-05-20) — conversation / lifecycle separation
+// ---------------------------------------------------------------------------
+//
+// 1. D-14 / D-15 — runtime-noise filter. Every host comment is run through
+//    `classifyComment` (src/worker/chat/comment-classify.ts). Rows that
+//    classify as 'runtime-noise' (disposition / recovery-owner / finish_
+//    successful_run_handoff system notices) are silently filtered from the
+//    UI thread. The discriminator order is locked by 04.1-01-SPIKE-FINDINGS
+//    PROBE-D14-DISCRIM: PRIMARY authorType==='system', SECONDARY
+//    presentation.kind==='system_notice', FALLBACK 5-phrase body match.
+//
+// 2. D-16 diagnostics opt-in. Callers passing `includeDiagnostics: true` (the
+//    Plan 04.1-06 UI toggle) receive the unfiltered list — runtime notices
+//    are NOT destroyed at the host, just hidden by default. Default OFF.
+//
+// 3. D-11 watchdog cadence. Every poll fires `ensureTopicWakeable` (Plan
+//    04.1-03) fire-and-forget at the head of the handler. The helper does
+//    its own try/catch; a slow / failing watchdog NEVER delays or fails the
+//    messages response. Per the spike findings the watchdog is defensive-
+//    only (no requestWakeup call — multi-turn native re-wake works on this
+//    host version).
+//
+// 4. D-13 host-stuck signal. The response shape grows `topicStuck: boolean`
+//    + `recoveryOwner: string | null` read once from the topic issue's
+//    `activeRecoveryAction` / `successfulRunHandoff.exhausted` via
+//    `isTopicStuck` (Plan 04.1-03). Plan 04.1-06's HostStuckBanner renders
+//    when topicStuck===true; recoveryOwner provides the named human action.
+//    A failed stuck-read degrades to `topicStuck:false, recoveryOwner:null`
+//    so the messages response is still returned.
 
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 import type { PluginIssuesClient, PluginLogger } from '@paperclipai/plugin-sdk';
 import type { ChatTopicsRepoCtx, ChatMessageRow } from '../db/chat-topics-repo.ts';
+import { classifyComment } from '../chat/comment-classify.ts';
+import { ensureTopicWakeable, isTopicStuck } from '../chat/topic-watchdog.ts';
 
 export type ChatMessagesCtx = OptInGuardDataCtx &
   ChatTopicsRepoCtx & {
@@ -44,13 +78,20 @@ type ThreadMessage = {
   supersedesUuid: string | null;
 };
 
-/** The subset of IssueComment this handler reads. */
+/**
+ * The subset of IssueComment this handler reads. The Plan 04.1-04
+ * extensions add `authorType` (D-14 PRIMARY discriminator) +
+ * `presentation.kind` (D-14 SECONDARY) so `classifyComment` has the host
+ * fields it needs.
+ */
 type CommentLike = {
   id?: string;
   body?: string;
   createdAt?: Date | string;
   authorUserId?: string | null;
   authorAgentId?: string | null;
+  authorType?: string | null;
+  presentation?: { kind?: string | null } | null;
 };
 
 /** Coerce a Date | ISO string | undefined to epoch ms (NaN-guarded). */
@@ -102,6 +143,16 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
       return { error: 'USER_ID_REQUIRED' };
     }
 
+    // Plan 04.1-04 — D-16 diagnostics opt-in. OFF by default.
+    const includeDiagnostics = (params as { includeDiagnostics?: unknown })?.includeDiagnostics === true;
+
+    // Plan 04.1-04 — D-11 watchdog cadence. Fire-and-forget at the head of
+    // the handler. The helper handles its own try/catch internally and
+    // NEVER throws back to the caller (chat.messages must not fail because
+    // of a watchdog mishap). A `void` discards the returned promise so the
+    // handler does not await the slow path.
+    void ensureTopicWakeable(ctx, topicIssueId, companyId);
+
     let comments: CommentLike[];
     try {
       comments = (await ctx.issues.listComments(topicIssueId, companyId)) as unknown as CommentLike[];
@@ -126,6 +177,36 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
       metaRows = [];
     }
 
+    // Plan 04.1-04 — D-13 host-stuck signal. Read the topic issue once for
+    // activeRecoveryAction / successfulRunHandoff.exhausted. Best-effort:
+    // a failure degrades to the safe defaults (topicStuck:false,
+    // recoveryOwner:null) so the messages response is still returned.
+    let topicStuck = false;
+    let recoveryOwner: string | null = null;
+    try {
+      const topicIssue = (await ctx.issues.get(topicIssueId, companyId)) as
+        | {
+            status?: string;
+            activeRecoveryAction?:
+              | { recoveryOwnerName?: string | null }
+              | null;
+            successfulRunHandoff?: { exhausted?: boolean } | null;
+          }
+        | null;
+      topicStuck = isTopicStuck(topicIssue);
+      if (topicStuck && topicIssue?.activeRecoveryAction) {
+        const rec = topicIssue.activeRecoveryAction as {
+          recoveryOwnerName?: string | null;
+        };
+        recoveryOwner = rec.recoveryOwnerName ?? null;
+      }
+    } catch (e) {
+      ctx.logger?.warn?.('chat.messages: topic-stuck read failed', {
+        topicIssueId,
+        err: (e as Error).message,
+      });
+    }
+
     // Index the side table by comment_id, and collect the set of message_uuids
     // that have been superseded by a later edit.
     const metaByCommentId = new Map<string, ChatMessageRow>();
@@ -137,6 +218,9 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
 
     const messages: ThreadMessage[] = (comments ?? [])
       .filter((c) => typeof c?.id === 'string' && c.id)
+      // Plan 04.1-04 — D-14/D-15 runtime-noise filter. The diagnostics opt-in
+      // bypasses the filter so D-16 can render the unfiltered list.
+      .filter((c) => includeDiagnostics || classifyComment(c) === 'conversation')
       .slice()
       .sort((a, b) => createdAtMs(a.createdAt) - createdAtMs(b.createdAt))
       .map((c) => {
@@ -160,6 +244,12 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
         };
       });
 
-    return { kind: 'messages' as const, topicIssueId, messages };
+    return {
+      kind: 'messages' as const,
+      topicIssueId,
+      messages,
+      topicStuck,
+      recoveryOwner,
+    };
   });
 }
