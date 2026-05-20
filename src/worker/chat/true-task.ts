@@ -28,10 +28,23 @@
 // warn-level log records the marker failure so it stays diagnosable.
 
 import type { PluginIssuesClient, PluginLogger } from '@paperclipai/plugin-sdk';
+// Plan 04.1-05 retrofit (cross-plan, [Rule 3] per Wave 1 lock): every
+// successful task create writes a best-effort back-link to the
+// chat_topic_tasks side table. chat.taskOwned reads via this table
+// because the host REST issues.list silently ignores originId filters
+// (04.1-01-SPIKE-FINDINGS PROBE-OQ2-FILTER). Best-effort symmetry with
+// the marker-comment write: try/catch + warn-log; failure NEVER bubbles.
+import { insertChatTopicTask, type ChatTopicsRepoCtx } from '../db/chat-topics-repo.ts';
 
 export type TrueTaskCtx = {
   issues: PluginIssuesClient;
   logger?: PluginLogger;
+  // Optional `db` -- the retrofit side-table write is opt-in: a caller
+  // that does not thread `db` (older test fixtures, dev-only paths)
+  // simply skips the back-link. Production callers (chat-true-task.ts,
+  // chat-promote.ts) thread ctx.db transparently because PluginContext
+  // carries it.
+  db?: ChatTopicsRepoCtx['db'];
 };
 
 export type CreateTrueTaskInput = {
@@ -87,6 +100,31 @@ export async function createTrueTask(
       issueId: issue.id,
       err: (e as Error).message,
     });
+  }
+
+  // Plan 04.1-05 retrofit (cross-plan per Wave 1 lock) — write the
+  // topic → task back-link to the chat_topic_tasks side table so
+  // chat.taskOwned (D-08) can list the topic's spun-off tasks. The
+  // REST issues.list surface silently ignores originId filters on this
+  // host (04.1-01-SPIKE-FINDINGS PROBE-OQ2-FILTER), so this side table
+  // is the steady-state lookup path. Best-effort symmetry with the
+  // marker write above: try/catch + warn-log; failure never bubbles.
+  // The repo helper carries ON CONFLICT DO NOTHING for race-safety.
+  if (ctx.db) {
+    try {
+      await insertChatTopicTask(
+        { db: ctx.db },
+        input.companyId,
+        input.topicIssueId,
+        issue.id,
+      );
+    } catch (e) {
+      ctx.logger?.warn?.('createTrueTask: chat_topic_tasks side-table write failed', {
+        topicIssueId: input.topicIssueId,
+        issueId: issue.id,
+        err: (e as Error).message,
+      });
+    }
   }
 
   return { issueId: issue.id };
