@@ -253,6 +253,27 @@ export async function updateChatMessagePinned(
 }
 
 /**
+ * Plan 04.1-05 / D-10 — plugin-side archive. Sets `chat_topics.archived` for
+ * ONE topic; does NOT touch host issue status (that would re-engage the
+ * disposition machinery via the host's recovery service — see PROBE-OQ3
+ * attempt 2 in 04.1-01-SPIKE-FINDINGS). Company-scoped so an archive never
+ * crosses companies. Mirrors the updateChatMessagePinned shape exactly.
+ */
+export async function setChatTopicArchived(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  topicIssueId: string,
+  archived: boolean,
+): Promise<void> {
+  await ctx.db.execute(
+    `UPDATE plugin_clarity_pack_cdd6bda4bd.chat_topics
+     SET archived = $1
+     WHERE issue_id = $2 AND company_id = $3`,
+    [archived, topicIssueId, companyId],
+  );
+}
+
+/**
  * Read a chat_messages row by (company_id, comment_id). PITFALL #4: the
  * chat_messages side table is operator-write-only — chat.send inserts a row for
  * every operator message, but AGENT comments have NO row. So this lookup
@@ -396,4 +417,64 @@ export async function insertEmployeeParent(
 
   const surviving = await getEmployeeParentIssueId(ctx, companyId, employeeAgentId);
   return surviving ?? parentIssueId;
+}
+
+// ---------------------------------------------------------------------------
+// chat_topic_tasks — Plan 04.1-05 D-08 active-tasks lookup side table
+// ---------------------------------------------------------------------------
+//
+// Wave 1 lock per 04.1-01-SPIKE-FINDINGS PROBE-OQ2-FILTER: the host REST
+// `issues.list` surface silently ignores `originKind` + `originId` /
+// `originIdPrefix` filters (returns the 500-row cap; exact-match returns 0
+// even when the row exists). The active-tasks-per-topic query therefore
+// CANNOT depend on origin-based filtering — the side table is the
+// steady-state path. createTrueTask (Plan 04.1-02) writes a row here on
+// every successful task create (best-effort, never bubbles); chat.taskOwned
+// reads via listChatTopicTasksForTopic and enriches per-row via ctx.issues.get.
+//
+// The table is plugin-namespace-only (`migrations/0007_chat_topic_tasks.sql`)
+// so coexistence guarantee #3 (additive-only) holds.
+
+/**
+ * Plan 04.1-05 D-08 — write the topic -> task back-link. The INSERT carries
+ * `ON CONFLICT (company_id, topic_issue_id, task_issue_id) DO NOTHING` so a
+ * cross-plan retrofit re-run (or a race with the createTrueTask helper's
+ * best-effort write) is a server-side no-op. Race-safe, idempotent.
+ */
+export async function insertChatTopicTask(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  topicIssueId: string,
+  taskIssueId: string,
+): Promise<void> {
+  await ctx.db.execute(
+    `INSERT INTO plugin_clarity_pack_cdd6bda4bd.chat_topic_tasks
+       (company_id, topic_issue_id, task_issue_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (company_id, topic_issue_id, task_issue_id) DO NOTHING`,
+    [companyId, topicIssueId, taskIssueId],
+  );
+}
+
+/**
+ * Plan 04.1-05 D-08 — list task issue ids spawned from one chat topic,
+ * newest-first. Bounded by LIMIT 50 so a runaway topic cannot blow up the
+ * UI. The caller is chat.taskOwned, which then fetches per-row metadata
+ * via ctx.issues.get; this query is O(1) on the index `(company_id,
+ * topic_issue_id, created_at DESC)`.
+ */
+export async function listChatTopicTasksForTopic(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  topicIssueId: string,
+): Promise<string[]> {
+  const rows = await ctx.db.query<{ task_issue_id: string }>(
+    `SELECT task_issue_id
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_topic_tasks
+     WHERE company_id = $1 AND topic_issue_id = $2
+     ORDER BY created_at DESC
+     LIMIT 50`,
+    [companyId, topicIssueId],
+  );
+  return rows.map((r) => r.task_issue_id);
 }
