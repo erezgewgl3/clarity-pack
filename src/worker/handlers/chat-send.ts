@@ -1,10 +1,14 @@
 // src/worker/handlers/chat-send.ts
 //
 // Plan 04-03 Task A — CHAT-02 / CHAT-06 / D-06 — the chat.send action handler.
+// Plan 04.1-03 Task 2 — auto-reopen REPLACED with ensureTopicWakeable.
 //
 // "Send a chat message" = create a comment on the topic issue. Posting a
 // comment on an agent-assigned issue natively wakes that agent (D-01, proven
-// live by the 04-01 spike) — Phase 4 builds ZERO agent-delivery code.
+// live by the 04-01 spike AND multi-turn N>1 by 04.1-01 PROBE-OQ3 PASS-NATIVE)
+// — Phase 4.1 builds ZERO agent-delivery code, and DROPS the requestWakeup
+// nudge the original D-12 design contemplated (the REST surface returns 404
+// on this host version; native wake is sufficient and reliable for N>1).
 //
 // chat.send is the canonical-write path:
 //   1. Dedup on message_uuid via getChatMessageByUuid — a resend (an
@@ -15,12 +19,16 @@
 //      content NEVER lives in a Clarity Pack table.
 //   3. insertChatMessage records only the message_uuid -> comment_id map (the
 //      side table maps IDs, never body).
-//   4. Auto-reopen (D-06): if the topic issue is 'done', flip it back to
-//      'in_progress'. Per 04-01-SPIKE-FINDINGS OQ-3 = STATUS-FLIP-NOT-NEEDED,
-//      the flip is for UX/status correctness ONLY — `requestWakeup` is NOT
-//      called; a posted comment alone wakes the assigned agent.
+//   4. D-09 / D-11 — ensureTopicWakeable(ctx, topicIssueId, companyId) runs
+//      fire-and-forget after the comment lands. The shared helper REPLACES
+//      the prior inline auto-reopen block: a single source of truth for the
+//      flip-off-done sweep used here AND in Plan 04.1-04's chat.messages
+//      poll handler. RESEARCH §Pitfall 3 closed by 04.1-01-SPIKE-FINDINGS
+//      PROBE-OQ3 PASS-NATIVE: native wake works for N>1; no requestWakeup.
+//      A slow / failing watchdog NEVER delays or fails the send (void call).
 //   5. A createComment host failure returns { error: 'SEND_FAILED' } and does
-//      NOT insert a chat_messages row — no orphan map entry.
+//      NOT insert a chat_messages row — no orphan map entry. The watchdog is
+//      NOT invoked: no comment landed, nothing to wake on.
 //
 // Wrapped via opt-in-guard's wrapActionHandler: an opted-out (or
 // unidentifiable) caller gets { error: 'OPT_IN_REQUIRED' } before the inner
@@ -34,6 +42,7 @@ import {
   insertChatMessage,
   type ChatTopicsRepoCtx,
 } from '../db/chat-topics-repo.ts';
+import { ensureTopicWakeable } from '../chat/topic-watchdog.ts';
 
 export type ChatSendCtx = OptInGuardActionCtx &
   ChatTopicsRepoCtx & {
@@ -87,27 +96,19 @@ export function registerChatSend(ctx: ChatSendCtx): void {
       sent_at: new Date().toISOString(),
     });
 
-    // 4. Auto-reopen (D-06) — a 'done' topic flips to 'in_progress' for
-    //    UX/status correctness. OQ-3 STATUS-FLIP-NOT-NEEDED: no requestWakeup.
-    try {
-      const issue = (await ctx.issues.get(topicIssueId, companyId)) as {
-        status?: string;
-      } | null;
-      if (issue && issue.status === 'done') {
-        await ctx.issues.update(
-          topicIssueId,
-          { status: 'in_progress' } as Parameters<PluginIssuesClient['update']>[1],
-          companyId,
-        );
-      }
-    } catch (e) {
-      // Auto-reopen is best-effort — the comment already landed and wakes the
-      // agent natively. A failed status flip must not fail the send.
-      ctx.logger?.warn?.('chat.send: auto-reopen check failed', {
-        topicIssueId,
-        err: (e as Error).message,
-      });
-    }
+    // 4. D-09 / D-11 — ensure the topic is wakeable on EVERY send. The
+    //    watchdog REPLACES the prior auto-reopen block: it does the same
+    //    flip-off-done sweep (done / cancelled / blocked → in_progress) from
+    //    a single source of truth shared with Plan 04.1-04's chat.messages
+    //    per-poll watchdog. Per 04.1-01-SPIKE-FINDINGS PROBE-OQ3 PASS-NATIVE
+    //    the helper does NOT call requestWakeup — multi-turn native re-wake
+    //    works (REST surface returns 404).
+    //
+    //    Fire-and-forget after the comment lands — the helper internally
+    //    catches every step, so a wake-gate / status-flip failure cannot
+    //    fail the send. `void` is REQUIRED: awaiting it would re-introduce
+    //    the delay the original inline block did not have either.
+    void ensureTopicWakeable(ctx, topicIssueId, companyId);
 
     return { ok: true, commentId: comment.id };
   });
