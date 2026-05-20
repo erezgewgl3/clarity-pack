@@ -42,6 +42,9 @@ import {
 import { deriveLiveness, usePoll, type LivenessState } from '../../primitives/use-poll.ts';
 import { ProseWithRefChips } from '../reader/prose-with-ref-chips.tsx';
 import { parseReasoning, ReasoningPanel } from './reasoning-panel.tsx';
+// Plan 04.1-06 — Patterns C, F (RuntimeNoiseRow inline), G.
+import { InlineTaskCard } from './true-task/inline-task-card.tsx';
+import { HostStuckBanner } from './host-stuck-banner.tsx';
 
 /** A persisted message as chat.messages returns it. */
 export type ChatMessage = {
@@ -53,10 +56,35 @@ export type ChatMessage = {
   senderKind: string | null;
   pinned: boolean;
   superseded: boolean;
+  // Plan 04.1-06 D-16 diagnostics view — Wave 1 spike captured a structured
+  // presentation envelope on system-classified comments. When the chat.messages
+  // handler is passed includeDiagnostics:true (Plan 04.1-04), runtime-noise
+  // comments are kept in the messages array; the UI distinguishes them via
+  // authorType/presentation and renders them as `.runtime-noise-comment`
+  // blocks instead of bubbles.
+  authorType?: string | null;
+  presentation?: {
+    kind?: string | null;
+    title?: string | null;
+    tone?: string | null;
+  } | null;
+  metadata?: {
+    version?: number;
+    sections?: Array<{
+      title?: string;
+      rows?: Array<Record<string, unknown>>;
+    }>;
+  } | null;
 };
 
 type MessagesResult =
-  | { kind: 'messages'; topicIssueId: string; messages: ChatMessage[] }
+  | {
+      kind: 'messages';
+      topicIssueId: string;
+      messages: ChatMessage[];
+      topicStuck?: boolean;
+      recoveryOwner?: string | null;
+    }
   | { error: string }
   | null;
 
@@ -116,16 +144,36 @@ export function MessageThread({
   userId,
   topicIssueId,
   optimistic = [],
+  assigneeAgentId,
+  employeeName,
+  employeeRole = null,
+  diagnostics = false,
+  pendingTaskCard = null,
 }: {
   companyId: string;
   userId: string;
   topicIssueId: string;
   optimistic?: OptimisticMessage[];
+  // Plan 04.1-06 — D-04 Promote upgrade requires the new chat.promote params
+  // assigneeAgentId + employeeName (Plan 04.1-02). Threaded from index.tsx
+  // via Composer.
+  assigneeAgentId?: string;
+  employeeName?: string;
+  employeeRole?: string | null;
+  // Plan 04.1-06 D-16 — when true, includeDiagnostics:true is sent to the
+  // chat.messages handler and runtime-noise comments render inline as
+  // `.runtime-noise-comment` blocks.
+  diagnostics?: boolean;
+  /** Optimistic InlineTaskCard rendered until chat.taskOwned catches up. */
+  pendingTaskCard?: { issueId: string; title: string } | null;
 }): React.ReactElement {
   const { data, loading, refresh } = usePluginData<MessagesResult>('chat.messages', {
     topicIssueId,
     companyId,
     userId,
+    // D-16 toggle — OFF by default; the handler returns the unfiltered list
+    // when this flips true.
+    includeDiagnostics: diagnostics,
   });
 
   // STREAMS_AVAILABLE — host NO-PATH. The live Countermoves re-drill confirmed
@@ -247,6 +295,17 @@ export function MessageThread({
       ? data.messages
       : [];
   const isError = !!data && typeof data === 'object' && 'error' in data;
+  // Plan 04.1-06 D-13 — host-stuck signal (Plan 04.1-04 response shape).
+  const topicStuck =
+    !!data &&
+    typeof data === 'object' &&
+    'kind' in data &&
+    data.kind === 'messages' &&
+    data.topicStuck === true;
+  const recoveryOwner =
+    data && typeof data === 'object' && 'kind' in data && data.kind === 'messages'
+      ? (data.recoveryOwner ?? null)
+      : null;
 
   // Strict server-time ordering — never a client clock (PITFALLS 11.4).
   const ordered = React.useMemo(
@@ -297,6 +356,13 @@ export function MessageThread({
         <span aria-hidden="true">{indicator.label}</span>
         <span className="sr-only">{indicator.statusText}</span>
       </div>
+      {/* Plan 04.1-06 Pattern G — Host-stuck banner rendered BELOW the
+          live indicator (CSS makes it sticky) when chat.messages returns
+          topicStuck:true. Silently unmounts on the next poll where
+          topicStuck flips back to false. */}
+      {topicStuck ? (
+        <HostStuckBanner topicIssueId={topicIssueId} recoveryOwner={recoveryOwner} />
+      ) : null}
       {pollDisabled ? (
         <div className="clarity-chat-error">
           Plugin disabled. Reload after re-enabling.
@@ -312,6 +378,68 @@ export function MessageThread({
         const day = dayLabel(ms);
         const showDivider = day && day !== lastDay;
         lastDay = day || lastDay;
+
+        // Plan 04.1-06 Pattern C — D-07 marker comment intercepted and
+        // rendered as an inline task card. The marker prefix is locked by
+        // src/worker/chat/true-task.ts (`Task created — <title>, assigned
+        // to <name>.`). Plan 04.1-04's classifyComment treats the marker as
+        // conversational so it always lands in the messages array, never
+        // filtered as runtime noise (Pitfall 4 anti-regression).
+        const markerMatch = /^Task created — ([^,]+), assigned to (.+)\.$/.exec(
+          (msg.body ?? '').trim(),
+        );
+        if (markerMatch) {
+          const parsedTitle = markerMatch[1] ?? 'New task';
+          const parsedAssignee = markerMatch[2] ?? employeeName ?? 'employee';
+          return (
+            <React.Fragment key={msg.commentId}>
+              {showDivider ? (
+                <div className="day-divider">
+                  <span>{day}</span>
+                </div>
+              ) : null}
+              {/* Optimistic state: chat.taskOwned has not yet returned the
+                  backing row; identifier/issueId/status are null. On the
+                  next 15s poll, chat.taskOwned + the side-table back-link
+                  (Plan 04.1-05 retrofit) will supply them. */}
+              <InlineTaskCard
+                identifier={null}
+                issueId={null}
+                title={parsedTitle}
+                employeeName={parsedAssignee}
+                role={employeeRole}
+                status={null}
+                createdAt={
+                  typeof msg.createdAt === 'string'
+                    ? msg.createdAt
+                    : new Date(ms).toISOString()
+                }
+              />
+            </React.Fragment>
+          );
+        }
+
+        // Plan 04.1-06 D-16 — runtime-noise comments rendered as
+        // `.runtime-noise-comment` blocks (NOT bubbles). The handler only
+        // returns them when diagnostics:true; this filter guards belt-and-
+        // suspenders for an old cache.
+        const isRuntimeNoise =
+          msg.authorType === 'system' ||
+          msg.presentation?.kind === 'system_notice';
+        if (isRuntimeNoise) {
+          if (!diagnostics) return null;
+          return (
+            <React.Fragment key={msg.commentId}>
+              {showDivider ? (
+                <div className="day-divider">
+                  <span>{day}</span>
+                </div>
+              ) : null}
+              <RuntimeNoiseRow msg={msg} />
+            </React.Fragment>
+          );
+        }
+
         return (
           <React.Fragment key={msg.commentId}>
             {showDivider ? (
@@ -334,11 +462,29 @@ export function MessageThread({
               companyId={companyId}
               userId={userId}
               topicIssueId={topicIssueId}
+              assigneeAgentId={assigneeAgentId ?? ''}
+              employeeName={employeeName ?? ''}
               onRefresh={refresh}
             />
           </React.Fragment>
         );
       })}
+
+      {/* Plan 04.1-06 Pattern C — optimistic InlineTaskCard rendered until
+          the marker comment lands in the thread on the next 15s poll. The
+          parent (Composer) clears `pendingTaskCard` when the operator
+          starts a new send. */}
+      {pendingTaskCard ? (
+        <InlineTaskCard
+          identifier={null}
+          issueId={pendingTaskCard.issueId}
+          title={pendingTaskCard.title}
+          employeeName={employeeName ?? 'employee'}
+          role={employeeRole}
+          status={null}
+          createdAt={new Date().toISOString()}
+        />
+      ) : null}
 
       {pendingOverlay.map((o) => (
         <OptimisticBubble key={o.messageUuid} optimistic={o} />
@@ -359,6 +505,8 @@ function PersistedMessage({
   companyId,
   userId,
   topicIssueId,
+  assigneeAgentId,
+  employeeName,
   onRefresh,
 }: {
   msg: ChatMessage;
@@ -367,6 +515,11 @@ function PersistedMessage({
   companyId: string;
   userId: string;
   topicIssueId: string;
+  // Plan 04.1-06 — Plan 04.1-02 chat.promote rewrite required two new
+  // params: assigneeAgentId (D-06 wake contract) + employeeName (D-07
+  // marker copy). Threaded from index.tsx via Composer + MessageThread.
+  assigneeAgentId: string;
+  employeeName: string;
   /** Re-fetch the thread — used so a pin's persisted ⚑ marker appears. */
   onRefresh?: () => void;
 }): React.ReactElement | null {
@@ -386,6 +539,8 @@ function PersistedMessage({
             companyId={companyId}
             userId={userId}
             topicIssueId={topicIssueId}
+            assigneeAgentId={assigneeAgentId}
+            employeeName={employeeName}
             pinned={msg.pinned}
             onRefresh={onRefresh}
           />
@@ -424,6 +579,8 @@ function PromoteActions({
   companyId,
   userId,
   topicIssueId,
+  assigneeAgentId,
+  employeeName,
   pinned,
   onRefresh,
 }: {
@@ -431,6 +588,11 @@ function PromoteActions({
   companyId: string;
   userId: string;
   topicIssueId: string;
+  /** Plan 04.1-02 — D-06 wake contract: chat.promote now requires the
+   *  chatted employee's agent id (the promoted task is assigned to them). */
+  assigneeAgentId: string;
+  /** Plan 04.1-02 — D-07 marker comment copy. */
+  employeeName: string;
   pinned: boolean;
   onRefresh?: () => void;
 }): React.ReactElement {
@@ -458,7 +620,18 @@ function PromoteActions({
     setBusy(true);
     setFeedback(null);
     try {
-      const result = await promote({ commentId, topicIssueId, companyId, userId });
+      // Plan 04.1-02 — D-04 unification: chat.promote requires the new
+      // assigneeAgentId + employeeName params. The handler reads them via
+      // reqStr and THROWS if missing. They are threaded from index.tsx via
+      // Composer + MessageThread.
+      const result = await promote({
+        commentId,
+        topicIssueId,
+        companyId,
+        userId,
+        assigneeAgentId,
+        employeeName,
+      });
       const err = resultError(result);
       if (err) {
         setFeedback({ kind: 'error', text: `Could not promote (${err})` });
@@ -478,7 +651,7 @@ function PromoteActions({
     } finally {
       setBusy(false);
     }
-  }, [promote, commentId, topicIssueId, companyId, userId]);
+  }, [promote, commentId, topicIssueId, companyId, userId, assigneeAgentId, employeeName]);
 
   const onPin = React.useCallback(async () => {
     setBusy(true);
@@ -575,4 +748,107 @@ function usePromote(): ReturnType<typeof usePluginAction> {
 }
 function usePin(): ReturnType<typeof usePluginAction> {
   return usePluginAction('chat.pin');
+}
+
+// ---------------------------------------------------------------------------
+// RuntimeNoiseRow — Plan 04.1-06 D-16 diagnostics view.
+//
+// Renders a system-classified comment as a `.runtime-noise-comment` block
+// (NEVER a bubble). When the host populates the structured presentation
+// envelope (Wave 1 spike capture: presentation.kind === 'system_notice'
+// AND metadata.sections), the row renders a <details> collapsible with
+// typed rows: issue_link / agent_link / run_link → identifier chips;
+// key_value → label + value. When the structured envelope is absent (the
+// classifier matched the body-pattern fallback only) we render the raw
+// body in a muted block.
+//
+// XSS posture: every parsed field renders as React text. NO
+// dangerouslySetInnerHTML.
+// ---------------------------------------------------------------------------
+type SectionRow = {
+  type?: string;
+  label?: string;
+  value?: string;
+  identifier?: string;
+  title?: string;
+  name?: string;
+  issueId?: string;
+  agentId?: string;
+  runId?: string;
+};
+
+function RuntimeNoiseRow({ msg }: { msg: ChatMessage }): React.ReactElement {
+  const presentationKind = msg.presentation?.kind ?? 'message';
+  const authorType = msg.authorType ?? 'unknown';
+  const title = msg.presentation?.title ?? null;
+  const sections = msg.metadata?.sections ?? null;
+  const hasStructured = Array.isArray(sections) && sections.length > 0;
+
+  return (
+    <div className="runtime-noise-comment" role="note">
+      <div className="runtime-noise-comment-header">
+        ⏿ SYSTEM · {authorType} · {presentationKind}
+      </div>
+      {hasStructured ? (
+        <details className="runtime-noise-comment-details">
+          <summary>{title ?? 'System notice'}</summary>
+          {sections!.map((section, i) => (
+            <div key={i} className="runtime-noise-comment-section">
+              {section.title ? (
+                <div className="runtime-noise-comment-section-title">{section.title}</div>
+              ) : null}
+              {(section.rows ?? []).map((row, j) => (
+                <RuntimeNoiseStructuredRow key={j} row={row as SectionRow} />
+              ))}
+            </div>
+          ))}
+        </details>
+      ) : (
+        <div className="runtime-noise-comment-body">{msg.body}</div>
+      )}
+    </div>
+  );
+}
+
+function RuntimeNoiseStructuredRow({ row }: { row: SectionRow }): React.ReactElement {
+  const label = row.label ?? row.type ?? '·';
+  switch (row.type) {
+    case 'issue_link':
+      return (
+        <div className="runtime-noise-comment-row">
+          <span className="runtime-noise-comment-row-label">{label}</span>
+          <span className="clarity-ref-chip" data-clarity-noise-chip="issue">
+            {row.identifier ?? 'ISSUE'}
+            {row.title ? ` · ${row.title}` : ''}
+          </span>
+        </div>
+      );
+    case 'agent_link':
+      return (
+        <div className="runtime-noise-comment-row">
+          <span className="runtime-noise-comment-row-label">{label}</span>
+          <span className="clarity-ref-chip" data-clarity-noise-chip="agent">
+            {row.name ?? 'agent'}
+          </span>
+        </div>
+      );
+    case 'run_link':
+      return (
+        <div className="runtime-noise-comment-row">
+          <span className="runtime-noise-comment-row-label">{label}</span>
+          <span className="clarity-ref-chip" data-clarity-noise-chip="run">
+            run · {(row.runId ?? '').slice(0, 8)}
+            {row.title ? ` · ${row.title}` : ''}
+          </span>
+        </div>
+      );
+    case 'key_value':
+    default:
+      return (
+        <div className="runtime-noise-comment-row">
+          <span className="runtime-noise-comment-row-label">{label}</span>
+          <span className="runtime-noise-comment-row-value">{row.value ?? '—'}</span>
+        </div>
+      );
+  }
 }

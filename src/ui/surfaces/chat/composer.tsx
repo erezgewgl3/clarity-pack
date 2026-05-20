@@ -32,6 +32,8 @@ import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { MessageThread, type OptimisticMessage } from './message-thread.tsx';
+import { TrueTaskToggle } from './true-task/true-task-toggle.tsx';
+import { TrueTaskDialog } from './true-task/true-task-dialog.tsx';
 
 // 04-01 spike OQ-1 verdict: NO-PATH. No plugin-accessible attachment-upload
 // route exists on the live host. CHAT-07 ships degraded. A future PATH-FOUND
@@ -55,17 +57,40 @@ export function Composer({
   userId,
   topicIssueId,
   topicTitle,
+  topicId,
+  assigneeAgentId,
+  employeeName,
+  employeeRole,
+  diagnostics = false,
 }: {
   companyId: string;
   userId: string;
   topicIssueId: string;
   topicTitle: string;
+  /** CHT-NNN id rendered in the TrueTaskDialog eyebrow (Pattern B). */
+  topicId: string;
+  /** D-06 default assignee for chat.createTrueTask — the chatted employee. */
+  assigneeAgentId: string;
+  /** Locked copywriting — used in Send-as-task placeholder + dialog defaults. */
+  employeeName: string;
+  /** Optional role suffix used by InlineTaskCard's "Assigned to …" line. */
+  employeeRole?: string | null;
+  /** Plan 04.1-06 — threaded down from index.tsx so chat.messages receives
+   *  includeDiagnostics:true and MessageThread renders runtime-noise inline. */
+  diagnostics?: boolean;
 }): React.ReactElement {
   const send = usePluginAction('chat.send');
   const [draft, setDraft] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   // The optimistic overlay — messages sent this session, keyed by uuid.
   const [optimistic, setOptimistic] = React.useState<OptimisticMessage[]>([]);
+  // Plan 04.1-06 D-01/D-02 — Send-as-task toggle + confirm dialog state.
+  const [taskArmed, setTaskArmed] = React.useState(false);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  // Locally-shown inline task card (UI-SPEC §"Interaction Flow" step 6 — the
+  // optimistic post-create state before chat.taskOwned has caught up).
+  const [pendingTaskCard, setPendingTaskCard] =
+    React.useState<{ issueId: string; title: string } | null>(null);
 
   // doSend is shared by the initial send and Retry. Retry passes the SAME
   // uuid + body so chat.send's message_uuid dedup makes it idempotent.
@@ -128,10 +153,18 @@ export function Composer({
   const handleSend = React.useCallback(() => {
     const body = draft.trim();
     if (!body || busy) return;
+    // Plan 04.1-06 D-01 — armed → open the confirm dialog instead of sending.
+    // The composer keeps the draft body until the dialog closes via either
+    // Keep editing (preserves draft + stays armed) or a successful Create
+    // task (the dialog's onSuccess callback clears + disarms).
+    if (taskArmed) {
+      setDialogOpen(true);
+      return;
+    }
     const messageUuid = newMessageUuid();
     setDraft('');
     void doSend(messageUuid, body);
-  }, [draft, busy, doSend]);
+  }, [draft, busy, taskArmed, doSend]);
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -146,6 +179,12 @@ export function Composer({
     [handleSend],
   );
 
+  // Placeholder + Send-button label flip on armed state (UI-SPEC Pattern A).
+  const placeholder = taskArmed
+    ? `Task for ${employeeName}… Enter to open the task form`
+    : 'Message this employee… Enter to send, Shift+Enter for newline';
+  const sendLabel = taskArmed ? 'Open task form' : 'Send';
+
   return (
     <>
       <MessageThread
@@ -153,6 +192,11 @@ export function Composer({
         userId={userId}
         topicIssueId={topicIssueId}
         optimistic={optimistic}
+        assigneeAgentId={assigneeAgentId}
+        employeeName={employeeName}
+        employeeRole={employeeRole ?? null}
+        diagnostics={diagnostics}
+        pendingTaskCard={pendingTaskCard}
       />
       <div className="composer" data-clarity-region="composer">
         <div className="composer-meta">
@@ -164,7 +208,7 @@ export function Composer({
         <div className="composer-box">
           <textarea
             className="composer-input"
-            placeholder="Message this employee… Enter to send, Shift+Enter for newline"
+            placeholder={placeholder}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -178,6 +222,14 @@ export function Composer({
           />
           <div className="composer-foot">
             <div className="composer-tools">
+              {/* Plan 04.1-06 Pattern A — Send-as-task toggle REPLACES the
+                  old "↗ New task" stub. The toggle owns its visual armed-state
+                  styling; the parent owns the boolean. */}
+              <TrueTaskToggle
+                armed={taskArmed}
+                disabled={!assigneeAgentId}
+                onToggle={() => setTaskArmed((a) => !a)}
+              />
               <button
                 type="button"
                 className="tool-btn"
@@ -206,12 +258,42 @@ export function Composer({
                 onClick={handleSend}
                 disabled={busy || draft.trim().length === 0}
               >
-                Send
+                {sendLabel}
               </button>
             </div>
           </div>
         </div>
       </div>
+      {/* Plan 04.1-06 Pattern B — confirm dialog. Mounted once at the JSX
+          tree's end; the native <dialog> imperative API opens/closes via
+          dialogRef inside the component. */}
+      <TrueTaskDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onSuccess={(result) => {
+          setDialogOpen(false);
+          setTaskArmed(false);
+          // Show an immediate optimistic InlineTaskCard until chat.taskOwned
+          // catches up (UI-SPEC §"Interaction Flow" step 6); cleared whenever
+          // a new send starts so it never lingers across topics.
+          if (result.issueId) {
+            setPendingTaskCard({
+              issueId: result.issueId,
+              title: draft.trim().slice(0, 200) || 'New task',
+            });
+          }
+          setDraft('');
+        }}
+        defaultTitle={draft.trim().slice(0, 80)}
+        body={draft.trim()}
+        topicIssueId={topicIssueId}
+        topicTitle={topicTitle}
+        topicId={topicId}
+        assigneeAgentId={assigneeAgentId}
+        employeeName={employeeName}
+        companyId={companyId}
+        userId={userId}
+      />
     </>
   );
 }
