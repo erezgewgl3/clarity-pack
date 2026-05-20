@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-20T00:00:00.000Z"
+last_updated: "2026-05-20T09:07:43Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 47
-  completed_plans: 28
-  percent: 60
+  completed_plans: 29
+  percent: 62
 ---
 
 # State: Clarity Pack
@@ -23,12 +23,27 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 1 CLOSED 2026-05-20 with Gate Verdict GO; Plans 04.1-02 / 04.1-03 / 04.1-04 (Wave 2, autonomous TDD) unblocked.
+**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 2 in progress 2026-05-20. Plan 04.1-02 COMPLETE; Plans 04.1-03 / 04.1-04 (Wave 2, autonomous TDD) ready to run next.
 
 ## Current Position
 
-Phase: 04.1 (chat-true-task) — Wave 1 CLOSED 2026-05-20 (Plan 04.1-01 falsify-first spike landed on live Countermoves; Gate Verdict GO).
-Plan: 1 of 7 complete — **Plan 04.1-01 COMPLETE 2026-05-20; 6 plans remaining.**
+Phase: 04.1 (chat-true-task) — Wave 2 in progress 2026-05-20 (Wave 1 CLOSED with Gate Verdict GO).
+Plan: 2 of 7 complete — **Plan 04.1-02 COMPLETE 2026-05-20; 5 plans remaining.**
+
+**Plan 04.1-02 — createTrueTask helper + chat.createTrueTask + chat.promote D-04 rewrite: COMPLETE 2026-05-20.**
+Autonomous TDD. 3 tasks / 6 commits `0b13481..2715ac6`:
+- `0b13481` (Task 1 RED) — `test(04.1-02): RED — createTrueTask helper tests` (13 tests).
+- `5523b38` (Task 1 GREEN) — `feat(04.1-02): createTrueTask shared helper` — new `src/worker/chat/true-task.ts` exports `createTrueTask` + `titleFromBody`; top-level issue (no parent-pointer), `assigneeAgentId` required, `originId 'chat-task:<topic>:<source|composer>'`, best-effort D-07 marker comment.
+- `16e8b4b` (Task 2 RED) — `test(04.1-02): RED — chat.createTrueTask handler tests` (15 tests).
+- `e7bd567` (Task 2 GREEN) — `feat(04.1-02): chat.createTrueTask handler` — new `src/worker/handlers/chat-true-task.ts` (operator composer path), registered in `src/worker.ts` alongside `chat.promote`.
+- `6dca532` (Task 3 RED) — `test(04.1-02): RED — chat.promote rewrite tests` (15 tests, 6 failing for new contract).
+- `2715ac6` (Task 3 GREEN) — `refactor(04.1-02): chat.promote delegates to createTrueTask` — REWRITTEN; old `parentId: topicIssueId` + unassigned-todo behaviour DELETED. The Phase 4 followup bug ("orphan task nested under plugin plumbing, nobody acts on it") is impossible by construction: `grep -c parentId` returns 0 in all three target files (`src/worker/chat/true-task.ts`, `src/worker/handlers/chat-true-task.ts`, `src/worker/handlers/chat-promote.ts`).
+
+Suite: 966 → 1000 tests (+34; 998 pass / 0 fail / 2 skip). CTT-01 + CTT-02 worker-tier satisfied (UI surfaces ship in Plan 04.1-06). Two deviations recorded (both [Rule 3 - Blocking]): updated `test/ui/chat-message-thread.test.mjs` chat.promote required-keys assertion to include new `assigneeAgentId` + `employeeName` (the Plan-04-04-era test pinned the old contract); and a plan-text inconsistency about missing-userId throwing — opt-in-guard fires first and returns `OPT_IN_REQUIRED` (documented inline in chat-true-task.test.mjs Test 3b). SUMMARY: `04.1-02-SUMMARY.md`.
+
+**Plans 04.1-03 + 04.1-04 (also Wave 2 autonomous TDD) UNBLOCKED.** Both consume the locked spike findings (`04.1-01-SPIKE-FINDINGS.md`) but neither imports from this plan. The marker-comment wording locked here is pinned by `true-task.test.mjs` Test 6 so Plan 04.1-04's `classifyComment` cannot accidentally classify the marker as runtime noise (Pitfall 4 anti-regression).
+
+---
 
 **Plan 04.1-01 — Falsify-First Spike: COMPLETE 2026-05-20.**
 Non-autonomous. **Phase 4.1 Gate Verdict: GO.** Multi-turn native re-wake
