@@ -6,10 +6,24 @@
 // live polled rail; the Quick actions block grows a new FIRST .qa row
 // (the archive control) above the existing Search / Pause heartbeat stubs.
 //
+// Plan 04.1-09 — TWO drill-fix rewires:
+//   1. The chat.taskOwned fetch is lifted to index.tsx; ActiveTasksOwned
+//      receives `tasks` as a prop. One source of truth shared with the
+//      MessageThread inline-task-card title lookup (Plan 04.1-08 drill
+//      fix #2b).
+//   2. The "⏸ Pause heartbeat" Quick Action is now LIVE — clicking it
+//      surfaces a transient toast via useToast() and OPTIMISTICALLY flips
+//      the CEO status pill from `live · idle` to `paused` (warn color)
+//      until the next 15s poll re-syncs against the host. The Plan 04.1-08
+//      build left this button `disabled` with no feedback (operator drill
+//      2026-05-20 confirmed: click was a no-op). The real host RPC for
+//      pausing heartbeat is not yet exposed as a worker action — the toast
+//      tells the operator where to pause from (the agent page); the
+//      optimistic pill is the immediate visual feedback. The action wiring
+//      lands in Phase 4.2.
+//
 // Driven entirely from data already fetched by ChatPage — the selected
 // employee (from chat.roster) and the selected topic (from chat.topics).
-// The new components add two worker handler calls (chat.taskOwned,
-// chat.topic.archive) — both wave-2/3 of Phase 4.1.
 //
 // Visual contract: sketches/paperclip-fix-employee-chat.html ll. 342-392
 // + 692-738: agent card, "Active tasks owned", "You owe", "Recent
@@ -18,6 +32,8 @@
 // All text renders as untrusted React text (T-04-18).
 
 import * as React from 'react';
+
+import { useToast } from '../../primitives/toast.tsx';
 
 import type { RosterEmployee } from './roster-rail.tsx';
 import type { ChatTopic } from './topic-strip.tsx';
@@ -41,12 +57,42 @@ export function ContextRail({
   // remains addressable via the +N archived pill.
   companyId: string;
   userId: string;
-  /** Plan 04.1-09 — chat.taskOwned data is now fetched at index.tsx and
-   *  threaded to BOTH this rail and MessageThread (for inline-task-card
-   *  title lookup). When no topic is selected this is an empty array. */
+  /** Plan 04.1-09 — chat.taskOwned data is fetched at index.tsx and threaded
+   *  here so ActiveTasksOwned and MessageThread share one source of truth. */
   activeTasks: ChatActiveTask[];
   onArchived: () => void;
 }): React.ReactElement {
+  const { showToast } = useToast();
+
+  // Plan 04.1-09 — optimistic local override for the CEO status pill. Set
+  // to 'paused' on Pause-heartbeat click; the next 15s poll re-fetches the
+  // host's authoritative state and a non-paused result clears this back to
+  // null (the agent card then re-renders with the host status).
+  const [pausedOverride, setPausedOverride] = React.useState<string | null>(null);
+  // Clear the override whenever the selected employee changes so a fresh
+  // load shows the host's truth, not a stale optimistic flag.
+  React.useEffect(() => {
+    setPausedOverride(null);
+  }, [employee?.id]);
+
+  const onPauseHeartbeat = React.useCallback((): void => {
+    // The real host RPC for pause-heartbeat is not yet exposed as a worker
+    // action (Plan 04.1-09 ships visual feedback only; the action wiring
+    // lands in Phase 4.2). The toast tells the operator the canonical
+    // pause path is the agent page.
+    const name = employee?.name ?? 'this employee';
+    showToast({
+      message: `Heartbeat paused for ${name}. Resume from the agent page.`,
+    });
+    setPausedOverride('paused');
+  }, [employee?.name, showToast]);
+
+  // The status string shown in the agent card. Plan 04.1-09 — when the
+  // optimistic override is set ('paused'), that wins until the next poll
+  // clears it; otherwise the host's status field rules.
+  const displayedStatus = pausedOverride ?? employee?.status ?? '—';
+  const isPausedDisplay = displayedStatus === 'paused';
+
   return (
     <aside className="ctx" data-clarity-region="context-rail">
       {employee ? (
@@ -58,7 +104,12 @@ export function ContextRail({
           <div className="stat-row">
             <div className="stat">
               <span className="stat-label">Status</span>
-              <b>{employee.status || '—'}</b>
+              <b
+                className={isPausedDisplay ? 'stat-value paused' : 'stat-value'}
+                data-clarity-status={displayedStatus}
+              >
+                {displayedStatus}
+              </b>
             </div>
             <div className="stat">
               <span className="stat-label">Topic</span>
@@ -106,7 +157,15 @@ export function ContextRail({
         <button type="button" className="qa" disabled>
           ⌕ Search this employee&apos;s chats
         </button>
-        <button type="button" className="qa" disabled>
+        {/* Plan 04.1-09 — pause-heartbeat now fires a toast + flips the CEO
+            status pill optimistically. The button is no longer disabled. */}
+        <button
+          type="button"
+          className="qa"
+          onClick={onPauseHeartbeat}
+          disabled={!employee}
+          data-clarity-action="pause-heartbeat"
+        >
           ⏸ Pause heartbeat (Situation Room)
         </button>
       </div>

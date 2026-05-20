@@ -32,6 +32,7 @@ import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
 import { useOptIn } from '../../primitives/use-opt-in.ts';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
+import { ToastProvider } from '../../primitives/toast.tsx';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import { RosterRail, type RosterEmployee } from './roster-rail.tsx';
@@ -117,7 +118,12 @@ function ChatPageOptedIn(): React.ReactElement {
 
   return (
     <ClaritySurfaceRoot name="chat">
-      <ChatPageBody companyId={companyId} userId={userId} />
+      {/* Plan 04.1-09 — ToastProvider wraps the chat body so the right rail's
+          Pause heartbeat Quick Action (and any future transient-feedback
+          surface) can showToast(). */}
+      <ToastProvider>
+        <ChatPageBody companyId={companyId} userId={userId} />
+      </ToastProvider>
     </ClaritySurfaceRoot>
   );
 }

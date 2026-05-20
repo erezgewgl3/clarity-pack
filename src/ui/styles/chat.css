@@ -2054,3 +2054,82 @@
   position: relative;
 }
 
+/* Plan 04.1-09 — Toast primitive.
+ * The Plan 04.1-08 build had no transient-feedback mechanism; the right-rail
+ * "⏸ Pause heartbeat" Quick Action was a no-op disabled stub. The toast
+ * primitive (src/ui/primitives/toast.tsx) ships a stack of bottom-right
+ * notifications that auto-dismiss after 4s + dismiss-on-click. Pure CSS
+ * animation — no animation library (same-origin trust model). The stack
+ * z-index 300 sits ABOVE the dialog backdrop (z-index 200) so a toast
+ * appearing while the task dialog is open is still visible. */
+[data-clarity-surface="chat"] .clarity-toast-stack {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+[data-clarity-surface="chat"] .clarity-toast {
+  background: var(--bg-3);
+  border: 1px solid var(--line-bright);
+  color: var(--ink);
+  padding: 12px 16px;
+  font-family: "Geist Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  max-width: 400px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: clarity-toast-in 0.2s ease;
+}
+@keyframes clarity-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Plan 04.1-09 — optimistic CEO status pill flip (warn-amber when paused).
+ * The agent-card status renders as `<b className="stat-value paused">paused</b>`
+ * when the operator clicks ⏸ Pause heartbeat; the next 15s poll re-syncs
+ * and the override clears. Color treatment matches the existing --warn
+ * token used by the chat-task-status-pill review state. */
+[data-clarity-surface="chat"] .stat-value.paused {
+  color: var(--warn);
+}
+
+/* Plan 04.1-09 — right-rail task-row width fix (Plan 04.1-08 drill — chars
+ * wrapped line-by-line in the Active tasks owned section). The Plan 04.1-06
+ * rule used `grid-template-columns: auto 1fr auto` — the `1fr` column had no
+ * `min-width: 0` override so it could not shrink below the title's intrinsic
+ * size, AND a long unbroken identifier inherited `word-break: break-word`
+ * which broke mid-character on narrow rails. The `minmax(0, 1fr)` middle
+ * column now shrinks; word-break:normal + overflow-wrap:break-word +
+ * hyphens:auto wraps at WORD boundaries (with hyphenation hints), not
+ * character boundaries. A 3-line `-webkit-line-clamp` keeps the row
+ * predictable; hovering reveals the full title via the `title=` attribute
+ * (set in active-tasks-owned.tsx). */
+[data-clarity-surface="chat"] .task-row {
+  /* Plan 04.1-09 override — was `auto 1fr auto`. The middle column now uses
+   * minmax(0, 1fr) so it can shrink below its content's intrinsic width. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+[data-clarity-surface="chat"] .task-row .ttl {
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
