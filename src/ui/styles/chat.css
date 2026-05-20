@@ -1360,7 +1360,26 @@
  * "X happened" event in the thread, NOT a message hero. No full border, no
  * background fill. Title is --ink-2 (NOT --ink), 13px weight 400 (was 15px
  * weight 500). BEAAA-NNN renders as a gold UNDERLINED LINK (handled by
- * RefChip primitive ref-chip class below). Status pill is outlined-only. */
+ * RefChip primitive ref-chip class below). Status pill is outlined-only.
+ *
+ * Plan 04.1-09 — the `<article>` wrapper class changed from `.msg` (the
+ * chat-bubble grid `grid-template-columns: 34px 1fr` — the card had no
+ * avatar so it landed in the 34px column and the title wrapped char-by-char)
+ * to `.inline-task-card-row` (a non-grid block element). The new
+ * `.clarity-loading-skeleton` placeholder renders inside the title slot
+ * while chat.taskOwned hasn't caught up (race window up to 15s). */
+[data-clarity-surface="chat"] .inline-task-card-row {
+  align-self: stretch;
+  width: 100%;
+  max-width: 780px;
+  padding: 0;
+  margin: 0;
+  display: block;
+}
+[data-clarity-surface="chat"] .clarity-loading-skeleton {
+  color: var(--ink-3);
+  font-style: italic;
+}
 [data-clarity-surface="chat"] .inline-task-card {
   align-self: stretch;
   max-width: 560px;

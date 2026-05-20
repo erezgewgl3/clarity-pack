@@ -21,7 +21,7 @@ import * as React from 'react';
 
 import type { RosterEmployee } from './roster-rail.tsx';
 import type { ChatTopic } from './topic-strip.tsx';
-import { ActiveTasksOwned } from './active-tasks-owned.tsx';
+import { ActiveTasksOwned, type ChatActiveTask } from './active-tasks-owned.tsx';
 import { ArchiveTopicButton } from './archive-topic-button.tsx';
 
 export function ContextRail({
@@ -29,6 +29,7 @@ export function ContextRail({
   topic,
   companyId,
   userId,
+  activeTasks,
   onArchived,
 }: {
   employee: RosterEmployee | null;
@@ -40,6 +41,10 @@ export function ContextRail({
   // remains addressable via the +N archived pill.
   companyId: string;
   userId: string;
+  /** Plan 04.1-09 — chat.taskOwned data is now fetched at index.tsx and
+   *  threaded to BOTH this rail and MessageThread (for inline-task-card
+   *  title lookup). When no topic is selected this is an empty array. */
+  activeTasks: ChatActiveTask[];
   onArchived: () => void;
 }): React.ReactElement {
   return (
@@ -67,11 +72,7 @@ export function ContextRail({
 
       <h3>Active tasks owned</h3>
       {topic ? (
-        <ActiveTasksOwned
-          companyId={companyId}
-          userId={userId}
-          topicIssueId={topic.issueId}
-        />
+        <ActiveTasksOwned tasks={activeTasks} />
       ) : (
         <p className="ctx-empty">Select a topic to see its spun-off tasks.</p>
       )}

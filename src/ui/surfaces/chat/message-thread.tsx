@@ -44,6 +44,7 @@ import { ProseWithRefChips } from '../reader/prose-with-ref-chips.tsx';
 import { parseReasoning, ReasoningPanel } from './reasoning-panel.tsx';
 // Plan 04.1-06 — Patterns C, F (RuntimeNoiseRow inline), G.
 import { InlineTaskCard } from './true-task/inline-task-card.tsx';
+import type { ChatActiveTask } from './active-tasks-owned.tsx';
 import { HostStuckBanner } from './host-stuck-banner.tsx';
 // Plan 04.1-08 — sticky read-only banner shown when the active topic is
 // archived (the operator opened it from the archive panel).
@@ -166,6 +167,7 @@ export function MessageThread({
   employeeName,
   employeeRole = null,
   diagnostics = false,
+  activeTasks = [],
   pendingTaskCard = null,
   onPromoteMessage = null,
   archivedBanner = null,
@@ -184,6 +186,12 @@ export function MessageThread({
   // chat.messages handler and runtime-noise comments render inline as
   // `.runtime-noise-comment` blocks.
   diagnostics?: boolean;
+  /** Plan 04.1-09 — chat.taskOwned data threaded from index.tsx so the
+   *  marker-comment branch can look up real titles by issueId (NOT parse
+   *  the title from the marker body — Plan 04.1-08 drill fix #2b: the
+   *  marker's first capture is the issueId, not the title). Default `[]`
+   *  keeps backwards compatibility for legacy mount points. */
+  activeTasks?: ChatActiveTask[];
   /** Optimistic InlineTaskCard rendered until chat.taskOwned catches up. */
   pendingTaskCard?: { issueId: string; title: string } | null;
   /** Plan 04.1-08 — opens the dual-mode dialog in PROMOTE mode at index.tsx.
@@ -426,16 +434,33 @@ export function MessageThread({
 
         // Plan 04.1-06 Pattern C — D-07 marker comment intercepted and
         // rendered as an inline task card. The marker prefix is locked by
-        // src/worker/chat/true-task.ts (`Task created — <title>, assigned
+        // src/worker/chat/true-task.ts (`Task created — <issueId>, assigned
         // to <name>.`). Plan 04.1-04's classifyComment treats the marker as
         // conversational so it always lands in the messages array, never
         // filtered as runtime noise (Pitfall 4 anti-regression).
+        //
+        // Plan 04.1-09 — the FIRST capture is the issueId, NOT the title.
+        // The Plan 04.1-06 build used it as the title which rendered the
+        // raw UUID in the card (operator drill 2026-05-20). The title is
+        // now looked up from chat.taskOwned (`activeTasks`) by issueId.
+        // Precedence: activeTasks hit > pendingTaskCard match > null
+        // (renders skeleton — race window of up to 15s).
         const markerMatch = /^Task created — ([^,]+), assigned to (.+)\.$/.exec(
           (msg.body ?? '').trim(),
         );
         if (markerMatch) {
-          const parsedTitle = markerMatch[1] ?? 'New task';
+          const parsedIssueId = markerMatch[1] ?? null;
           const parsedAssignee = markerMatch[2] ?? employeeName ?? 'employee';
+          // Look up the real title from chat.taskOwned (threaded down from
+          // index.tsx via Composer).
+          const matchedTask = parsedIssueId
+            ? activeTasks.find((t) => t.issueId === parsedIssueId)
+            : null;
+          const resolvedTitle: string | null =
+            matchedTask?.title ??
+            (pendingTaskCard?.issueId === parsedIssueId
+              ? pendingTaskCard.title
+              : null);
           return (
             <React.Fragment key={msg.commentId}>
               {showDivider ? (
@@ -443,17 +468,13 @@ export function MessageThread({
                   <span>{day}</span>
                 </div>
               ) : null}
-              {/* Optimistic state: chat.taskOwned has not yet returned the
-                  backing row; identifier/issueId/status are null. On the
-                  next 15s poll, chat.taskOwned + the side-table back-link
-                  (Plan 04.1-05 retrofit) will supply them. */}
               <InlineTaskCard
-                identifier={null}
-                issueId={null}
-                title={parsedTitle}
+                identifier={matchedTask?.identifier ?? null}
+                issueId={parsedIssueId}
+                title={resolvedTitle}
                 employeeName={parsedAssignee}
                 role={employeeRole}
-                status={null}
+                status={matchedTask?.status ?? null}
                 createdAt={
                   typeof msg.createdAt === 'string'
                     ? msg.createdAt

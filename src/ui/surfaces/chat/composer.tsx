@@ -43,6 +43,7 @@ import {
   type OptimisticMessage,
   type PromoteSourceMessagePayload,
 } from './message-thread.tsx';
+import type { ChatActiveTask } from './active-tasks-owned.tsx';
 
 // 04-01 spike OQ-1 verdict: NO-PATH. No plugin-accessible attachment-upload
 // route exists on the live host. CHAT-07 ships degraded. A future PATH-FOUND
@@ -71,6 +72,7 @@ export function Composer({
   employeeRole,
   diagnostics = false,
   disabled = false,
+  activeTasks = [],
   pendingTaskCard = null,
   onPromoteMessage = null,
   archivedBanner = null,
@@ -94,6 +96,10 @@ export function Composer({
   /** Plan 04.1-08 — true when the active topic is archived. Disables sending
    *  and applies `.composer--disabled` styling. */
   disabled?: boolean;
+  /** Plan 04.1-09 — chat.taskOwned data threaded from index.tsx so the
+   *  MessageThread inline-task-card branch can look up real titles by
+   *  issueId. Default `[]` keeps backwards compatibility. */
+  activeTasks?: ChatActiveTask[];
   /** Plan 04.1-08 — optimistic InlineTaskCard shown in the thread until the
    *  marker comment lands on the next poll. Now driven by the parent (the
    *  + Create task / Promote dialog opens at the index.tsx level). */
@@ -201,6 +207,7 @@ export function Composer({
         employeeName={employeeName}
         employeeRole={employeeRole ?? null}
         diagnostics={diagnostics}
+        activeTasks={activeTasks}
         pendingTaskCard={pendingTaskCard}
         onPromoteMessage={onPromoteMessage}
         archivedBanner={archivedBanner}

@@ -11,6 +11,16 @@
 // The wrapper class stays `.inline-task-card` so CSS owns the visual change.
 // Reads as a quiet "X happened" event, not a message.
 //
+// Plan 04.1-09 — WRAPPER FIXED. The Plan 04.1-08 build wrapped the card in
+// the `.msg` chat-bubble grid (`grid-template-columns: 34px 1fr`) — the
+// card has no avatar so it collapsed into the 34px avatar column and the
+// UUID title wrapped char-by-char. The wrapper is now the new
+// `inline-task-card-row` block element that lets the card breathe full
+// width. The `title` prop also accepts `null` to render a skeleton
+// placeholder when chat.taskOwned hasn't caught up (race window of up to
+// 15s after a marker comment lands but before the side-table back-link
+// surfaces).
+//
 // SECURITY (T-04-18): every field renders as React text. NO
 // dangerouslySetInnerHTML. The BEAAA-NNN ref renders via the RefChip
 // primitive (Plan 02 resolve-refs round-trip is safe).
@@ -41,7 +51,11 @@ export function InlineTaskCard({
   identifier: string | null;
   /** Host issue id used by the RefChip to resolve the inline card. */
   issueId: string | null;
-  title: string;
+  /** Plan 04.1-09 — `null` while chat.taskOwned hasn't surfaced the row yet
+   *  (race window of up to 15s after the marker comment lands). The card
+   *  renders a `.clarity-loading-skeleton` placeholder for the title slot
+   *  until the next poll resolves it. */
+  title: string | null;
   employeeName: string;
   /** Optional employee role suffix; rendered as " · {role}" when present. */
   role?: string | null;
@@ -50,15 +64,27 @@ export function InlineTaskCard({
   createdAt: string | null;
 }): React.ReactElement {
   const statusLabel = status ?? 'pending';
+  // Plan 04.1-09 — the a11y label degrades gracefully when the title hasn't
+  // resolved yet (the operator hears "Task created" without the UUID-as-title
+  // gibberish the Plan 04.1-08 build leaked).
+  const ariaLabel = title
+    ? `Task created — ${title}, assigned to ${employeeName}, status ${statusLabel}`
+    : `Task created — loading title, assigned to ${employeeName}, status ${statusLabel}`;
   return (
     <article
-      className="msg"
+      className="inline-task-card-row"
       role="group"
-      aria-label={`Task created — ${title}, assigned to ${employeeName}, status ${statusLabel}`}
+      aria-label={ariaLabel}
     >
       <div className="inline-task-card">
         <div className="inline-task-card-eyebrow">↗ TASK CREATED</div>
-        <div className="inline-task-card-title">{title}</div>
+        <div className="inline-task-card-title">
+          {title === null ? (
+            <span className="clarity-loading-skeleton">…</span>
+          ) : (
+            title
+          )}
+        </div>
         <div className="inline-task-card-assignee">
           Assigned to {employeeName}
           {role ? ` · ${role}` : ''}

@@ -40,6 +40,7 @@ import { ContextRail } from './context-rail.tsx';
 import { Composer } from './composer.tsx';
 import { ChatActionsRow } from './actions-row.tsx';
 import { ArchivePanel, type ArchivedTopic } from './archive-panel.tsx';
+import { useChatActiveTasks } from './active-tasks-owned.tsx';
 import {
   TrueTaskDialog,
   type TrueTaskDialogMode,
@@ -148,6 +149,16 @@ function ChatPageBody({
     sourceMessage: PromoteSourceMessage | null;
     sourceTopic: ChatTopic | null;
   }>({ open: false, mode: 'cold', sourceMessage: null, sourceTopic: null });
+
+  // Plan 04.1-09 — chat.taskOwned fetch lifted to this level so both
+  // ContextRail (right rail's "Active tasks owned") AND MessageThread
+  // (inline-task-card title lookup, Plan 04.1-08 drill fix #2b) share one
+  // source of truth. 15s poll cadence matches the message thread.
+  const { tasks: activeTasks } = useChatActiveTasks({
+    companyId,
+    userId,
+    topicIssueId: topic?.issueId ?? null,
+  });
 
   const handleSelectEmployee = React.useCallback((next: RosterEmployee) => {
     setEmployee(next);
@@ -426,6 +437,10 @@ function ChatPageBody({
             employeeName={employee.name}
             employeeRole={employee.role}
             diagnostics={diagnostics}
+            // Plan 04.1-09 — chat.taskOwned data threaded down so the
+            // MessageThread inline-task-card branch can look up real
+            // titles by issueId from the marker comment's first capture.
+            activeTasks={activeTasks}
             // Plan 04.1-08 — when the active topic is archived, the
             // composer goes read-only with the dashed border + "Unarchive
             // to send messages" placeholder. The ArchivedBanner sits at
@@ -460,6 +475,7 @@ function ChatPageBody({
         topic={topic}
         companyId={companyId}
         userId={userId}
+        activeTasks={activeTasks}
         onArchived={() => {
           // Plan 04.1-06 Pattern E — after a successful archive, drop the
           // archived topic from the active view and force the strip to
