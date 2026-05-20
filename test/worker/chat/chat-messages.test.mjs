@@ -1,8 +1,23 @@
 // test/worker/chat/chat-messages.test.mjs
 //
 // Plan 04-04 Task A RED — chat.messages data handler.
+// EXTENDED 2026-05-20 by Plan 04.1-04:
+//   - U1..U5 — runtime-noise filter (D-14/D-15). System-authored / system_notice
+//     / body-pattern-match comments are silently filtered from the message
+//     thread by default. `includeDiagnostics: true` returns them anyway
+//     (D-16 diagnostics opt-in).
+//   - U5 cross-pin — the Plan 04.1-02 marker comment IS surfaced (Pitfall 4).
+//   - U6..U7 — D-11 watchdog cadence. Every poll fires `ensureTopicWakeable`
+//     fire-and-forget at the head of the handler; a slow watchdog never
+//     delays the messages response.
+//   - U8..U10 — D-13 host-stuck signal. The response shape grows
+//     `topicStuck: boolean` + `recoveryOwner: string | null` from the topic
+//     issue's `activeRecoveryAction` / `successfulRunHandoff.exhausted`.
+//   - U11 — the opt-in gate runs BEFORE the watchdog hook (never wake an
+//     agent for an opted-out user).
+//   - U12 — full response-shape contract.
 //
-// chat.messages returns the message thread for one topic issue:
+// Original Plan 04-04 invariants preserved:
 //   - ctx.issues.listComments(topicIssueId, companyId) is the canonical body
 //     source (CHAT-02 — content lives only in public.issue_comments).
 //   - chat_messages rows (the side table) are JOINed in for supersedes / pin
@@ -25,8 +40,18 @@ function makeCtx({
   comments = [],
   chatMessages = [],
   listCommentsThrows = false,
+  // Plan 04.1-04 — watchdog + topic-stuck simulation.
+  // `topicIssue` is the object ctx.issues.get returns; defaults to an in_progress
+  // issue with no recovery action (the steady-state). Pass overrides to simulate
+  // D-11 flip targets (status: done/cancelled/blocked) or D-13 stuck signals.
+  topicIssue = { status: 'in_progress' },
+  topicIssueNull = false,
+  getThrows = false,
+  getDelayMs = 0,
 } = {}) {
   const handlers = new Map();
+  const getCalls = [];
+  const updateCalls = [];
 
   const ctx = {
     logger: { warn() {}, info() {} },
@@ -41,6 +66,21 @@ function makeCtx({
         void companyId;
         if (listCommentsThrows) throw new Error('host listComments 503');
         return comments;
+      },
+      async get(issueId, companyId) {
+        getCalls.push({ issueId, companyId });
+        if (getDelayMs > 0) {
+          await new Promise((r) => setTimeout(r, getDelayMs));
+        }
+        if (getThrows) throw new Error('host issues.get 503');
+        if (topicIssueNull) return null;
+        // The watchdog reads status from this; the stuck-signal read also
+        // reads activeRecoveryAction + successfulRunHandoff from this.
+        return { id: issueId, companyId, ...topicIssue };
+      },
+      async update(issueId, patch, companyId) {
+        updateCalls.push({ issueId, patch, companyId });
+        return { id: issueId };
       },
     },
     db: {
@@ -60,6 +100,8 @@ function makeCtx({
       },
     },
     _handlers: handlers,
+    _getCalls: getCalls,
+    _updateCalls: updateCalls,
   };
   ctx.db = wrapHostFaithfulDb(ctx.db);
   return ctx;
@@ -74,6 +116,10 @@ function msgParams(overrides = {}) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// ORIGINAL Plan 04-04 contract — preserved verbatim
+// ---------------------------------------------------------------------------
+
 test('chat.messages: handler registers under key chat.messages', () => {
   const ctx = makeCtx();
   registerChatMessages(ctx);
@@ -83,9 +129,9 @@ test('chat.messages: handler registers under key chat.messages', () => {
 test('chat.messages: returns the comment thread ordered by server created_at', async () => {
   const ctx = makeCtx({
     comments: [
-      { id: 'c-2', body: 'second', createdAt: new Date('2026-01-02T00:00:00Z'), authorUserId: 'user-eric' },
-      { id: 'c-1', body: 'first', createdAt: new Date('2026-01-01T00:00:00Z'), authorUserId: 'user-eric' },
-      { id: 'c-3', body: 'third', createdAt: new Date('2026-01-03T00:00:00Z'), authorUserId: 'user-eric' },
+      { id: 'c-2', body: 'second', createdAt: new Date('2026-01-02T00:00:00Z'), authorType: 'user', authorUserId: 'user-eric' },
+      { id: 'c-1', body: 'first', createdAt: new Date('2026-01-01T00:00:00Z'), authorType: 'user', authorUserId: 'user-eric' },
+      { id: 'c-3', body: 'third', createdAt: new Date('2026-01-03T00:00:00Z'), authorType: 'user', authorUserId: 'user-eric' },
     ],
   });
   registerChatMessages(ctx);
@@ -102,8 +148,8 @@ test('chat.messages: returns the comment thread ordered by server created_at', a
 test('chat.messages: a superseded comment is marked so the UI can collapse the edit chain (CHAT-05)', async () => {
   const ctx = makeCtx({
     comments: [
-      { id: 'c-1', body: 'typo', createdAt: new Date('2026-01-01T00:00:00Z'), authorUserId: 'user-eric' },
-      { id: 'c-2', body: 'fixed', createdAt: new Date('2026-01-02T00:00:00Z'), authorUserId: 'user-eric' },
+      { id: 'c-1', body: 'typo', createdAt: new Date('2026-01-01T00:00:00Z'), authorType: 'user', authorUserId: 'user-eric' },
+      { id: 'c-2', body: 'fixed', createdAt: new Date('2026-01-02T00:00:00Z'), authorType: 'user', authorUserId: 'user-eric' },
     ],
     chatMessages: [
       {
@@ -141,7 +187,7 @@ test('chat.messages: a superseded comment is marked so the UI can collapse the e
 test('chat.messages: pin flag from the side table surfaces on the message', async () => {
   const ctx = makeCtx({
     comments: [
-      { id: 'c-1', body: 'pinned note', createdAt: new Date('2026-01-01T00:00:00Z') },
+      { id: 'c-1', body: 'pinned note', createdAt: new Date('2026-01-01T00:00:00Z'), authorType: 'user' },
     ],
     chatMessages: [
       {
@@ -172,9 +218,9 @@ test('chat.messages: surfaces senderKind from the side table — operator vs age
   const ctx = makeCtx({
     comments: [
       // operator message — host stamped NO authorUserId (posted as the worker)
-      { id: 'c-op', body: 'hello from Eric', createdAt: new Date('2026-01-01T00:00:00Z'), authorUserId: null },
+      { id: 'c-op', body: 'hello from Eric', createdAt: new Date('2026-01-01T00:00:00Z'), authorType: 'agent', authorUserId: null },
       // agent reply — no chat_messages row at all
-      { id: 'c-agent', body: 'reply from the agent', createdAt: new Date('2026-01-02T00:00:00Z'), authorUserId: null },
+      { id: 'c-agent', body: 'reply from the agent', createdAt: new Date('2026-01-02T00:00:00Z'), authorType: 'agent', authorUserId: null },
     ],
     chatMessages: [
       {
@@ -232,4 +278,303 @@ test('chat.messages: listComments failure → { error: THREAD_FAILED }', async (
   registerChatMessages(ctx);
   const result = await ctx._handlers.get('chat.messages')(msgParams());
   assert.equal(result.error, 'THREAD_FAILED');
+});
+
+// ===========================================================================
+// Plan 04.1-04 — runtime-noise filter (D-14/D-15), watchdog hook (D-11),
+//                host-stuck signal (D-13), opt-in-first ordering.
+// ===========================================================================
+
+// Fixture: a thread with one user, one agent reply, and one system disposition
+// notice (the exact shape captured live on Countermoves COU-1757 per
+// 04.1-01-SPIKE-FINDINGS PROBE-D14-DISCRIM).
+function mixedThread() {
+  return [
+    {
+      id: 'c-op',
+      body: 'Lock the rate at 12%',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      authorType: 'user',
+      authorUserId: 'user-eric',
+    },
+    {
+      id: 'c-agent',
+      body: 'OK, will lock at 12%.',
+      createdAt: new Date('2026-01-01T00:00:30Z'),
+      authorType: 'agent',
+      authorAgentId: 'agent-ceo',
+    },
+    {
+      // The captured live notice shape from 04.1-01-SPIKE-FINDINGS.
+      id: 'c-sys',
+      body: 'Paperclip needs a disposition before this issue can continue.',
+      createdAt: new Date('2026-01-01T00:01:00Z'),
+      authorType: 'system',
+      authorUserId: null,
+      authorAgentId: null,
+      presentation: { kind: 'system_notice', tone: 'warning' },
+    },
+  ];
+}
+
+test('U1 RUNTIME-NOISE-FILTERED-BY-DEFAULT: a system disposition notice is silently filtered (CTT-04)', async () => {
+  const ctx = makeCtx({ comments: mixedThread() });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  assert.equal(result.kind, 'messages');
+  const ids = result.messages.map((m) => m.commentId);
+  assert.deepEqual(ids, ['c-op', 'c-agent'], 'system_notice row c-sys filtered; conversational rows preserved in order');
+});
+
+test('U2 INCLUDE-DIAGNOSTICS-OFF-IS-DEFAULT: omitting includeDiagnostics filters the system comment', async () => {
+  const ctx = makeCtx({ comments: mixedThread() });
+  registerChatMessages(ctx);
+  // No includeDiagnostics in the params shape.
+  const resultOmit = await ctx._handlers.get('chat.messages')(msgParams());
+  assert.equal(resultOmit.messages.length, 2, 'default: 2 conversational, 0 noise');
+
+  // Explicit false — same behaviour as omit.
+  const resultFalse = await ctx._handlers.get('chat.messages')(msgParams({ includeDiagnostics: false }));
+  assert.equal(resultFalse.messages.length, 2);
+});
+
+test('U3 INCLUDE-DIAGNOSTICS-ON-INCLUDES-NOISE: D-16 toggle returns all 3 comments', async () => {
+  const ctx = makeCtx({ comments: mixedThread() });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams({ includeDiagnostics: true }));
+
+  assert.equal(result.messages.length, 3);
+  const ids = result.messages.map((m) => m.commentId);
+  assert.deepEqual(ids, ['c-op', 'c-agent', 'c-sys'], 'D-16 diagnostics view sees the system row in chronological order');
+});
+
+test('U4 BODY-PATTERN-FALLBACK: an agent-authored comment whose body matches a RUNTIME_PHRASE is filtered', async () => {
+  // The host-field discriminator misses (authorType is 'agent'), but the
+  // body-pattern fallback catches it. This is the defense-in-depth path for
+  // any host build that ever ships a runtime notice without the system stamp.
+  const ctx = makeCtx({
+    comments: [
+      { id: 'c-1', body: 'Hi there.', createdAt: new Date('2026-01-01T00:00:00Z'), authorType: 'agent' },
+      { id: 'c-2', body: 'This run exhausted the bounded corrective handoff.', createdAt: new Date('2026-01-01T00:00:30Z'), authorType: 'agent' },
+    ],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  const ids = result.messages.map((m) => m.commentId);
+  assert.deepEqual(ids, ['c-1'], 'c-2 caught by body-pattern fallback');
+});
+
+test('U5 MARKER-COMMENT-NEVER-FILTERED (Pitfall 4 integration): Plan 04.1-02 marker wording is surfaced', async () => {
+  // The exact wording from src/worker/chat/true-task.ts line 78 (the Plan
+  // 04.1-02 D-07 marker). This test cross-checks the integration between
+  // the marker-writer (Plan 04.1-02) and the filter (Plan 04.1-04) — a
+  // future RUNTIME_PHRASES addition that accidentally matches the marker
+  // fails this test AND the comment-classify unit test.
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-marker',
+        body: 'Task created — abc12345, assigned to CEO.',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        authorType: 'agent',
+      },
+    ],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  assert.equal(result.messages.length, 1, 'marker comment is surfaced, not stripped');
+  assert.equal(result.messages[0].commentId, 'c-marker');
+});
+
+test('U6 WATCHDOG-HOOK-FIRED: every chat.messages call invokes ctx.issues.get for the topic', async () => {
+  // D-11 watchdog cadence — every poll re-checks the topic is wakeable.
+  // The watchdog reads via ctx.issues.get; the stuck-signal read may also
+  // hit ctx.issues.get. We assert ≥1 call hitting the topic id.
+  const ctx = makeCtx({ comments: mixedThread() });
+  registerChatMessages(ctx);
+  await ctx._handlers.get('chat.messages')(msgParams());
+
+  // Allow a tick for the fire-and-forget watchdog to start.
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+
+  assert.ok(ctx._getCalls.length >= 1, 'watchdog (or stuck-read) called ctx.issues.get at least once');
+  assert.ok(
+    ctx._getCalls.every((c) => c.issueId === 'issue-topic-1' && c.companyId === 'co-1'),
+    'all gets are scoped to the topic id + companyId',
+  );
+});
+
+test('U6b WATCHDOG-FLIPS-OFF-DONE: when the topic is parked at done, the watchdog flips it to in_progress', async () => {
+  // Steady-state recovery path per OQ3 attempt-2: the host disposition-
+  // recovery service flipped the topic to done; the next poll catches it.
+  const ctx = makeCtx({
+    comments: mixedThread(),
+    topicIssue: { status: 'done' },
+  });
+  registerChatMessages(ctx);
+  await ctx._handlers.get('chat.messages')(msgParams());
+
+  // Watchdog is fire-and-forget — give it a tick to land.
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(ctx._updateCalls.length, 1, 'watchdog issued one flip-off-done update');
+  assert.equal(ctx._updateCalls[0].patch.status, 'in_progress');
+});
+
+test('U7 WATCHDOG-FIRE-AND-FORGET: a slow watchdog does NOT delay the chat.messages response', async () => {
+  // 50ms ctx.issues.get delay simulates a slow host. The fire-and-forget
+  // watchdog must NOT be awaited; the response must return as fast as the
+  // listComments + side-table-query path.
+  //
+  // The handler DOES await the topicIssue read for the topicStuck/recoveryOwner
+  // shape — that's a SECOND ctx.issues.get. The fire-and-forget call is the
+  // FIRST one (the watchdog). With both reads served by the same fake, we
+  // can't measure them separately by wall-clock; instead we assert the
+  // response returns AT MOST one round-trip slow (≤ ~80ms), not two (≥ ~100ms).
+  // Specifically: the fire-and-forget watchdog's get IS not awaited, so the
+  // total elapsed is bounded by the single stuck-read get.
+  const ctx = makeCtx({
+    comments: mixedThread(),
+    topicIssue: { status: 'in_progress' },
+    getDelayMs: 50,
+  });
+  registerChatMessages(ctx);
+
+  const before = Date.now();
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  const elapsed = Date.now() - before;
+
+  assert.equal(result.kind, 'messages');
+  // If both gets were awaited sequentially we'd see >=100ms. The watchdog
+  // get must not be awaited — total elapsed is bounded by ONE 50ms get
+  // (the stuck-read) plus listComments overhead. Threshold 85ms allows CI
+  // slack; 100ms would be a regression.
+  assert.ok(
+    elapsed < 85,
+    `chat.messages must not await the watchdog get (elapsed=${elapsed}ms; threshold=85ms)`,
+  );
+
+  // Let the fire-and-forget watchdog complete so node --test doesn't see
+  // a dangling promise.
+  await new Promise((r) => setTimeout(r, 70));
+});
+
+test('U8 TOPIC-STUCK-FIELD-FALSE: a clean topic returns topicStuck=false, recoveryOwner=null', async () => {
+  const ctx = makeCtx({
+    comments: mixedThread(),
+    topicIssue: { status: 'in_progress' },
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  assert.equal(result.topicStuck, false, 'no activeRecoveryAction → topicStuck false');
+  assert.equal(result.recoveryOwner, null, 'no recovery owner');
+});
+
+test('U9 TOPIC-STUCK-FIELD-TRUE-RECOVERY: activeRecoveryAction surfaces recoveryOwner name', async () => {
+  // The UI-SPEC Pattern G banner reads recoveryOwner to render the named
+  // human action. Plan 04.1-06's HostStuckBanner depends on this shape.
+  const ctx = makeCtx({
+    comments: mixedThread(),
+    topicIssue: {
+      status: 'in_progress',
+      activeRecoveryAction: { kind: 'recovery_owner', recoveryOwnerName: 'Eric' },
+    },
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  assert.equal(result.topicStuck, true);
+  assert.equal(result.recoveryOwner, 'Eric');
+});
+
+test('U10 TOPIC-STUCK-FIELD-TRUE-EXHAUSTED: successfulRunHandoff.exhausted=true → topicStuck true', async () => {
+  const ctx = makeCtx({
+    comments: mixedThread(),
+    topicIssue: {
+      status: 'in_progress',
+      successfulRunHandoff: { exhausted: true },
+    },
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  assert.equal(result.topicStuck, true);
+  // recoveryOwner may be null when no name is attached — the banner falls
+  // back to a generic 'Owner' label per UI-SPEC.
+  assert.equal(result.recoveryOwner, null);
+});
+
+test('U11 OPT-IN-GATE-STILL-FIRST: opted-out caller → no watchdog get, no listComments call', async () => {
+  // The opt-in gate (wrapDataHandler) returns OPT_IN_REQUIRED BEFORE the
+  // handler body runs — so NO ctx.issues call should fire for an opted-out
+  // user. This pins the contract: never wake an agent for someone who
+  // hasn't opted in.
+  let listCommentsCalled = false;
+  const ctx = makeCtx({
+    optedIn: false,
+    comments: mixedThread(),
+  });
+  // Wrap listComments to assert it's never called.
+  const realListComments = ctx.issues.listComments;
+  ctx.issues.listComments = async (...args) => {
+    listCommentsCalled = true;
+    return realListComments(...args);
+  };
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  assert.equal(result.error, 'OPT_IN_REQUIRED');
+  assert.equal(listCommentsCalled, false, 'no listComments call for an opted-out user');
+  assert.equal(ctx._getCalls.length, 0, 'no watchdog get for an opted-out user');
+});
+
+test('U12 RESPONSE-SHAPE-EXTENDED: response carries kind, topicIssueId, messages, topicStuck, recoveryOwner', async () => {
+  const ctx = makeCtx({
+    comments: mixedThread(),
+    topicIssue: {
+      status: 'in_progress',
+      activeRecoveryAction: { kind: 'recovery_owner', recoveryOwnerName: 'CFO' },
+    },
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  // Existing fields preserved — Plan 04-05's UI continues to work.
+  assert.equal(result.kind, 'messages');
+  assert.equal(result.topicIssueId, 'issue-topic-1');
+  assert.ok(Array.isArray(result.messages));
+
+  // New fields — Plan 04.1-06's HostStuckBanner reads these.
+  assert.equal(result.topicStuck, true);
+  assert.equal(result.recoveryOwner, 'CFO');
+
+  // Defensive — no extra surprise fields beyond the documented shape.
+  const expectedKeys = new Set(['kind', 'topicIssueId', 'messages', 'topicStuck', 'recoveryOwner']);
+  for (const k of Object.keys(result)) {
+    assert.ok(expectedKeys.has(k), `unexpected response key: ${k}`);
+  }
+});
+
+test('U13 STUCK-READ-FAILURE-DEGRADES-GRACEFULLY: a thrown ctx.issues.get does NOT fail the messages response', async () => {
+  // Best-effort durability: if the topic-stuck read fails, the messages
+  // array is still returned. topicStuck defaults to false; recoveryOwner null.
+  const ctx = makeCtx({
+    comments: mixedThread(),
+    getThrows: true,
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+
+  // The messages array is still returned (filtered).
+  assert.equal(result.kind, 'messages');
+  assert.equal(result.messages.length, 2, 'filtered conversational rows still returned');
+  // Stuck fields fall back to safe defaults.
+  assert.equal(result.topicStuck, false);
+  assert.equal(result.recoveryOwner, null);
 });
