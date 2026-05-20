@@ -6,16 +6,23 @@
 // ChatPage, which feeds the message thread.
 //
 // Plan 04.1-06 Task 2 — Pattern E tail. Topics with `archived === true`
-// (Plan 04.1-05 D-10) are hidden by default; an `<ArchivedTopicsPill>`
-// at the right end of the strip toggles them back in at opacity 0.6 with
-// an inline Unarchive hover-action (re-fires chat.topic.archive with
-// archived:false). The host issue's status remains in_progress
-// throughout — D-10 invariant pinned by the handler tests.
+// (Plan 04.1-05 D-10) are hidden by default; an `<ArchivedTopicsPill>` at
+// the right end of the strip surfaces a dropdown panel of the archived
+// topics (Plan 04.1-08 — the panel replaces the original inline-reveal).
 //
-// The "+ New topic" button lives in the thread head (rendered by index.tsx)
-// and calls chat.topic.create — not in this component.
+// Plan 04.1-08 — TopicStrip now accepts an optional `onOpenArchivePanel`
+// callback from the parent (index.tsx). When provided, clicking the +N
+// archived pill invokes that callback (which opens the ArchivePanel
+// dropdown at the parent level). The legacy inline-reveal behavior is
+// preserved as a fallback when no callback is wired.
 //
-// Visual contract: sketches/paperclip-fix-employee-chat.html ll. 139-157.
+// The host issue's status remains in_progress throughout — D-10 invariant
+// pinned by the handler tests.
+//
+// The "+ New topic" button lives in the actions row (Plan 04.1-08; was the
+// thread head pre-04.1-08) — index.tsx renders it.
+//
+// Visual contract: sketches/paperclip-fix-chat-true-task.html ll. 167-216.
 //
 // All topic titles render as untrusted React text (T-04-18).
 
@@ -57,12 +64,20 @@ export function TopicStrip({
   employeeAgentId,
   activeTopicIssueId,
   onSelectTopic,
+  onOpenArchivePanel = null,
+  archivePanelOpen = false,
 }: {
   companyId: string;
   userId: string;
   employeeAgentId: string;
   activeTopicIssueId: string | null;
   onSelectTopic: (topic: ChatTopic) => void;
+  /** Plan 04.1-08 — clicking the +N archived pill calls this callback (the
+   *  parent opens the ArchivePanel dropdown). When null, falls back to the
+   *  legacy inline-reveal behavior. */
+  onOpenArchivePanel?: (() => void) | null;
+  /** Plan 04.1-08 — drives the pill's `expanded` aria-pressed visual. */
+  archivePanelOpen?: boolean;
 }): React.ReactElement {
   const { data, loading, refresh } = usePluginData<TopicsResult>('chat.topics', {
     employeeAgentId,
@@ -81,11 +96,15 @@ export function TopicStrip({
       ? data.topics
       : [];
 
-  // Plan 04.1-06 Pattern E — hide archived topics by default; the pill at
-  // the right end exposes them on-demand.
+  // Plan 04.1-06 Pattern E — hide archived topics by default; Plan 04.1-08
+  // the +N pill now opens an ArchivePanel dropdown (parent owns the open
+  // state). When the parent supplied an onOpenArchivePanel callback, we
+  // skip the inline-reveal — the strip stays clean.
   const visible = React.useMemo(
-    () => (showArchived ? allTopics : allTopics.filter((t) => !t.archived)),
-    [allTopics, showArchived],
+    () => (showArchived && !onOpenArchivePanel
+      ? allTopics
+      : allTopics.filter((t) => !t.archived)),
+    [allTopics, showArchived, onOpenArchivePanel],
   );
   const archivedCount = React.useMemo(
     () => allTopics.filter((t) => t.archived).length,
@@ -173,8 +192,17 @@ export function TopicStrip({
       )}
       <ArchivedTopicsPill
         archivedCount={archivedCount}
-        expanded={showArchived}
-        onToggle={() => setShowArchived((s) => !s)}
+        // Plan 04.1-08 — when the parent wired an onOpenArchivePanel, the
+        // pill drives THAT (the dropdown panel opens). Otherwise legacy
+        // inline-reveal behavior remains for older mount points.
+        expanded={onOpenArchivePanel ? archivePanelOpen : showArchived}
+        onToggle={() => {
+          if (onOpenArchivePanel) {
+            onOpenArchivePanel();
+            return;
+          }
+          setShowArchived((s) => !s);
+        }}
       />
     </div>
   );

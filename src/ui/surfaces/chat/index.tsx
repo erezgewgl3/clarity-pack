@@ -1,7 +1,11 @@
 // src/ui/surfaces/chat/index.tsx
 //
-// Plan 04-05 — CHAT-01 — the Employee Chat page surface. Replaces the
-// chat-stub.tsx placeholder.
+// Plan 04-05 — CHAT-01 — the Employee Chat page surface.
+// Plan 04.1-08 REWIRED — mounts:
+//   - <ChatActionsRow>     BETWEEN <TopicStrip> and the messages scroller
+//   - <ArchivePanel>       dropdown anchored to the +N archived pill
+//   - <TrueTaskDialog>     dual-mode dialog (cold + promote)
+//   - <ArchivedBanner>     sticky read-only banner (rendered by MessageThread)
 //
 // Three-gate composition mirrors bulletin/index.tsx EXACTLY (Plan 02-09
 // pattern):
@@ -11,18 +15,17 @@
 // userId MUST come from useResolvedUserId — never bare useHostContext().userId
 // (the production null-userId gap, DEV-15-STRUCTURAL).
 //
-// Then the four-region shell — roster rail / topic strip + message thread /
-// context rail — a 3-column grid 264px 1fr 340px per
-// sketches/paperclip-fix-employee-chat.html l. 44.
-//
-// The manifest `clarity-chat` slot's exportName MUST stay `ChatPage`.
+// Then the four-region shell — roster rail / [topic strip + actions row +
+// message thread + composer] / context rail — a 3-column grid 264px 1fr 360px
+// per Plan 04.1-08 (was 340px in 04-05; widened so right-rail labels never
+// truncate at 1280px / browser zoom 100%).
 //
 // All chat text renders as untrusted React text — never
 // dangerouslySetInnerHTML. SPA navigation via useHostNavigation().linkProps,
 // never raw <a href>.
 
 import * as React from 'react';
-import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginAction, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 import type { PluginPageProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
@@ -35,7 +38,30 @@ import { RosterRail, type RosterEmployee } from './roster-rail.tsx';
 import { TopicStrip, type ChatTopic } from './topic-strip.tsx';
 import { ContextRail } from './context-rail.tsx';
 import { Composer } from './composer.tsx';
-import { DiagnosticsToggle } from './diagnostics-toggle.tsx';
+import { ChatActionsRow } from './actions-row.tsx';
+import { ArchivePanel, type ArchivedTopic } from './archive-panel.tsx';
+import {
+  TrueTaskDialog,
+  type TrueTaskDialogMode,
+  type PromoteSourceMessage,
+} from './true-task/true-task-dialog.tsx';
+import type { PromoteSourceMessagePayload } from './message-thread.tsx';
+
+type ArchivedTopicsResult =
+  | {
+      kind: 'archivedTopics';
+      topics: Array<{
+        topicIssueId: string;
+        topicId: string;
+        title: string;
+        employeeAgentId: string;
+        messageCount: number;
+        lastActiveAt: string;
+        archivedAt: string | null;
+      }>;
+    }
+  | { error: string }
+  | null;
 
 export function ChatPage(_props?: PluginPageProps): React.ReactElement {
   // OPTIN — gate BEFORE resolution.
@@ -104,31 +130,38 @@ function ChatPageBody({
 }): React.ReactElement {
   const [employee, setEmployee] = React.useState<RosterEmployee | null>(null);
   const [topic, setTopic] = React.useState<ChatTopic | null>(null);
-  // Bumped after a successful chat.topic.create so the TopicStrip's key
-  // changes and its usePluginData('chat.topics') re-fetches the new topic in
-  // (GAP 2 — the strip otherwise never re-fetches after a create).
+  // Bumped after a successful chat.topic.create or chat.topic.archive flip
+  // so the TopicStrip's key changes and its usePluginData('chat.topics')
+  // re-fetches. Also drives chat.archivedTopics refresh.
   const [refreshKey, setRefreshKey] = React.useState(0);
-  // A non-blocking error surfaced when chat.topic.create returns { error }
-  // (GAP 1 — the create handler RETURNS errors, it does not throw).
+  // A non-blocking error surfaced when chat.topic.create returns { error }.
   const [createError, setCreateError] = React.useState<string | null>(null);
-  // Plan 04.1-06 Pattern F — D-16 diagnostics toggle (header). Local React
-  // state — does NOT persist across reloads (UI-SPEC §Persistence).
+  // Plan 04.1-06 — D-16 diagnostics toggle (now mounted in the actions row
+  // per Plan 04.1-08).
   const [diagnostics, setDiagnostics] = React.useState(false);
 
-  // The roster rail hands back the full employee row — used for the active
-  // highlight, the thread head, and the context rail. Switching employee
-  // clears the active topic (the topic strip auto-selects the new employee's
-  // most-recent topic).
+  // Plan 04.1-08 — archive panel + dialog open state.
+  const [archivePanelOpen, setArchivePanelOpen] = React.useState(false);
+  const [dialogState, setDialogState] = React.useState<{
+    open: boolean;
+    mode: TrueTaskDialogMode;
+    sourceMessage: PromoteSourceMessage | null;
+    sourceTopic: ChatTopic | null;
+  }>({ open: false, mode: 'cold', sourceMessage: null, sourceTopic: null });
+
   const handleSelectEmployee = React.useCallback((next: RosterEmployee) => {
     setEmployee(next);
     setTopic(null);
+    setArchivePanelOpen(false);
   }, []);
 
   const handleSelectTopic = React.useCallback((next: ChatTopic) => {
     setTopic(next);
+    setArchivePanelOpen(false);
   }, []);
 
   const createTopic = usePluginAction('chat.topic.create');
+  const archive = usePluginAction('chat.topic.archive');
   const [creating, setCreating] = React.useState(false);
 
   const handleNewTopic = React.useCallback(async () => {
@@ -138,16 +171,12 @@ function ChatPageBody({
     setCreating(true);
     setCreateError(null);
     try {
-      // chat.topic.create RETURNS its outcome — { ok, topicId, issueId,
-      // parentIssueId } on success or { error } on failure. It does NOT throw
-      // on a worker-side failure, so the result must be inspected (GAP 1).
       const result = await createTopic({
         employeeAgentId: employee.id,
         title,
         companyId,
         userId,
       });
-
       if (
         result &&
         typeof result === 'object' &&
@@ -160,8 +189,6 @@ function ChatPageBody({
           issueId: string;
           parentIssueId: string;
         };
-        // GAP 1 — drop the user straight into the just-created topic so the
-        // composer opens for the first message immediately.
         setTopic({
           topicId: created.topicId,
           issueId: created.issueId,
@@ -171,12 +198,8 @@ function ChatPageBody({
           lastActivityAt: new Date().toISOString(),
           archived: false,
         });
-        // GAP 2 — force the TopicStrip to re-fetch so the new topic appears in
-        // the strip without re-selecting the employee.
         setRefreshKey((k) => k + 1);
       } else {
-        // GAP 1 — the create RETURNED an error. Surface it visibly; never
-        // silently swallow it (the old empty catch could not even see this).
         const errCode =
           result && typeof result === 'object' && 'error' in result
             ? String((result as { error: unknown }).error)
@@ -184,12 +207,132 @@ function ChatPageBody({
         setCreateError(errCode);
       }
     } catch {
-      // A genuine transport-level throw (rare — the handler returns errors).
       setCreateError('CREATE_FAILED');
     } finally {
       setCreating(false);
     }
   }, [employee, createTopic, companyId, userId]);
+
+  // Plan 04.1-08 — archive panel state + data fetch + handlers.
+  const { data: archivedRaw, refresh: refreshArchived } =
+    usePluginData<ArchivedTopicsResult>(
+      'chat.archivedTopics',
+      employee && archivePanelOpen
+        ? { companyId, userId, employeeAgentId: employee.id, _refreshKey: refreshKey }
+        : {},
+    );
+  const archivedTopics: ArchivedTopic[] = React.useMemo(() => {
+    if (!archivedRaw || typeof archivedRaw !== 'object' || !('kind' in archivedRaw)) {
+      return [];
+    }
+    if (archivedRaw.kind !== 'archivedTopics') return [];
+    return archivedRaw.topics.map((t) => ({
+      topicIssueId: t.topicIssueId,
+      topicId: t.topicId,
+      title: t.title,
+      employeeName: employee?.name ?? '',
+      messageCount: t.messageCount,
+      lastActiveAt: t.lastActiveAt,
+      archivedAt: t.archivedAt ?? t.lastActiveAt,
+    }));
+  }, [archivedRaw, employee]);
+
+  const handleOpenArchivedTopic = React.useCallback(
+    (topicIssueId: string) => {
+      // Find the topic in the archived list and open it in ARCHIVED state.
+      const found = archivedTopics.find((t) => t.topicIssueId === topicIssueId);
+      if (!found || !employee) return;
+      setTopic({
+        topicId: found.topicId,
+        issueId: found.topicIssueId,
+        // Best-effort — parentIssueId isn't exposed in archived rows; the
+        // composer is disabled so this field is not load-bearing. Empty
+        // string is acceptable; future plans can plumb it.
+        parentIssueId: '',
+        employeeAgentId: employee.id,
+        title: found.title,
+        lastActivityAt: found.lastActiveAt,
+        archived: true,
+      });
+      setArchivePanelOpen(false);
+    },
+    [archivedTopics, employee],
+  );
+
+  const handleUnarchiveFromPanel = React.useCallback(
+    async (topicIssueId: string) => {
+      try {
+        await archive({
+          archived: false,
+          topicIssueId,
+          companyId,
+          userId,
+        });
+      } finally {
+        setRefreshKey((k) => k + 1);
+        void refreshArchived?.();
+        setArchivePanelOpen(false);
+        // If the operator was viewing the archived topic in the main thread,
+        // flip its archived state so the composer re-enables.
+        setTopic((cur) =>
+          cur && cur.issueId === topicIssueId ? { ...cur, archived: false } : cur,
+        );
+      }
+    },
+    [archive, companyId, userId, refreshArchived],
+  );
+
+  // Plan 04.1-08 — handler for the banner's Unarchive button (re-uses the
+  // same chat.topic.archive flip; refetches the active topics + archive
+  // panel + closes the archived view).
+  const handleUnarchiveActive = React.useCallback(async () => {
+    if (!topic) return;
+    await handleUnarchiveFromPanel(topic.issueId);
+  }, [topic, handleUnarchiveFromPanel]);
+
+  // Plan 04.1-08 — dialog open helpers.
+  const openColdDialog = React.useCallback(() => {
+    setDialogState({
+      open: true,
+      mode: 'cold',
+      sourceMessage: null,
+      sourceTopic: topic ?? null,
+    });
+  }, [topic]);
+
+  const openPromoteDialog = React.useCallback(
+    (src: PromoteSourceMessagePayload) => {
+      if (!topic) return;
+      setDialogState({
+        open: true,
+        mode: 'promote',
+        sourceMessage: {
+          body: src.body,
+          commentId: src.commentId,
+          employeeName: src.employeeName,
+          occurredAt: src.occurredAt,
+        },
+        sourceTopic: topic,
+      });
+    },
+    [topic],
+  );
+
+  const closeDialog = React.useCallback(() => {
+    setDialogState((s) => ({ ...s, open: false }));
+  }, []);
+
+  const onDialogSuccess = React.useCallback(
+    (result: { issueId: string; mode: TrueTaskDialogMode }) => {
+      void result;
+      setDialogState((s) => ({ ...s, open: false }));
+      // Refresh — the chat.taskOwned rail + the messages thread (marker
+      // comment) pick up the new task on the next poll. A bump here makes
+      // any cached query keyed on refreshKey re-fire.
+      setRefreshKey((k) => k + 1);
+    },
+    [],
+  );
 
   return (
     <div className="clarity-chat-shell" data-clarity-region="chat-shell">
@@ -218,22 +361,10 @@ function ChatPageBody({
               aria-label="Search chats"
             />
           </div>
-          <div className="head-actions">
-            {/* Plan 04.1-06 Pattern F — D-16 diagnostics toggle. Sits to
-                the LEFT of "+ New topic" per UI-SPEC §"Diagnostics toggle". */}
-            <DiagnosticsToggle
-              armed={diagnostics}
-              onToggle={() => setDiagnostics((a) => !a)}
-            />
-            <button
-              type="button"
-              className="btn"
-              onClick={handleNewTopic}
-              disabled={!employee || creating}
-            >
-              + New topic
-            </button>
-          </div>
+          {/* Plan 04.1-08 — .head-actions is now empty. + New topic and
+              Diagnostics both moved to the ActionsRow below. The block stays
+              in the markup for symmetry with the sketch shell. */}
+          <div className="head-actions" />
         </header>
 
         <TopicStrip
@@ -242,7 +373,33 @@ function ChatPageBody({
           employeeAgentId={employee?.id ?? ''}
           activeTopicIssueId={topic?.issueId ?? null}
           onSelectTopic={handleSelectTopic}
+          onOpenArchivePanel={() => setArchivePanelOpen((o) => !o)}
+          archivePanelOpen={archivePanelOpen}
           key={`${employee?.id ?? 'none'}:${refreshKey}`}
+        />
+
+        {/* Plan 04.1-08 — the archive panel is mounted as a sibling of the
+            topic strip so its CSS `position: absolute; top: 100%` anchors it
+            below the strip. The panel handles its own click-outside and
+            Escape; the parent owns the open state via archivePanelOpen. */}
+        <ArchivePanel
+          open={archivePanelOpen && !!employee}
+          archivedTopics={archivedTopics}
+          onClose={() => setArchivePanelOpen(false)}
+          onOpenTopic={handleOpenArchivedTopic}
+          onUnarchive={(topicIssueId) => void handleUnarchiveFromPanel(topicIssueId)}
+        />
+
+        {/* Plan 04.1-08 — actions row sits between the topic strip and the
+            messages scroller. The + Create task button opens the dialog in
+            COLD mode; + New topic delegates to the existing topic create
+            flow; Diagnostics moved here from the thread-head. */}
+        <ChatActionsRow
+          onCreateTask={openColdDialog}
+          onNewTopic={() => void handleNewTopic()}
+          newTopicDisabled={!employee || creating}
+          diagnosticsOn={diagnostics}
+          onDiagnosticsToggle={() => setDiagnostics((a) => !a)}
         />
 
         {createError ? (
@@ -260,13 +417,6 @@ function ChatPageBody({
             No topic selected — choose a topic above or start a new one.
           </div>
         ) : (
-          // Composer owns the optimistic-send state and renders the
-          // MessageThread itself (the thread reads the optimistic overlay).
-          // Plan 04.1-06 — Composer now needs topicId / assigneeAgentId /
-          // employeeName / employeeRole / diagnostics so the TrueTaskDialog
-          // and PromoteActions can call chat.createTrueTask / chat.promote
-          // with the new D-06/D-07 required params, and so MessageThread
-          // can pass includeDiagnostics: through to chat.messages.
           <Composer
             companyId={companyId}
             userId={userId}
@@ -276,6 +426,30 @@ function ChatPageBody({
             employeeName={employee.name}
             employeeRole={employee.role}
             diagnostics={diagnostics}
+            // Plan 04.1-08 — when the active topic is archived, the
+            // composer goes read-only with the dashed border + "Unarchive
+            // to send messages" placeholder. The ArchivedBanner sits at
+            // the top of the messages thread.
+            disabled={topic.archived === true}
+            // Plan 04.1-08 — per-bubble "→ Promote to task" hover button
+            // opens the dual-mode dialog at this level (vs the legacy
+            // inline chat.promote fire-and-forget).
+            onPromoteMessage={openPromoteDialog}
+            // Plan 04.1-08 — the archived-banner data flows from this level
+            // (the parent owns the unarchive action; message-count and
+            // task-count are best-effort 0 in v1 until chat.taskOwned /
+            // chat.messages enrichment lands in Phase 4.2).
+            archivedBanner={
+              topic.archived === true
+                ? {
+                    topicTitle: topic.title,
+                    messageCount: 0,
+                    tasksSpawned: 0,
+                    lastActiveAt: topic.lastActivityAt,
+                    onUnarchive: () => void handleUnarchiveActive(),
+                  }
+                : null
+            }
             key={`composer-${topic.issueId}`}
           />
         )}
@@ -289,11 +463,32 @@ function ChatPageBody({
         onArchived={() => {
           // Plan 04.1-06 Pattern E — after a successful archive, drop the
           // archived topic from the active view and force the strip to
-          // re-fetch so the "+N archived" pill reflects the new count.
+          // re-fetch.
           setTopic(null);
           setRefreshKey((k) => k + 1);
+          void refreshArchived?.();
         }}
       />
+
+      {/* Plan 04.1-08 — dual-mode dialog. Mounted at the shell root so the
+          backdrop covers the entire chat surface; the dialog's native
+          showModal() handles focus-trap + Escape. */}
+      {employee ? (
+        <TrueTaskDialog
+          open={dialogState.open}
+          mode={dialogState.mode}
+          onClose={closeDialog}
+          onSuccess={onDialogSuccess}
+          sourceMessage={dialogState.sourceMessage}
+          sourceTopic={dialogState.sourceTopic}
+          defaultAssigneeAgentId={employee.id}
+          defaultEmployeeName={employee.name}
+          companyId={companyId}
+          userId={userId}
+          employeeAgentId={employee.id}
+        />
+      ) : null}
+
     </div>
   );
 }

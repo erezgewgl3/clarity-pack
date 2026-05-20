@@ -38,7 +38,11 @@
 import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
-import { MessageThread, type OptimisticMessage } from './message-thread.tsx';
+import {
+  MessageThread,
+  type OptimisticMessage,
+  type PromoteSourceMessagePayload,
+} from './message-thread.tsx';
 
 // 04-01 spike OQ-1 verdict: NO-PATH. No plugin-accessible attachment-upload
 // route exists on the live host. CHAT-07 ships degraded. A future PATH-FOUND
@@ -68,6 +72,8 @@ export function Composer({
   diagnostics = false,
   disabled = false,
   pendingTaskCard = null,
+  onPromoteMessage = null,
+  archivedBanner = null,
 }: {
   companyId: string;
   userId: string;
@@ -92,6 +98,19 @@ export function Composer({
    *  marker comment lands on the next poll. Now driven by the parent (the
    *  + Create task / Promote dialog opens at the index.tsx level). */
   pendingTaskCard?: { issueId: string; title: string } | null;
+  /** Plan 04.1-08 — threaded from index.tsx through to the per-bubble
+   *  PromoteActions; clicking "→ Promote to task" opens the dual-mode
+   *  dialog in PROMOTE mode at the index.tsx level. */
+  onPromoteMessage?: ((src: PromoteSourceMessagePayload) => void) | null;
+  /** Plan 04.1-08 — passed through to MessageThread so the sticky read-only
+   *  banner renders at the top of `.messages` when the topic is archived. */
+  archivedBanner?: {
+    topicTitle: string;
+    messageCount: number;
+    tasksSpawned: number;
+    lastActiveAt: string | null;
+    onUnarchive: () => void;
+  } | null;
 }): React.ReactElement {
   const send = usePluginAction('chat.send');
   const [draft, setDraft] = React.useState('');
@@ -183,6 +202,8 @@ export function Composer({
         employeeRole={employeeRole ?? null}
         diagnostics={diagnostics}
         pendingTaskCard={pendingTaskCard}
+        onPromoteMessage={onPromoteMessage}
+        archivedBanner={archivedBanner}
       />
       <div
         className={`composer${disabled ? ' composer--disabled' : ''}`}

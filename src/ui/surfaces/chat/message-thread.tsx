@@ -45,6 +45,9 @@ import { parseReasoning, ReasoningPanel } from './reasoning-panel.tsx';
 // Plan 04.1-06 — Patterns C, F (RuntimeNoiseRow inline), G.
 import { InlineTaskCard } from './true-task/inline-task-card.tsx';
 import { HostStuckBanner } from './host-stuck-banner.tsx';
+// Plan 04.1-08 — sticky read-only banner shown when the active topic is
+// archived (the operator opened it from the archive panel).
+import { ArchivedBanner } from './archived-banner.tsx';
 
 /**
  * Plan 04.1-08 — when the operator clicks "→ Promote to task" on an agent
@@ -165,6 +168,7 @@ export function MessageThread({
   diagnostics = false,
   pendingTaskCard = null,
   onPromoteMessage = null,
+  archivedBanner = null,
 }: {
   companyId: string;
   userId: string;
@@ -186,6 +190,15 @@ export function MessageThread({
    *  When null, the PromoteActions falls back to its in-place chat.promote
    *  fire-and-forget (used by older mount points). */
   onPromoteMessage?: ((src: PromoteSourceMessagePayload) => void) | null;
+  /** Plan 04.1-08 — when set, renders the sticky read-only ArchivedBanner
+   *  at the top of `.messages`. Caller computes message/task counts. */
+  archivedBanner?: {
+    topicTitle: string;
+    messageCount: number;
+    tasksSpawned: number;
+    lastActiveAt: string | null;
+    onUnarchive: () => void;
+  } | null;
 }): React.ReactElement {
   const { data, loading, refresh } = usePluginData<MessagesResult>('chat.messages', {
     topicIssueId,
@@ -376,6 +389,18 @@ export function MessageThread({
         <span aria-hidden="true">{indicator.label}</span>
         <span className="sr-only">{indicator.statusText}</span>
       </div>
+      {/* Plan 04.1-08 — sticky archived banner shown when the active topic
+          is archived (operator opened it via the archive panel). Rendered
+          BEFORE host-stuck so a stuck-AND-archived topic shows both. */}
+      {archivedBanner ? (
+        <ArchivedBanner
+          topicTitle={archivedBanner.topicTitle}
+          messageCount={archivedBanner.messageCount}
+          tasksSpawned={archivedBanner.tasksSpawned}
+          lastActiveAt={archivedBanner.lastActiveAt}
+          onUnarchive={archivedBanner.onUnarchive}
+        />
+      ) : null}
       {/* Plan 04.1-06 Pattern G — Host-stuck banner rendered BELOW the
           live indicator (CSS makes it sticky) when chat.messages returns
           topicStuck:true. Silently unmounts on the next poll where
