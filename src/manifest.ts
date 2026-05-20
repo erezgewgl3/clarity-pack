@@ -18,6 +18,51 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.8.3 (Plan 04.1-10 — gap-closure on the Plan 04.1-09 drill) — four
+  // surgical UI fixes for the regressions Eric's 2026-05-20 second live
+  // drill on Countermoves surfaced. Worker tier, schema, and capability
+  // list all UNCHANGED — pure UI + CSS + small React rewires:
+  // (1) INLINE TASK CARD + CREATION TOAST — onDialogSuccess in index.tsx
+  //     used to do `void result; setRefreshKey(k=>k+1)` — discarded the
+  //     dialog payload entirely. Consequence: the optimistic
+  //     pendingTaskCard was NEVER written, so for promote-mode tasks the
+  //     inline card only appeared ~15s later when the chat.taskOwned
+  //     poll caught up to the marker comment. Cold-mode tasks (no marker
+  //     by spec, no inline-card surface) vanished with zero operator
+  //     confirmation. New shape: onSuccess receives { issueId, mode,
+  //     title }; promote → setPendingTaskCard fires the optimistic card
+  //     immediately with the operator-typed title; BOTH modes fire a 6s
+  //     toast "↗ Task created — <8-char-id>, assigned to <name>.". The
+  //     pending card clears via three paths: marker-arrival (MessageThread
+  //     fires onPendingResolved), topic switch, employee switch.
+  // (2) DIALOG DETAILS TEXTAREA + HORIZONTAL VIEWPORT OVERFLOW —
+  //     (a) DETAILS field promoted from <input type=text> (single-line
+  //     primary content surface, unworkable for real task bodies) to a
+  //     <textarea rows=6>. CSS: min-height 140px, max-height 40vh,
+  //     overflow-y auto, resize: vertical. (b) Long topic titles +
+  //     several open topics pushed the chat shell wider than viewport,
+  //     hiding the right rail. Root cause: grid items default to
+  //     min-width: auto. CSS fix: .clarity-chat-shell > .thread, > main
+  //     get min-width: 0; .topics gets min-width: 0 + max-width: 100%
+  //     (its existing overflow-x: auto now scrolls inside instead of
+  //     pushing the parent column wider); .topic .topic-title gets
+  //     ellipsis truncation at max-width 220px with full title in
+  //     title= attribute for hover discovery.
+  // (3) RESUME HEARTBEAT INLINE TOGGLE — Plan 04.1-09 shipped Pause as
+  //     visual-only; resuming required navigating away from chat to the
+  //     agent page. The Quick Action row now TOGGLES based on the
+  //     optimistic CEO status: paused → ▶ Resume heartbeat; otherwise
+  //     ⏸ Pause heartbeat. Resume click attempts usePluginAction(
+  //     'agents.resumeHeartbeat') with { agentId, companyId, userId };
+  //     success → 4s confirm toast; failure (action key not bound on
+  //     this host) → 6s graceful-degrade toast hinting the agent page.
+  //     The optimistic flip (setPausedOverride(null)) lands BEFORE the
+  //     host call so the visual is snappy regardless of host latency.
+  // Suite 1195 -> ≥1219 (24+ new tests across 3 UI test files; one new
+  // node:test file chat-index-on-dialog-success.test.mjs covers the
+  // dialog-success rewire). UI/CSS only — no manifest shape, capability,
+  // schema, or worker-contract change.
+  //
   // 0.8.2 (Plan 04.1-09 — gap-closure on the Plan 04.1-08 drill) — five
   // surgical UI fixes for the regressions Eric's 2026-05-20 live drill on
   // Countermoves surfaced. Worker tier, schema, and capability list all
@@ -274,7 +319,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.8.2',
+  version: '0.8.3',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

@@ -216,6 +216,51 @@ test('chat.css (Plan 04.1-09): .true-task-dialog-backdrop is fixed inset 0 with 
   );
 });
 
+// ---------------------------------------------------------------------------
+// Plan 04.1-10 — DETAILS textarea sizing (drill fix #2a). The Plan 04.1-08
+// build rendered DETAILS as a single-line <input type="text">; Task 1 of
+// this plan promoted it to a <textarea> and Task 2 adds the sizing CSS:
+// min-height 140px, max-height 40vh, vertical resize, overflow-y auto.
+// ---------------------------------------------------------------------------
+
+test('chat.css (Plan 04.1-10): .true-task-dialog textarea has min-height 140px', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  const block = css.match(/\.true-task-dialog\s+textarea\s*\{([^}]*)\}/);
+  assert.ok(block, '.true-task-dialog textarea must be styled');
+  assert.match(
+    block[1],
+    /min-height:\s*140px/,
+    'textarea min-height 140px so it opens at ~6 lines',
+  );
+});
+
+test('chat.css (Plan 04.1-10): .true-task-dialog textarea has max-height 40vh + scrollable + vertical resize', () => {
+  const css = readFileSync(
+    path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),
+    'utf8',
+  );
+  const block = css.match(/\.true-task-dialog\s+textarea\s*\{([^}]*)\}/);
+  assert.ok(block, '.true-task-dialog textarea must be styled');
+  assert.match(
+    block[1],
+    /max-height:\s*40vh/,
+    'textarea max-height 40vh so the dialog stays on small screens',
+  );
+  assert.match(
+    block[1],
+    /overflow-y:\s*auto/,
+    'textarea overflow-y auto so content scrolls inside it past the cap',
+  );
+  assert.match(
+    block[1],
+    /resize:\s*vertical/,
+    'textarea resize: vertical so the operator can drag taller',
+  );
+});
+
 test('chat.css (Plan 04.1-09): .true-task-dialog is position:relative (not the stale position:fixed top-left)', () => {
   const css = readFileSync(
     path.resolve(HERE, '..', '..', 'src', 'ui', 'styles', 'chat.css'),

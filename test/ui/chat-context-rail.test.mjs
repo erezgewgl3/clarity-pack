@@ -274,3 +274,99 @@ test('index.tsx (Plan 04.1-09): chat.taskOwned fetch lifted via useChatActiveTas
     'index.tsx must pass activeTasks to both consumers',
   );
 });
+
+// ---------------------------------------------------------------------------
+// Plan 04.1-10 — Resume heartbeat inline toggle (drill fix #3). Once paused,
+// the Quick Action row toggles to ▶ Resume; clicking attempts the host
+// action AND optimistically flips the visual back to live. Graceful-degrade
+// toast when the host action key isn't bound.
+// ---------------------------------------------------------------------------
+
+test('context-rail.tsx (Plan 04.1-10): when CEO status is paused, Resume row renders (NOT Pause)', () => {
+  const c = code(SRC);
+  // The render is gated on isPausedDisplay — true → Resume button; false → Pause.
+  assert.match(
+    c,
+    /isPausedDisplay\s*\?\s*\([\s\S]*?Resume heartbeat[\s\S]*?\)\s*:\s*\([\s\S]*?Pause heartbeat/,
+    'paused state must render Resume; otherwise Pause',
+  );
+});
+
+test('context-rail.tsx (Plan 04.1-10): Resume button has data-clarity-action="resume-heartbeat"', () => {
+  const c = code(SRC);
+  assert.match(
+    c,
+    /data-clarity-action="resume-heartbeat"/,
+    'Resume button needs a stable selector for the operator drill',
+  );
+});
+
+test('context-rail.tsx (Plan 04.1-10): Resume click invokes onResumeHeartbeat', () => {
+  const c = code(SRC);
+  // The Resume button's onClick wraps onResumeHeartbeat in a fire-and-forget
+  // arrow so React's synthetic event matches the void return type.
+  assert.match(
+    c,
+    /onClick=\{\s*\(\)\s*=>\s*void\s+onResumeHeartbeat\(\)\s*\}/,
+    'Resume click must invoke onResumeHeartbeat',
+  );
+});
+
+test('context-rail.tsx (Plan 04.1-10): onResumeHeartbeat optimistically flips paused → live FIRST', () => {
+  const c = code(SRC);
+  // Before the async host call, setPausedOverride(null) lands so the visual
+  // flips back instantly; the host call follows. This ordering keeps the
+  // visual snappy when the host call latency is non-trivial.
+  const block = c.match(/const onResumeHeartbeat[\s\S]*?\}\,\s*\[/);
+  assert.ok(block, 'onResumeHeartbeat must exist');
+  // setPausedOverride(null) appears before the resumeAction(...) call.
+  const setIdx = block[0].indexOf('setPausedOverride(null)');
+  const callIdx = block[0].indexOf('resumeAction(');
+  assert.ok(setIdx >= 0, 'must call setPausedOverride(null)');
+  assert.ok(callIdx >= 0, 'must call resumeAction');
+  assert.ok(
+    setIdx < callIdx,
+    'optimistic flip must happen BEFORE the host action call',
+  );
+});
+
+test('context-rail.tsx (Plan 04.1-10): Resume invokes agents.resumeHeartbeat via usePluginAction', () => {
+  const c = code(SRC);
+  assert.match(
+    c,
+    /usePluginAction\(\s*['"]agents\.resumeHeartbeat['"]\s*\)/,
+    'must bind the agents.resumeHeartbeat action via usePluginAction',
+  );
+});
+
+test('context-rail.tsx (Plan 04.1-10): Resume host-call failure path fires a graceful-degrade toast', () => {
+  const c = code(SRC);
+  // The catch arm in onResumeHeartbeat surfaces a toast that names the
+  // agent page as the canonical resume path AND still leaves the optimistic
+  // flip in place (no rollback).
+  assert.match(
+    c,
+    /host call pending — verify on the agent page/,
+    'catch-block toast must include the host-pending hint',
+  );
+});
+
+test('context-rail.tsx (Plan 04.1-10): Resume success path fires a confirming toast', () => {
+  const c = code(SRC);
+  // The success arm fires a 4s confirm toast.
+  assert.match(
+    c,
+    /Heartbeat resumed for \$\{name\}\.`,\s*duration:\s*4000/,
+    'success toast must be "Heartbeat resumed for <name>." at 4s duration',
+  );
+});
+
+test('chat.css (Plan 04.1-10): .qa-resume gives the leading glyph a live-green hint', () => {
+  // The ▶ play-glyph reads as "go" in the live token color, mirroring the
+  // amber warn tint on .stat-value.paused for the paused state.
+  assert.match(
+    CSS,
+    /\.qa-resume::first-letter\b[\s\S]*?color:\s*var\(--live\)/,
+    '.qa-resume leading glyph must be the live-green token',
+  );
+});
