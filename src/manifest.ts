@@ -18,6 +18,49 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
+  // 0.8.2 (Plan 04.1-09 — gap-closure on the Plan 04.1-08 drill) — five
+  // surgical UI fixes for the regressions Eric's 2026-05-20 live drill on
+  // Countermoves surfaced. Worker tier, schema, and capability list all
+  // UNCHANGED — pure UI + CSS + small React rewires:
+  // (1) DIALOG CENTERED MODAL — the +Create task dialog rendered TOP-LEFT
+  //     because the existing CSS forced `position:fixed inset:0 width:480px`
+  //     on the native <dialog> element. Replaced with a custom backdrop +
+  //     body pair: outer .true-task-dialog-backdrop is fixed inset:0 flex
+  //     centered; inner .true-task-dialog is position:relative max-width
+  //     560px. Backdrop click closes; click inside body uses stopPropagation;
+  //     Escape closes via window listener. The native <dialog> shell is gone.
+  // (2) INLINE TASK CARD FULL WIDTH + REAL TITLE — the card was wrapped in
+  //     `<article className="msg">` (the chat-bubble grid 34px 1fr) and
+  //     collapsed into the 34px avatar column; the title came from
+  //     markerMatch[1] which is the issueId, NOT the title — the card showed
+  //     a UUID. Wrapper class is now `inline-task-card-row` (non-grid block);
+  //     title is looked up from chat.taskOwned (`activeTasks`) by issueId
+  //     with a pendingTaskCard fallback and a skeleton placeholder during
+  //     the 15s race window. The chat.taskOwned fetch is lifted to index.tsx
+  //     via the new useChatActiveTasks hook; one source of truth for both
+  //     ContextRail and MessageThread.
+  // (3) KEYBOARD SHORTCUT — Ctrl+T / ⌘+T opened a new browser tab because
+  //     the browser intercepted the chord before the plugin handler ran.
+  //     Replaced with Linear-style single-key `T` (no modifier) when no
+  //     input/textarea/contenteditable is focused. Tooltip + kbd-hint copy
+  //     updated.
+  // (4) PAUSE HEARTBEAT FEEDBACK — the right rail's Quick Action was a
+  //     disabled no-op. New toast primitive (src/ui/primitives/toast.tsx —
+  //     ToastProvider + useToast + ChatToast) shows a transient
+  //     bottom-right notification on pause click + optimistically flips the
+  //     CEO status pill to `paused` (warn-amber) until the next 15s poll
+  //     re-syncs. The real host RPC for pause-heartbeat is deferred to 4.2;
+  //     the toast tells the operator the canonical pause path is the agent
+  //     page.
+  // (5) RIGHT-RAIL TASK-ROW WORD-WRAP — long titles in `Active tasks owned`
+  //     wrapped char-by-char because the `1fr` middle column could not
+  //     shrink below intrinsic content size. Grid is now `auto minmax(0, 1fr)
+  //     auto`; .ttl wraps at word boundaries with hyphenation and clamps to
+  //     3 lines; full title surfaces on hover via the title= attribute.
+  // Suite 1158 -> 1195 (37 new tests across 5 UI test files). UI/CSS +
+  // one new primitive (toast.tsx) — no manifest shape, capability, schema,
+  // or worker-contract change.
+  //
   // 0.7.8 (Plan 04-05 Task-4 follow-up — Employee Chat live indicator polish) —
   // two small fixes to the 0.7.7 indicator. (1) DUPLICATE DOT — the indicator
   // showed TWO dots: the CSS `.auto-refresh::before` pseudo-element (the real
@@ -231,7 +274,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '0.8.1',
+  version: '0.8.2',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

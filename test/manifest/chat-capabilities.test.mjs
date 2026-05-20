@@ -24,8 +24,8 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is 0.8.1 (Plan 04.1-08 — UI redesign gap closure)', () => {
-  assert.equal(manifest.version, '0.8.1');
+test('manifest version is 0.8.2 (Plan 04.1-09 — 5-fix gap closure on 04.1-08 drill)', () => {
+  assert.equal(manifest.version, '0.8.2');
 });
 
 test('manifest declares the capabilities the chat handlers need', () => {
