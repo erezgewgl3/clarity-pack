@@ -293,8 +293,13 @@ test('chat.topic.create: child description carries the D-11 CONVERSATION CONTAIN
   const desc = ctx._createdIssues[0].description ?? '';
 
   // The four load-bearing strings from PATTERNS.md lines 476-493.
+  // The instruction text is line-wrapped in the description; whitespace may
+  // include a newline between 'Do' and 'NOT'.
   assert.ok(desc.includes('CONVERSATION CONTAINER'), 'literal CONVERSATION CONTAINER tag');
-  assert.ok(/Do NOT mark it/i.test(desc), 'explicit Do NOT mark it instruction');
+  assert.ok(
+    /Do\s+NOT\s+mark\s+it/i.test(desc),
+    'explicit Do NOT mark it instruction (whitespace-tolerant for line wrap)',
+  );
   assert.ok(desc.includes('cancelled'), 'mentions the cancelled disposition by name');
   assert.ok(
     desc.includes('spin off a separate true-task issue'),
