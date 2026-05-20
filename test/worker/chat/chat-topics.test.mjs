@@ -253,7 +253,9 @@ test('chat.topic.create: child issue is assigned to the employee-agent (D-02 wak
   const child = ctx._createdIssues[0];
   assert.equal(child.assigneeAgentId, 'agent-sdr');
   assert.equal(child.originKind, 'plugin:clarity-pack');
-  assert.equal(child.status, 'todo');
+  // Plan 04.1-03 D-09 — chat-topic child issues are created at in_progress
+  // (the watchdog flip target — single source of truth, no thrash).
+  assert.equal(child.status, 'in_progress');
 });
 
 test('chat.topic.create: allocates a CHT-NN and inserts a chat_topics row', async () => {
@@ -277,6 +279,97 @@ test('chat.topic.create: child description carries the D-14 reasoning block', as
     /reply.*comment/i.test(child.description ?? ''),
     'the child issue description instructs the agent to reply by commenting',
   );
+});
+
+// ===========================================================================
+// Plan 04.1-03 Task 3 — D-11 converse-only description + in_progress initial
+//   status + removal of the (incorrect) 'private' word.
+// ===========================================================================
+
+test('chat.topic.create: child description carries the D-11 CONVERSATION CONTAINER instruction', async () => {
+  const ctx = makeCtx({ parents: { 'agent-sdr': 'parent-issue-9' } });
+  registerChatTopics(ctx);
+  await ctx._handlers.get('chat.topic.create')(createParams());
+  const desc = ctx._createdIssues[0].description ?? '';
+
+  // The four load-bearing strings from PATTERNS.md lines 476-493.
+  assert.ok(desc.includes('CONVERSATION CONTAINER'), 'literal CONVERSATION CONTAINER tag');
+  assert.ok(/Do NOT mark it/i.test(desc), 'explicit Do NOT mark it instruction');
+  assert.ok(desc.includes('cancelled'), 'mentions the cancelled disposition by name');
+  assert.ok(
+    desc.includes('spin off a separate true-task issue'),
+    'directs the agent to spin off a separate true-task issue (D-11 + D-04)',
+  );
+});
+
+test('chat.topic.create: child description keeps the Phase-4 framing strings', async () => {
+  const ctx = makeCtx({ parents: { 'agent-sdr': 'parent-issue-9' } });
+  registerChatTopics(ctx);
+  await ctx._handlers.get('chat.topic.create')(createParams());
+  const desc = ctx._createdIssues[0].description ?? '';
+
+  // The Phase-4 framing must survive the Plan 04.1-03 edit.
+  assert.ok(desc.includes('Chat topic:'), 'Phase-4 title prefix');
+  assert.ok(desc.includes('between the operator and'), 'Phase-4 attribution');
+  assert.ok(
+    desc.includes('Reply to messages by posting a comment on THIS issue'),
+    'Phase-4 OQ-4 reply-channel instruction',
+  );
+  assert.ok(desc.includes('## Reasoning'), 'Phase-4 D-14 reasoning block header');
+});
+
+test('chat.topic.create: child description DROPS the (incorrect) word "private" (ROADMAP scope correction #1)', async () => {
+  const ctx = makeCtx({ parents: { 'agent-sdr': 'parent-issue-9' } });
+  registerChatTopics(ctx);
+  await ctx._handlers.get('chat.topic.create')(createParams());
+  const desc = ctx._createdIssues[0].description ?? '';
+
+  // Chat-topic issues are NOT private (any operator with read on the parent
+  // issue can see them). The early-Phase-4 description claimed otherwise.
+  assert.equal(
+    /\bprivate\b/i.test(desc),
+    false,
+    'the word "private" must NOT appear in the topic description',
+  );
+});
+
+test('chat.topic.create: child topic issue is created at status "in_progress" (D-09 — RESEARCH OQ-1)', async () => {
+  const ctx = makeCtx({ parents: { 'agent-sdr': 'parent-issue-9' } });
+  registerChatTopics(ctx);
+  await ctx._handlers.get('chat.topic.create')(createParams());
+  const child = ctx._createdIssues[0];
+
+  // The child topic issue is held at the watchdog flip target so the agent
+  // reads it as an ongoing conversation, NOT a fresh task to complete.
+  assert.equal(child.status, 'in_progress');
+});
+
+test('chat.topic.create: PARENT "Chat — <employee>" issue status stays at "todo" (only child flips to in_progress)', async () => {
+  const ctx = makeCtx({ parents: {} }); // first-ever topic — parent created too
+  registerChatTopics(ctx);
+  await ctx._handlers.get('chat.topic.create')(createParams());
+
+  assert.equal(ctx._createdIssues.length, 2, 'parent + child created');
+  const parent = ctx._createdIssues[0];
+  const child = ctx._createdIssues[1];
+  assert.equal(parent.title, 'Chat — Cold Outreach');
+  assert.equal(parent.status, 'todo', 'parent stays at todo');
+  assert.equal(child.status, 'in_progress', 'only the child flips to in_progress');
+});
+
+test('chat.topic.create: all other create-call fields are unchanged by the Plan 04.1-03 edit', async () => {
+  const ctx = makeCtx({ parents: { 'agent-sdr': 'parent-issue-9' } });
+  registerChatTopics(ctx);
+  await ctx._handlers.get('chat.topic.create')(createParams());
+  const child = ctx._createdIssues[0];
+
+  // Pin the rest of the create payload — only status + description changed.
+  assert.equal(child.companyId, 'co-1');
+  assert.equal(child.parentId, 'parent-issue-9');
+  assert.equal(child.title, 'Pricing question');
+  assert.equal(child.assigneeAgentId, 'agent-sdr');
+  assert.equal(child.originKind, 'plugin:clarity-pack');
+  assert.ok(child.originId.startsWith('chat-topic-'), 'originId still chat-topic-<CHT-NN>');
 });
 
 test('chat.topic.create: missing title → throws (action-handler convention)', async () => {
