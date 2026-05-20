@@ -101,6 +101,12 @@ import {
   type ChatPromoteCtx,
 } from './worker/handlers/chat-promote.ts';
 import { registerChatPin, type ChatPinCtx } from './worker/handlers/chat-pin.ts';
+// Plan 04.1-02 — operator composer "true task" handler (delegates to the
+// shared createTrueTask helper that chat.promote also uses).
+import {
+  registerChatTrueTask,
+  type ChatTrueTaskCtx,
+} from './worker/handlers/chat-true-task.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -178,6 +184,9 @@ const plugin = definePlugin({
     registerChatSearch(ctx as unknown as ChatSearchCtx);
     registerChatPromote(ctx as unknown as ChatPromoteCtx);
     registerChatPin(ctx as unknown as ChatPinCtx);
+    // Plan 04.1-02 — operator-composer "create a true task" (D-04 partner of
+    // chat.promote; both delegate to createTrueTask).
+    registerChatTrueTask(ctx as unknown as ChatTrueTaskCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.

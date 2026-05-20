@@ -114,10 +114,16 @@ test('chat.createTrueTask: opted-out caller → OPT_IN_REQUIRED, no host calls',
 });
 
 // ---- Test 3 — reqStr THROWS on every missing required string param --------
+//
+// NOTE: userId is NOT in this list because the opt-in-guard wrapper fires
+// BEFORE the handler body — a request with no userId is treated as opted-out
+// (extractUserId returns null, isOptedIn(ctx, null) returns false, the guard
+// returns OPT_IN_REQUIRED). The reqStr(params, 'userId') inside the handler
+// is defensive/structural — see Test 3b which pins the OPT_IN_REQUIRED path
+// for a missing userId. This matches existing chat.send / chat.promote tests.
 
 for (const key of [
   'companyId',
-  'userId',
   'topicIssueId',
   'title',
   'body',
@@ -135,6 +141,18 @@ for (const key of [
     );
   });
 }
+
+// ---- Test 3b — missing userId is gated by opt-in-guard, not reqStr --------
+
+test('chat.createTrueTask: missing userId → OPT_IN_REQUIRED (opt-in-guard fires before reqStr)', async () => {
+  const ctx = makeCtx();
+  registerChatTrueTask(ctx);
+  const p = params();
+  delete p.userId;
+  const result = await ctx._handlers.get('chat.createTrueTask')(p);
+  assert.equal(result.error, 'OPT_IN_REQUIRED');
+  assert.equal(ctx._createdIssues.length, 0);
+});
 
 // ---- Test 4 — HAPPY: opted-in operator gets a top-level assigned task -----
 
