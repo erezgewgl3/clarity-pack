@@ -51,29 +51,56 @@ export type CreateTrueTaskInput = {
   companyId: string;
   title: string;
   description: string;
-  /** D-06 — NEVER omitted. The chat-topic's employee-agent by default, reassignable in the confirm dialog. */
+  /** D-06 — NEVER omitted. The chat-topic's employee-agent by default, reassignable in the dialog. */
   assigneeAgentId: string;
-  /** Topic issue id — the marker comment is posted here, and the originId back-references it. */
-  topicIssueId: string;
+  /**
+   * Topic issue id, OR null for a COLD task (Plan 04.1-08).
+   * - string: chat-anchored task (the marker comment + side-table back-link
+   *   are written; originId is `chat-task:<topic>:<source|composer>`).
+   * - null:   COLD task. NO marker comment (no topic to mark). NO side-table
+   *   back-link (not linked to any topic). originId is
+   *   `cold-task:<userId>:<unix-ms>` — distinct prefix so chat.taskOwned
+   *   does NOT pick it up for any topic.
+   */
+  topicIssueId: string | null;
   /** Comment id this task came from. null when called direct from the operator composer (no source message). */
   sourceCommentId: string | null;
   /** Plain-English employee name interpolated into the marker comment body (D-07). */
   employeeName: string;
+  /** Plan 04.1-08 — required for COLD tasks to compose the cold-task originId.
+   *  Ignored when topicIssueId is a string (chat-anchored path). */
+  userId?: string | null;
 };
 
 /**
- * Create a true task — a top-level, assigned Paperclip issue plus a marker
- * comment on the chat topic. Re-throws on ctx.issues.create failure; the
- * marker write is best-effort (a failed marker still returns { issueId }).
+ * Create a true task — a top-level, assigned Paperclip issue plus (for
+ * chat-anchored tasks) a marker comment on the chat topic. Re-throws on
+ * ctx.issues.create failure; the marker write is best-effort (a failed
+ * marker still returns { issueId }).
+ *
+ * Plan 04.1-08 — when input.topicIssueId === null, the cold-task path runs:
+ * originId is `cold-task:<userId>:<unix-ms>`, NO marker comment, NO
+ * chat_topic_tasks side-table back-link. The task is fully top-level (no
+ * topic association) so chat.taskOwned NEVER returns it for any topic.
  */
 export async function createTrueTask(
   ctx: TrueTaskCtx,
   input: CreateTrueTaskInput,
 ): Promise<{ issueId: string }> {
+  // Plan 04.1-08 — COLD vs chat-anchored task discrimination.
+  // `input.topicIssueId === null` literally (NOT falsy — a deliberate strict
+  // check so empty string and other falsy values cannot accidentally trigger
+  // the cold path).
+  const isCold = input.topicIssueId === null;
+
   // D-05 — TOP-LEVEL: the new task lives in the normal Paperclip Issues list,
   // NOT nested under the chat topic. The originId back-link is the
   // authoritative provenance pointer. We deliberately do NOT pass a parent-
   // pointer field on the create payload.
+  const originId = isCold
+    ? `cold-task:${input.userId ?? 'unknown'}:${Date.now()}`
+    : `chat-task:${input.topicIssueId}:${input.sourceCommentId ?? 'composer'}`;
+
   const issue = await ctx.issues.create({
     companyId: input.companyId,
     title: input.title,
@@ -81,22 +108,28 @@ export async function createTrueTask(
     status: 'todo',
     assigneeAgentId: input.assigneeAgentId,
     originKind: 'plugin:clarity-pack',
-    originId: `chat-task:${input.topicIssueId}:${input.sourceCommentId ?? 'composer'}`,
+    originId,
   });
+
+  // COLD path: no topic to mark, no side-table to populate; return early.
+  if (isCold) {
+    return { issueId: issue.id };
+  }
 
   // D-07 — marker comment on the topic issue. Plugin-authored, so a future
   // classifyComment (Plan 04.1-04) returns 'conversation' for it. The wording
   // is LOCKED and pinned by test 6 of true-task.test.mjs (Pitfall 4 — must
   // never overlap RUNTIME_PHRASES).
+  const topicIssueId = input.topicIssueId as string;
   const markerBody = `Task created — ${issue.id}, assigned to ${input.employeeName}.`;
   try {
-    await ctx.issues.createComment(input.topicIssueId, markerBody, input.companyId);
+    await ctx.issues.createComment(topicIssueId, markerBody, input.companyId);
   } catch (e) {
     // Best-effort durability: the originId carries the authoritative back-
     // reference; the marker is the in-thread artifact. A marker failure must
     // not make the operator see the task as failed.
     ctx.logger?.warn?.('createTrueTask: marker createComment failed', {
-      topicIssueId: input.topicIssueId,
+      topicIssueId,
       issueId: issue.id,
       err: (e as Error).message,
     });
@@ -115,12 +148,12 @@ export async function createTrueTask(
       await insertChatTopicTask(
         { db: ctx.db },
         input.companyId,
-        input.topicIssueId,
+        topicIssueId,
         issue.id,
       );
     } catch (e) {
       ctx.logger?.warn?.('createTrueTask: chat_topic_tasks side-table write failed', {
-        topicIssueId: input.topicIssueId,
+        topicIssueId,
         issueId: issue.id,
         err: (e as Error).message,
       });

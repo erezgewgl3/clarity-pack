@@ -39,6 +39,10 @@ export type ChatTopicRow = {
   last_activity_at: string; // ISO
   archived: boolean;
   created_at: string; // ISO
+  /** Plan 04.1-08 — when this topic was archived. NULL when never archived
+   *  or when actively unarchived. Powers the archive panel's
+   *  ORDER BY archived_at DESC sort. Added by migration 0008. */
+  archived_at?: string | null;
 };
 
 /** A chat_messages row — D-09 idempotency / supersedes / pin side table. */
@@ -257,7 +261,12 @@ export async function updateChatMessagePinned(
  * ONE topic; does NOT touch host issue status (that would re-engage the
  * disposition machinery via the host's recovery service — see PROBE-OQ3
  * attempt 2 in 04.1-01-SPIKE-FINDINGS). Company-scoped so an archive never
- * crosses companies. Mirrors the updateChatMessagePinned shape exactly.
+ * crosses companies.
+ *
+ * Plan 04.1-08 — also stamps `archived_at` so the archive panel can sort
+ * newest-archived-first. SET archived_at = now() on archive; NULL on
+ * un-archive. The column was added by migration 0008
+ * (additive-only per CLAUDE.md coexistence guarantee #3).
  */
 export async function setChatTopicArchived(
   ctx: ChatTopicsRepoCtx,
@@ -267,9 +276,39 @@ export async function setChatTopicArchived(
 ): Promise<void> {
   await ctx.db.execute(
     `UPDATE plugin_clarity_pack_cdd6bda4bd.chat_topics
-     SET archived = $1
+     SET archived = $1,
+         archived_at = CASE WHEN $1 = true THEN now() ELSE NULL END
      WHERE issue_id = $2 AND company_id = $3`,
     [archived, topicIssueId, companyId],
+  );
+}
+
+/**
+ * Plan 04.1-08 — list every ARCHIVED chat topic for one employee-agent,
+ * company-scoped, sorted by archive time DESC (newest-archived first).
+ *
+ * Powers the archive panel (chat.archivedTopics data handler). Returns the
+ * full ChatTopicRow shape so the handler can shape an ArchivedTopic for the
+ * UI without a second round-trip; the message-count is computed separately
+ * (the handler joins against public.issue_comments via a count subquery — or
+ * uses 0 if the count query can't run).
+ */
+export async function listArchivedChatTopicsForEmployee(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  employeeAgentId: string,
+): Promise<ChatTopicRow[]> {
+  // ORDER BY: prefer archived_at DESC when available; fall back to
+  // last_activity_at DESC (covers any rows archived before migration 0008
+  // ran — their archived_at is NULL so they sort last).
+  return ctx.db.query<ChatTopicRow>(
+    `SELECT ${CHAT_TOPIC_COLS}, archived_at
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_topics
+     WHERE company_id = $1
+       AND employee_agent_id = $2
+       AND archived = true
+     ORDER BY archived_at DESC NULLS LAST, last_activity_at DESC`,
+    [companyId, employeeAgentId],
   );
 }
 

@@ -47,14 +47,28 @@ function reqStr(params: Record<string, unknown> | undefined, key: string): strin
 export function registerChatTrueTask(ctx: ChatTrueTaskCtx): void {
   wrapActionHandler(ctx, 'chat.createTrueTask', async (params) => {
     const companyId = reqStr(params, 'companyId');
-    const topicIssueId = reqStr(params, 'topicIssueId');
+    // Plan 04.1-08 — topicIssueId is REQUIRED but accepts null for COLD
+    // tasks. We accept three shapes:
+    //   - string: chat-anchored task (the existing 04.1-02 path).
+    //   - null:   COLD task — originId path cold-task:<userId>:<unix-ms>.
+    //   - undefined / wrong type: throw with the required-param convention.
+    let topicIssueId: string | null;
+    const rawTopicIssueId = params?.topicIssueId;
+    if (rawTopicIssueId === null) {
+      topicIssueId = null;
+    } else if (typeof rawTopicIssueId === 'string' && rawTopicIssueId) {
+      topicIssueId = rawTopicIssueId;
+    } else {
+      throw new Error('chat.createTrueTask: topicIssueId required');
+    }
+
     const title = reqStr(params, 'title');
     const body = reqStr(params, 'body');
     const assigneeAgentId = reqStr(params, 'assigneeAgentId');
     const employeeName = reqStr(params, 'employeeName');
-    // userId is enforced by the opt-in-guard wrapper; re-read for completeness.
+    // userId is enforced by the opt-in-guard wrapper; re-read for the
+    // cold-task originId composition (cold-task:<userId>:<unix-ms>).
     const userId = reqStr(params, 'userId');
-    void userId;
 
     // sourceCommentId is OPTIONAL — null when the operator composes a task
     // directly (no source message) — gives the originId tail "composer".
@@ -63,17 +77,28 @@ export function registerChatTrueTask(ctx: ChatTrueTaskCtx): void {
         ? params.sourceCommentId
         : null;
 
+    const isCold = topicIssueId === null;
+    const description = isCold
+      ? 'Created from the chat surface (cold task — not linked to a topic).\n\n' +
+        'Details:\n' +
+        body
+      : 'Created from a chat composer message.\n\n' + 'Message body:\n' + body;
+
     try {
       const result = await createTrueTask(ctx, {
         companyId,
         title,
-        description:
-          'Created from a chat composer message.\n\n' + 'Message body:\n' + body,
+        description,
         assigneeAgentId,
         topicIssueId,
         sourceCommentId,
         employeeName,
+        userId,
       });
+      // Backwards-compatible response shape: existing chat-true-task tests
+      // assert deepEqual on { ok, issueId, topicIssueId } — preserve that.
+      // Plan 04.1-08: distinguishing cold vs chat-anchored is observable
+      // via topicIssueId === null in the response.
       return { ok: true, issueId: result.issueId, topicIssueId };
     } catch (e) {
       ctx.logger?.warn?.('chat.createTrueTask: createTrueTask failed', {

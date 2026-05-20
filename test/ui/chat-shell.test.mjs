@@ -135,9 +135,12 @@ test('Chat shell: index.tsx does NOT read bare useHostContext().userId', () => {
   );
 });
 
-test('Chat shell: the 3-column shell grid 264px 1fr 340px is present', () => {
+test('Chat shell: the 3-column shell grid 264px 1fr 360px is present (Plan 04.1-08)', () => {
   const css = readFileSync(CHAT_CSS, 'utf8');
-  assert.match(css, /grid-template-columns:\s*264px\s+1fr\s+340px/);
+  // Plan 04.1-08 — right rail widened from 340px to 360px so rail labels
+  // ("Active tasks owned", "Archive this topic", "Search this employee's
+  // chats", "Pause heartbeat") no longer truncate at 1280px / zoom 100%.
+  assert.match(css, /grid-template-columns:\s*264px\s+1fr\s+360px/);
 });
 
 test('Chat shell: chat.css — every rule scoped to [data-clarity-surface="chat"]', () => {

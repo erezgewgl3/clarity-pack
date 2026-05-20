@@ -118,6 +118,12 @@ import {
   registerChatActiveTasks,
   type ChatActiveTasksCtx,
 } from './worker/handlers/chat-active-tasks.ts';
+// Plan 04.1-08 — chat.archivedTopics: data handler powering the archive panel
+// (dropdown anchored to the +N archived pill). ORDER BY archived_at DESC.
+import {
+  registerChatArchivedTopics,
+  type ChatArchivedTopicsCtx,
+} from './worker/handlers/chat-archived-topics.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -209,6 +215,11 @@ const plugin = definePlugin({
     // calls ctx.issues.list (Wave 1 lock: REST originId filters do not
     // work; the side table is the steady-state lookup path).
     registerChatActiveTasks(ctx as unknown as ChatActiveTasksCtx);
+    // Plan 04.1-08 — chat.archivedTopics: lists every archived topic for an
+    // employee+company, newest-archived-first. Reads via
+    // listArchivedChatTopicsForEmployee which uses the archived_at column
+    // added by migration 0008.
+    registerChatArchivedTopics(ctx as unknown as ChatArchivedTopicsCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.

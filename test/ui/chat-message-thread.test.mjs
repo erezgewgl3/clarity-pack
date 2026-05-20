@@ -337,7 +337,13 @@ test('Chat thread: composer.tsx contains the explicit attachment-degrade message
 test('Chat thread: composer.tsx disables the attach button (OQ-1 NO-PATH)', () => {
   const src = readChat('composer.tsx');
   assert.match(src, /ATTACHMENTS_AVAILABLE\s*=\s*false/);
-  assert.match(src, /disabled=\{!ATTACHMENTS_AVAILABLE\}/);
+  // Plan 04.1-08 — the disabled prop is now compound (also disabled when the
+  // active topic is archived): `disabled={!ATTACHMENTS_AVAILABLE || disabled}`.
+  assert.match(
+    src,
+    /disabled=\{!ATTACHMENTS_AVAILABLE(\s*\|\|[^}]+)?\}/,
+    'attach button must be disabled when ATTACHMENTS_AVAILABLE=false',
+  );
 });
 
 test('Chat thread: composer.tsx generates a message_uuid via crypto.randomUUID', () => {
@@ -423,10 +429,14 @@ test('Chat thread: composer.tsx lets Shift+Enter insert a newline (does NOT send
 
 test('Chat thread: composer.tsx copy reflects Enter-to-send / Shift+Enter-for-newline', () => {
   const src = readChat('composer.tsx');
-  // The placeholder and the .composer-hint foot text must describe the new
-  // behaviour — no lingering "⌘+Enter to send" operator-facing copy.
-  assert.match(src, /Enter to send/, 'the placeholder must say "Enter to send"');
-  assert.match(src, /Shift\+Enter for newline/, 'the placeholder must mention Shift+Enter for newline');
+  // Plan 04.1-08 — the placeholder is now `Message {employeeName}…`
+  // (single-purpose composer; the kbd hint sits below the textarea instead
+  // of inside the placeholder). The hint copy must still describe the
+  // Enter / Shift+Enter convention via the visible kbd-row, NOT in the
+  // placeholder. The stale "⌘+Enter to send" copy must NOT have crept back.
+  assert.match(src, /Message \$\{employeeName\}…/, 'the placeholder is the single-purpose chat copy');
+  assert.match(src, /to send/, 'a visible "to send" hint string is rendered (kbd row under the textarea)');
+  assert.match(src, /for newline/, 'a visible "for newline" hint string is rendered');
   assert.doesNotMatch(
     src,
     /⌘\+Enter to send/,
