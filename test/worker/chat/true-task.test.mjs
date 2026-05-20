@@ -21,10 +21,14 @@ function makeCtx({
   createIssueThrows = false,
   createCommentThrows = false,
   createdIssueId = 'BEAAA-202',
+  // Plan 04.1-05 retrofit -- side-table INSERT modeling. If sideTableThrows
+  // is true, ctx.db.execute throws when called against chat_topic_tasks.
+  sideTableThrows = false,
 } = {}) {
   const createCalls = [];
   const createCommentCalls = [];
   const warnLogs = [];
+  const sideTableInserts = [];
   const ctx = {
     logger: {
       warn(msg, fields) {
@@ -43,9 +47,29 @@ function makeCtx({
         return { id: `comment-${createCommentCalls.length}`, issueId, body, companyId };
       },
     },
+    // Plan 04.1-05 retrofit -- createTrueTask now writes to the
+    // chat_topic_tasks side table best-effort post-create. The helper
+    // accepts an optional `db` field; the older callers (which never
+    // exercised the side table) supply nothing or supply this fake.
+    db: {
+      async execute(sql, params) {
+        if (
+          /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_topic_tasks/i.test(sql)
+        ) {
+          if (sideTableThrows) throw new Error('host db.execute 503');
+          sideTableInserts.push({ sql, params });
+          return { rowCount: 1 };
+        }
+        return { rowCount: 0 };
+      },
+      async query() {
+        return [];
+      },
+    },
     _createCalls: createCalls,
     _createCommentCalls: createCommentCalls,
     _warnLogs: warnLogs,
+    _sideTableInserts: sideTableInserts,
   };
   return ctx;
 }
@@ -196,4 +220,79 @@ test('titleFromBody: 100-char single-line body returns first 77 chars + "..." (8
 
 test('titleFromBody: empty body returns "Promoted chat message" fallback', () => {
   assert.equal(titleFromBody(''), 'Promoted chat message');
+});
+
+// ===========================================================================
+// Plan 04.1-05 cross-plan retrofit -- side-table back-link write
+// ===========================================================================
+//
+// Wave 1 lock per 04.1-01-SPIKE-FINDINGS PROBE-OQ2-FILTER: the host REST
+// issues.list silently ignores originId filters, so chat.taskOwned (D-08)
+// reads the chat_topic_tasks side table. createTrueTask MUST write the
+// topic -> task back-link on every successful task create. The write is
+// best-effort (try/catch + warn-log; failure never bubbles), mirroring
+// the marker-comment best-effort discipline already in this helper. This
+// is the cross-plan retrofit Plan 04.1-05 spec explicitly carries.
+
+test('createTrueTask retrofit: writes chat_topic_tasks back-link after successful issue create', async () => {
+  const ctx = makeCtx({ createdIssueId: 'BEAAA-RETRO-1' });
+  await createTrueTask(ctx, input());
+  assert.equal(
+    ctx._sideTableInserts.length,
+    1,
+    'exactly one chat_topic_tasks INSERT issued post-create',
+  );
+  const insert = ctx._sideTableInserts[0];
+  // params: [company_id, topic_issue_id, task_issue_id]
+  assert.deepEqual(insert.params, ['co-1', 'issue-topic-1', 'BEAAA-RETRO-1']);
+  assert.match(
+    insert.sql,
+    /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_topic_tasks/i,
+  );
+  assert.match(
+    insert.sql,
+    /ON CONFLICT[\s\S]*DO NOTHING/i,
+    'idempotent retrofit write (race-safe)',
+  );
+});
+
+test('createTrueTask retrofit: side-table INSERT failure does NOT fail the helper (best-effort)', async () => {
+  const ctx = makeCtx({ createdIssueId: 'BEAAA-RETRO-2', sideTableThrows: true });
+  const result = await createTrueTask(ctx, input());
+  assert.deepEqual(
+    result,
+    { issueId: 'BEAAA-RETRO-2' },
+    'helper still returns the created issueId',
+  );
+  // A warn-log entry mentions the side-table failure.
+  assert.ok(
+    ctx._warnLogs.some((w) =>
+      /chat_topic_tasks|side[-_ ]?table|retrofit/i.test(w.msg ?? ''),
+    ),
+    'warn-log entry mentions the side-table failure',
+  );
+});
+
+test('createTrueTask retrofit: side-table write happens AFTER ctx.issues.create succeeds (not before)', async () => {
+  // If create fails, the helper re-throws BEFORE any side-table write.
+  const ctx = makeCtx({ createIssueThrows: true });
+  await assert.rejects(() => createTrueTask(ctx, input()), /issues\.create 503/);
+  assert.equal(
+    ctx._sideTableInserts.length,
+    0,
+    'no side-table INSERT when create itself fails',
+  );
+});
+
+test('createTrueTask retrofit: side-table write happens even if marker createComment fails (best-effort symmetry)', async () => {
+  const ctx = makeCtx({
+    createdIssueId: 'BEAAA-RETRO-3',
+    createCommentThrows: true,
+  });
+  await createTrueTask(ctx, input());
+  // The marker comment failed -- a warn-log recorded it -- but the side
+  // table was still written, because the task was created successfully
+  // (the side table is the AUTHORITATIVE back-link per Wave 1 lock).
+  assert.equal(ctx._sideTableInserts.length, 1);
+  assert.equal(ctx._sideTableInserts[0].params[2], 'BEAAA-RETRO-3');
 });
