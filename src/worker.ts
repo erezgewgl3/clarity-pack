@@ -107,6 +107,13 @@ import {
   registerChatTrueTask,
   type ChatTrueTaskCtx,
 } from './worker/handlers/chat-true-task.ts';
+// Plan 04.1-05 — D-10 plugin-side topic archive + D-08 active-tasks-per-topic
+// (the host issue stays in_progress for archive; active-tasks reads the
+// chat_topic_tasks side table populated by createTrueTask's retrofit write).
+import {
+  registerChatTopicArchive,
+  type ChatTopicArchiveCtx,
+} from './worker/handlers/chat-topic-archive.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -187,6 +194,11 @@ const plugin = definePlugin({
     // Plan 04.1-02 — operator-composer "create a true task" (D-04 partner of
     // chat.promote; both delegate to createTrueTask).
     registerChatTrueTask(ctx as unknown as ChatTrueTaskCtx);
+    // Plan 04.1-05 — D-10 plugin-side archive action handler. NEVER calls
+    // ctx.issues.update — the host issue MUST stay non-terminal (the OQ3
+    // attempt-2 evidence shows the host's disposition-recovery service
+    // engages on terminal chat-topic issues).
+    registerChatTopicArchive(ctx as unknown as ChatTopicArchiveCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
