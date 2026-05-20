@@ -2138,3 +2138,96 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
+/* ---------------------------------------------------------------------------
+ * Plan 04.1-10 drill fix #2a — Dialog DETAILS textarea sizing.
+ *
+ * The DETAILS field is the operator's primary content (what they actually
+ * want the agent to do). The Plan 04.1-08 build rendered it as a single-
+ * line <input type="text">, then 04.1-09 didn't touch it. On the
+ * 2026-05-20 drill Eric flagged it as the second-worst defect: typing 2+
+ * sentences of context was unworkable. The DETAILS control is now a
+ * <textarea> (markup change in true-task-dialog.tsx); these CSS rules
+ * size it so the operator has a comfortable default (~6-7 lines) without
+ * the dialog growing past 40vh:
+ *
+ *   - min-height 140px so the textarea opens at ~6 lines of body text.
+ *   - max-height 40vh caps the visual footprint so the dialog stays on
+ *     screen even on a 720p laptop.
+ *   - overflow-y auto means the textarea scrolls INSIDE itself when the
+ *     content grows past the cap (dialog frame doesn't blow up).
+ *   - resize: vertical lets a power user drag the lower-right corner to
+ *     extend the textarea taller; horizontal resize is disallowed so the
+ *     dialog width contract holds.
+ *
+ * Other dialog field styling (input/select) is unchanged — see the
+ * .true-task-dialog-field input, select rule above (chat.css:1325). */
+[data-clarity-surface="chat"] .true-task-dialog textarea {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  font-family: "Geist", "Helvetica Neue", sans-serif;
+  font-size: 14.5px;
+  width: 100%;
+  min-height: 140px;
+  max-height: 40vh;
+  overflow-y: auto;
+  resize: vertical;
+  line-height: 1.5;
+}
+[data-clarity-surface="chat"] .true-task-dialog textarea:focus {
+  outline: 1px solid var(--ink-2);
+  outline-offset: 1px;
+  border-color: var(--ink-3);
+}
+
+/* ---------------------------------------------------------------------------
+ * Plan 04.1-10 drill fix #2b — Horizontal viewport overflow.
+ *
+ * On the 2026-05-20 drill long topic titles plus several open topics pushed
+ * the topic strip wider than its grid column. Because grid items default to
+ * `min-width: auto` (the intrinsic content size), the middle .thread column
+ * REFUSED to shrink — so the whole 264px+1fr+360px grid grew past the
+ * viewport and the right rail (Active tasks owned + Quick actions) was
+ * clipped behind the right edge. Eric's repro: long titles like
+ * "Explain how paperclip.ai works and can one instance run a whole company?"
+ *
+ * Fix has three parts, all CSS:
+ *   (1) `.thread` and `<main>` grid items get `min-width: 0` so they can
+ *       shrink below intrinsic content size.
+ *   (2) `.topics` (the topic strip container) also gets `min-width: 0` and
+ *       `max-width: 100%`; combined with the existing `overflow-x: auto` it
+ *       now scrolls horizontally INSIDE the strip when topics overflow,
+ *       instead of pushing the parent column wider.
+ *   (3) Long topic titles truncate with `text-overflow: ellipsis` capped at
+ *       220px; the existing `title=` attribute (added in topic-strip.tsx
+ *       for hover discovery) shows the full title on mouseover. Topic chips
+ *       still don't shrink (their flex-shrink: 0 is preserved from the base
+ *       rule), so they scroll as units inside the strip.
+ *
+ * Live console check: at viewport ≥1280px,
+ *   document.documentElement.scrollWidth === document.documentElement.clientWidth
+ * must be true with this rule set applied. */
+[data-clarity-surface="chat"] .clarity-chat-shell > .thread,
+[data-clarity-surface="chat"] .clarity-chat-shell > main {
+  min-width: 0;
+}
+
+[data-clarity-surface="chat"] .topics {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-clarity-surface="chat"] .topic {
+  max-width: 280px;
+}
+
+[data-clarity-surface="chat"] .topic .topic-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+  display: inline-block;
+  vertical-align: middle;
+}
+

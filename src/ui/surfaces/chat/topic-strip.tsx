@@ -175,11 +175,19 @@ export function TopicStrip({
                 }
               }}
               aria-pressed={topic.issueId === activeTopicIssueId}
-              title={isArchived ? 'Click to unarchive' : undefined}
+              // Plan 04.1-10 drill fix #2b — `title=` shows the full topic
+              // title on hover when the .topic-title span truncates long
+              // titles with ellipsis. Archived rows keep the "Click to
+              // unarchive" hint.
+              title={isArchived ? 'Click to unarchive' : topic.title}
               disabled={isBusy}
             >
               <span className="dot" />
-              {topic.title}
+              {/* Plan 04.1-10 — wrap the title in .topic-title so chat.css can
+                  ellipsis-truncate long titles at max-width 220px (the strip
+                  was pushing the whole chat shell past the viewport on long
+                  titles like "Explain how paperclip.ai works…"). */}
+              <span className="topic-title">{topic.title}</span>
               <span className="id">{chtLabel(topic)}</span>
               {isArchived ? (
                 <span className="archived-topic-suffix">
