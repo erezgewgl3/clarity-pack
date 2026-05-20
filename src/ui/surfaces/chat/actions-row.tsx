@@ -10,10 +10,15 @@
 //
 // Layout: [+ Create task] [+ New topic] [⏿ Diagnostics] · spacer · [kbd hint]
 //
-// Global keyboard shortcut: ⌘+T (Mac) / Ctrl+T (Windows) opens the cold dialog
-// — UNLESS the focus is inside an input / textarea / contenteditable, in which
-// case the browser default wins. (Note: browsers may also bind Ctrl+T to "new
-// tab"; preventDefault catches it inside the chat surface only.)
+// Plan 04.1-09 — SHORTCUT REPLACED. The Plan 04.1-08 build bound ⌘+T / Ctrl+T
+// to open the cold task dialog. On every real browser the chord hit the
+// browser's "New Tab" shortcut FIRST and stole the keystroke before the
+// plugin's handler ran (operator drill 2026-05-20 — pressing Ctrl+T opened
+// a new browser tab, the task dialog never showed). Replaced with a
+// Linear-style single-key `T` shortcut: pressing `T` (with NO modifier)
+// opens the dialog ONLY when no input/textarea/contenteditable is focused.
+// Any modifier present → bail (so Ctrl+T still opens a new tab as the
+// browser default). Tooltip + kbd hint copy updated accordingly.
 //
 // SECURITY (T-04-18): button labels are static literals; no untrusted input
 // renders here. No raw fetch.
@@ -38,12 +43,15 @@ export function ChatActionsRow({
   diagnosticsOn: boolean;
   onDiagnosticsToggle: () => void;
 }): React.ReactElement {
-  // Global ⌘+T / Ctrl+T → openTaskDialog cold. Skip when focused inside an
-  // input / textarea / contenteditable so the browser keeps the default.
+  // Plan 04.1-09 — single-key `T` (no modifier) opens the dialog when no
+  // editable is focused. Any modifier (Ctrl/Cmd/Alt/Shift) → bail so browser
+  // and OS shortcuts (Ctrl+T new tab, etc.) work normally.
   React.useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if (e.key !== 't' && e.key !== 'T') return;
-      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key !== 'T' && e.key !== 't') return;
+      // Bail on ANY modifier — let browser shortcuts (Ctrl+T new tab, etc.) work
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      // Bail when the user is typing in an input/textarea/contenteditable
       const ae = (typeof document !== 'undefined' ? document.activeElement : null) as
         | HTMLElement
         | null;
@@ -72,7 +80,7 @@ export function ChatActionsRow({
         type="button"
         className="btn primary"
         onClick={onCreateTask}
-        title="Create a task (⌘T / Ctrl+T)"
+        title="Create a task (T)"
         data-clarity-action="create-task-cold"
       >
         + Create task
@@ -93,7 +101,6 @@ export function ChatActionsRow({
       />
       <span className="spacer" aria-hidden="true" />
       <span className="kbd-hint" aria-hidden="true">
-        <kbd>⌘</kbd>
         <kbd>T</kbd> new task
       </span>
     </div>
