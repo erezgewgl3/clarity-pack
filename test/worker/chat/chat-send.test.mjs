@@ -1,6 +1,7 @@
 // test/worker/chat/chat-send.test.mjs
 //
 // Plan 04-03 Task A RED — chat.send action handler.
+// Plan 04.1-03 Task 2 — auto-reopen REPLACED with ensureTopicWakeable.
 //
 // chat.send is the canonical-write path for an outgoing chat message:
 //   1. Dedup on message_uuid — a resend returns the original comment_id
@@ -8,12 +9,16 @@
 //   2. createComment writes the message to public.issue_comments (CHAT-02 —
 //      message content lives ONLY in the host comment table).
 //   3. insertChatMessage records the message_uuid -> comment_id map.
-//   4. Auto-reopen (D-06): a 'done' topic is flipped to 'in_progress' so the
-//      assigned agent wakes. Per 04-01-SPIKE-FINDINGS OQ-3
-//      (STATUS-FLIP-NOT-NEEDED) the status flip is for UX/status correctness
-//      only — requestWakeup is NOT called; a comment alone wakes the agent.
+//   4. D-09 / D-11 — ensureTopicWakeable(ctx, topicIssueId, companyId) runs
+//      fire-and-forget after the comment lands. The shared helper REPLACES the
+//      prior inline auto-reopen block: it flips terminal/blocked status off
+//      (towards in_progress). Per 04.1-01-SPIKE-FINDINGS PROBE-OQ3 PASS-NATIVE
+//      multi-turn native re-wake works (REST surface returns 404) — the
+//      helper does NOT call requestWakeup. A slow / failing watchdog never
+//      delays or fails the send.
 //   5. A createComment host failure returns { error: 'SEND_FAILED' } and does
-//      NOT insert a chat_messages row (no orphan map entry).
+//      NOT insert a chat_messages row (no orphan map entry). The watchdog is
+//      NOT invoked when the comment never landed.
 //
 // Wrapped via opt-in-guard's wrapActionHandler — an opted-out caller gets
 // { error: 'OPT_IN_REQUIRED' } before the inner handler runs (T-04-08).
@@ -27,15 +32,18 @@ import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 // makeCtx wires an in-memory ctx. `chatMessages` seeds the chat_messages side
 // table (keyed by message_uuid). `issueStatus` is the status of the topic
 // issue that ctx.issues.get returns. `createCommentFails` makes createComment
-// throw (host failure path).
+// throw (host failure path). `getDelayMs` slows down ctx.issues.get to prove
+// fire-and-forget — chat.send must resolve before the slow get completes.
 function makeCtx({
   optedIn = true,
   chatMessages = [],
   issueStatus = 'in_progress',
   createCommentFails = false,
+  getDelayMs = 0,
 } = {}) {
   const handlers = new Map();
   const createCommentCalls = [];
+  const getCalls = [];
   const updateCalls = [];
   const wakeupCalls = [];
   const insertedMessages = [];
@@ -51,6 +59,10 @@ function makeCtx({
     },
     issues: {
       async get(issueId, companyId) {
+        getCalls.push({ issueId, companyId, at: Date.now() });
+        if (getDelayMs > 0) {
+          await new Promise((r) => setTimeout(r, getDelayMs));
+        }
         return { id: issueId, companyId, status: issueStatus };
       },
       async createComment(issueId, body, companyId) {
@@ -100,6 +112,7 @@ function makeCtx({
     },
     _handlers: handlers,
     _createCommentCalls: createCommentCalls,
+    _getCalls: getCalls,
     _updateCalls: updateCalls,
     _wakeupCalls: wakeupCalls,
     _insertedMessages: insertedMessages,
@@ -166,42 +179,90 @@ test('chat.send: resend with stored message_uuid is idempotent — no second cre
   assert.equal(result.commentId, 'comment-existing');
 });
 
-test('chat.send: sending to a done topic auto-reopens it to in_progress (D-06)', async () => {
+test('chat.send: sending to a done topic auto-reopens it to in_progress (D-11 via ensureTopicWakeable)', async () => {
   const ctx = makeCtx({ issueStatus: 'done' });
   registerChatSend(ctx);
   await ctx._handlers.get('chat.send')(sendParams());
+
+  // The watchdog is fire-and-forget — wait a tick for it to run.
+  await new Promise((r) => setImmediate(r));
 
   assert.equal(ctx._updateCalls.length, 1);
   assert.equal(ctx._updateCalls[0].issueId, 'issue-topic-1');
   assert.equal(ctx._updateCalls[0].patch.status, 'in_progress');
 });
 
-test('chat.send: OQ-3 STATUS-FLIP-NOT-NEEDED — requestWakeup is NOT called on auto-reopen', async () => {
-  const ctx = makeCtx({ issueStatus: 'done' });
-  registerChatSend(ctx);
-  await ctx._handlers.get('chat.send')(sendParams());
-
-  assert.equal(
-    ctx._wakeupCalls.length,
-    0,
-    '04-01-SPIKE-FINDINGS OQ-3: a comment alone wakes the agent — no requestWakeup',
-  );
+test('chat.send: PROBE-OQ3 PASS-NATIVE — requestWakeup is NEVER called (REST returns 404; native wake suffices)', async () => {
+  // Regression guard — Plan 04.1-03 drops requestWakeup per 04.1-01-SPIKE-
+  // FINDINGS PROBE-OQ3. If a future "helpful" edit re-introduces the call,
+  // the wakeupCalls counter would be non-zero on any of these status paths.
+  for (const status of ['done', 'cancelled', 'blocked', 'in_progress', 'todo']) {
+    const ctx = makeCtx({ issueStatus: status });
+    registerChatSend(ctx);
+    await ctx._handlers.get('chat.send')(sendParams());
+    await new Promise((r) => setImmediate(r));
+    assert.equal(
+      ctx._wakeupCalls.length,
+      0,
+      `requestWakeup must NOT be called (status=${status}) — 04.1-01-SPIKE-FINDINGS PROBE-OQ3`,
+    );
+  }
 });
 
-test('chat.send: in_progress topic is NOT updated (no needless flip)', async () => {
+test('chat.send: in_progress topic is NOT updated (no needless flip, but watchdog STILL fires — D-11 anti-regression)', async () => {
   const ctx = makeCtx({ issueStatus: 'in_progress' });
   registerChatSend(ctx);
   await ctx._handlers.get('chat.send')(sendParams());
+  await new Promise((r) => setImmediate(r));
+
+  // No flip on a non-terminal status.
   assert.equal(ctx._updateCalls.length, 0);
+  // ... but the watchdog DID run — issues.get was called on every send (D-11
+  // anti-regression of OQ-3 STATUS-FLIP-NOT-NEEDED: the conclusion was right
+  // about the requestWakeup nudge being unnecessary, NOT about skipping the
+  // status check on subsequent sends).
+  assert.ok(
+    ctx._getCalls.length >= 1,
+    'ensureTopicWakeable runs on every send (issues.get always called)',
+  );
 });
 
-test('chat.send: createComment host failure → { error: SEND_FAILED }, no orphan chat_messages row', async () => {
+test('chat.send: fire-and-forget — chat.send returns BEFORE a slow watchdog completes', async () => {
+  // 50ms is well above the single setImmediate tick chat.send needs to land
+  // the comment + the side-table insert.
+  const ctx = makeCtx({ issueStatus: 'done', getDelayMs: 50 });
+  registerChatSend(ctx);
+  const before = Date.now();
+  const result = await ctx._handlers.get('chat.send')(sendParams());
+  const elapsed = Date.now() - before;
+
+  assert.equal(result.ok, true);
+  assert.equal(result.commentId, 'comment-1');
+  // chat.send must NOT have awaited the 50ms-delayed get. Allow 25ms slack
+  // for slow CI; 50ms would mean we awaited the watchdog (regression).
+  assert.ok(
+    elapsed < 40,
+    `chat.send must not await the watchdog (elapsed=${elapsed}ms; threshold=40ms)`,
+  );
+  // Wait for the watchdog to actually finish before the next test.
+  await new Promise((r) => setTimeout(r, 70));
+});
+
+test('chat.send: createComment host failure → { error: SEND_FAILED }, no orphan chat_messages row, watchdog NOT invoked', async () => {
   const ctx = makeCtx({ createCommentFails: true });
   registerChatSend(ctx);
   const result = await ctx._handlers.get('chat.send')(sendParams());
+  await new Promise((r) => setImmediate(r));
 
   assert.equal(result.error, 'SEND_FAILED');
   assert.equal(ctx._insertedMessages.length, 0, 'no side-table insert when the comment never landed');
+  // U5 — no point waking the agent for a message that never landed.
+  assert.equal(
+    ctx._getCalls.length,
+    0,
+    'watchdog NOT invoked when createComment fails (no comment to wake on)',
+  );
+  assert.equal(ctx._updateCalls.length, 0);
 });
 
 test('chat.send: opted-out caller → OPT_IN_REQUIRED, no createComment (T-04-08)', async () => {
