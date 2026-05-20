@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.6
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-20T09:07:43Z"
+last_updated: "2026-05-20T09:35:00Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 47
-  completed_plans: 29
-  percent: 62
+  completed_plans: 30
+  percent: 64
 ---
 
 # State: Clarity Pack
@@ -23,12 +23,27 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 2 in progress 2026-05-20. Plan 04.1-02 COMPLETE; Plans 04.1-03 / 04.1-04 (Wave 2, autonomous TDD) ready to run next.
+**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 2 in progress 2026-05-20. Plans 04.1-02 + 04.1-03 COMPLETE; Plan 04.1-04 (Wave 2, autonomous TDD) ready to run next.
 
 ## Current Position
 
 Phase: 04.1 (chat-true-task) — Wave 2 in progress 2026-05-20 (Wave 1 CLOSED with Gate Verdict GO).
-Plan: 2 of 7 complete — **Plan 04.1-02 COMPLETE 2026-05-20; 5 plans remaining.**
+Plan: 3 of 7 complete — **Plan 04.1-03 COMPLETE 2026-05-20; 4 plans remaining.**
+
+**Plan 04.1-03 — topic-watchdog (D-09/D-11) + chat.send fire-and-forget + chat-topics converse-only: COMPLETE 2026-05-20.**
+Autonomous TDD. 3 tasks / 6 commits `aa75677..dc7438e`:
+- `aa75677` (Task 1 RED) — `test(04.1-03): RED — topic-watchdog tests (ensureTopicWakeable + isTopicStuck)` (17 tests).
+- `216890c` (Task 1 GREEN) — `feat(04.1-03): topic-watchdog ensureTopicWakeable + isTopicStuck (D-09/D-11)` — new `src/worker/chat/topic-watchdog.ts` exports `ensureTopicWakeable` (defensive flip-off-done; status ∈ {done, cancelled, blocked} → in_progress; every step try/catch + warn-log; never throws), `isTopicStuck` (UI-SPEC Pattern G trigger — true when activeRecoveryAction set OR successfulRunHandoff.exhausted), and `NON_TERMINAL_CONVERSATION_STATUS = 'in_progress'` (single source of truth shared with chat-topics.ts Task 3).
+- `cc3501f` (Task 2 RED) — `test(04.1-03): RED — chat.send fires ensureTopicWakeable fire-and-forget` (3 new + PROBE-OQ3 regression guard across 5 status paths).
+- `813b6f1` (Task 2 GREEN) — `feat(04.1-03): chat.send fires ensureTopicWakeable fire-and-forget (D-09/D-11)` — auto-reopen block REPLACED with `void ensureTopicWakeable(ctx, topicIssueId, companyId)`. Fire-and-forget proven by a 50ms-delayed-get test ('chat.send returns BEFORE a slow watchdog completes'). Top-of-file rationale rewritten with the spike-locked D-09/D-11/PROBE-OQ3 PASS-NATIVE story.
+- `5c821a2` (Task 3 RED) — `test(04.1-03): RED — chat-topics D-11 description + in_progress initial status` (6 new assertions; existing D-02 wake-contract test updated to expect status:'in_progress').
+- `dc7438e` (Task 3 GREEN) — `feat(04.1-03): chat-topics D-11 converse-only + in_progress initial status` — buildTopicDescription extended with the D-11 'CONVERSATION CONTAINER, do NOT mark it done/cancelled' instruction (PATTERNS.md verbatim); the (incorrect) word 'private' is removed (ROADMAP scope correction #1); child topic-issue create uses `status: NON_TERMINAL_CONVERSATION_STATUS` (imported from topic-watchdog.ts) — initial value AND watchdog target agree by construction, no thrash. Parent `Chat — <employee>` issue keeps `status: 'todo'`.
+
+Suite: 1000 → 1024 tests (+24; 1022 pass / 0 fail / 2 pre-existing skip). CTT-03 (multi-turn reliability) + CTT-05 (never stranded) + CTT-06 (host-stuck signal primitive) worker-tier satisfied (UI banner CTT-06 ships in Plan 04.1-06 reading `topicStuck`). **Three deviations recorded** (all anticipated): (1) **[Rule 3 — Scope simplification from Wave 1 findings]** dropped `ctx.issues.requestWakeup` entirely from `ensureTopicWakeable` per `04.1-01-SPIKE-FINDINGS.md` PROBE-OQ3 PASS-NATIVE (multi-turn native re-wake works; REST returns 404 on this host) — the prompt's `<scope_simplification_from_wave1>` explicitly instructed this override of PLAN.md text; regression-guarded by a dedicated 'NEVER calls ctx.issues.requestWakeup' test across 5 status paths; (2) **[Rule 3 — Blocking]** the PLAN.md acceptance grep `grep -cE "requestWakeup" chat-send.ts == 0` is met SUBSTANTIVELY (0 functional calls — verified by `grep -nE "ctx\.issues\.requestWakeup|\.requestWakeup\("`) but not literally (3 explanatory comment hits remain documenting why the call was dropped); (3) **[Rule 1 — Bug]** the initial 'Do NOT mark it' test regex was not whitespace-tolerant — the description text line-wraps 'Do' and 'NOT' across a newline; fixed to `/Do\s+NOT\s+mark\s+it/i`. SUMMARY: `04.1-03-SUMMARY.md`.
+
+**Plan 04.1-04 (chat.messages classifyComment + watchdog wiring) UNBLOCKED.** Imports `ensureTopicWakeable`, `isTopicStuck`, and `NON_TERMINAL_CONVERSATION_STATUS` from this plan's `src/worker/chat/topic-watchdog.ts`. Touches `src/worker/handlers/chat-messages.ts` only — zero `files_modified` overlap with Plan 04.1-03 (same wave 2, parallel-safe per PLAN.md).
+
+---
 
 **Plan 04.1-02 — createTrueTask helper + chat.createTrueTask + chat.promote D-04 rewrite: COMPLETE 2026-05-20.**
 Autonomous TDD. 3 tasks / 6 commits `0b13481..2715ac6`:
