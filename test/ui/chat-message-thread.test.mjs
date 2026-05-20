@@ -578,12 +578,23 @@ test('Chat thread: PromoteActions promote({...}) passes commentId + topicIssueId
   );
 });
 
-test('Chat thread: chat.promote handler requires commentId + topicIssueId (GAP 12)', () => {
+test('Chat thread: chat.promote handler requires commentId + topicIssueId (GAP 12) + assigneeAgentId + employeeName (Plan 04.1-02 D-04/D-06/D-07)', () => {
   const required = handlerRequiredKeys('chat-promote.ts');
   assert.deepEqual(
     [...required].sort(),
-    ['commentId', 'companyId', 'topicIssueId', 'userId'],
-    'chat-promote.ts must require commentId + topicIssueId (not messageUuid)',
+    // Plan 04.1-02 — chat.promote now delegates to createTrueTask, which
+    // requires assigneeAgentId (D-06 wake contract) and employeeName (D-07
+    // marker comment copy). The PromoteActions UI must thread both from
+    // the topic's employeeAgentId + roster row in Plan 04.1-06.
+    [
+      'assigneeAgentId',
+      'commentId',
+      'companyId',
+      'employeeName',
+      'topicIssueId',
+      'userId',
+    ],
+    'chat-promote.ts must require commentId + topicIssueId + assigneeAgentId + employeeName',
   );
 });
 

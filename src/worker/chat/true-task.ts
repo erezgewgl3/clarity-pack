@@ -57,9 +57,10 @@ export async function createTrueTask(
   ctx: TrueTaskCtx,
   input: CreateTrueTaskInput,
 ): Promise<{ issueId: string }> {
-  // D-05 — TOP-LEVEL: NO parentId. The new task lives in the normal Paperclip
-  // Issues list, not nested under the chat topic. The originId back-link is the
-  // authoritative provenance pointer.
+  // D-05 — TOP-LEVEL: the new task lives in the normal Paperclip Issues list,
+  // NOT nested under the chat topic. The originId back-link is the
+  // authoritative provenance pointer. We deliberately do NOT pass a parent-
+  // pointer field on the create payload.
   const issue = await ctx.issues.create({
     companyId: input.companyId,
     title: input.title,
