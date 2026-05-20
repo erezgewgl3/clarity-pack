@@ -17,6 +17,12 @@
 @import url("https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap");
 
 /* ---- Scope root: warm-dark palette + base typography (sketch ll. 11-33) ---- */
+/* Plan 04.1-08 — WCAG AA contrast bump on --ink-3 / --ink-4.
+ *   --ink-3 #7E7869 (~4.3:1) → #A09786 (~6.0:1 AA body / AAA UI).
+ *   --ink-4 #52503F (~2.4:1) → #6D6857 (~3.5:1 decorative ONLY — NEVER body text).
+ * Every existing body-text use of --ink-4 in this file is migrated to --ink-3;
+ * decorative-only uses (subtle borders, dot separators, divider hairlines) stay
+ * on --ink-4. See sketches/paperclip-fix-chat-true-task.html ll. 23-29. */
 [data-clarity-surface="chat"] {
   --bg: #0e0d0a;
   --bg-2: #15140f;
@@ -26,8 +32,8 @@
   --line-bright: #3d3a2e;
   --ink: #e8e1cf;
   --ink-2: #b8b0a0;
-  --ink-3: #7e7869;
-  --ink-4: #52503f;
+  --ink-3: #A09786;
+  --ink-4: #6D6857;
   --live: #7db47e;
   --live-soft: #1f3320;
   --warn: #d9a23e;
@@ -67,10 +73,13 @@
   border-left: 3px solid var(--alert);
 }
 
-/* ---- Shell — 3-column grid 264px 1fr 340px (sketch l. 44) ---- */
+/* ---- Shell — 3-column grid 264px 1fr 360px (Plan 04.1-08 widens right rail) ---- */
+/* Plan 04.1-08 — right rail widened from ~280px to 360px so the rail labels
+ * (`Active tasks owned`, `Archive this topic`, `Search this employee's chats`,
+ * `Pause heartbeat`) do not truncate at 1280px viewport / browser zoom 100%. */
 [data-clarity-surface="chat"] .clarity-chat-shell {
   display: grid;
-  grid-template-columns: 264px 1fr 340px;
+  grid-template-columns: 264px 1fr 360px;
   height: 78vh;
   min-height: 520px;
   position: relative;
@@ -137,7 +146,8 @@
   font-family: "Geist Mono", monospace;
   font-size: 9.5px;
   letter-spacing: 0.22em;
-  color: var(--ink-4);
+  /* Plan 04.1-08 — was --ink-4 (text below WCAG AA). Section heading text. */
+  color: var(--ink-3);
   text-transform: uppercase;
 }
 [data-clarity-surface="chat"] .emp {
@@ -224,7 +234,8 @@
 }
 [data-clarity-surface="chat"] .emp .badge.muted {
   background: transparent;
-  color: var(--ink-4);
+  /* Plan 04.1-08 — was --ink-4 (body text below WCAG AA). */
+  color: var(--ink-3);
   border: 1px solid var(--line);
 }
 
@@ -598,7 +609,8 @@
   font-style: italic;
 }
 [data-clarity-surface="chat"] .pending-row.quiet {
-  color: var(--ink-4);
+  /* Plan 04.1-08 — was --ink-4 (body text below WCAG AA). */
+  color: var(--ink-3);
 }
 [data-clarity-surface="chat"] .msg {
   display: grid;
@@ -804,7 +816,8 @@
   font-family: "Geist Mono", monospace;
   font-size: 10px;
   letter-spacing: 0.04em;
-  color: var(--ink-4);
+  /* Plan 04.1-08 — was --ink-4 (body text below WCAG AA). */
+  color: var(--ink-3);
   font-style: italic;
 }
 
@@ -1217,33 +1230,12 @@
  * Active weights on new components: 400 (body) + 500 (meta-labels). No 600.
  * ----------------------------------------------------------------------- */
 
-/* Pattern A — composer Send-as-task toggle (UI-SPEC §"Composer mode toggle"). */
-[data-clarity-surface="chat"] .true-task-toggle {
-  /* Inherits .tool-btn base (chat.css:964-982). Off-state is already
-   * `border: 1px solid transparent` from .tool-btn. The armed selector
-   * below overrides border/color/background only. */
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-[data-clarity-surface="chat"] .true-task-toggle[data-armed="true"] {
-  border-color: var(--you);
-  color: var(--you);
-  background: var(--you-soft);
-}
-[data-clarity-surface="chat"] .true-task-toggle[data-armed="true"]::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--you);
-  margin-right: 4px;
-}
-[data-clarity-surface="chat"] .true-task-toggle:focus-visible {
-  outline: 1px solid var(--ink-2);
-  outline-offset: 2px;
-}
+/* Pattern A — Send-as-task toggle REMOVED in Plan 04.1-08.
+ * The composer is single-purpose (chat only); cold tasks are created via the
+ * new `+ Create task` button in `.chat-actions-row`; promote-from-message is
+ * the per-bubble hover affordance. The toggle CSS rules + the TS component
+ * (true-task-toggle.tsx) are deleted. The send button always says SEND and
+ * the placeholder is always `Message {employee}…`. */
 
 /* Pattern B — confirm dialog (UI-SPEC §"Confirm dialog (D-02)").
  * Native <dialog> — no shadcn / radix import. */
@@ -1334,45 +1326,63 @@
   margin-top: 16px;
 }
 
-/* Pattern C — inline task card (UI-SPEC §"Inline task card (D-03)"). */
+/* Pattern C — inline task card (Plan 04.1-08 TONED DOWN).
+ * Was: full-border + gradient + heavy-weight box (UI-SPEC v1, hero element).
+ * Now: 2px left-rule provenance marker (sketch ll. 268-298). Reads as a quiet
+ * "X happened" event in the thread, NOT a message hero. No full border, no
+ * background fill. Title is --ink-2 (NOT --ink), 13px weight 400 (was 15px
+ * weight 500). BEAAA-NNN renders as a gold UNDERLINED LINK (handled by
+ * RefChip primitive ref-chip class below). Status pill is outlined-only. */
 [data-clarity-surface="chat"] .inline-task-card {
-  align-self: center;
-  max-width: 520px;
-  background: var(--bg-3);
-  border: 1px solid var(--line-bright);
-  border-radius: 2px;
-  padding: 12px 16px;
+  align-self: stretch;
+  max-width: 560px;
+  width: 100%;
+  border-left: 2px solid var(--you);
+  background: transparent;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  padding: 6px 0 6px 14px;
+  margin: 2px 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 [data-clarity-surface="chat"] .inline-task-card-eyebrow {
   font-family: "Geist Mono", monospace;
-  font-size: 10px;
+  /* Plan 04.1-08 — was 10px. Sketch ll. 278-281: 9px with opacity .85. */
+  font-size: 9px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--you);
-  font-weight: 500;
+  font-weight: 600;
+  opacity: 0.85;
 }
 [data-clarity-surface="chat"] .inline-task-card-title {
   font-family: "Geist", "Helvetica Neue", sans-serif;
-  font-size: 14.5px;
-  font-weight: 500;
-  color: var(--ink);
+  /* Plan 04.1-08 — was 14.5px / weight 500 / --ink (hero). Now 13px / weight 400 / --ink-2 (provenance). */
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-2);
   line-height: 1.4;
 }
 [data-clarity-surface="chat"] .inline-task-card-assignee {
   font-family: "Geist", "Helvetica Neue", sans-serif;
-  font-size: 13px;
-  color: var(--ink-2);
+  font-size: 12px;
+  color: var(--ink-3);
   line-height: 1.4;
 }
 [data-clarity-surface="chat"] .inline-task-card-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-top: 4px;
+  margin-top: 2px;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
 }
 [data-clarity-surface="chat"] .inline-task-card-meta .ts {
   font-family: "Geist Mono", monospace;
@@ -1381,24 +1391,33 @@
   letter-spacing: 0.04em;
   margin-left: auto;
 }
+/* Plan 04.1-08 — outlined-only status pill (no background fill). */
 [data-clarity-surface="chat"] .inline-task-card-meta .st {
   font-family: "Geist Mono", monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
+  font-size: 9px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 500;
+  padding: 1px 6px;
+  border: 1px solid var(--idle);
+  color: var(--idle);
+  background: transparent;
 }
 [data-clarity-surface="chat"] .inline-task-card-meta .st.review {
   color: var(--warn);
+  border-color: var(--warn);
 }
 [data-clarity-surface="chat"] .inline-task-card-meta .st.todo {
   color: var(--ink-3);
+  border-color: var(--ink-4);
 }
 [data-clarity-surface="chat"] .inline-task-card-meta .st.done {
   color: var(--live);
+  border-color: var(--live);
 }
 [data-clarity-surface="chat"] .inline-task-card-meta .st.blocked {
   color: var(--alert);
+  border-color: var(--alert);
 }
 
 /* Pattern D — active tasks owned empty state (UI-SPEC §"Active tasks owned").
@@ -1442,20 +1461,27 @@
   gap: 8px;
 }
 
-/* Pattern E tail — +N archived strip pill (UI-SPEC §"+N archived pill"). */
+/* Pattern E tail — +N archived strip pill (UI-SPEC §"+N archived pill").
+ * Plan 04.1-08 — was using --ink-4 text (below WCAG AA). Pill is now readable
+ * (--ink-2) so it surfaces the count clearly; clicking it opens the archive
+ * panel (the inline-reveal pattern is gone). */
 [data-clarity-surface="chat"] .archived-topics-pill {
-  border: 1px dashed var(--line);
+  border: 1px dashed var(--line-bright);
   font-style: italic;
-  color: var(--ink-4);
+  color: var(--ink-2);
   margin-left: 8px;
+  cursor: pointer;
 }
 [data-clarity-surface="chat"] .archived-topics-pill:hover {
-  color: var(--ink-3);
-  border-color: var(--ink-4);
-}
-[data-clarity-surface="chat"] .archived-topics-pill.active {
-  color: var(--ink-2);
+  color: var(--ink);
   border-color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .archived-topics-pill.active,
+[data-clarity-surface="chat"] .archived-topics-pill[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--ink-3);
+  background: var(--bg-3);
+  font-style: normal;
 }
 /* Archived-topic row when the pill is expanded (UI-SPEC: "opacity 0.6
  * with an inline Unarchive hover action"). */
@@ -1488,8 +1514,9 @@
  * (UI-SPEC §"Gutter-alignment carve-out"). NEVER a bubble. */
 [data-clarity-surface="chat"] .runtime-noise-comment {
   font-family: "Geist Mono", monospace;
-  color: var(--ink-4);
-  border: 1px dashed var(--line);
+  /* Plan 04.1-08 — was --ink-4 (body text below WCAG AA). */
+  color: var(--ink-3);
+  border: 1px dashed var(--line-bright);
   background: var(--bg-2);
   padding: 8px 12px 8px 22px;
   margin: 8px 0;
@@ -1501,7 +1528,8 @@
   font-size: 10px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--ink-4);
+  /* Plan 04.1-08 — was --ink-4 (header text below WCAG AA). */
+  color: var(--ink-3);
   font-weight: 500;
   margin-bottom: 4px;
 }
@@ -1536,7 +1564,8 @@
   font-size: 9.5px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-4);
+  /* Plan 04.1-08 — was --ink-4 (label text below WCAG AA). */
+  color: var(--ink-3);
   min-width: 96px;
 }
 [data-clarity-surface="chat"] .runtime-noise-comment-row-value {
@@ -1589,3 +1618,392 @@
   margin-top: 8px;
   text-decoration: none;
 }
+
+/* ---- Plan 04.1-08 — redesign ----------------------------------------------
+ *
+ * Three intents at the affordance level:
+ *   1. Talk to an employee   — composer textarea, single-purpose.
+ *   2. Promote message to task — per-bubble HOVER action on agent replies.
+ *   3. Create a cold task     — `+ Create task` PRIMARY button in actions row.
+ *
+ * Plus the archive UX (panel dropdown + click-to-open read-only state +
+ * archived-banner). Sketch ground truth: paperclip-fix-chat-true-task.html.
+ * Token discipline: only --ink-3 / --ink-4 bumps; no new palette additions.
+ * --------------------------------------------------------------------------- */
+
+/* Actions row — sits BETWEEN topic strip and messages scroller. Always visible. */
+[data-clarity-surface="chat"] .chat-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+[data-clarity-surface="chat"] .chat-actions-row .btn.primary {
+  background: var(--you);
+  color: #1B150A;
+  border-color: var(--you);
+  font-weight: 700;
+}
+[data-clarity-surface="chat"] .chat-actions-row .btn.primary:hover {
+  background: #F0CE76;
+  border-color: #F0CE76;
+}
+[data-clarity-surface="chat"] .chat-actions-row .spacer {
+  flex: 1;
+}
+[data-clarity-surface="chat"] .chat-actions-row .kbd-hint {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .chat-actions-row .kbd-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  background: var(--bg-3);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  margin: 0 2px;
+  color: var(--ink);
+}
+
+/* Archive panel — dropdown anchored to the +N archived pill (sketch ll. 565-640).
+ * REPLACES Plan 04.1-06's inline-reveal pattern. Click-to-open rows; hover
+ * Unarchive button with event.stopPropagation. Real-time search input filters
+ * by title. Empty state when 0 archives. Footer `View all archived →` is a
+ * NO-OP stub for Phase 4.2 (per memory phase-4.2-deferred-from-4.1). */
+[data-clarity-surface="chat"] .chat-archive-panel {
+  position: absolute;
+  top: 100%;
+  right: 22px;
+  width: 440px;
+  z-index: 30;
+  background: var(--bg-2);
+  border: 1px solid var(--line-bright);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-3);
+}
+[data-clarity-surface="chat"] .chat-archive-panel__head h4 {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink);
+  font-weight: 600;
+  margin: 0;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__close {
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__close:hover {
+  color: var(--ink);
+}
+[data-clarity-surface="chat"] .chat-archive-panel__search {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+[data-clarity-surface="chat"] .chat-archive-panel__search input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-family: "Geist Mono", monospace;
+  font-size: 11.5px;
+  padding: 7px 10px;
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__search input::placeholder {
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .chat-archive-panel__search input:focus {
+  outline: none;
+  border-color: var(--ink-2);
+}
+[data-clarity-surface="chat"] .chat-archive-panel__list {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row {
+  padding: 11px 16px;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 12px;
+  row-gap: 5px;
+  align-items: center;
+  transition: background 0.12s ease;
+  position: relative;
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  color: inherit;
+  font: inherit;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row:first-child {
+  border-top: none;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row:hover {
+  background: var(--bg-3);
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row-content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row-title {
+  font-size: 13.5px;
+  color: var(--ink);
+  font-weight: 400;
+  line-height: 1.35;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row-sub {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row-sub .sep {
+  color: var(--ink-4);
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row-hint {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  margin-top: 2px;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row:hover .chat-archive-panel__row-hint {
+  opacity: 0.8;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__unarchive {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  border: 1px solid var(--you);
+  color: var(--you);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.12s ease, color 0.12s ease;
+  white-space: nowrap;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__row:hover .chat-archive-panel__unarchive {
+  opacity: 1;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__unarchive:hover {
+  background: var(--you);
+  color: #1B150A;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+[data-clarity-surface="chat"] .chat-archive-panel__foot {
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-3);
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__foot button {
+  background: none;
+  border: none;
+  color: var(--you);
+  cursor: pointer;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 9.5px;
+  font-family: "Geist Mono", monospace;
+  padding: 0;
+}
+[data-clarity-surface="chat"] .chat-archive-panel__foot button:hover {
+  text-decoration: underline;
+}
+
+/* Archived banner — sticky read-only banner shown when an archived topic is
+ * open in the main thread. Uses --warn color family (NOT --alert; alert is
+ * reserved for host-stuck). Sketch ll. 642-660. */
+[data-clarity-surface="chat"] .chat-archived-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  padding: 12px 18px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  margin: 0 auto 8px;
+  max-width: 780px;
+}
+[data-clarity-surface="chat"] .chat-archived-banner__ico {
+  font-size: 18px;
+  color: var(--warn);
+}
+[data-clarity-surface="chat"] .chat-archived-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+[data-clarity-surface="chat"] .chat-archived-banner__ttl {
+  font-family: "Geist Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--warn);
+  font-weight: 600;
+}
+[data-clarity-surface="chat"] .chat-archived-banner__body {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+[data-clarity-surface="chat"] .chat-archived-banner__body b {
+  color: var(--ink);
+  font-weight: 500;
+}
+[data-clarity-surface="chat"] .chat-archived-banner__unarchive {
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 7px 14px;
+  border: 1px solid var(--warn);
+  color: #1B150A;
+  background: var(--warn);
+  font-weight: 700;
+  cursor: pointer;
+}
+[data-clarity-surface="chat"] .chat-archived-banner__unarchive:hover {
+  background: #E6B259;
+  border-color: #E6B259;
+}
+
+/* Composer disabled state — when the active topic is archived, the composer
+ * is dashed-border and read-only. Placeholder reads "Unarchive to send
+ * messages." (sketch ll. 663-674). */
+[data-clarity-surface="chat"] .composer--disabled .composer-box {
+  border-style: dashed;
+  background: var(--bg-2);
+  cursor: not-allowed;
+}
+[data-clarity-surface="chat"] .composer--disabled .composer-input {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+[data-clarity-surface="chat"] .composer--disabled .composer-input::placeholder {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* Archived-topic representation in the strip — dashed border + 0.62 opacity +
+ * 📁 suffix. Plan 04.1-08 deepens the Plan 04.1-06 representation. */
+[data-clarity-surface="chat"] .topic.archived-topic-active {
+  opacity: 0.62;
+  border-style: dashed;
+}
+[data-clarity-surface="chat"] .topic.archived-topic-active::after {
+  content: " 📁";
+  margin-left: 4px;
+  font-size: 10px;
+}
+
+/* Task dialog — DUAL-MODE (cold + promote) reshape (sketch ll. 464-525).
+ * The existing .true-task-dialog rules at chat.css:1250-1335 are kept for the
+ * outer <dialog> shell + backdrop; these additions provide:
+ *   - FROM MESSAGE block (left-rule + bg-3, only rendered in PROMOTE mode)
+ *   - footer kbd hint
+ *   - Cancel + Create task button row
+ * The dialog component (true-task-dialog.tsx) renders / omits the FROM-MESSAGE
+ * block based on the mode prop. */
+[data-clarity-surface="chat"] .true-task-dialog-from-msg {
+  border-left: 3px solid var(--you);
+  background: var(--bg-3);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--ink-2);
+  font-style: italic;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+}
+[data-clarity-surface="chat"] .true-task-dialog-from-msg-label {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--you);
+  margin-bottom: 6px;
+  font-style: normal;
+  font-weight: 600;
+  display: block;
+}
+[data-clarity-surface="chat"] .true-task-dialog-foot-hint {
+  margin-right: auto;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .true-task-dialog-foot-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  background: var(--bg);
+  font-size: 9.5px;
+  color: var(--ink);
+  margin: 0 1px;
+}
+
+/* The .topics container is positioning-relative so the archive panel can
+ * absolute-position below the +N pill. */
+[data-clarity-surface="chat"] .topics {
+  position: relative;
+}
+
