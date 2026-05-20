@@ -120,6 +120,19 @@ Hybrid real-time UI durable as ordinary issue comments.
 - [ ] **CHAT-10**: Reasoning panel (`<details>`-style) shows the agent's sources + reasoning bullets when expanded; collapsed by default.
 - [ ] **CHAT-11**: Coexistence test: disabling the plugin leaves every chat message intact and visible as ordinary threaded comments in classic Paperclip UI.
 
+#### CTT — Chat → True Task (CTT)
+
+Phase 4.1 extension of CHAT-09. Turns the Employee Chat composer into a real task-creation surface; locks chat-topic lifecycle so multi-turn conversation is reliable; separates runtime/system bookkeeping from genuine conversational content; protects against host-side disposition/recovery stranding.
+
+- [ ] **CTT-01**: From the Employee Chat composer, the operator can turn an intention into a TRUE task — a real Paperclip issue that is assigned to an employee-agent, has a status lifecycle, and appears in the normal Issues list (not parented under a chat-topic plumbing tree, not unassigned). *Extends CHAT-09.*
+- [ ] **CTT-02**: The existing agent-message `↗ Promote to task` affordance produces the SAME assigned, findable top-level task as the operator-side composer path. One shared mechanism, one consistent result. *Extends CHAT-09.*
+- [ ] **CTT-03**: A chat topic supports sustained multi-turn conversation — the assigned employee-agent reliably re-wakes on every operator message, not only the first. *Extends CHAT-09.*
+- [ ] **CTT-04**: The chat thread shows genuine conversational messages only — Paperclip agent-task-lifecycle / system bookkeeping comments (disposition, recovery owner, `finish_successful_run_handoff`) never appear as chat messages, and are filterable/diagnosable via an operator-toggled diagnostics path.
+- [ ] **CTT-05**: A chat topic issue is never stranded in a stuck task-completion state by the plugin's own behaviour: the chat-topic issue is held non-terminal (never marked done by the plugin) and a watchdog flips it back off `done`/`cancelled`/`blocked` if observed there.
+- [ ] **CTT-06**: If a chat topic does still end up host-stuck (residual disposition / recovery-owner state the plugin cannot reverse), the chat surface shows the operator a clear `⚠ TOPIC STUCK HOST-SIDE` banner — never silent, never auto-recover.
+- [ ] **CTT-07**: Archiving a chat topic is a plugin-side concept: it sets `chat_topics.archived = true` and drops the topic from the chat UI without marking the host issue `done` (which would re-engage the disposition machinery). Archived topics remain reversible via a `+N archived` strip pill.
+- [ ] **CTT-08**: The chat context rail tracks spun-off true-task status live: each task created from a topic appears in the `Active tasks owned` section with a status pill that updates on every chat poll.
+
 ### Coexistence Guarantees (COEXIST)
 
 Cross-cutting; verified by a checklist that runs on every PR.
@@ -247,6 +260,14 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | CHAT-09 | Phase 4 | Implemented (Plan 04-04 — chat.promote linked issue + chat.pin; Plan 04-05 Promote/Pin affordances on agent messages) |
 | CHAT-10 | Phase 4 | Implemented (Plan 04-05 — reasoning panel, collapsed by default, shows agent sources + reasoning bullets) |
 | CHAT-11 | Phase 4 | Implemented (Plan 04-06 — 08-chat-disable.mjs automated coexistence check in the CI checklist) |
+| CTT-01 | Phase 4.1 | Pending |
+| CTT-02 | Phase 4.1 | Pending |
+| CTT-03 | Phase 4.1 | Pending |
+| CTT-04 | Phase 4.1 | Pending |
+| CTT-05 | Phase 4.1 | Pending |
+| CTT-06 | Phase 4.1 | Pending |
+| CTT-07 | Phase 4.1 | Pending |
+| CTT-08 | Phase 4.1 | Pending |
 | COEXIST-01 | Phase 2 | Pending |
 | COEXIST-02 | Phase 2 | Pending |
 | COEXIST-03 | Phase 2 | Pending |
@@ -273,4 +294,4 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 
 ---
 *Requirements defined: 2026-05-07*
-*Last updated: 2026-05-19 — Plan 04-06 Task 2: CHAT-01..CHAT-11 traceability rows marked Implemented with their delivering Phase 4 plan references (Phase 4 closure).*
+*Last updated: 2026-05-20 — Plan 04.1-01 Task 1: registered CTT-01..CTT-08 (Pending, Phase 4.1) — the Phase 4.1 closure plan (04.1-07) will flip these to Implemented with delivering-plan references.*
