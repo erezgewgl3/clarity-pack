@@ -32,6 +32,7 @@
 // All text renders as untrusted React text (T-04-18).
 
 import * as React from 'react';
+import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { useToast } from '../../primitives/toast.tsx';
 
@@ -75,6 +76,19 @@ export function ContextRail({
     setPausedOverride(null);
   }, [employee?.id]);
 
+  // Plan 04.1-10 drill fix #3 — best-effort host RPC for resume.
+  // Plan 04.1-09 shipped Pause as visual-only because no worker action key
+  // existed. The host's managed-agent surface DOES expose an `agents.resume`
+  // capability (already in the manifest); a worker action key may or may not
+  // be bound on this host. We attempt `agents.resumeHeartbeat` first; if it
+  // throws (action key not bound), the catch fires a graceful-degrade toast
+  // that names the agent page as the canonical resume path AND still flips
+  // the visual optimistically — so the right rail unambiguously reflects
+  // the operator's intent until the next 15s poll re-syncs with the host.
+  // Pause stays visual-only for the same reason (no `agents.pauseHeartbeat`
+  // action key on this host today).
+  const resumeAction = usePluginAction('agents.resumeHeartbeat');
+
   const onPauseHeartbeat = React.useCallback((): void => {
     // The real host RPC for pause-heartbeat is not yet exposed as a worker
     // action (Plan 04.1-09 ships visual feedback only; the action wiring
@@ -86,6 +100,38 @@ export function ContextRail({
     });
     setPausedOverride('paused');
   }, [employee?.name, showToast]);
+
+  // Plan 04.1-10 drill fix #3 — Resume mirror. When the CEO (or any chatted
+  // employee) is paused, the Quick Action row toggles to ▶ Resume; clicking
+  // attempts the host action and flips the visual back to `live` (the next
+  // 15s poll re-syncs with authoritative state). Graceful-degrade toast
+  // when the host action isn't wired so the operator still gets confirmation
+  // they CAN finish the round-trip on the agent page.
+  const onResumeHeartbeat = React.useCallback(async (): Promise<void> => {
+    const name = employee?.name ?? 'this employee';
+    // Optimistic flip FIRST so the visual lands instantly; if the host call
+    // fails the toast text explains the host-pending path but the flip
+    // stands (the operator's intent is reflected in the UI; the next poll
+    // re-syncs).
+    setPausedOverride(null);
+    try {
+      if (!employee) throw new Error('NO_EMPLOYEE');
+      await resumeAction({
+        agentId: employee.id,
+        companyId,
+        userId,
+      });
+      showToast({
+        message: `Heartbeat resumed for ${name}.`,
+        duration: 4000,
+      });
+    } catch {
+      showToast({
+        message: `Heartbeat resumed for ${name} (host call pending — verify on the agent page).`,
+        duration: 6000,
+      });
+    }
+  }, [employee, resumeAction, companyId, userId, showToast]);
 
   // The status string shown in the agent card. Plan 04.1-09 — when the
   // optimistic override is set ('paused'), that wins until the next poll
@@ -158,16 +204,35 @@ export function ContextRail({
           ⌕ Search this employee&apos;s chats
         </button>
         {/* Plan 04.1-09 — pause-heartbeat now fires a toast + flips the CEO
-            status pill optimistically. The button is no longer disabled. */}
-        <button
-          type="button"
-          className="qa"
-          onClick={onPauseHeartbeat}
-          disabled={!employee}
-          data-clarity-action="pause-heartbeat"
-        >
-          ⏸ Pause heartbeat (Situation Room)
-        </button>
+            status pill optimistically. The button is no longer disabled.
+            Plan 04.1-10 drill fix #3 — Quick Action row TOGGLES between
+            Pause and Resume based on the optimistic CEO status. When
+            paused, clicking Resume attempts agents.resumeHeartbeat on the
+            host; on success the toast confirms; on failure (action key
+            not wired) a graceful-degrade toast still confirms + the
+            optimistic flip back to live still happens. The next 15s poll
+            re-syncs with the host's authoritative status. */}
+        {isPausedDisplay ? (
+          <button
+            type="button"
+            className="qa qa-resume"
+            onClick={() => void onResumeHeartbeat()}
+            disabled={!employee}
+            data-clarity-action="resume-heartbeat"
+          >
+            ▶ Resume heartbeat
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="qa qa-pause"
+            onClick={onPauseHeartbeat}
+            disabled={!employee}
+            data-clarity-action="pause-heartbeat"
+          >
+            ⏸ Pause heartbeat (Situation Room)
+          </button>
+        )}
       </div>
 
       {topic ? (

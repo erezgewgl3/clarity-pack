@@ -2231,3 +2231,21 @@
   vertical-align: middle;
 }
 
+/* ---------------------------------------------------------------------------
+ * Plan 04.1-10 drill fix #3 — Resume heartbeat affordance.
+ *
+ * When the chatted employee's optimistic CEO-status pill reads `paused`,
+ * the Quick Action row toggles from ⏸ Pause heartbeat to ▶ Resume
+ * heartbeat. The Resume variant gets a soft live-green tint on its
+ * leading triangle so the call-to-action visual reads as "go" — mirrors
+ * the pause-state's amber warn tint on .stat-value.paused.
+ *
+ * The buttons share the .qa base class; only the leading-glyph hint
+ * color differs. */
+[data-clarity-surface="chat"] .qa-resume {
+  color: var(--ink);
+}
+[data-clarity-surface="chat"] .qa-resume::first-letter {
+  color: var(--live);
+}
+
