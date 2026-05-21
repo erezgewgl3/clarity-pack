@@ -31,12 +31,20 @@
 //
 // Pitfall 4 — the Plan 04.1-02 marker comment
 // `"Task created — <issueId>, assigned to <employeeName>."` MUST classify as
-// 'conversation'. The marker is authored by the plugin worker (authorType is
-// 'agent'/'user', NEVER 'system') and its wording does not overlap any
-// RUNTIME_PHRASES entry. Both invariants are pinned by Test 11 / Test 11b in
-// test/worker/chat/comment-classify.test.mjs — a future RUNTIME_PHRASES
-// addition that accidentally matches the marker fails the suite before it
-// could ever strip a real marker from a live chat thread.
+// 'conversation'. Plan 04.1-11 added an explicit marker-pattern allowlist at
+// the top of classifyComment for this. The prior Plan 04.1-04 assumption that
+// the marker carries authorType:'agent' or 'user' is FALSE in production —
+// the Paperclip host stamps plugin-worker `ctx.issues.createComment` calls
+// with authorType:'system' on Countermoves (CONFIRMED 2026-05-21 by Eric's
+// diagnostics-on test: markers were visible as system-noise rows in the
+// thread when diagnostics were toggled on, then absent from the rendered
+// conversation when diagnostics were toggled off — the PRIMARY discriminator
+// was stripping them). The allowlist guarantees the marker passes through
+// regardless of host-stamped authorType. A future RUNTIME_PHRASES addition
+// that accidentally matches the marker still can't strip it — the allowlist
+// returns 'conversation' BEFORE the body-pattern path even runs. Pinned by
+// the marker-with-authorType-system regression test in
+// test/worker/chat/comment-classify.test.mjs.
 
 export type CommentClass = 'conversation' | 'runtime-noise';
 
@@ -86,16 +94,64 @@ export const RUNTIME_PHRASES: readonly string[] = Object.freeze([
  * `authorType` and no `presentation.kind` defaults to 'conversation' so we
  * never strip a legitimate-but-incomplete row.
  */
+/**
+ * Plan 04.1-11 (2026-05-21) — Plan 04.1-02 task-created marker allowlist.
+ *
+ * Matches the canonical marker shape produced by `createTrueTask` in
+ * src/worker/chat/true-task.ts:124:
+ *   `Task created — <issueId>, assigned to <employeeName>.`
+ *
+ * The regex is TIGHT on purpose: em-dash separator (NOT hyphen-minus),
+ * single non-comma chunk for the issueId (UUID or short id — NO commas
+ * allowed so the trailing chunk delimiter stays unambiguous), single
+ * non-empty chunk for the employeeName, literal period terminator. Does
+ * NOT broaden the conversational allowlist beyond this one literal pattern
+ * — future plugin-worker comment shapes do NOT get a free pass; they need
+ * their own opt-in entry here.
+ *
+ * The PRIMARY/SECONDARY/FALLBACK chain below is UNCHANGED. This allowlist
+ * is purely additive at the HEAD of classifyComment so the host's
+ * authorType:'system' stamp can't strip the marker on Countermoves.
+ *
+ * If the marker shape ever changes in true-task.ts, this regex MUST update
+ * in the same commit. The two locations are linked by Plan 04.1-11.
+ */
+const TASK_CREATED_MARKER_RE = /^Task created — [^,]+, assigned to .+\.$/;
+
 export function classifyComment(c: CommentLike): CommentClass {
+  // Plan 04.1-11 (2026-05-21) — marker-pattern allowlist (Pitfall 4
+  // production fix). The Plan 04.1-02 marker comment
+  //   `Task created — <issueId>, assigned to <employeeName>.`
+  // MUST classify as 'conversation' regardless of authorType, because the
+  // host stamps plugin-worker `ctx.issues.createComment` calls with
+  // authorType:'system' on Countermoves (CONFIRMED 2026-05-21 by
+  // diagnostics-on test). The original Plan 04.1-04 spec assumed
+  // authorType:'agent' or 'user'; production showed otherwise.
+  //
+  // Without this exception the marker is filtered server-side as
+  // runtime-noise → chat.messages never returns it → message-thread's
+  // inline-task-card render path never fires → operator's confirmation
+  // card disappears on every chat reload.
+  //
+  // Order matters: the allowlist runs BEFORE the primary authorType check
+  // so a marker stamped authorType:'system' still passes through. The
+  // RUNTIME_PHRASES fallback path below CANNOT strip a marker even if a
+  // future phrase accidentally overlaps — the return here is final.
+  const trimmedBody = (c.body ?? '').trim();
+  if (TASK_CREATED_MARKER_RE.test(trimmedBody)) {
+    return 'conversation';
+  }
+
   // PRIMARY (HIGH confidence) — host discriminator from 04.1-01-SPIKE-FINDINGS.
   if (c.authorType === 'system') return 'runtime-noise';
 
   // SECONDARY (defense-in-depth) — presentation envelope.
   if (c.presentation?.kind === 'system_notice') return 'runtime-noise';
 
-  // FALLBACK — narrow body-pattern blocklist.
-  const body = (c.body ?? '').toLowerCase();
-  if (body.length > 0 && RUNTIME_PHRASES.some((p) => body.includes(p.toLowerCase()))) {
+  // FALLBACK — narrow body-pattern blocklist (case-insensitive substring
+  // match). Uses a fresh `.toLowerCase()` view of `trimmedBody`.
+  const lowerBody = trimmedBody.toLowerCase();
+  if (lowerBody.length > 0 && RUNTIME_PHRASES.some((p) => lowerBody.includes(p.toLowerCase()))) {
     return 'runtime-noise';
   }
   return 'conversation';
