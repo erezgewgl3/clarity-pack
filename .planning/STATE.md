@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.8.3
-milestone_name: phase-4.1-final-ui
+milestone: v0.8.4
+milestone_name: phase-4.1-bundled-fixes
 status: executing
-last_updated: "2026-05-21T00:00:00Z"
+last_updated: "2026-05-21T10:30:00Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 47
-  completed_plans: 36
-  percent: 77
+  completed_plans: 37
+  percent: 79
 ---
 
 # State: Clarity Pack
@@ -23,12 +23,19 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4.1 (Chat → True Task) — **Wave 5 (closure) UNBLOCKED 2026-05-21**. Plans 04.1-01 through 04.1-10 COMPLETE (UI surface APPROVED-WITH-FOLLOWUPS at v0.8.3); only Plan 04.1-07 (CI coexistence check + traceability + final closure drill + phase wrap) remains before Phase 4.1 closes.
+**Current Focus:** Phase 4.1 (Chat → True Task) — **Wave 5 (closure) UNBLOCKED 2026-05-21**. Plans 04.1-01 through 04.1-11 COMPLETE (UI surface APPROVED-WITH-FOLLOWUPS at v0.8.3; bundled cadence-gate + marker-classifier fixes PASSED at v0.8.4 2026-05-21); only Plan 04.1-07 (CI coexistence check + traceability + final closure drill + phase wrap) remains before Phase 4.1 closes.
 
 ## Current Position
 
 Phase: 04.1 (chat-true-task) — **Wave 5 / Plan 04.1-07 (closure) ready 2026-05-21.** Waves 1+2+3+4 all closed.
-Plan: **9 of 10 complete — Plan 04.1-10 APPROVED-WITH-FOLLOWUPS 2026-05-21; 1 plan remaining (04.1-07 closure).**
+Plan: **10 of 11 complete — Plan 04.1-11 bundled fixes PASS 2026-05-21; 1 plan remaining (04.1-07 closure).**
+
+**Locked decision 2026-05-21:** Plan 04.1-11 bundled TWO surgical fixes from two phases into one ship (0.8.4): (a) Phase 3 cross-phase patch — `isPastDue` Date-compare helper in `src/worker/jobs/compile-bulletin.ts` replacing broken `now.toISOString() < nextDueAtIso` string compare (ASCII 'T' > ' ' lexicographic reversed same-day chronology → every-1-min cron fired a fresh compile every tick → ~687 stranded `Bulletin No.` issues on Countermoves before manual SQL bleed-stop); (b) Phase 4.1 patch — marker-pattern allowlist at HEAD of `classifyComment` in `src/worker/chat/comment-classify.ts` because Countermoves host stamps plugin-worker createComment calls with `authorType: 'system'` (the Plan 04.1-04 dual-keyed discriminator caught the Plan 04.1-02 marker as collateral). Bundled for operator-drill efficiency under Phase 4.1's plan numbering with a cross-phase notation in the SUMMARY and an addendum on the Phase 3 debug doc. Both fixes PASS. **707 stranded `Bulletin No.` issues remain on Countermoves pending operator cleanup** (manual DELETE-by-cycle-number at the keyboard; intentionally manual to keep the audit trail visible during the diagnosis window; not blocking Wave 5 closure).
+
+**Plan 04.1-11 — Bulletin cadence Date-compare + marker classifier allowlist (bundled cross-phase 0.8.4 patch): PASS 2026-05-21.**
+Non-autonomous (Eric Countermoves bundled drill). 2 surgical fixes; 6 atomic commits `479e9b6..6b5828a`; version 0.8.3 → 0.8.4; tarball `clarity-pack-0.8.4.tgz` (133,041 bytes; sha256 `77ad0c37bec7723545fb3cd098eae4e6fca3751d3f549f23411fcc23f2bb9bd8`). **Both parts PASSED:** Part A (cadence) — 1 compile fired at the 5-min mark (cycle 706 published 10:30:55 UTC), then silence; Date-compare gate is holding. Part B (marker) — toast `↗ Task created —` fired bottom-right; inline task cards survived nav-away-then-back; diagnostics OFF showed no system-noise row for the marker. **Cross-phase plan:** Fix A touches `src/worker/jobs/compile-bulletin.ts` (Phase 3 territory, Plan 03-10 v0.6.6 lineage); Fix B touches `src/worker/chat/comment-classify.ts` (Phase 4.1 territory, Plan 04.1-04 lineage). Bundled here under Phase 4.1's plan numbering for operator-drill efficiency. **Two side observations filed to Phase 4.2 deferred memory** (LIVE indicator floating mid-thread — pre-existing regression from a later UI plan; toast vs Paperclip host notification visual differentiation). New project memory `bulletin-cadence-gate-string-bug.md` filed to capture the string-vs-Date-compare pattern. Phase 3 debug doc `.planning/debug/resolved/bulletin-compile-cadence-runaway.md` got a 2026-05-21 "ROOT CAUSE FOUND + 0.8.4 PASS" addendum. Suite 1221 → 1235 (+14 tests). **0 deviations** — plan executed exactly as written. SUMMARY: `04.1-11-SUMMARY.md`. **Plan 04.1-07 (closure) UNBLOCKED.**
+
+---
 
 **Plan 04.1-10 — Final UI gap closure (pendingTaskCard + textarea + viewport + Resume toggle): APPROVED-WITH-FOLLOWUPS 2026-05-21.**
 Non-autonomous (Eric Countermoves regression drill). 4 surgical UI fixes; 5 atomic commits `528e03b..6ac1308`; version 0.8.2 → 0.8.3; tarball `clarity-pack-0.8.3.tgz` sha256 `fd3919c2b1c37a3bc3df56609f75900539688456acce585b4db2a403859eda38`. **All 4 regression checks PASSED:** (1) inline task card + creation toast (`onDialogSuccess` REWRITTEN — sets `pendingTaskCard` for promote mode, fires `showToast` with `Task created` prefix for BOTH modes); (2) dialog DETAILS textarea sized 140px / 40vh / scroll / vertical resize; (3) no horizontal viewport scroll at 1280px+ (`min-width: 0` on `.thread` grid item + `.topics` overflow-x scroll + topic chip ellipsis at 220px); (4) Pause/Resume inline toggle with graceful degrade when host hasn't shipped `agents.resumeHeartbeat` yet. **5 polish followups filed to memory `phase-4.2-deferred-from-4.1`** (auto-scroll-to-new-card; pin unpin toggle; right-rail-pin navigates-to-source; pendingTaskCard default-to-todo; pause-toast wording). **Plan 04.1-10 supersedes Plans 04.1-06 + 04.1-08 + 04.1-09 in the UI surface lineage** — version trail 0.7.8 → 0.8.0 (04.1-06 initial UI, deprecated) → 0.8.1 (04.1-08 redesign, deprecated) → 0.8.2 (04.1-09 first gap closure, deprecated) → **0.8.3 (04.1-10 final, APPROVED)**. None of 04.1-06/08/09 ever produced SUMMARY files — each flowed into the next iteration; the lineage section in 04.1-10-SUMMARY.md is the trail of record. Worker-tier handlers from Plans 04.1-02..04.1-05 + spike findings from 04.1-01 carry forward unchanged. **Plan 04.1-07 (Wave 5 closure — REQUIREMENTS flip CTT-01..CTT-08 + CI coexistence check `09-true-task.mjs` + `04.1-traceability.test.mjs` RED→GREEN + final closure drill + ROADMAP/STATE phase-complete writes) UNBLOCKED.** SUMMARY: `04.1-10-SUMMARY.md`.
