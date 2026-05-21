@@ -233,3 +233,70 @@ the non-destructive uninstall — the namespace is plugin-owned). Cosmetic; the
 v0.6.6 verdict rests on cycle 8 and the settled pointer.
 
 Phase 03 (daily-bulletin) closure unblocked — BULL-05/06/09.
+
+---
+
+## 2026-05-21 — REGRESSION SURFACED + ROOT CAUSE FOUND + 0.8.4 PASS
+
+**Status:** RESOLVED 2026-05-21 — definitive root cause identified; one-line fix shipped in 0.8.4; operator drill verified.
+**Owning plan:** Plan 04.1-11 (cross-phase patch — Phase 3 fix bundled under Phase 4.1 plan numbering for operator-drill efficiency).
+**Related memory:** `bulletin-cadence-gate-string-bug.md`.
+
+**The cadence runaway returned** during Eric's Plan 04.1-10 closure work (post-Phase-3 closure, post-Phase-4 closure). At ~10:00 UTC 2026-05-21, Countermoves had ~687 published bulletin issues with `Bulletin No. N — Thursday, 2026-05-21` titles created every ~2 minutes. Same shape as the v0.6.5 drill but on a different week. v0.6.6's two fixes (verifier frozen snapshot + advance-on-every-path) were still in place and working; this was a NEW, latent bug they couldn't have caught.
+
+### Root cause (definitive)
+
+`src/worker/jobs/compile-bulletin.ts:315` used STRING comparison instead of Date comparison:
+
+```ts
+if (now.toISOString() < nextDueAtIso) { continue; }
+```
+
+- `now.toISOString()` produces `"2026-05-21T09:36:59.000Z"` (with 'T' separator at pos 10)
+- Postgres `timestamptz` returns `"2026-05-21 10:30:00+00"` (with space separator at pos 10)
+- Lexicographic compare: 'T' (ASCII 84) > ' ' (ASCII 32)
+- Same-day timestamps → string compare reverses the chronological relation
+- Gate fails every cron tick → fresh compile every minute → unbounded runaway
+
+**Why v0.6.6's closure drill passed:** by the time of the v0.6.6 drill, `next_due_at` had advanced to the next day (06:30 EDT tomorrow, i.e. `2026-05-19 10:30:00+00`), so the day-digit difference at position 9 dominated the lexicographic compare and accidentally produced the correct ordering. v0.6.6 fixed the ADVANCE behavior (which was the original Bug 1 cause); the GATE that READS the advanced value was the latent bug. The v0.6.6 drill ran a CROSS-DAY scenario which accidentally worked; the SAME-DAY scenario reproduced 2026-05-21.
+
+### Fix shipped (Plan 04.1-11, 0.8.4)
+
+Extracted the gate decision into a pure exported helper `isPastDue(now: Date, nextDueAtIso: string): boolean` using Date comparison. The compile-bulletin per-company loop now reads:
+
+```ts
+import { isPastDue } from './compile-bulletin.ts';
+
+if (!isPastDue(now, nextDueAtIso)) continue;
+```
+
+The helper uses `now.getTime() < new Date(nextDueAtIso).getTime()` — works regardless of source format (ISO-T from JS, space-separator from Postgres). One-line semantic fix; the rest of the per-company loop is byte-identical.
+
+### Verification (Countermoves drill 2026-05-21)
+
+- Pre-install snapshot bookend per the runbook.
+- Pushed `next_due_at` to (now + 5 minutes) via psql to FORCE the gate into the same-day-future scenario:
+
+```bash
+psql "$DB_URL" -c "UPDATE plugin_clarity_pack_cdd6bda4bd.bulletins SET next_due_at = (now() + interval '5 minutes') WHERE company_id = '...';"
+```
+
+- Cron fires every 1 minute; gate held for 4 fires (no-op), released on the 5th fire (compiled cycle 706 at 10:30:55 UTC), `next_due_at` then advanced to the next 06:30-ET slot via the v0.6.6 advance-on-every-path mechanism, and stayed silent for the remainder of the watch window.
+- `SELECT COUNT(*) ... WHERE published_at > now() - interval '10 minutes'` → 1.
+- **PASS — definitive.**
+
+### Memory + regression tests
+
+- New project memory: `bulletin-cadence-gate-string-bug.md` — captures the string-vs-Date pattern so future plans don't repeat it. Includes the trigger phrase to self ("If I'm comparing two timestamp strings with `<` or `>`, RED FLAG — convert to `Date.getTime()` on both sides.").
+- New test: `test/worker/jobs/compile-bulletin-gate.test.mjs` — pins the `isPastDue` helper against both ISO-T and Postgres-space formats, same-day AND cross-day fixtures. Includes the regression-pinning assertion that the OLD string-compare logic was lexicographic and would have produced the WRONG answer for case 1 (same-day-future). 9 cases total.
+- Drill-scenario rule established: cron-gate drills MUST explicitly exercise the same-day case. v0.6.6's drill missed this because the drill ran when `next_due_at` was already a different day. Filed in `bulletin-cadence-gate-string-bug.md`.
+
+Both ensure this bug class is detectable at build time, not at the next Phase 3 closure drill.
+
+### Outstanding operator cleanup
+
+**707 stranded `Bulletin No. N — Thursday, 2026-05-21` issues remain on Countermoves** pending DELETE-by-cycle-number cleanup. Eric will run at the keyboard. Intentionally manual to keep the audit trail visible during the diagnosis window. Not blocking Wave 5 closure (the stranded issues do not affect plugin functionality — they just clutter the Issues list).
+
+### Cross-phase notation
+
+This fix is structurally Phase 3 territory (it patches `src/worker/jobs/compile-bulletin.ts`, last modified in Plan 03-10 v0.6.6) but was bundled into Plan 04.1-11 (Phase 4.1) for operator-drill efficiency — Eric ran ONE Countermoves drill verifying both Fix A (cadence) and Fix B (marker classifier allowlist) instead of two separate drills. Plan 04.1-11's SUMMARY frontmatter carries `cross-phase: true` and a dedicated cross-phase note section. Anyone tracing the Phase 3 cadence-runaway history reads the full story end-to-end here without bouncing between Phase 3 and Phase 4.1 directories.
