@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.8.4
-milestone_name: phase-4.1-bundled-fixes
+milestone_name: phase-4.1-closure-pending-drill
 status: executing
-last_updated: "2026-05-21T10:30:00Z"
+last_updated: "2026-05-21T13:30:00Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 47
-  completed_plans: 37
-  percent: 79
+  completed_plans: 38
+  percent: 81
 ---
 
 # State: Clarity Pack
@@ -23,12 +23,25 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4.1 (Chat → True Task) — **Wave 5 (closure) UNBLOCKED 2026-05-21**. Plans 04.1-01 through 04.1-11 COMPLETE (UI surface APPROVED-WITH-FOLLOWUPS at v0.8.3; bundled cadence-gate + marker-classifier fixes PASSED at v0.8.4 2026-05-21); only Plan 04.1-07 (CI coexistence check + traceability + final closure drill + phase wrap) remains before Phase 4.1 closes.
+**Current Focus:** Phase 4.1 (Chat → True Task) — **Wave 5 closure WORK COMPLETE 2026-05-21; awaiting operator drill on Countermoves.** Plans 04.1-01 through 04.1-11 + 04.1-07 build work all COMPLETE; only the final operator coexistence drill (disable → preserve → re-enable → restore) remains before Phase 4.1 officially flips to COMPLETE & VERIFIED.
 
 ## Current Position
 
-Phase: 04.1 (chat-true-task) — **Wave 5 / Plan 04.1-07 (closure) ready 2026-05-21.** Waves 1+2+3+4 all closed.
-Plan: **10 of 11 complete — Plan 04.1-11 bundled fixes PASS 2026-05-21; 1 plan remaining (04.1-07 closure).**
+Phase: 04.1 (chat-true-task) — **Wave 5 / Plan 04.1-07 closure WORK COMPLETE 2026-05-21; operator drill PENDING.** Waves 1+2+3+4 all closed.
+Plan: **11 of 11 build work complete — Plan 04.1-07 autonomous tasks 1-4 done; final operator drill is the only remaining gate before Phase 4.1 closes.**
+
+**Plan 04.1-07 — Phase 4.1 closure (coexistence + traceability + REQUIREMENTS flip + VERIFICATION): WORK COMPLETE 2026-05-21, OPERATOR DRILL PENDING.**
+Non-autonomous (final task is operator closure drill on Countermoves). Autonomous tasks 1-4 done; 4 commits land the closure paperwork:
+- `811d3bc` (Task 1) — `feat(04.1-07): COEXIST-09 true-task coexistence check (CI gate)` — `scripts/coexistence-checks/09-true-task.mjs` (5 assertions: migrations additive-only / D-10 invariant `chat-topic-archive.ts` zero `ctx.issues.update` / no `ctx.issues.delete*` anywhere in `src/worker/` / no destructive uninstall hook in manifest / Phase 4.1 source files exist); `run-all.mjs` CHECKS array extended; local `node scripts/coexistence-checks/run-all.mjs` reports 9/9 PASS.
+- `b705e39` (Task 2 RED) — `test(04.1-07): RED -- 04.1 traceability test (CTT-01..CTT-08)` — new `test/phases/04.1-traceability.test.mjs` (mirrors 04-traceability.test.mjs; 5 assertions: row-exists / Phase 4.1 / Implemented / 04.1-NN plan ref). RED state: 3 of 5 fail on Pending rows.
+- `5981358` (Task 3 GREEN) — `docs(04.1-07): CTT-01..CTT-08 -> Implemented (GREEN)` — REQUIREMENTS.md CTT-01..CTT-08 rows flipped from Pending to `Implemented (Plan 04.1-NN -- <one-liner>)`. Mapping: CTT-01 → 04.1-02+04.1-10; CTT-02 → 04.1-02; CTT-03 → 04.1-03; CTT-04 → 04.1-04+04.1-11; CTT-05 → 04.1-03; CTT-06 → 04.1-03+04.1-04+04.1-10; CTT-07 → 04.1-05+04.1-08+04.1-10; CTT-08 → 04.1-05+04.1-10. Test goes GREEN (5/5 PASS).
+- (Task 4 — this commit) — `docs(04.1-07): VERIFICATION + ROADMAP + STATE phase-close writes` — `.planning/phases/04.1-chat-true-task/04.1-VERIFICATION.md` drafted (verdict PASSED pending drill; per-CTT proof table; 04.1-01 spike FLAG-1/FLAG-2 reconciliations; tarball pin `clarity-pack-0.8.4.tgz` sha256 `77ad0c37bec7723545fb3cd098eae4e6fca3751d3f549f23411fcc23f2bb9bd8`; supersession lineage 0.7.8 → 0.8.4; stranded-bulletins note; lessons learned referencing `bulletin-cadence-gate-string-bug` + GSD velocity recalibration); ROADMAP.md Phase 4.1 line + Phase Progress table + Last updated all reflect closure work complete pending drill; STATE.md frontmatter + Current Focus updated.
+
+Suite 1235 + 5 new traceability tests = 1240 (+5 over 04.1-11 close). Coexistence check 9/9 PASS. **Plan 04.1-07 drill on Countermoves is the only remaining gate.** Drill protocol: bookend snapshot, inventory chat_topic_tasks + archived chat_topics + issue_comments counts, `pnpm paperclipai plugin disable clarity-pack`, confirm classic Paperclip still shows chat-topic + true-task issues + comments, inventory unchanged, `pnpm paperclipai plugin enable clarity-pack`, confirm chat surface restored, `node scripts/coexistence-checks/run-all.mjs` 9/9 PASS.
+
+After approved verdict, a continuation agent will append the drill section to `04.1-VERIFICATION.md`, flip ROADMAP Phase 4.1 to `[x] COMPLETE & VERIFIED <date>`, flip STATE frontmatter `status` to `complete` for Phase 4.1, advance the current position to Phase 5 (or 4.2 if filed), and produce `04.1-07-SUMMARY.md`.
+
+---
 
 **Locked decision 2026-05-21:** Plan 04.1-11 bundled TWO surgical fixes from two phases into one ship (0.8.4): (a) Phase 3 cross-phase patch — `isPastDue` Date-compare helper in `src/worker/jobs/compile-bulletin.ts` replacing broken `now.toISOString() < nextDueAtIso` string compare (ASCII 'T' > ' ' lexicographic reversed same-day chronology → every-1-min cron fired a fresh compile every tick → ~687 stranded `Bulletin No.` issues on Countermoves before manual SQL bleed-stop); (b) Phase 4.1 patch — marker-pattern allowlist at HEAD of `classifyComment` in `src/worker/chat/comment-classify.ts` because Countermoves host stamps plugin-worker createComment calls with `authorType: 'system'` (the Plan 04.1-04 dual-keyed discriminator caught the Plan 04.1-02 marker as collateral). Bundled for operator-drill efficiency under Phase 4.1's plan numbering with a cross-phase notation in the SUMMARY and an addendum on the Phase 3 debug doc. Both fixes PASS. **707 stranded `Bulletin No.` issues remain on Countermoves pending operator cleanup** (manual DELETE-by-cycle-number at the keyboard; intentionally manual to keep the audit trail visible during the diagnosis window; not blocking Wave 5 closure).
 
