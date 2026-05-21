@@ -183,6 +183,75 @@ test('Test 11b (MARKER-NEVER-NOISE — realistic uuid + employee name): "Task cr
 });
 
 // ---------------------------------------------------------------------------
+// Plan 04.1-11 (2026-05-21) — production fix regression suite.
+//
+// The host stamps plugin-worker createComment() calls with
+// authorType:'system' on Countermoves. The Plan 04.1-02 marker must survive
+// the host's classifier override; non-marker system comments must still be
+// filtered. The allowlist runs BEFORE the primary authorType check.
+// ---------------------------------------------------------------------------
+
+test('Test 15 (PLAN-04.1-11 MARKER + AUTHORTYPE=SYSTEM): marker text + authorType=system → conversation', () => {
+  // The exact production failure mode pinned by Eric's diagnostics-on test
+  // on Countermoves 2026-05-21. Before this fix the marker was visible as
+  // a system-noise row (when diagnostics on) and absent from the rendered
+  // conversation (when diagnostics off) — proving the PRIMARY authorType
+  // discriminator was stripping it. The allowlist now bypasses the primary
+  // check for any body matching the canonical marker shape.
+  const marker = {
+    body: 'Task created — abc12345-def6-789a-bcde-f01234567890, assigned to CEO.',
+    authorType: 'system',
+  };
+  assert.strictEqual(classifyComment(marker), 'conversation');
+});
+
+test('Test 16 (PLAN-04.1-11 CONTROL — non-marker authorType=system): random system body → runtime-noise', () => {
+  // Defensive control: the allowlist is PRECISE, not a catch-all. A
+  // non-marker body stamped authorType:'system' must still classify as
+  // runtime-noise. If the regex were broadened to anything looser than the
+  // canonical marker shape, this assertion would catch the regression.
+  const random = {
+    body: 'Paperclip needs a disposition before this issue can continue.',
+    authorType: 'system',
+  };
+  assert.strictEqual(classifyComment(random), 'runtime-noise');
+});
+
+test('Test 17 (PLAN-04.1-11 EDGE — hyphen-minus not em-dash): marker with wrong dash → falls through to authorType', () => {
+  // The regex requires the em-dash literal (U+2014 — same character
+  // true-task.ts emits). A marker miswritten with a hyphen-minus does NOT
+  // match the allowlist, falls through, and gets filtered by the
+  // authorType:'system' primary check. Documents that the regex is tight.
+  const wrongDash = {
+    body: 'Task created - abc12345, assigned to CEO.', // hyphen-minus, NOT em-dash
+    authorType: 'system',
+  };
+  assert.strictEqual(classifyComment(wrongDash), 'runtime-noise');
+});
+
+test('Test 18 (PLAN-04.1-11 EDGE — trailing whitespace): marker + spaces after period → conversation (trimmed)', () => {
+  // The allowlist trims body before matching, so a marker with stray
+  // trailing whitespace still passes. Defensive against host stores that
+  // pad row text.
+  const padded = {
+    body: '  Task created — abc12345, assigned to CEO.   \n',
+    authorType: 'system',
+  };
+  assert.strictEqual(classifyComment(padded), 'conversation');
+});
+
+test('Test 19 (PLAN-04.1-11 EDGE — empty body system): empty body + system → runtime-noise', () => {
+  // After trim, body is empty → regex doesn't match → falls through to the
+  // authorType:'system' primary → runtime-noise. Mirrors Test 14's logic
+  // post-allowlist insertion to prove the allowlist is non-greedy on empty
+  // bodies.
+  assert.strictEqual(
+    classifyComment({ authorType: 'system', body: '' }),
+    'runtime-noise',
+  );
+});
+
+// ---------------------------------------------------------------------------
 // DEFENSIVE — null / empty fields
 // ---------------------------------------------------------------------------
 
