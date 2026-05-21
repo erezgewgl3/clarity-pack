@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.6.6
-milestone_name: milestone
+milestone: v0.8.3
+milestone_name: phase-4.1-final-ui
 status: executing
-last_updated: "2026-05-20T10:04:28Z"
+last_updated: "2026-05-21T00:00:00Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 47
-  completed_plans: 32
-  percent: 68
+  completed_plans: 36
+  percent: 77
 ---
 
 # State: Clarity Pack
@@ -23,12 +23,17 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4.1 (Chat → True Task) — Wave 3 in progress 2026-05-20. Plans 04.1-02 + 04.1-03 + 04.1-04 + 04.1-05 COMPLETE; Plan 04.1-06 (Wave 3 UI surfaces) ready to run next; Plan 04.1-07 (closure) follows.
+**Current Focus:** Phase 4.1 (Chat → True Task) — **Wave 5 (closure) UNBLOCKED 2026-05-21**. Plans 04.1-01 through 04.1-10 COMPLETE (UI surface APPROVED-WITH-FOLLOWUPS at v0.8.3); only Plan 04.1-07 (CI coexistence check + traceability + final closure drill + phase wrap) remains before Phase 4.1 closes.
 
 ## Current Position
 
-Phase: 04.1 (chat-true-task) — Wave 3 in progress 2026-05-20 (Wave 1 CLOSED with Gate Verdict GO; Wave 2 worker tier complete).
-Plan: 5 of 7 complete — **Plan 04.1-05 COMPLETE 2026-05-20; 2 plans remaining.**
+Phase: 04.1 (chat-true-task) — **Wave 5 / Plan 04.1-07 (closure) ready 2026-05-21.** Waves 1+2+3+4 all closed.
+Plan: **9 of 10 complete — Plan 04.1-10 APPROVED-WITH-FOLLOWUPS 2026-05-21; 1 plan remaining (04.1-07 closure).**
+
+**Plan 04.1-10 — Final UI gap closure (pendingTaskCard + textarea + viewport + Resume toggle): APPROVED-WITH-FOLLOWUPS 2026-05-21.**
+Non-autonomous (Eric Countermoves regression drill). 4 surgical UI fixes; 5 atomic commits `528e03b..6ac1308`; version 0.8.2 → 0.8.3; tarball `clarity-pack-0.8.3.tgz` sha256 `fd3919c2b1c37a3bc3df56609f75900539688456acce585b4db2a403859eda38`. **All 4 regression checks PASSED:** (1) inline task card + creation toast (`onDialogSuccess` REWRITTEN — sets `pendingTaskCard` for promote mode, fires `showToast` with `Task created` prefix for BOTH modes); (2) dialog DETAILS textarea sized 140px / 40vh / scroll / vertical resize; (3) no horizontal viewport scroll at 1280px+ (`min-width: 0` on `.thread` grid item + `.topics` overflow-x scroll + topic chip ellipsis at 220px); (4) Pause/Resume inline toggle with graceful degrade when host hasn't shipped `agents.resumeHeartbeat` yet. **5 polish followups filed to memory `phase-4.2-deferred-from-4.1`** (auto-scroll-to-new-card; pin unpin toggle; right-rail-pin navigates-to-source; pendingTaskCard default-to-todo; pause-toast wording). **Plan 04.1-10 supersedes Plans 04.1-06 + 04.1-08 + 04.1-09 in the UI surface lineage** — version trail 0.7.8 → 0.8.0 (04.1-06 initial UI, deprecated) → 0.8.1 (04.1-08 redesign, deprecated) → 0.8.2 (04.1-09 first gap closure, deprecated) → **0.8.3 (04.1-10 final, APPROVED)**. None of 04.1-06/08/09 ever produced SUMMARY files — each flowed into the next iteration; the lineage section in 04.1-10-SUMMARY.md is the trail of record. Worker-tier handlers from Plans 04.1-02..04.1-05 + spike findings from 04.1-01 carry forward unchanged. **Plan 04.1-07 (Wave 5 closure — REQUIREMENTS flip CTT-01..CTT-08 + CI coexistence check `09-true-task.mjs` + `04.1-traceability.test.mjs` RED→GREEN + final closure drill + ROADMAP/STATE phase-complete writes) UNBLOCKED.** SUMMARY: `04.1-10-SUMMARY.md`.
+
+---
 
 **Plan 04.1-05 — chat-topic archive (D-10) + chat.taskOwned (D-08) + chat_topic_tasks side table + createTrueTask cross-plan retrofit: COMPLETE 2026-05-20.**
 Autonomous TDD. 2 tasks + 1 cross-plan retrofit / 8 commits `f0e1862..bc2e26e`:
@@ -425,7 +430,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [######    ] 2/5 phases complete; Phase 4 Employee Chat 3/6 plans done
+**Progress:** [########  ] 4/6 phases complete; Phase 4.1 Chat → True Task **6/7 plans done** (Plan 04.1-10 APPROVED-WITH-FOLLOWUPS 2026-05-21; only Plan 04.1-07 closure remains)
 
 ## Performance Metrics
 
@@ -474,6 +479,8 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 21. **Chat active-tasks query path = side table, not issues.list filter** (Plan 04.1-01) - the REST `issues.list` surface silently ignores `originId`/`originIdPrefix` filters on this host version (returns 500-row cap regardless of filter; exact-match returns 0 even when the row exists — verified 2026-05-20 against Countermoves). Plan 04.1-05 ships `migrations/0007_chat_topic_tasks.sql` as the defensive default (additive, plugin-namespace, race-safe `topic_issue_id → task_issue_id` map). `chat.taskOwned` data handler queries the side table, NOT `issues.list`. Client-side `originId.startsWith(...)` filter kept as belt-and-braces fallback for upgrade-path topics that pre-date the migration. `createTrueTask` (Plan 04.1-02) MUST insert into `chat_topic_tasks` immediately after `ctx.issues.create`.
 
 22. **Chat-topic watchdog is defensive-only** (Plan 04.1-01) - the assigned employee-agent leaves chat-topic issues at `in_progress` after a successful run (PROBE-OQ1-STATUS AGENT-LEAVES-IN-PROGRESS, 2026-05-20); there is no agent-set status the watchdog must override on every poll. Plan 04.1-04's `topic-watchdog.ts` is a defensive sweep that flips status from `done`/`cancelled`/`blocked` back to `in_progress` ONLY when something else (the host's disposition-recovery service per the OQ3 attempt-2 evidence) has parked the topic terminally. `topicStuck` (Plan 04.1-04) triggers ONLY when the watchdog has attempted N≥2 flips in the last M poll cycles without success — CTT-05 is the steady-state path; CTT-06 banner is last-resort only.
+
+23. **Phase 4.1 chat UI surface evolved across four iterative drill cycles** (Plan 04.1-10) - the final shipped UI is `clarity-pack-0.8.3.tgz` (sha256 `fd3919c2…eda38`); Plan 04.1-10 SUPERSEDES Plans 04.1-06 + 04.1-08 + 04.1-09 in the UI surface lineage. Version trail: 0.7.8 (pre-4.1) → 0.8.0 (04.1-06 initial UI, deprecated) → 0.8.1 (04.1-08 redesign, deprecated) → 0.8.2 (04.1-09 first gap closure, deprecated) → **0.8.3 (04.1-10 final, APPROVED-WITH-FOLLOWUPS 2026-05-21)**. Worker-tier handlers from Plans 04.1-02..04.1-05 + spike findings from 04.1-01 are unchanged across the chain. None of 04.1-06/08/09 ever produced SUMMARY files — each flowed into the next iteration; the lineage section in `04.1-10-SUMMARY.md` is the trail of record. Pattern locked for future phases: **when a drill finding doesn't block but surfaces a small set of orthogonal UX gaps, file each cycle as a standalone gap-closure plan rather than re-opening the prior plan.** Operator can roll back exactly one step on a failed drill. Cost: ~4 drill cycles × ~15min each in a single afternoon — consistent with `feedback_gsd-velocity-recalibration` (iterative drill is the rhythm, not a planning failure). 5 polish followups from the 04.1-10 drill filed to memory `phase-4.2-deferred-from-4.1`.
 
 15. **Standing-number SQL is column-bound to a live-introspected schema** (Plan 03-10) - the 5 `STANDING_NUMBER_SLOTS` are agent-operations metrics (`open_issues`, `completed_7d`, `blocked_issues`, `agent_spend_mtd`, `budget_used_pct`) over `public.issues`/`public.companies`; every column is verified present by a live `\d` introspection capture (`03-10-SCHEMA-FINDINGS.md §2`), never extrapolated from the host repo or a CRM mental model. Paperclip has no customer/revenue/sales data — the original CRM-model slots (MRR, cold-email reply rate, refunds) referenced columns that do not exist. Per 03-CONTEXT.md line 92 only the registry SHAPE + BULL-05 (SQL-derived, grep-able, never LLM-generated) are locked; the specific numbers are planner's discretion. The local host-faithful test suite returns canned `db.query` results and CANNOT catch schema drift — a live Countermoves drill is the only valid proof.
 
