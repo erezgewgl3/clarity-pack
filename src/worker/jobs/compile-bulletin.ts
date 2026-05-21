@@ -86,6 +86,37 @@ import type { BulletinDraft, StandingNumberRow } from '../../shared/types.ts';
 /** Retry spacing for a failed compile cycle (D-22 — 15 minutes). */
 const RETRY_INTERVAL_MS = 15 * 60 * 1000;
 
+/**
+ * Plan 04.1-11 — pure cadence gate decision.
+ *
+ * Returns `true` when `now` is at or past the next-due-at instant (compile may
+ * proceed), `false` when the instant is still in the future (gate triggers
+ * `continue`). Pure / unit-testable — extracted from the per-company loop in
+ * `registerCompileBulletinJob` so the same-day-format regression
+ * (`bulletin-compile-cadence-runaway.md` 2026-05-21 RE-DRILL) can be pinned
+ * with a focused test without spinning up the full job ctx.
+ *
+ * IMPORTANT: this MUST construct `Date` objects and compare epoch ms — the
+ * earlier implementation lexicographically compared `now.toISOString()`
+ * (with 'T' separator) against the Postgres-format string (with space
+ * separator), which reversed chronological order on same-day comparisons.
+ *
+ * @param now              the current instant (from job context)
+ * @param nextDueAtIso     the next-due-at value as returned by Postgres
+ *                         `timestamptz` (e.g. `'2026-05-21 10:30:00+00'`)
+ *                         OR as written by Date.prototype.toISOString
+ *                         (e.g. `'2026-05-21T10:30:00.000Z'`). Both formats
+ *                         must work — `getNextDueAtForCompany` reads what
+ *                         the driver returns and `upsertBulletin` writes
+ *                         ISO-8601, so the value crossing this gate may be
+ *                         in either shape.
+ * @returns `true` if `now >= nextDueAt` (proceed to compile), `false` if
+ *          `now < nextDueAt` (no-op this tick).
+ */
+export function isPastDue(now: Date, nextDueAtIso: string): boolean {
+  return now.getTime() >= new Date(nextDueAtIso).getTime();
+}
+
 export function computeCompileRetry(
   priorFailureCount: number,
   now: Date,
@@ -313,14 +344,18 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
 
         // Gate: not yet due → no-op.
         //
-        // Plan 04.1-11 (2026-05-21) — DATE compare, NOT string compare.
-        // `now.toISOString()` produces "...T..." but Postgres timestamptz returns
-        // "... ..." (space separator). String-comparing them with `<` reverses the
-        // chronological relation when both timestamps fall on the SAME DAY (ASCII 'T'
-        // > ' '). Same-day gate failure ran the compile every tick → bulletin cycle
-        // #691 on Countermoves 2026-05-21 before manual SQL bleed-stop. The v0.6.6
-        // fix advanced next_due_at correctly but the gate that READS it was the bug.
-        if (now.getTime() < new Date(nextDueAtIso).getTime()) {
+        // Plan 04.1-11 (2026-05-21) — DATE compare via `isPastDue` helper, NOT
+        // string compare. `now.toISOString()` produces "...T..." but Postgres
+        // timestamptz returns "... ..." (space separator). String-comparing
+        // them with `<` reverses the chronological relation when both
+        // timestamps fall on the SAME DAY (ASCII 'T' > ' '). Same-day gate
+        // failure ran the compile every tick → bulletin cycle #691 on
+        // Countermoves 2026-05-21 before manual SQL bleed-stop. The v0.6.6
+        // fix advanced next_due_at correctly but the gate that READS it was
+        // the bug. `isPastDue` is exported so test/worker/bulletin/
+        // compile-bulletin-gate.test.mjs can pin the decision against both
+        // timestamp formats and same-day + cross-day scenarios.
+        if (!isPastDue(now, nextDueAtIso)) {
           continue;
         }
 
