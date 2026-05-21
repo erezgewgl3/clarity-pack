@@ -5,7 +5,8 @@
 // table, and exits non-zero if any failed. The .github/workflows/
 // coexistence.yml workflow invokes this script on every PR.
 // Plan 03-04 added COEXIST-07 (bulletin-disable); Plan 04-06 added COEXIST-08
-// (chat-disable / CHAT-11).
+// (chat-disable / CHAT-11); Plan 04.1-07 added COEXIST-09 (true-task / Phase
+// 4.1 surface preservation, CTT-07/CTT-08, D-10 invariant).
 
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -22,6 +23,7 @@ const CHECKS = [
   { id: 'COEXIST-06', script: '06-css-bleed-through.mjs' },
   { id: 'COEXIST-07', script: '07-bulletin-disable.mjs' },
   { id: 'COEXIST-08', script: '08-chat-disable.mjs' },
+  { id: 'COEXIST-09', script: '09-true-task.mjs' },
 ];
 
 const results = [];
