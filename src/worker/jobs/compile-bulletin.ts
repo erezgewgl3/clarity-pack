@@ -312,7 +312,15 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         }
 
         // Gate: not yet due → no-op.
-        if (now.toISOString() < nextDueAtIso) {
+        //
+        // Plan 04.1-11 (2026-05-21) — DATE compare, NOT string compare.
+        // `now.toISOString()` produces "...T..." but Postgres timestamptz returns
+        // "... ..." (space separator). String-comparing them with `<` reverses the
+        // chronological relation when both timestamps fall on the SAME DAY (ASCII 'T'
+        // > ' '). Same-day gate failure ran the compile every tick → bulletin cycle
+        // #691 on Countermoves 2026-05-21 before manual SQL bleed-stop. The v0.6.6
+        // fix advanced next_due_at correctly but the gate that READS it was the bug.
+        if (now.getTime() < new Date(nextDueAtIso).getTime()) {
           continue;
         }
 
