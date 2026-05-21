@@ -260,14 +260,14 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | CHAT-09 | Phase 4 | Implemented (Plan 04-04 — chat.promote linked issue + chat.pin; Plan 04-05 Promote/Pin affordances on agent messages) |
 | CHAT-10 | Phase 4 | Implemented (Plan 04-05 — reasoning panel, collapsed by default, shows agent sources + reasoning bullets) |
 | CHAT-11 | Phase 4 | Implemented (Plan 04-06 — 08-chat-disable.mjs automated coexistence check in the CI checklist) |
-| CTT-01 | Phase 4.1 | Pending |
-| CTT-02 | Phase 4.1 | Pending |
-| CTT-03 | Phase 4.1 | Pending |
-| CTT-04 | Phase 4.1 | Pending |
-| CTT-05 | Phase 4.1 | Pending |
-| CTT-06 | Phase 4.1 | Pending |
-| CTT-07 | Phase 4.1 | Pending |
-| CTT-08 | Phase 4.1 | Pending |
+| CTT-01 | Phase 4.1 | Implemented (Plan 04.1-02 worker — createTrueTask helper + chat.createTrueTask handler produce a top-level assigned issue; Plan 04.1-10 UI dialog dual-mode + pendingTaskCard / creation toast; v0.8.3) |
+| CTT-02 | Phase 4.1 | Implemented (Plan 04.1-02 — chat.promote REWRITTEN to delegate to createTrueTask; D-04 single mechanism; `grep -c parentId` returns 0 in all three target files) |
+| CTT-03 | Phase 4.1 | Implemented (Plan 04.1-03 — chat.send fires `void ensureTopicWakeable(...)` fire-and-forget after every send; multi-turn native re-wake PROVEN live on Countermoves per 04.1-01 PROBE-OQ3 PASS-NATIVE) |
+| CTT-04 | Phase 4.1 | Implemented (Plan 04.1-04 — classifyComment dual-keyed discriminator + 5-phrase RUNTIME_PHRASES + chat.messages `.filter()` (default ON, opt-out via includeDiagnostics:true); Plan 04.1-11 marker-pattern allowlist stabilizes the marker against host-stamped authorType:'system') |
+| CTT-05 | Phase 4.1 | Implemented (Plan 04.1-03 — NON_TERMINAL_CONVERSATION_STATUS='in_progress' initial child-topic status + chat-topics D-11 CONVERSATION CONTAINER instruction + defensive flip-off-done watchdog catches `done`/`cancelled`/`blocked`) |
+| CTT-06 | Phase 4.1 | Implemented (Plan 04.1-03 isTopicStuck primitive + Plan 04.1-04 topicStuck + recoveryOwner response shape + Plan 04.1-10 HostStuckBanner UI; never silent, never auto-recover per spike FLAG-1 reconciliation) |
+| CTT-07 | Phase 4.1 | Implemented (Plan 04.1-05 — chat.topic.archive plugin-side ONLY; D-10 invariant pinned by chat-topic-archive.ts spy test (zero ctx.issues.update) + COEXIST-09 CI gate; Plan 04.1-08 archived_at column for sort order; UI archive panel in Plan 04.1-10) |
+| CTT-08 | Phase 4.1 | Implemented (Plan 04.1-05 — chat.taskOwned reads chat_topic_tasks side table; D-08 active-tasks rail; createTrueTask cross-plan retrofit writes the back-link best-effort; Plan 04.1-10 ContextRail Active tasks owned rendering) |
 | COEXIST-01 | Phase 2 | Pending |
 | COEXIST-02 | Phase 2 | Pending |
 | COEXIST-03 | Phase 2 | Pending |
