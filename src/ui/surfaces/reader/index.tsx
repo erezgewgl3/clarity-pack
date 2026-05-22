@@ -41,16 +41,22 @@
 // usePluginData('flatten-blocker-chain') call (independent cadence).
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginData, useHostLocation } from '@paperclipai/plugin-sdk/ui/hooks';
 import type { PluginDetailTabProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
+// Plan 04.2-01 — the URL-prefix parser is re-imported separately so the
+// reader-view-null-context.test.mjs single-import grep for useResolvedCompanyId
+// stays exact (it pins `import { useResolvedCompanyId } from ...`).
+import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { useOptIn } from '../../primitives/use-opt-in.ts';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import { TldrStrip } from './tldr-strip.tsx';
+// Plan 04.2-01 (RCB-01) — the Reader-header Continue-in-chat primitive.
+import { ContinueInChatButton } from './continue-in-chat-button.tsx';
 import { Breadcrumb, type Ancestry } from './breadcrumb.tsx';
 import { ProseWithRefChips } from './prose-with-ref-chips.tsx';
 import { AnchoredToCards } from './ref-card.tsx';
@@ -204,6 +210,13 @@ function ReaderViewReady({
   companyId: string;
   userId: string;
 }): React.ReactElement {
+  // Plan 04.2-01 (RCB-01) — the company URL prefix for the Continue-in-chat
+  // deep link (/<prefix>/chat). Detail-tab slots never receive companyPrefix
+  // in the host context (02-03c-HOST-CONTEXT.md §1), so it is parsed from the
+  // pathname — the same source useResolvedCompanyId derives its prefix from.
+  const { pathname } = useHostLocation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
+
   const { data, loading } = usePluginData<ReaderViewData | { error: string }>('issue.reader', {
     issueId: entityId,
     companyId,
@@ -212,6 +225,10 @@ function ReaderViewReady({
   if (loading || !data || 'error' in data) {
     // Loading state OR opt-in-guard short-circuited (shouldn't happen here
     // because we already gated on optedIn upstream AND userId is real).
+    // Plan 04.2-01 — ContinueInChatButton is NOT rendered here: it mounts
+    // only in the populated render below, so it never fires chat.openForIssue
+    // before issue data + companyId + userId have all resolved (Task 4
+    // Test 2 pins the absent-while-loading contract).
     return (
       <ClaritySurfaceRoot name="reader">
         <p className="clarity-reader-loading">Loading Reader view…</p>
@@ -220,6 +237,28 @@ function ReaderViewReady({
   }
   return (
     <ClaritySurfaceRoot name="reader">
+      {/* Plan 04.2-01 (RCB-01) — Reader-header action row. The deterministic
+          Continue-in-chat affordance sits above the breadcrumb; its render
+          (enabled / disabled / nothing) is fully driven by chat.openForIssue.
+          Mounted only here in the populated render — companyId + userId are
+          real strings and the issue has loaded, so no undefined-id call and
+          no companyId === null crash (memory feedback_test-usehostcontext-
+          null-companyId). companyPrefix may be '' on an unprefixed URL; the
+          button still mounts and simply builds a relative /chat link. */}
+      <div className="clarity-reader-header-actions" data-clarity-region="reader-header-actions">
+        <ContinueInChatButton
+          issueId={entityId}
+          companyId={companyId}
+          userId={userId}
+          companyPrefix={companyPrefix}
+          // `issue` is a forward-compat slot — chat.openForIssue computes the
+          // real seedTitle/seedBody from ctx.issues.get on the worker side,
+          // so the button does not consume these for the seed payload. The
+          // identifier falls back to the issue id; title is left null (the
+          // Reader's ReaderViewData carries no raw issue title).
+          issue={{ identifier: entityId, title: null }}
+        />
+      </div>
       <Breadcrumb ancestry={data.ancestry} />
       <TldrStrip tldr={data.tldr} />
       <div className="clarity-reader-body">

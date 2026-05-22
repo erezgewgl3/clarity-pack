@@ -50,11 +50,19 @@ test('Test 1b — the button is rendered in the loaded ReaderViewReady component
 });
 
 test('Test 1c — the button receives issueId, companyId, userId, companyPrefix and issue props', () => {
-  // The button needs all five props (Plan Task 3 signature). Grep each.
+  // The button needs all five props (Plan Task 3 signature). Isolate the
+  // <ContinueInChatButton ...> element (open tag through its closing `/>`)
+  // and assert each prop is wired inside it — robust to inline comments.
+  const c = code(READER_SRC);
+  const open = c.indexOf('<ContinueInChatButton');
+  assert.ok(open >= 0, '<ContinueInChatButton ...> element present');
+  const close = c.indexOf('/>', open);
+  assert.ok(close > open, 'the element has a self-closing /> tag');
+  const element = c.slice(open, close + 2);
   for (const prop of ['issueId', 'companyId', 'userId', 'companyPrefix', 'issue']) {
     assert.match(
-      READER_SRC,
-      new RegExp(`<ContinueInChatButton[\\s\\S]{0,400}\\b${prop}=`),
+      element,
+      new RegExp(`\\b${prop}=`),
       `ContinueInChatButton receives the ${prop} prop`,
     );
   }
