@@ -124,6 +124,12 @@ import {
   registerChatArchivedTopics,
   type ChatArchivedTopicsCtx,
 } from './worker/handlers/chat-archived-topics.ts';
+// Plan 04.2-01 — chat.openForIssue: deterministic Reader -> Chat lineage
+// routing (RCB-02). Read-only -- never mutates the host issue.
+import {
+  registerChatOpenForIssue,
+  type ChatOpenForIssueCtx,
+} from './worker/handlers/chat-open-for-issue.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -220,6 +226,10 @@ const plugin = definePlugin({
     // listArchivedChatTopicsForEmployee which uses the archived_at column
     // added by migration 0008.
     registerChatArchivedTopics(ctx as unknown as ChatArchivedTopicsCtx);
+    // Plan 04.2-01 — chat.openForIssue: the Reader-view Continue-in-chat
+    // primitive resolves an issue's deterministic chat route through this
+    // handler (RCB-02). Non-exempt, opt-in-guard wrapped. Read-only.
+    registerChatOpenForIssue(ctx as unknown as ChatOpenForIssueCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
