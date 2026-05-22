@@ -42,6 +42,10 @@ import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import { RosterRail, type RosterEmployee } from './roster-rail.tsx';
 import { TopicStrip, type ChatTopic } from './topic-strip.tsx';
+// Plan 04.2-02 Task 2 (GAP-RCB-03) — the SHARED Reader->Chat deep-link
+// contract. parseChatDeepLink is the READ half; the Reader's
+// continue-in-chat-button + reverse-topics-link use the matching EMIT half.
+import { parseChatDeepLink } from './deep-link.mjs';
 import { ContextRail } from './context-rail.tsx';
 import { Composer } from './composer.tsx';
 import { ChatActionsRow } from './actions-row.tsx';
@@ -274,58 +278,67 @@ function ChatPageBody({
     }
   }, [employee, createTopic, companyId, userId]);
 
-  // Plan 04.2-01 (RCB-03) — chat surface deep-link URL-param handling.
+  // Plan 04.2-01 (RCB-03) / Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) — chat
+  // surface deep-link handling.
   //
-  // The Reader-view ContinueInChatButton (Task 3) hands the chat surface an
-  // exact destination via the URL query string:
-  //   ?topic=<topicIssueId>            — switch to that topic
-  //   ?topic&comment=<commentId>       — switch + scroll the comment into view
-  //                                      + flash-highlight it for ~1.5s
-  //   ?newTopic=1&seedTitle&seedBody&originIssueId — open the seeded New Topic
-  //                                      dialog; create threads originIssueId
-  //   ?employee=<agentId>              — select that roster employee
+  // The Reader-view ContinueInChatButton + ReverseTopicsLink hand the chat
+  // surface an exact destination through the SHARED deep-link contract
+  // (src/ui/surfaces/chat/deep-link.mjs). The contract carries the params on
+  // TWO channels: the structured `state` option of navigate() (the
+  // load-bearing one — the host forwards it verbatim to useHostLocation()
+  // .state, untouched by the company-prefix resolveHref step that the
+  // 04.2-01 live drill proved strips the `?query` tail) AND the `?query`
+  // string as a refresh / copy-link fallback. parseChatDeepLink reads
+  // whichever is present (state first, search fallback). The resolved
+  // ChatDeepLink drives:
+  //   { topic }                 — switch to that topic
+  //   { topic, comment }        — switch + scroll the comment into view +
+  //                               flash-highlight it for ~1.6s
+  //   { newTopic, seedTitle,    — open the pre-seeded New Topic dialog;
+  //     seedBody, originIssueId }  create threads originIssueId (RCB-04)
   //
-  // After consumption the params are CLEARED via a replace navigation so a
-  // refresh does not re-trigger the dialog (T-04.2-01-06 — pinned by Test 4).
-  const { search, pathname } = useHostLocation();
+  // After consumption BOTH channels are CLEARED via a replace navigation
+  // (pathname only, no state) so a refresh does not re-trigger the dialog or
+  // the flash (T-04.2-02-04 — pinned by the contract test + chat-url-params
+  // Test 4).
+  const { search, pathname, state: locationState } = useHostLocation();
   const nav = useHostNavigation();
-  // A ref guards against the effect firing twice for the same query string
-  // (e.g. a re-render before the replace-navigation lands).
-  const consumedSearchRef = React.useRef<string | null>(null);
+  // A ref guards against the effect firing twice for the same deep link
+  // (e.g. a re-render before the replace-navigation lands). The key is built
+  // from BOTH channels so neither a stale search nor a stale state re-fires.
+  const consumedDeepLinkRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    if (!search || search === '?') return;
-    if (consumedSearchRef.current === search) return;
-    // URLSearchParams.get() decodes percent-encoding for us (T-04.2-01-03 —
-    // the seed strings arrive as plain decoded text, never raw HTML).
-    const params = new URLSearchParams(search);
-    const topicParam = params.get('topic');
-    const commentParam = params.get('comment');
-    const newTopicParam = params.get('newTopic');
-    const seedTitle = params.get('seedTitle');
-    const seedBody = params.get('seedBody');
-    const originIssueId = params.get('originIssueId');
-    if (!topicParam && !newTopicParam) return;
+    // parseChatDeepLink prefers the structured `state` channel and falls back
+    // to the query string; it tolerates missing / malformed input without
+    // throwing (T-04.2-02-05) and returns plain decoded strings only.
+    const link = parseChatDeepLink({ search, state: locationState });
+    if (!link) return;
 
-    consumedSearchRef.current = search;
+    // Consume-once guard — keyed on the resolved link so neither channel
+    // re-triggers after the replace-navigation clears them.
+    const linkKey = JSON.stringify(link);
+    if (consumedDeepLinkRef.current === linkKey) return;
+    consumedDeepLinkRef.current = linkKey;
 
-    if (newTopicParam === '1') {
-      // Open the pre-seeded New Topic dialog. employeeParam selection (below)
-      // happens via the roster on the next render; the operator confirms the
+    if (link.newTopic) {
+      // Open the pre-seeded New Topic dialog. seedTitle / seedBody are plain
+      // decoded strings — they populate controlled React inputs only, never
+      // dangerouslySetInnerHTML (T-04.2-02-01). The operator confirms the
       // assignee in the dialog before Create.
       setSeedDialog({
-        title: seedTitle ?? '',
-        body: seedBody ?? '',
-        originIssueId: originIssueId && originIssueId.length > 0 ? originIssueId : null,
+        title: link.seedTitle ?? '',
+        body: link.seedBody ?? '',
+        originIssueId: link.originIssueId,
       });
-    } else if (topicParam) {
-      // Topic-switch deep link. The param is the topic ISSUE id (Task 3's
-      // buildChatHref uses data.topicIssueId). We open a minimal ChatTopic —
-      // the message thread + topic strip both key on issueId, so the strip
-      // reconciles the full row on its own chat.topics fetch.
+    } else if (link.topic) {
+      // Topic-switch deep link. `topic` is the topic ISSUE id. We open a
+      // minimal ChatTopic — the message thread + topic strip both key on
+      // issueId, so the strip reconciles the full row on its own
+      // chat.topics fetch.
       setTopic({
-        topicId: topicParam,
-        issueId: topicParam,
+        topicId: link.topic,
+        issueId: link.topic,
         parentIssueId: '',
         employeeAgentId: '',
         title: '',
@@ -335,8 +348,8 @@ function ChatPageBody({
       // If a comment target was supplied, scroll it into view + flash it once
       // the thread has rendered. A short timeout lets the topic-switch render
       // + the chat.messages fetch paint the bubble first.
-      if (commentParam) {
-        const targetId = `msg-${commentParam}`;
+      if (link.comment) {
+        const targetId = `msg-${link.comment}`;
         window.setTimeout(() => {
           const el =
             typeof document !== 'undefined' ? document.getElementById(targetId) : null;
@@ -349,10 +362,12 @@ function ChatPageBody({
       }
     }
 
-    // Clear the consumed params so a refresh does not re-trigger the dialog
-    // or the flash. A replace navigation keeps the history entry clean.
+    // Clear BOTH consumed channels so a refresh does not re-trigger the
+    // dialog or the flash. A replace navigation to the bare pathname (no
+    // state) keeps the history entry clean and drops both the `?query` tail
+    // and the `state` object.
     nav.navigate(pathname, { replace: true });
-  }, [search, pathname, nav]);
+  }, [search, pathname, locationState, nav]);
 
   // Plan 04.2-01 (RCB-03) — the seeded New Topic dialog's Create action.
   // Threads originIssueId through chat.topic.create (RCB-04) so the created

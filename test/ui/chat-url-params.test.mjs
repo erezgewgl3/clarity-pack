@@ -1,20 +1,25 @@
 // test/ui/chat-url-params.test.mjs
 //
-// Plan 04.2-01 Task 5 — source-grep contract tests for the chat surface
-// deep-link URL-param handling (RCB-03). Same source-grep idiom as
+// Plan 04.2-01 Task 5 / Plan 04.2-02 Task 2 — source-grep contract tests for
+// the chat surface deep-link handling (RCB-03). Same source-grep idiom as
 // chat-shell.test.mjs / chat-actions-row.test.mjs (Node's runner does not
-// load .tsx). The chat surface learns to honour the params the Reader's
-// ContinueInChatButton (Task 3) hands it:
+// load .tsx).
 //
-//   ?topic=<id>            — switch to that topic
-//   ?topic&comment=<id>    — switch + scroll the comment into view + flash
-//   ?newTopic=1&seed...    — open a pre-seeded New Topic dialog; create
-//                            threads originIssueId to chat.topic.create
-//   ?employee=<agentId>    — select that employee
+// Plan 04.2-02 GREEN UPDATE: the chat surface NO LONGER hand-parses
+// individual `?topic=` / `?comment=` / `?newTopic=` / seed params with
+// URLSearchParams; it delegates to the SHARED parseChatDeepLink contract
+// helper (src/ui/surfaces/chat/deep-link.mjs) which reads BOTH the
+// structured `state` channel (the load-bearing one — the GAP-RCB-03 fix)
+// AND the `?query` string (refresh / copy-link fallback). The greps below
+// pin the NEW contract — assertions about the resolved ChatDeepLink fields
+// (topic, comment, newTopic, seedTitle, seedBody, originIssueId) being
+// consumed downstream, not about which specific URLSearchParams call site
+// extracted them. The cross-hook round-trip itself is pinned by
+// continue-in-chat-deeplink-contract.test.mjs.
 //
-// After consumption the params are cleared (router.replace) so a refresh
-// does not re-trigger the dialog. The live DOM is covered by the Task 8
-// operator drill.
+// After consumption the link is cleared (router.replace) so a refresh does
+// not re-trigger the dialog. The live DOM is covered by the Task 4 operator
+// drill.
 
 import { strict as assert } from 'node:assert';
 import { existsSync, readFileSync } from 'node:fs';
@@ -33,55 +38,61 @@ function code(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
-test('chat/index.tsx: reads the host location search params (useHostLocation)', () => {
+test('chat/index.tsx: reads the host location (useHostLocation) — both search AND state channels', () => {
   const c = code(readChat('index.tsx'));
   // The repo convention is useHostLocation() — there is no react-router
-  // useSearchParams in this codebase. The `search` query string is read
-  // (destructured from the hook or via member access — accept either).
+  // useSearchParams in this codebase. The new contract reads BOTH the
+  // structured `state` (load-bearing) AND `search` (refresh fallback).
   assert.match(c, /useHostLocation/, 'chat surface reads useHostLocation');
+  assert.match(c, /\bsearch\b/, 'destructures search from the host location');
+  assert.match(c, /\bstate\b/, 'destructures state from the host location (the load-bearing channel)');
+  // Both channels feed parseChatDeepLink (the SHARED contract helper).
   assert.match(
     c,
-    /\bsearch\b[\s\S]{0,40}=\s*useHostLocation\(\)|\.search\b|new URLSearchParams\(\s*search/,
-    'reads the location search query string',
+    /parseChatDeepLink\(\s*\{[\s\S]{0,80}search[\s\S]{0,80}state|parseChatDeepLink\(\s*\{[\s\S]{0,80}state[\s\S]{0,80}search/,
+    'both search and state are passed to parseChatDeepLink',
   );
 });
 
-test('Test 1 — TOPIC-SWITCH: a ?topic= param drives a topic switch', () => {
+test('Test 1 — TOPIC-SWITCH: a topic deep link drives a topic switch', () => {
   const c = code(readChat('index.tsx'));
-  assert.match(c, /['"]topic['"]/, 'parses the topic param');
-  // The consumed topic param feeds the topic-switch path (setTopic).
-  assert.match(c, /setTopic\(/, 'a topic param results in a setTopic call');
+  // The resolved ChatDeepLink's `topic` field feeds the topic-switch path.
+  assert.match(c, /link\.topic/, 'reads the resolved deep-link topic field');
+  assert.match(c, /setTopic\(/, 'a topic deep link results in a setTopic call');
 });
 
-test('Test 2 — NEW-TOPIC-SEEDED: ?newTopic=1 opens a pre-seeded New Topic dialog', () => {
+test('Test 2 — NEW-TOPIC-SEEDED: a newTopic deep link opens a pre-seeded New Topic dialog', () => {
   const c = code(readChat('index.tsx'));
-  assert.match(c, /newTopic/, 'parses the newTopic param');
-  assert.match(c, /seedTitle/, 'parses the seedTitle param');
-  assert.match(c, /seedBody/, 'parses the seedBody param');
-  assert.match(c, /originIssueId/, 'parses the originIssueId param');
+  // The resolved ChatDeepLink fields drive the seeded dialog.
+  assert.match(c, /link\.newTopic/, 'branches on the resolved newTopic flag');
+  assert.match(c, /link\.seedTitle/, 'reads the resolved seedTitle');
+  assert.match(c, /link\.seedBody/, 'reads the resolved seedBody');
+  assert.match(c, /link\.originIssueId/, 'reads the resolved originIssueId');
   // The seeded create threads originIssueId into chat.topic.create.
   assert.match(
     c,
     /createTopic\([\s\S]{0,400}originIssueId/,
-    'chat.topic.create is invoked with originIssueId from the URL',
+    'chat.topic.create is invoked with originIssueId from the deep link',
   );
 });
 
-test('Test 2b — the seeded values are URL-decoded before use (decodeURIComponent)', () => {
+test('Test 2b — the deep-link seed values arrive URL-decoded (parseChatDeepLink contract)', () => {
   const c = code(readChat('index.tsx'));
-  // URLSearchParams.get() already decodes, OR an explicit decodeURIComponent
-  // is used — either satisfies the decode contract. URLSearchParams counts.
-  assert.match(
-    c,
-    /URLSearchParams|decodeURIComponent/,
-    'seed params are decoded (URLSearchParams or decodeURIComponent)',
-  );
+  // The hand-rolled URLSearchParams / decodeURIComponent paths are gone —
+  // the chat surface delegates to parseChatDeepLink, which decodes the
+  // `?query` channel via URLSearchParams internally and returns plain
+  // decoded strings (pinned by continue-in-chat-deeplink-contract.test.mjs
+  // D2 + D5).
+  assert.match(c, /parseChatDeepLink/, 'delegates decoding to parseChatDeepLink');
+  // No raw URLSearchParams / decodeURIComponent in the deep-link path —
+  // every consumer reads the resolved link fields, not raw params.
+  assert.doesNotMatch(c, /new URLSearchParams\(/, 'no hand-rolled URLSearchParams in the chat surface (delegated)');
 });
 
-test('Test 3 — COMMENT-FLASH: ?comment= scrolls + flash-highlights the target comment', () => {
+test('Test 3 — COMMENT-FLASH: a comment deep-link field scrolls + flash-highlights', () => {
   const c = code(readChat('index.tsx'));
-  assert.match(c, /['"]comment['"]/, 'parses the comment param');
-  // The comment param drives a scrollIntoView + the flash-highlight class.
+  assert.match(c, /link\.comment/, 'reads the resolved deep-link comment field');
+  // The comment field drives a scrollIntoView + the flash-highlight class.
   assert.match(c, /scrollIntoView/, 'the target comment is scrolled into view');
   assert.match(c, /flash-highlight/, 'the target comment gets the flash-highlight class');
 });

@@ -53,10 +53,17 @@ test('Test 2b — the count is derived from topicsForIssue.length (not hardcoded
   assert.match(c, /\.length/, 'the N count is derived from .length');
 });
 
-test('Test 3 — a popover row click navigates to /<prefix>/chat?topic=<id>', () => {
+test('Test 3 — a popover row click navigates via the shared deep-link contract', () => {
+  // Plan 04.2-02 GAP-RCB-03 fix: the literal `chat?topic=<id>` href build
+  // moved into the SHARED src/ui/surfaces/chat/deep-link.mjs
+  // (buildTopicDeepLink). ReverseTopicsLink now delegates and calls
+  // navigate(to, { state }) — the load-bearing channel. The literal-string
+  // round-trip is pinned by continue-in-chat-deeplink-contract.test.mjs D4
+  // (reverse-topics uses the same shared contract).
   const c = code(readSrc());
-  assert.match(c, /chat\?topic=|chat['"`]\s*\+|\?topic=/, 'a row navigates into /<prefix>/chat?topic=<id>');
+  assert.match(c, /buildTopicDeepLink|buildChatDeepLink/, 'delegates to the shared deep-link helper');
   assert.match(c, /useHostNavigation|navigate|linkProps/, 'navigates via the host navigation hook');
+  assert.match(c, /navigate\([\s\S]{0,160}state/, 'navigate() carries the structured state option');
 });
 
 test('reverse-topics-link.tsx: takes companyPrefix + topicsForIssue props', () => {

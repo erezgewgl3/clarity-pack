@@ -18,9 +18,18 @@
 // SECURITY (T-04.2-01-03): topic titles render as untrusted React text only —
 // never dangerouslySetInnerHTML. Navigation goes through the host nav hook,
 // not a raw <a href> (SCAF-09).
+//
+// Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) — a row click now emits the deep
+// link through the SHARED `buildTopicDeepLink` contract helper and calls
+// navigate() with the structured `state` option, exactly like the
+// Continue-in-chat button. Before this fix the row navigated with a bare
+// `/<prefix>/chat?topic=<id>` path whose `?query` tail the host's
+// company-prefix `resolveHref` step strips — the same root cause as the
+// Continue-button gap. The chat surface reads it back via parseChatDeepLink.
 
 import * as React from 'react';
 import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
+import { buildTopicDeepLink } from '../../surfaces/chat/deep-link.mjs';
 
 /** One reverse-topic row — mirrors the worker's ChatTopicByOriginEntry. */
 export type ReverseTopic = {
@@ -91,11 +100,14 @@ export function ReverseTopicsLink({
               role="menuitem"
               onClick={() => {
                 setOpen(false);
-                // Deep-link into the chat surface — Task 5's URL-param handler
-                // switches to this topic on arrival.
-                nav.navigate(
-                  `/${companyPrefix}/chat?topic=${encodeURIComponent(t.topicIssueId)}`,
-                );
+                // Deep-link into the chat surface via the SHARED contract —
+                // the chat surface's parseChatDeepLink switches to this topic
+                // on arrival. The structured `state` option is the
+                // load-bearing channel (survives the host's resolveHref).
+                const deepLink = buildTopicDeepLink(companyPrefix, t.topicIssueId);
+                if (deepLink) {
+                  nav.navigate(deepLink.to, { state: deepLink.state });
+                }
               }}
             >
               <span className="clarity-reverse-topics-row-title">{t.title}</span>

@@ -69,29 +69,45 @@ test('Test 4 — NO_ASSIGNEE renders a DISABLED button with the locked tooltip',
   );
 });
 
-test('Test 5 — existing-topic click navigates with a topic + comment deep link', () => {
+test('Test 5 — existing-topic click delegates to the shared deep-link contract', () => {
+  // Plan 04.2-02 GAP-RCB-03 fix: the literal `?topic=`/`?comment=` href
+  // build moved into the SHARED src/ui/surfaces/chat/deep-link.mjs
+  // (buildChatDeepLink). continue-in-chat-button.tsx now delegates by
+  // passing { route: 'existing-topic', topicIssueId, sourceCommentId, ... }.
+  // The literal-query-string round-trip is pinned by
+  // continue-in-chat-deeplink-contract.test.mjs D1 (existing-topic).
   const c = code(readSrc());
-  // The existing-topic deep link carries topic + comment params. The href is
-  // built from individually-encoded `key=value` parts joined onto a `?` base
-  // (uniform with the new-topic branch) — assert each param is present and
-  // that the result is appended after a `?`.
-  assert.match(c, /topic=/, 'existing-topic href carries the topic param');
-  assert.match(c, /comment=/, 'existing-topic href carries the comment param');
-  assert.match(c, /\?\$\{parts\.join|base\}\?/, 'params are joined onto the chat route after a ?');
+  assert.match(c, /buildChatDeepLink/, 'delegates to the shared buildChatDeepLink');
+  assert.match(c, /'existing-topic'|"existing-topic"/, 'forwards the existing-topic route');
+  assert.match(c, /topicIssueId/, 'forwards topicIssueId to the contract helper');
+  assert.match(c, /sourceCommentId/, 'forwards sourceCommentId to the contract helper');
 });
 
-test('Test 6 — new-topic-needed click navigates with newTopic=1, originIssueId= and encoded seed', () => {
+test('Test 6 — new-topic-needed click delegates with originIssueId + seed payload', () => {
+  // Plan 04.2-02 GAP-RCB-03 fix: literal `newTopic=1`/`seedTitle=` query
+  // construction moved to the shared deep-link helper. Pinned end-to-end by
+  // continue-in-chat-deeplink-contract.test.mjs D2 (new-topic round-trip).
   const c = code(readSrc());
-  assert.match(c, /newTopic=1/, 'new-topic-needed href carries newTopic=1');
-  assert.match(c, /originIssueId=/, 'new-topic-needed href carries originIssueId=');
-  assert.match(c, /seedTitle=/, 'new-topic-needed href carries seedTitle=');
-  assert.match(c, /seedBody=/, 'new-topic-needed href carries seedBody=');
+  assert.match(c, /buildChatDeepLink/, 'delegates to the shared buildChatDeepLink');
+  assert.match(c, /'new-topic-needed'|"new-topic-needed"/, 'forwards the new-topic-needed route');
+  assert.match(c, /seedTitle/, 'forwards seedTitle to the contract helper');
+  assert.match(c, /seedBody/, 'forwards seedBody to the contract helper');
+  assert.match(c, /originIssueId/, 'forwards originIssueId to the contract helper');
 });
 
-test('continue-in-chat-button.tsx: seedTitle + seedBody are encodeURIComponent-encoded (>= 2 calls)', () => {
+test('continue-in-chat-button.tsx: navigate() carries the structured state (GAP-RCB-03 load-bearing)', () => {
+  // The Plan 04.2-02 fix carries the deep link on `navigate()`'s `state`
+  // option — the channel the host forwards verbatim, untouched by the
+  // company-prefix resolveHref step that the 04.2-01 live drill proved
+  // strips the `?query` tail. (The OLD Plan-04.2-01 contract relied on the
+  // query string and on >= 2 explicit encodeURIComponent calls; both moved
+  // into the shared deep-link helper.)
   const c = code(readSrc());
-  const matches = c.match(/encodeURIComponent/g) ?? [];
-  assert.ok(matches.length >= 2, `expected >= 2 encodeURIComponent calls, found ${matches.length}`);
+  assert.match(
+    c,
+    /navigate\([\s\S]{0,160}state/,
+    'navigate() call carries the structured state option (the load-bearing channel)',
+  );
 });
 
 test('continue-in-chat-button.tsx: invokes the chat.openForIssue data handler', () => {

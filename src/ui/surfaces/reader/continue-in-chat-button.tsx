@@ -35,14 +35,26 @@
 // <button> and routes via the host navigation hook's navigate() so
 // modifier-click etc. stay native where applicable.
 //
-// SECURITY (T-04.2-01-03): seedTitle / seedBody render only as
-// encodeURIComponent-encoded URL params and, downstream, as controlled
-// React-text input values — never dangerouslySetInnerHTML. No raw fetch.
+// Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) — the emit side of the verified
+// Reader->Chat deep-link contract. The deep link is built by the SHARED
+// `buildChatDeepLink` helper (src/ui/surfaces/chat/deep-link.mjs) and
+// navigate() is called with BOTH the path (`to`, with a `?query` fallback
+// tail) AND the structured `state` option. `state` is the load-bearing
+// channel: the host router forwards it verbatim to `useHostLocation().state`,
+// untouched by the company-prefix `resolveHref` step that the live drill
+// proved strips the `?query` tail. chat/index.tsx reads it back via the
+// shared `parseChatDeepLink`.
+//
+// SECURITY (T-04.2-02-01): seedTitle / seedBody travel as plain structured
+// string fields (in `state`) and as URL-encoded query params (the fallback);
+// downstream they populate controlled React-text input values only — never
+// dangerouslySetInnerHTML. No raw fetch.
 
 import * as React from 'react';
 import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
+import { buildChatDeepLink } from '../../surfaces/chat/deep-link.mjs';
 
 /** The chat.openForIssue route payload (Task 2 — chat-open-for-issue.ts). */
 export type ChatOpenForIssueResult = {
@@ -73,40 +85,43 @@ export type ContinueInChatButtonProps = {
   issue: ContinueInChatIssue;
 };
 
+/** What navigate() needs: the path (with a `?query` fallback) + the
+ *  structured state object (the load-bearing channel). null = not navigable. */
+type ChatDeepLinkNav = {
+  to: string;
+  state: { clarityChatDeepLink: unknown };
+};
+
 /**
- * Build the chat deep-link path for the resolved route. Returns null when the
- * route is not navigable (topic-itself / unresolved).
+ * Build the Reader->Chat deep link for the resolved route. Delegates to the
+ * SHARED `buildChatDeepLink` contract helper so the emit shape and the
+ * chat-side read shape (parseChatDeepLink) cannot drift apart — the exact
+ * test-gap that let GAP-RCB-03 ship. Returns null when the route is not
+ * navigable (topic-itself / NO_ASSIGNEE error / unresolved).
  */
-function buildChatHref(
+function buildChatNav(
   data: ChatOpenForIssueResult,
   companyPrefix: string,
   issueId: string,
-): string | null {
-  const base = `/${companyPrefix}/chat`;
+): ChatDeepLinkNav | null {
   if (data.route === 'existing-topic' && data.topicIssueId) {
-    // Explicit `key=encodeURIComponent(value)` parts (uniform with the
-    // new-topic branch below) — each param is individually encoded so a
-    // topic/comment id with a URL-special char survives the round-trip.
-    const parts = [`topic=${encodeURIComponent(data.topicIssueId)}`];
-    if (data.sourceCommentId) {
-      parts.push(`comment=${encodeURIComponent(data.sourceCommentId)}`);
-    }
-    if (data.assigneeAgentId) {
-      parts.push(`employee=${encodeURIComponent(data.assigneeAgentId)}`);
-    }
-    return `${base}?${parts.join('&')}`;
+    return buildChatDeepLink({
+      route: 'existing-topic',
+      companyPrefix,
+      topicIssueId: data.topicIssueId,
+      sourceCommentId: data.sourceCommentId,
+      assigneeAgentId: data.assigneeAgentId,
+    }) as ChatDeepLinkNav | null;
   }
   if (data.route === 'new-topic-needed' && !data.error) {
-    // encodeURIComponent on the seed strings — the URLSearchParams encoder
-    // does this for us, but the Task 3 acceptance grep pins >= 2 explicit
-    // encodeURIComponent calls (defence-in-depth + an unambiguous contract).
-    const seedTitle = encodeURIComponent(data.seedTitle ?? '');
-    const seedBody = encodeURIComponent(data.seedBody ?? '');
-    const parts = [`newTopic=1`, `originIssueId=${encodeURIComponent(issueId)}`];
-    if (data.assigneeAgentId) parts.push(`employee=${encodeURIComponent(data.assigneeAgentId)}`);
-    parts.push(`seedTitle=${seedTitle}`);
-    parts.push(`seedBody=${seedBody}`);
-    return `${base}?${parts.join('&')}`;
+    return buildChatDeepLink({
+      route: 'new-topic-needed',
+      companyPrefix,
+      assigneeAgentId: data.assigneeAgentId,
+      seedTitle: data.seedTitle ?? '',
+      seedBody: data.seedBody ?? '',
+      originIssueId: issueId,
+    }) as ChatDeepLinkNav | null;
   }
   return null;
 }
@@ -156,8 +171,8 @@ export function ContinueInChatButton({
     );
   }
 
-  const href = buildChatHref(result, companyPrefix, issueId);
-  if (!href) return null;
+  const deepLink = buildChatNav(result, companyPrefix, issueId);
+  if (!deepLink) return null;
 
   // existing-topic — the tooltip names the source topic; new-topic-needed —
   // the tooltip mirrors the label.
@@ -174,7 +189,13 @@ export function ContinueInChatButton({
       data-clarity-action="continue-in-chat"
       data-clarity-route={result.route}
       onClick={() => {
-        nav.navigate(href);
+        // GAP-RCB-03 fix — navigate() carries the deep link on BOTH channels:
+        // the path `to` (with a ?query tail for refresh/copy-link recovery)
+        // AND the structured `state` option. `state` is the load-bearing
+        // channel — the host forwards it verbatim to useHostLocation().state,
+        // untouched by the company-prefix resolveHref step. chat/index.tsx's
+        // parseChatDeepLink reads it back.
+        nav.navigate(deepLink.to, { state: deepLink.state });
       }}
     >
       Continue in chat with {employeeLabel} →

@@ -274,9 +274,15 @@ test('deep-link.mjs: the shared contract module exists', () => {
 });
 
 test('continue-in-chat-button.tsx: emits via the shared buildChatDeepLink + carries state', () => {
-  const c = code(readSrc('src/ui/surfaces/reader/continue-in-chat-button.tsx'));
+  const raw = readSrc('src/ui/surfaces/reader/continue-in-chat-button.tsx');
+  const c = code(raw);
   assert.match(c, /buildChatDeepLink/, 'imports + uses buildChatDeepLink');
-  assert.match(c, /deep-link/, 'imports from the shared deep-link module');
+  // Grep the RAW source for the import path — `code()` strips line comments
+  // and the file's pre-existing header has a `/*` glob inside a `//` comment
+  // (src/ui/surfaces/reader/*) that confuses the block-strip regex into
+  // eating the import lines along with it. The unambiguous import-path
+  // grep here is reliable evidence of "imports from the shared module".
+  assert.match(raw, /from\s+['"][^'"]*\bdeep-link\.mjs['"]/, 'imports from the shared deep-link module');
   // navigate is called with the structured state — the load-bearing channel.
   assert.match(
     c,
