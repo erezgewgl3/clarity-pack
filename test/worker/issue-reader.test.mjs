@@ -71,6 +71,25 @@ function makeFakeCtx() {
         if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.ac_checklist_items/i.test(sql)) {
           return FIXTURE.acItems;
         }
+        // Plan 04.2-01 (RCB-06) — listChatTopicsByOriginIssue: the reverse
+        // backlink query. Two topics started from this issue, newest-first.
+        if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics/i.test(sql) &&
+            /origin_issue_id/i.test(sql)) {
+          return [
+            {
+              topic_id: 'CHT-9',
+              issue_id: 'CHT-ISSUE-9',
+              title: 'How does underwriting work',
+              last_activity_at: '2026-05-20T12:00:00Z',
+            },
+            {
+              topic_id: 'CHT-4',
+              issue_id: 'CHT-ISSUE-4',
+              title: 'Earlier question',
+              last_activity_at: '2026-05-18T09:00:00Z',
+            },
+          ];
+        }
         return [];
       },
     },
@@ -240,3 +259,44 @@ test('issue.reader throws when companyId is missing (loud failure — UI bug sur
     /companyId required/,
   );
 });
+
+// --- Plan 04.2-01 Task 6 (RCB-06) — topicsForIssue reverse backlink ---------
+
+test('issue.reader response carries topicsForIssue populated from listChatTopicsByOriginIssue', async () => {
+  const { ctx, registered, dbCalls } = makeFakeCtx();
+  registerIssueReader(ctx);
+  const handler = registered.get('issue.reader');
+  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
+  assert.ok(Array.isArray(result.topicsForIssue), 'topicsForIssue is an array');
+  assert.equal(result.topicsForIssue.length, 2, 'two topics started from this issue');
+  // newest-first preserved; camelCase shape from the repo.
+  assert.equal(result.topicsForIssue[0].topicId, 'CHT-9');
+  assert.equal(result.topicsForIssue[0].topicIssueId, 'CHT-ISSUE-9');
+  assert.equal(result.topicsForIssue[0].title, 'How does underwriting work');
+  assert.ok(result.topicsForIssue[0].lastActivityAt, 'lastActivityAt present');
+  // The reverse query targets the baked plugin namespace + the origin column.
+  const originQuery = dbCalls.find(
+    (c) => /chat_topics/.test(c.sql) && /origin_issue_id/.test(c.sql),
+  );
+  assert.ok(originQuery, 'a chat_topics origin_issue_id query was issued');
+  assert.match(originQuery.sql, /plugin_clarity_pack_cdd6bda4bd\.chat_topics/);
+});
+
+test('issue.reader degrades topicsForIssue to [] when the chat_topics query throws (Reader never breaks)', async () => {
+  const { ctx, registered } = makeFakeCtx();
+  // Make ONLY the chat_topics origin query throw; every other slice still works.
+  const origQuery = ctx.db.query;
+  ctx.db.query = async (sql, params) => {
+    if (/chat_topics/.test(sql) && /origin_issue_id/.test(sql)) {
+      throw new Error('simulated repo failure');
+    }
+    return origQuery(sql, params);
+  };
+  registerIssueReader(ctx);
+  const handler = registered.get('issue.reader');
+  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
+  // The Reader payload still returns — best-effort degrade, like the TL;DR path.
+  assert.ok(result.tldr, 'the rest of the Reader payload still returns');
+  assert.deepEqual(result.topicsForIssue, [], 'topicsForIssue degrades to [] on a repo failure');
+});
+
