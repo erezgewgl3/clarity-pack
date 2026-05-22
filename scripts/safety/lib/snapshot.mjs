@@ -329,6 +329,14 @@ export async function snapshot(opts) {
   const filter = (entryPath /* relative to cwd, posix */) => {
     if (entryPath.includes('/plugins/node_modules/') || entryPath.endsWith('/plugins/node_modules')) return false;
     if (entryPath.includes('/plugins/.cache/') || entryPath.endsWith('/plugins/.cache')) return false;
+    // codex-home/skills/ holds symlinks into the Paperclip repo skills dir (a
+    // Codex agent skill cache). restore.mjs's CVE-2026-31802 guard rejects ANY
+    // symlink whose target escapes the instance tree, aborting the whole
+    // restore — so these escaping symlinks must never enter the tar. The
+    // analogous Claude links live under claude-prompt-cache/ (excluded via
+    // REGENERABLE_CACHE_DIRS below). Unconditional: even includeCaches:true
+    // must not admit an unrestorable escaping symlink.
+    if (entryPath.includes('/codex-home/skills/') || entryPath.endsWith('/codex-home/skills')) return false;
     if (!includeCaches && pathHasCacheSegment(entryPath)) return false; // defect 2 mitigation
     if (excludeSecrets && (entryPath.includes('/secrets/') || entryPath.endsWith('/secrets'))) return false;
     if (!includeLogs && (entryPath.startsWith(`${instanceRel}/logs/`) || entryPath === `${instanceRel}/logs`)) {

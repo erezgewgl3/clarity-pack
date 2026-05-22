@@ -184,6 +184,15 @@ async function seedCacheDirs(home, opts = {}) {
     // path components).
     await writeFile(path.join(inst, 'claude-prompt-cache.md'), 'sibling file, not a dir');
   }
+  if (opts.codexSkills) {
+    // Codex agent skill cache. In production these are symlinks escaping into
+    // the Paperclip repo skills dir; a plain file is sufficient to exercise
+    // the path-based filter exclusion and keeps the test Windows-safe (no
+    // fs.symlink privilege dependency).
+    const codexSkills = path.join(inst, 'companies', 'co-1', 'codex-home', 'skills');
+    await mkdir(codexSkills, { recursive: true });
+    await writeFile(path.join(codexSkills, 'diagnose-why-work-stopped'), 'skill stub');
+  }
 }
 
 test('S1-cache-A — claude-prompt-cache/ at instance root is excluded by default', async () => {
@@ -206,6 +215,36 @@ test('S1-cache-A — claude-prompt-cache/ at instance root is excluded by defaul
       assert.ok(
         !/(^|\/)claude-prompt-cache(\/|$)/.test(e),
         `unexpected claude-prompt-cache entry: ${e}`
+      );
+    }
+    // Ordinary fixture entries are still present.
+    assert.ok(
+      entries.includes('instances/default/config.json'),
+      `expected config.json in entries:\n${entries.join('\n')}`
+    );
+  });
+});
+
+test('S1-cache-E — codex-home/skills/ is excluded by default (escaping skill symlinks)', async () => {
+  await withTmp(async (root) => {
+    const home = path.join(root, 'home');
+    await copyFakeInstance(home);
+    await seedPGlite(home);
+    await seedCacheDirs(home, { codexSkills: true });
+    const outDir = path.join(root, 'snap');
+    await snapshot({
+      home,
+      instanceId: 'default',
+      mode: 'pglite',
+      outDir,
+      _paperclipCli: stubCli,
+      silent: true
+    });
+    const entries = await listTarEntries(path.join(outDir, 'instance-fs.tar.gz'));
+    for (const e of entries) {
+      assert.ok(
+        !/\/codex-home\/skills(\/|$)/.test(e),
+        `unexpected codex-home/skills entry: ${e}`
       );
     }
     // Ordinary fixture entries are still present.
