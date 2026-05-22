@@ -69,11 +69,15 @@ test('Test 4 — NO_ASSIGNEE renders a DISABLED button with the locked tooltip',
   );
 });
 
-test('Test 5 — existing-topic click navigates with ?topic= and &comment=', () => {
+test('Test 5 — existing-topic click navigates with a topic + comment deep link', () => {
   const c = code(readSrc());
-  // The existing-topic deep link carries topic + comment.
-  assert.match(c, /\?topic=/, 'existing-topic href carries ?topic=');
-  assert.match(c, /comment=/, 'existing-topic href carries comment=');
+  // The existing-topic deep link carries topic + comment params. The href is
+  // built from individually-encoded `key=value` parts joined onto a `?` base
+  // (uniform with the new-topic branch) — assert each param is present and
+  // that the result is appended after a `?`.
+  assert.match(c, /topic=/, 'existing-topic href carries the topic param');
+  assert.match(c, /comment=/, 'existing-topic href carries the comment param');
+  assert.match(c, /\?\$\{parts\.join|base\}\?/, 'params are joined onto the chat route after a ?');
 });
 
 test('Test 6 — new-topic-needed click navigates with newTopic=1, originIssueId= and encoded seed', () => {
