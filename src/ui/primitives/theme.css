@@ -26,6 +26,36 @@
   --clarity-state-standby-bg: oklch(0.55 0.02 60);
   --clarity-state-awaiting-peer-bg: oklch(0.55 0.10 220);
 
+  /* ---------------------------------------------------------------------
+   * Plan 04.2-02 Task 1 — GAP-RCB-01-STYLING token-scope fix.
+   *
+   * These warm-dark palette tokens were originally introduced (Plan 02-08)
+   * ONLY under the [data-clarity-surface='situation-room'] block. Plan
+   * 04.2-01 then authored the Reader-surface Continue-in-chat button +
+   * reverse-topics rules to consume `var(--clarity-you)` /
+   * `--clarity-you-soft` / `--clarity-ink-3` / `--clarity-line` /
+   * `--clarity-bg-2` / `--clarity-bg-3` — but those vars do NOT resolve on
+   * [data-clarity-surface='reader'], so the gold PRIMARY button rendered
+   * transparent / invisible on the live Countermoves drill.
+   *
+   * The fix promotes the shared palette tokens to the base
+   * [data-clarity-surface] block — a single source of truth that resolves on
+   * EVERY Clarity surface (Reader, Situation Room, Chat). The situation-room
+   * block keeps only its layout-specific values (--clarity-max-w + the page
+   * chrome). check-css-scope.mjs still passes — the base block selector is
+   * `[data-clarity-surface]`.
+   * ------------------------------------------------------------------- */
+  --clarity-bg-2: oklch(0.16 0.01 60);
+  --clarity-bg-3: oklch(0.18 0.01 60);
+  --clarity-bg-4: oklch(0.21 0.01 60);
+  --clarity-line: oklch(0.30 0.01 60);
+  --clarity-line-bright: oklch(0.40 0.01 60);
+  --clarity-ink-2: oklch(0.78 0.01 60);
+  --clarity-ink-3: oklch(0.55 0.01 60);
+  --clarity-ink-4: oklch(0.42 0.01 60);
+  --clarity-you: oklch(0.82 0.13 85);
+  --clarity-you-soft: oklch(0.32 0.04 85);
+
   /* Typography — Geist + Geist Mono + Instrument Serif per SCAF-08. Falls
    * back to system stack if those families aren't loaded. */
   font-family: 'Geist', system-ui, -apple-system, sans-serif;
@@ -366,18 +396,15 @@
  * to satisfy SCAF-06 / COEXIST-01.
  * =========================================================================== */
 
-/* Situation Room palette extension (mockup-derived). */
+/* Situation Room page chrome.
+ *
+ * Plan 04.2-02 Task 1 — the warm-dark palette tokens that used to live here
+ * (--clarity-bg-2..4, --clarity-line, --clarity-line-bright, --clarity-ink-2..4,
+ * --clarity-you, --clarity-you-soft) were promoted to the base
+ * [data-clarity-surface] block above so they resolve on every Clarity surface
+ * (GAP-RCB-01-STYLING fix). The Situation Room inherits them unchanged. Only
+ * --clarity-max-w (situation-room-specific) and the page chrome stay here. */
 [data-clarity-surface='situation-room'] {
-  --clarity-bg-2: oklch(0.16 0.01 60);
-  --clarity-bg-3: oklch(0.18 0.01 60);
-  --clarity-bg-4: oklch(0.21 0.01 60);
-  --clarity-line: oklch(0.30 0.01 60);
-  --clarity-line-bright: oklch(0.40 0.01 60);
-  --clarity-ink-2: oklch(0.78 0.01 60);
-  --clarity-ink-3: oklch(0.55 0.01 60);
-  --clarity-ink-4: oklch(0.42 0.01 60);
-  --clarity-you: oklch(0.82 0.13 85);
-  --clarity-you-soft: oklch(0.32 0.04 85);
   --clarity-max-w: 1480px;
 
   background: var(--clarity-bg);
