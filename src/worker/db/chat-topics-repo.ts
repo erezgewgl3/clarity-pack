@@ -43,6 +43,24 @@ export type ChatTopicRow = {
    *  or when actively unarchived. Powers the archive panel's
    *  ORDER BY archived_at DESC sort. Added by migration 0008. */
   archived_at?: string | null;
+  /** Plan 04.2-01 (RCB-04) — the Paperclip issue this topic was started from
+   *  via the Reader-view Continue-in-chat -> new-topic flow. NULL for topics
+   *  created the ordinary way (pre-0009 rows + button-less Readers). Added by
+   *  migration 0009. The repo writes it via insertChatTopic's OPTIONAL
+   *  `originIssueId` field; listChatTopicsByOriginIssue reads it. */
+  origin_issue_id?: string | null;
+};
+
+/**
+ * Plan 04.2-01 (RCB-04 / RCB-06) — a chat topic as the Reader reverse-topics
+ * list consumes it (issue-reader.ts `topicsForIssue` + the ReverseTopicsLink
+ * popover). camelCase shape; mapped from a ChatTopicRow.
+ */
+export type ChatTopicByOriginEntry = {
+  topicIssueId: string;
+  topicId: string;
+  title: string;
+  lastActivityAt: string;
 };
 
 /** A chat_messages row — D-09 idempotency / supersedes / pin side table. */
@@ -85,15 +103,25 @@ const CHAT_EMPLOYEE_PARENT_COLS =
  * `ON CONFLICT (company_id, issue_id) DO NOTHING` so a re-fired topic create
  * is a server-side no-op; the read-back is keyed on (company_id, issue_id) and
  * always returns a row.
+ *
+ * Plan 04.2-01 (RCB-04) — the `row` argument may carry an OPTIONAL
+ * `originIssueId` field. When present it is written into the migration-0009
+ * `origin_issue_id` column; when absent (every pre-04.2-01 call site) the
+ * column is written NULL. The field is optional on `ChatTopicRow` so existing
+ * callers compile unchanged (RCB-07 back-compat).
  */
 export async function insertChatTopic(
   ctx: ChatTopicsRepoCtx,
-  row: ChatTopicRow,
+  row: ChatTopicRow & { originIssueId?: string | null },
 ): Promise<ChatTopicRow> {
+  const originIssueId =
+    typeof row.originIssueId === 'string' && row.originIssueId
+      ? row.originIssueId
+      : row.origin_issue_id ?? null;
   await ctx.db.execute(
     `INSERT INTO plugin_clarity_pack_cdd6bda4bd.chat_topics
-       (${CHAT_TOPIC_COLS})
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (${CHAT_TOPIC_COLS}, origin_issue_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (company_id, issue_id) DO NOTHING`,
     [
       row.topic_id,
@@ -105,6 +133,7 @@ export async function insertChatTopic(
       row.last_activity_at,
       row.archived,
       row.created_at,
+      originIssueId,
     ],
   );
 
@@ -148,6 +177,35 @@ export async function listChatTopicsForEmployee(
      ORDER BY last_activity_at DESC`,
     [companyId, employeeAgentId],
   );
+}
+
+/**
+ * Plan 04.2-01 (RCB-04 / RCB-06) — list every chat topic that was started
+ * from one source Paperclip issue (origin_issue_id match), company-scoped,
+ * most-recently-active first. Mirrors listChatTopicTasksForTopic's
+ * newest-first SELECT shape. Powers issue-reader.ts's `topicsForIssue`
+ * field and, through it, the Reader header's `<N> conversations about this
+ * issue` reverse list. Returns the camelCase ChatTopicByOriginEntry shape so
+ * the handler can ship it to the UI without a second mapping pass.
+ */
+export async function listChatTopicsByOriginIssue(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  originIssueId: string,
+): Promise<ChatTopicByOriginEntry[]> {
+  const rows = await ctx.db.query<ChatTopicRow>(
+    `SELECT ${CHAT_TOPIC_COLS}, origin_issue_id
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_topics
+     WHERE company_id = $1 AND origin_issue_id = $2
+     ORDER BY last_activity_at DESC`,
+    [companyId, originIssueId],
+  );
+  return rows.map((r) => ({
+    topicIssueId: r.issue_id,
+    topicId: r.topic_id,
+    title: r.title,
+    lastActivityAt: r.last_activity_at,
+  }));
 }
 
 /**

@@ -1,0 +1,34 @@
+-- 0009_chat_topics_origin_issue.sql
+-- Plan 04.2-01 -- Reader-Chat Bridge: additive plugin-namespace column that
+-- back-links a chat topic to the Paperclip issue it was started from.
+--
+-- A topic created through the Reader-view Continue-in-chat -> new-topic flow
+-- persists origin_issue_id (RCB-04). The chat topic strip then renders an
+-- About <COU-NNNN> chip (RCB-05), and the Reader header surfaces the reverse
+-- N conversations about this issue list (RCB-06) via
+-- listChatTopicsByOriginIssue. A topic created the ordinary way leaves the
+-- column NULL -- pre-0009 rows and button-less Readers keep working (RCB-07).
+--
+-- All DDL targets the deterministic plugin namespace
+-- plugin_clarity_pack_cdd6bda4bd literally per 02-01 SMOKE-FINDINGS.md
+-- Finding #4 (the Paperclip host validator requires fully-qualified schema
+-- names; there is NO template substitution).
+--
+-- Validator constraints honored (matches 0006_chat.sql + 0007 + 0008):
+--   - apostrophe-free comments (greedy string-literal strip hazard);
+--   - no anonymous procedural blocks (DO dollar-quoted patterns rejected);
+--   - NO standalone CREATE INDEX -- the host extractQualifiedRefs has no
+--     pattern for CREATE INDEX ... ON schema.table, so a standalone index
+--     statement yields zero qualified refs and is rejected at install with
+--     the fully-qualified-schema-names error (Plan 03-03 Countermoves drill,
+--     verbatim-ported in test/migrations/ddl-prefix-validator.test.mjs).
+--     The reverse-topics SELECT is company-scoped and single-operator-scale;
+--     no extra index is needed (same call made by 0006 + 0007).
+--   - file ends on a semicolon-terminated statement (no trailing comment).
+--
+-- Additive-only per CLAUDE.md coexistence guarantee #3: only ADD COLUMN IF
+-- NOT EXISTS in the plugin namespace; the host-owned schema is never touched.
+-- Idempotent -- re-running the migration is a no-op.
+
+ALTER TABLE plugin_clarity_pack_cdd6bda4bd.chat_topics
+  ADD COLUMN IF NOT EXISTS origin_issue_id text DEFAULT NULL;

@@ -178,6 +178,16 @@ export function registerChatTopics(ctx: ChatTopicsCtx): void {
       typeof params?.employeeName === 'string' && params.employeeName
         ? params.employeeName
         : employeeAgentId;
+    // Plan 04.2-01 (RCB-04) — OPTIONAL. When the UI opens this topic through
+    // the Reader-view Continue-in-chat -> new-topic flow it threads the
+    // source issue id via the `?originIssueId=` deep-link param; absent for
+    // every ordinary + New topic create. Written into chat_topics.
+    // origin_issue_id (migration 0009) so the About-chip + reverse-topics
+    // backlinks resolve.
+    const originIssueId =
+      typeof params?.originIssueId === 'string' && params.originIssueId
+        ? params.originIssueId
+        : null;
 
     try {
       // 1. Resolve the per-employee `Chat — <employee>` parent issue, O(1).
@@ -233,6 +243,9 @@ export function registerChatTopics(ctx: ChatTopicsCtx): void {
         last_activity_at: now,
         archived: false,
         created_at: now,
+        // Plan 04.2-01 (RCB-04) — null for ordinary creates; the source issue
+        // id when this topic was started from a Reader.
+        originIssueId,
       });
 
       return { ok: true, topicId, issueId: child.id, parentIssueId: parentId };
