@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.8.4
 milestone_name: phase-4.1-closed
 status: executing
-stopped_at: "Plan 04.2-01 Tasks 1-7 COMPLETE + Task 8 operator drill RAN 2026-05-22 — install/upgrade PASS, 5-path Reader↔Chat Bridge drill FAILED with 2 gaps (GAP-RCB-01-STYLING, GAP-RCB-03-DEEPLINK). 04.2-01-SUMMARY.md + 04.2-VERIFICATION.md (status gaps_found) written. RCB-01..RCB-07 NOT Implemented; Phase 4.2 NOT complete. Gap-closure pending as Plan 04.2-02 (version 0.9.1)."
-last_updated: "2026-05-22T21:00:00.000Z"
+stopped_at: "Completed Plan 04.1-01 (Wave 1, falsify-first spike). Next: Plan 04.1-02 (createTrueTask shared helper + chat.createTrueTask handler + chat.promote D-04 unification rewrite — Wave 2, autonomous TDD)."
+last_updated: "2026-05-22T21:09:36.345Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 34
-  completed_plans: 27
+  total_plans: 35
+  completed_plans: 28
   percent: 50
 ---
 
@@ -467,7 +467,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Executing Phase 04.2
+**Status:** Ready to execute
 **Progress:** [########  ] 4/6 phases complete; Phase 4.1 Chat → True Task **6/7 plans done** (Plan 04.1-10 APPROVED-WITH-FOLLOWUPS 2026-05-21; only Plan 04.1-07 closure remains)
 
 ## Performance Metrics
