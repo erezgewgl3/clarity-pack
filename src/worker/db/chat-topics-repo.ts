@@ -164,6 +164,12 @@ export async function getChatTopicByIssueId(
 /**
  * List every chat topic for one employee-agent, company-scoped, most-recently
  * active first. Powers the topic strip in the chat surface.
+ *
+ * Plan 04.2-01 (RCB-05) — the SELECT also pulls the migration-0009
+ * `origin_issue_id` column so the topic strip can render the
+ * `About <COU-NNNN> ↗` backlink chip on the active topic. Topics created the
+ * ordinary way (and every pre-0009 row) carry NULL there — the chip is then
+ * simply not rendered.
  */
 export async function listChatTopicsForEmployee(
   ctx: ChatTopicsRepoCtx,
@@ -171,7 +177,7 @@ export async function listChatTopicsForEmployee(
   employeeAgentId: string,
 ): Promise<ChatTopicRow[]> {
   return ctx.db.query<ChatTopicRow>(
-    `SELECT ${CHAT_TOPIC_COLS}
+    `SELECT ${CHAT_TOPIC_COLS}, origin_issue_id
      FROM plugin_clarity_pack_cdd6bda4bd.chat_topics
      WHERE company_id = $1 AND employee_agent_id = $2
      ORDER BY last_activity_at DESC`,

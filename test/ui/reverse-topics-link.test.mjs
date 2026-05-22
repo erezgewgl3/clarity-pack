@@ -72,9 +72,17 @@ test('reverse-topics-link.tsx: renders untrusted text only (no dangerouslySetInn
 test('Reader index.tsx mounts <ReverseTopicsLink> next to <ContinueInChatButton>', () => {
   const readerSrc = readFileSync(path.join(READER_DIR, 'index.tsx'), 'utf8');
   assert.match(readerSrc, /<ReverseTopicsLink\b/, 'Reader renders <ReverseTopicsLink />');
+  // The import may pull a type alias alongside the component — match the
+  // named-import + module-specifier without pinning a single-binding shape.
   assert.match(
     readerSrc,
-    /import\s*\{\s*ReverseTopicsLink\s*\}\s*from\s*['"]\.\/reverse-topics-link/,
-    'Reader imports ReverseTopicsLink',
+    /import\s*\{[^}]*\bReverseTopicsLink\b[^}]*\}\s*from\s*['"]\.\/reverse-topics-link/,
+    'Reader imports ReverseTopicsLink from ./reverse-topics-link',
+  );
+  // The two header affordances live in the same action row.
+  assert.match(
+    readerSrc,
+    /<ContinueInChatButton[\s\S]*<ReverseTopicsLink|<ReverseTopicsLink[\s\S]*<ContinueInChatButton/,
+    'ReverseTopicsLink sits in the header alongside ContinueInChatButton',
   );
 });

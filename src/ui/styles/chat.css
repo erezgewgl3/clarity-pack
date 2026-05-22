@@ -2338,3 +2338,46 @@
   gap: 8px;
 }
 
+/* ---------------------------------------------------------------------------
+ * Plan 04.2-01 (RCB-05) — the About-issue backlink chip in the topic strip.
+ *
+ * Rendered at the left end of the strip when the active topic was started
+ * from a Reader (origin_issue_id set). A `--you`-tinted pill: the link half
+ * navigates to the source issue's Reader, the × half dismisses it for the
+ * session.
+ * ------------------------------------------------------------------------- */
+[data-clarity-surface="chat"] .topic-about-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 8px;
+  border: 1px solid var(--you);
+  border-radius: 999px;
+  background: var(--you-soft);
+}
+[data-clarity-surface="chat"] .topic-about-chip-link {
+  background: transparent;
+  border: none;
+  color: var(--you);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 4px 2px 9px;
+  cursor: pointer;
+}
+[data-clarity-surface="chat"] .topic-about-chip-link:hover {
+  text-decoration: underline;
+}
+[data-clarity-surface="chat"] .topic-about-chip-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--ink-3);
+  font: inherit;
+  padding: 2px 7px 2px 2px;
+  cursor: pointer;
+  line-height: 1;
+}
+[data-clarity-surface="chat"] .topic-about-chip-dismiss:hover {
+  color: var(--ink);
+}
+

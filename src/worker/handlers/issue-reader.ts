@@ -37,6 +37,14 @@ import type { RefCardData, TLDR } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { getTldrByScope, type TldrCacheCtx } from '../db/tldr-cache.ts';
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
+// Plan 04.2-01 (RCB-06) — the reverse backlink: chat topics started FROM this
+// issue. listChatTopicsByOriginIssue reads the migration-0009 origin_issue_id
+// column; ChatTopicByOriginEntry is the camelCase row the Reader consumes.
+import {
+  listChatTopicsByOriginIssue,
+  type ChatTopicsRepoCtx,
+  type ChatTopicByOriginEntry,
+} from '../db/chat-topics-repo.ts';
 
 const REF_PATTERN = /\bBEAAA-\d+\b/g;
 const ACTIVITY_LIMIT = 8; // READER-09
@@ -64,6 +72,11 @@ export type IssueReaderResult = {
   activity: ActivityEvent[];
   deliverable: DeliverableSummary;
   issueBody: string | null;
+  /** Plan 04.2-01 (RCB-06) — chat topics started FROM this issue (the reverse
+   *  backlink). Empty for issues with no Reader-originated chat topics and for
+   *  every pre-0009 issue. Feeds the Reader header's `<N> conversations about
+   *  this issue` reverse-topics list. */
+  topicsForIssue: ChatTopicByOriginEntry[];
 };
 
 type RawHostIssue = {
@@ -105,6 +118,7 @@ function emptyResult(): IssueReaderResult {
     activity: [],
     deliverable: null,
     issueBody: null,
+    topicsForIssue: [],
   };
 }
 
@@ -219,6 +233,27 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
       ctx.logger?.warn?.('issue.reader: documents.list failed', { err: (e as Error).message });
     }
 
+    // ---- topicsForIssue (RCB-06 reverse backlink) ---------------------------
+    // Best-effort, like the TL;DR path: a repo failure logs a warning and
+    // yields []. The Reader load NEVER fails on this — a missing migration
+    // 0009 or a transient DB error degrades the reverse-topics list to empty
+    // (RCB-07 — pre-0009 issues simply have no topics here).
+    let topicsForIssue: ChatTopicByOriginEntry[] = [];
+    try {
+      topicsForIssue = await listChatTopicsByOriginIssue(
+        ctx as unknown as ChatTopicsRepoCtx,
+        companyId,
+        issueId,
+      );
+    } catch (e) {
+      ctx.logger?.warn?.('issue.reader: listChatTopicsByOriginIssue failed', {
+        issueId,
+        companyId,
+        err: (e as Error).message,
+      });
+      topicsForIssue = [];
+    }
+
     return {
       tldr,
       refCards,
@@ -227,6 +262,7 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
       activity,
       deliverable,
       issueBody: issueBodyValue,
+      topicsForIssue,
     } satisfies IssueReaderResult;
   });
 }

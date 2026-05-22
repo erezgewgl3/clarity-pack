@@ -753,3 +753,93 @@
   margin-top: 8px;
   opacity: 0.85;
 }
+
+/* ---------- Plan 04.2-01 — Reader header action row (RCB-01 / RCB-06) ------
+ *
+ * The Reader-header action row holds the Continue-in-chat button and the
+ * reverse-topics list. The button is a PRIMARY gold affordance — the chat
+ * surface's `.btn.primary` rule is scoped to [data-clarity-surface='chat'],
+ * so the Reader surface needs its own gold-button rule here.
+ * ------------------------------------------------------------------------ */
+[data-clarity-surface='reader'] .clarity-reader-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+[data-clarity-surface='reader'] .clarity-continue-in-chat {
+  background: var(--clarity-you);
+  color: #1b150a;
+  border: 1px solid var(--clarity-you);
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+[data-clarity-surface='reader'] .clarity-continue-in-chat:disabled {
+  background: var(--clarity-you-soft);
+  color: var(--clarity-ink-3);
+  border-color: var(--clarity-line);
+  cursor: not-allowed;
+}
+
+/* ---------- Plan 04.2-01 — reverse-topics list (RCB-06) ------------------- */
+[data-clarity-surface='reader'] .clarity-reverse-topics {
+  position: relative;
+  display: inline-block;
+}
+[data-clarity-surface='reader'] .clarity-reverse-topics-trigger {
+  background: transparent;
+  border: none;
+  color: var(--clarity-you);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+[data-clarity-surface='reader'] .clarity-reverse-topics-trigger:hover {
+  text-decoration: underline;
+}
+[data-clarity-surface='reader'] .clarity-reverse-topics-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  z-index: 20;
+  min-width: 260px;
+  background: var(--clarity-bg-2);
+  border: 1px solid var(--clarity-line);
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+[data-clarity-surface='reader'] .clarity-reverse-topics-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 9px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--clarity-fg);
+}
+[data-clarity-surface='reader'] .clarity-reverse-topics-row:hover {
+  background: var(--clarity-bg-3);
+}
+[data-clarity-surface='reader'] .clarity-reverse-topics-row-title {
+  font-size: 13px;
+}
+[data-clarity-surface='reader'] .clarity-reverse-topics-row-meta {
+  font-size: 11px;
+  color: var(--clarity-ink-3);
+}

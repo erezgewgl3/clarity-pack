@@ -27,7 +27,11 @@
 // All topic titles render as untrusted React text (T-04-18).
 
 import * as React from 'react';
-import { usePluginAction, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import {
+  usePluginAction,
+  usePluginData,
+  useHostNavigation,
+} from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { ArchivedTopicsPill } from './archived-topics-pill.tsx';
 
@@ -40,6 +44,12 @@ export type ChatTopic = {
   title: string;
   lastActivityAt: string;
   archived: boolean;
+  /** Plan 04.2-01 (RCB-05) — the source Paperclip issue this topic was
+   *  started from via the Reader-view Continue-in-chat flow. NULL for topics
+   *  created the ordinary way and every pre-0009 row. Optional so existing
+   *  ChatTopic literals (deep-link minimal topics, archived-panel rows)
+   *  compile unchanged. */
+  originIssueId?: string | null;
 };
 
 type TopicsResult =
@@ -85,8 +95,19 @@ export function TopicStrip({
     userId,
   });
   const archive = usePluginAction('chat.topic.archive');
+  // Plan 04.2-01 (RCB-05) — the host navigation hook drives the About-issue
+  // backlink chip. resolveHref() prepends the active company prefix so the
+  // chip lands on /<prefix>/issues/<originIssueId>.
+  const nav = useHostNavigation();
 
   const [showArchived, setShowArchived] = React.useState(false);
+  // Plan 04.2-01 (RCB-05) — per-topic dismissal of the About-issue chip.
+  // Keyed by the topic issue id so dismissing one topic's chip does not hide
+  // another's; persisted in localStorage so it stays dismissed for the
+  // session. The state mirror lets a dismiss re-render without a full fetch.
+  const [aboutChipDismissed, setAboutChipDismissed] = React.useState<Set<string>>(
+    () => new Set(),
+  );
   // Track in-flight un-archive operations per issueId so the button can show
   // a transient busy state without re-rendering the whole strip.
   const [unarchiving, setUnarchiving] = React.useState<Set<string>>(new Set());
@@ -147,8 +168,72 @@ export function TopicStrip({
     [archive, companyId, userId, refresh],
   );
 
+  // Plan 04.2-01 (RCB-05) — the active topic, resolved from the loaded list
+  // so its origin_issue_id is in hand for the About-issue backlink chip.
+  const activeTopic = React.useMemo(
+    () => allTopics.find((t) => t.issueId === activeTopicIssueId) ?? null,
+    [allTopics, activeTopicIssueId],
+  );
+  const aboutIssueId =
+    activeTopic && typeof activeTopic.originIssueId === 'string' && activeTopic.originIssueId
+      ? activeTopic.originIssueId
+      : null;
+  // localStorage key — topic-scoped so each topic's chip dismissal is
+  // independent. Read once per render; the Set mirror drives re-render.
+  const aboutChipDismissKey = activeTopic
+    ? `clarity-about-chip-dismissed:${activeTopic.issueId}`
+    : null;
+  const aboutChipIsDismissed =
+    (activeTopic ? aboutChipDismissed.has(activeTopic.issueId) : false) ||
+    (typeof window !== 'undefined' && aboutChipDismissKey
+      ? window.localStorage.getItem(aboutChipDismissKey) === '1'
+      : false);
+
+  const handleDismissAboutChip = React.useCallback(() => {
+    if (!activeTopic || !aboutChipDismissKey) return;
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(aboutChipDismissKey, '1');
+      }
+    } catch {
+      // localStorage may be unavailable (privacy mode) — the Set mirror below
+      // still hides the chip for this session.
+    }
+    setAboutChipDismissed((s) => {
+      const next = new Set(s);
+      next.add(activeTopic.issueId);
+      return next;
+    });
+  }, [activeTopic, aboutChipDismissKey]);
+
   return (
     <div className="topics" data-clarity-region="topic-strip">
+      {/* Plan 04.2-01 (RCB-05) — the About-issue backlink chip. Rendered at
+          the LEFT end ONLY when the active topic was started from a Reader
+          (origin_issue_id set) AND the operator has not dismissed it this
+          session. Click navigates to the source issue's Reader. The issue id
+          renders as untrusted React text (T-04.2-01-03). */}
+      {aboutIssueId && !aboutChipIsDismissed ? (
+        <span className="topic-about-chip" data-clarity-region="about-issue-chip">
+          <button
+            type="button"
+            className="topic-about-chip-link"
+            title={`Open the source issue ${aboutIssueId}`}
+            onClick={() => nav.navigate(nav.resolveHref(`/issues/${aboutIssueId}`))}
+            data-clarity-action="about-issue-backlink"
+          >
+            About {aboutIssueId} ↗
+          </button>
+          <button
+            type="button"
+            className="topic-about-chip-dismiss"
+            aria-label="Dismiss the about-issue chip"
+            onClick={handleDismissAboutChip}
+          >
+            ×
+          </button>
+        </span>
+      ) : null}
       <span className="topic-lbl">Topics ·</span>
       {loading && allTopics.length === 0 ? (
         <span className="topics-empty">Loading topics…</span>

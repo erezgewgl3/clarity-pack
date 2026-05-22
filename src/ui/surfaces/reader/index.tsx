@@ -57,6 +57,8 @@ import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 import { TldrStrip } from './tldr-strip.tsx';
 // Plan 04.2-01 (RCB-01) — the Reader-header Continue-in-chat primitive.
 import { ContinueInChatButton } from './continue-in-chat-button.tsx';
+// Plan 04.2-01 (RCB-06) — the Reader-header reverse-topics list.
+import { ReverseTopicsLink, type ReverseTopic } from './reverse-topics-link.tsx';
 import { Breadcrumb, type Ancestry } from './breadcrumb.tsx';
 import { ProseWithRefChips } from './prose-with-ref-chips.tsx';
 import { AnchoredToCards } from './ref-card.tsx';
@@ -75,6 +77,10 @@ export type ReaderViewData = {
   activity: ActivityEvent[];
   deliverable: { filename: string; last_write_at: string | null } | null;
   issueBody: string | null;
+  /** Plan 04.2-01 (RCB-06) — chat topics started FROM this issue. Optional so
+   *  a pre-04.2-01 cached issue.reader payload still satisfies the type;
+   *  the ReverseTopicsLink treats absent/empty identically (renders nothing). */
+  topicsForIssue?: ReverseTopic[];
 };
 
 export function ReaderView({ context }: PluginDetailTabProps): React.ReactElement {
@@ -257,6 +263,14 @@ function ReaderViewReady({
           // identifier falls back to the issue id; title is left null (the
           // Reader's ReaderViewData carries no raw issue title).
           issue={{ identifier: entityId, title: null }}
+        />
+        {/* Plan 04.2-01 (RCB-06) — the reverse-topics list. Renders nothing
+            when no chat topics were started from this issue (the common case
+            + every pre-0009 issue); otherwise `<N> conversations about this
+            issue ↗` with a popover. Fed from issue.reader's topicsForIssue. */}
+        <ReverseTopicsLink
+          companyPrefix={companyPrefix}
+          topicsForIssue={data.topicsForIssue ?? []}
         />
       </div>
       <Breadcrumb ancestry={data.ancestry} />

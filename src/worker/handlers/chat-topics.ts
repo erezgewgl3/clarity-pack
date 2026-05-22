@@ -71,6 +71,11 @@ type TopicEntry = {
   title: string;
   lastActivityAt: string;
   archived: boolean;
+  /** Plan 04.2-01 (RCB-05) — the source Paperclip issue this topic was
+   *  started from via the Reader-view Continue-in-chat flow. NULL for topics
+   *  created the ordinary way + every pre-0009 row. Drives the topic strip's
+   *  `About <COU-NNNN> ↗` backlink chip. */
+  originIssueId: string | null;
 };
 
 function mapTopic(row: ChatTopicRow): TopicEntry {
@@ -82,6 +87,8 @@ function mapTopic(row: ChatTopicRow): TopicEntry {
     title: row.title,
     lastActivityAt: row.last_activity_at,
     archived: row.archived,
+    // Plan 04.2-01 (RCB-05) — surfaced from the migration-0009 column.
+    originIssueId: row.origin_issue_id ?? null,
   };
 }
 
