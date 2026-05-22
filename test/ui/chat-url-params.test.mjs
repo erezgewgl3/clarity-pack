@@ -35,10 +35,15 @@ function code(src) {
 
 test('chat/index.tsx: reads the host location search params (useHostLocation)', () => {
   const c = code(readChat('index.tsx'));
-  // The repo convention is useHostLocation().search — there is no react-router
-  // useSearchParams in this codebase.
+  // The repo convention is useHostLocation() — there is no react-router
+  // useSearchParams in this codebase. The `search` query string is read
+  // (destructured from the hook or via member access — accept either).
   assert.match(c, /useHostLocation/, 'chat surface reads useHostLocation');
-  assert.match(c, /\.search\b/, 'reads the location.search query string');
+  assert.match(
+    c,
+    /\bsearch\b[\s\S]{0,40}=\s*useHostLocation\(\)|\.search\b|new URLSearchParams\(\s*search/,
+    'reads the location search query string',
+  );
 });
 
 test('Test 1 — TOPIC-SWITCH: a ?topic= param drives a topic switch', () => {

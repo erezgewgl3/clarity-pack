@@ -2249,3 +2249,92 @@
   color: var(--live);
 }
 
+/* ---------------------------------------------------------------------------
+ * Plan 04.2-01 (RCB-03) — deep-link comment flash-highlight.
+ *
+ * When the chat surface is opened via a Reader-view Continue-in-chat jump
+ * (?topic=...&comment=...), the URL-param handler in chat/index.tsx scrolls
+ * the source comment bubble (#msg-<commentId>) into view and adds the
+ * `.flash-highlight` class for ~1.5s so the operator's eye lands on the exact
+ * message. The animation fades a `--you`-tinted highlight back to transparent.
+ * ------------------------------------------------------------------------- */
+@keyframes clarity-flash {
+  0% {
+    background: var(--you-soft);
+    box-shadow: 0 0 0 2px var(--you);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+[data-clarity-surface="chat"] .msg.flash-highlight .bubble {
+  animation: clarity-flash 1.5s ease-out;
+  border-radius: 8px;
+}
+/* Respect reduced-motion — keep a brief static highlight, drop the fade. */
+@media (prefers-reduced-motion: reduce) {
+  [data-clarity-surface="chat"] .msg.flash-highlight .bubble {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--you);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Plan 04.2-01 (RCB-03) — seeded New Topic dialog.
+ *
+ * Opened when the chat surface receives ?newTopic=1 from a Reader-view
+ * Continue-in-chat -> new-topic jump. A lightweight backdrop + body pair
+ * (the same shape as true-task-dialog's 04.1-09 rework) with the topic title
+ * + body pre-filled from the seedTitle/seedBody URL params.
+ * ------------------------------------------------------------------------- */
+[data-clarity-surface="chat"] .new-topic-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+[data-clarity-surface="chat"] .new-topic-dialog {
+  position: relative;
+  width: min(520px, 92vw);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+[data-clarity-surface="chat"] .new-topic-dialog h3 {
+  margin: 0;
+  font-size: 15px;
+}
+[data-clarity-surface="chat"] .new-topic-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+[data-clarity-surface="chat"] .new-topic-dialog input,
+[data-clarity-surface="chat"] .new-topic-dialog textarea {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+  color: var(--ink);
+  font: inherit;
+}
+[data-clarity-surface="chat"] .new-topic-dialog textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+[data-clarity-surface="chat"] .new-topic-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+

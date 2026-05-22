@@ -627,7 +627,12 @@ function PersistedMessage({
   const who = isMine ? 'Eric · You' : 'Agent';
 
   return (
-    <article className={`msg${isMine ? ' me' : ''}`}>
+    // Plan 04.2-01 (RCB-03) — `id="msg-<commentId>"` is the stable DOM scroll
+    // target for the chat surface's `?comment=<id>` deep link: the URL-param
+    // handler in index.tsx does getElementById('msg-' + commentId) to scroll
+    // + flash-highlight the source comment a Reader-view Continue-in-chat
+    // jump points at.
+    <article id={`msg-${msg.commentId}`} className={`msg${isMine ? ' me' : ''}`}>
       {isMine ? null : <div className="av">A</div>}
       <div className="bubble">
         {isMine ? null : (

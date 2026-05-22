@@ -25,7 +25,12 @@
 // never raw <a href>.
 
 import * as React from 'react';
-import { usePluginAction, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import {
+  usePluginAction,
+  usePluginData,
+  useHostLocation,
+  useHostNavigation,
+} from '@paperclipai/plugin-sdk/ui/hooks';
 import type { PluginPageProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
@@ -177,6 +182,17 @@ function ChatPageBody({
     title: string;
   } | null>(null);
 
+  // Plan 04.2-01 (RCB-03) — the pre-seeded New Topic dialog. Opened when the
+  // chat surface receives ?newTopic=1 from a Reader-view Continue-in-chat ->
+  // new-topic jump; the title/body are pre-filled from the seedTitle/seedBody
+  // URL params and the create threads originIssueId through to
+  // chat.topic.create (Task 1 RCB-04 thread-through). null = closed.
+  const [seedDialog, setSeedDialog] = React.useState<{
+    title: string;
+    body: string;
+    originIssueId: string | null;
+  } | null>(null);
+
   // Plan 04.1-09 — chat.taskOwned fetch lifted to this level so both
   // ContextRail (right rail's "Active tasks owned") AND MessageThread
   // (inline-task-card title lookup, Plan 04.1-08 drill fix #2b) share one
@@ -257,6 +273,142 @@ function ChatPageBody({
       setCreating(false);
     }
   }, [employee, createTopic, companyId, userId]);
+
+  // Plan 04.2-01 (RCB-03) — chat surface deep-link URL-param handling.
+  //
+  // The Reader-view ContinueInChatButton (Task 3) hands the chat surface an
+  // exact destination via the URL query string:
+  //   ?topic=<topicIssueId>            — switch to that topic
+  //   ?topic&comment=<commentId>       — switch + scroll the comment into view
+  //                                      + flash-highlight it for ~1.5s
+  //   ?newTopic=1&seedTitle&seedBody&originIssueId — open the seeded New Topic
+  //                                      dialog; create threads originIssueId
+  //   ?employee=<agentId>              — select that roster employee
+  //
+  // After consumption the params are CLEARED via a replace navigation so a
+  // refresh does not re-trigger the dialog (T-04.2-01-06 — pinned by Test 4).
+  const { search, pathname } = useHostLocation();
+  const nav = useHostNavigation();
+  // A ref guards against the effect firing twice for the same query string
+  // (e.g. a re-render before the replace-navigation lands).
+  const consumedSearchRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!search || search === '?') return;
+    if (consumedSearchRef.current === search) return;
+    // URLSearchParams.get() decodes percent-encoding for us (T-04.2-01-03 —
+    // the seed strings arrive as plain decoded text, never raw HTML).
+    const params = new URLSearchParams(search);
+    const topicParam = params.get('topic');
+    const commentParam = params.get('comment');
+    const newTopicParam = params.get('newTopic');
+    const seedTitle = params.get('seedTitle');
+    const seedBody = params.get('seedBody');
+    const originIssueId = params.get('originIssueId');
+    if (!topicParam && !newTopicParam) return;
+
+    consumedSearchRef.current = search;
+
+    if (newTopicParam === '1') {
+      // Open the pre-seeded New Topic dialog. employeeParam selection (below)
+      // happens via the roster on the next render; the operator confirms the
+      // assignee in the dialog before Create.
+      setSeedDialog({
+        title: seedTitle ?? '',
+        body: seedBody ?? '',
+        originIssueId: originIssueId && originIssueId.length > 0 ? originIssueId : null,
+      });
+    } else if (topicParam) {
+      // Topic-switch deep link. The param is the topic ISSUE id (Task 3's
+      // buildChatHref uses data.topicIssueId). We open a minimal ChatTopic —
+      // the message thread + topic strip both key on issueId, so the strip
+      // reconciles the full row on its own chat.topics fetch.
+      setTopic({
+        topicId: topicParam,
+        issueId: topicParam,
+        parentIssueId: '',
+        employeeAgentId: '',
+        title: '',
+        lastActivityAt: new Date().toISOString(),
+        archived: false,
+      });
+      // If a comment target was supplied, scroll it into view + flash it once
+      // the thread has rendered. A short timeout lets the topic-switch render
+      // + the chat.messages fetch paint the bubble first.
+      if (commentParam) {
+        const targetId = `msg-${commentParam}`;
+        window.setTimeout(() => {
+          const el =
+            typeof document !== 'undefined' ? document.getElementById(targetId) : null;
+          if (el) {
+            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            el.classList.add('flash-highlight');
+            window.setTimeout(() => el.classList.remove('flash-highlight'), 1600);
+          }
+        }, 600);
+      }
+    }
+
+    // Clear the consumed params so a refresh does not re-trigger the dialog
+    // or the flash. A replace navigation keeps the history entry clean.
+    nav.navigate(pathname, { replace: true });
+  }, [search, pathname, nav]);
+
+  // Plan 04.2-01 (RCB-03) — the seeded New Topic dialog's Create action.
+  // Threads originIssueId through chat.topic.create (RCB-04) so the created
+  // topic persists chat_topics.origin_issue_id for the About-chip backlink.
+  const handleSeededCreate = React.useCallback(async () => {
+    if (!employee || !seedDialog) return;
+    const title = seedDialog.title.trim();
+    if (!title) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const result = await createTopic({
+        employeeAgentId: employee.id,
+        title,
+        companyId,
+        userId,
+        // RCB-04 — the source issue this topic was started from. Absent ->
+        // chat.topic.create writes origin_issue_id NULL.
+        originIssueId: seedDialog.originIssueId ?? undefined,
+      });
+      if (
+        result &&
+        typeof result === 'object' &&
+        'ok' in result &&
+        (result as { ok: unknown }).ok === true
+      ) {
+        const created = result as {
+          ok: true;
+          topicId: string;
+          issueId: string;
+          parentIssueId: string;
+        };
+        setTopic({
+          topicId: created.topicId,
+          issueId: created.issueId,
+          parentIssueId: created.parentIssueId,
+          employeeAgentId: employee.id,
+          title,
+          lastActivityAt: new Date().toISOString(),
+          archived: false,
+        });
+        setRefreshKey((k) => k + 1);
+        setSeedDialog(null);
+      } else {
+        const errCode =
+          result && typeof result === 'object' && 'error' in result
+            ? String((result as { error: unknown }).error)
+            : 'CREATE_FAILED';
+        setCreateError(errCode);
+      }
+    } catch {
+      setCreateError('CREATE_FAILED');
+    } finally {
+      setCreating(false);
+    }
+  }, [employee, seedDialog, createTopic, companyId, userId]);
 
   // Plan 04.1-08 — archive panel state + data fetch + handlers.
   const { data: archivedRaw, refresh: refreshArchived } =
@@ -599,6 +751,80 @@ function ChatPageBody({
           userId={userId}
           employeeAgentId={employee.id}
         />
+      ) : null}
+
+      {/* Plan 04.2-01 (RCB-03) — the pre-seeded New Topic dialog. Opened by
+          the deep-link handler above when the chat surface receives
+          ?newTopic=1 from a Reader-view Continue-in-chat -> new-topic jump.
+          The title + body are CONTROLLED React inputs pre-filled from the
+          decoded seedTitle / seedBody params (never dangerouslySetInnerHTML —
+          T-04.2-01-03). Create threads originIssueId through chat.topic.create
+          so the new topic persists chat_topics.origin_issue_id (RCB-04). */}
+      {seedDialog ? (
+        <div
+          className="new-topic-dialog-backdrop"
+          data-clarity-region="new-topic-dialog"
+          onClick={() => setSeedDialog(null)}
+        >
+          <div
+            className="new-topic-dialog"
+            role="dialog"
+            aria-label="Start a new chat topic"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Continue in chat — new topic</h3>
+            <label>
+              Topic title
+              <input
+                type="text"
+                value={seedDialog.title}
+                autoFocus
+                onChange={(e) =>
+                  setSeedDialog((s) => (s ? { ...s, title: e.target.value } : s))
+                }
+                data-clarity-field="seed-title"
+              />
+            </label>
+            <label>
+              First message
+              <textarea
+                value={seedDialog.body}
+                onChange={(e) =>
+                  setSeedDialog((s) => (s ? { ...s, body: e.target.value } : s))
+                }
+                data-clarity-field="seed-body"
+              />
+            </label>
+            {createError ? (
+              <div className="topic-create-error" role="alert" data-clarity-error="topic-create">
+                Could not start the topic ({createError}).
+              </div>
+            ) : null}
+            <div className="new-topic-dialog-actions">
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setSeedDialog(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!employee || creating || !seedDialog.title.trim()}
+                onClick={() => void handleSeededCreate()}
+                data-clarity-action="seed-create-topic"
+              >
+                {creating ? 'Creating…' : 'Create topic'}
+              </button>
+            </div>
+            {!employee ? (
+              <p className="thread-empty">
+                Pick an employee from the roster first, then create the topic.
+              </p>
+            ) : null}
+          </div>
+        </div>
       ) : null}
 
     </div>
