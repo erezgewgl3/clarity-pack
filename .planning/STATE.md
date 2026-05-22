@@ -27,9 +27,13 @@ progress:
 
 ## Current Position
 
-Phase: 04.1 (chat-true-task) — **COMPLETE & VERIFIED 2026-05-22.** All waves (1+2+3+4+5) closed.
-Plan: **11 of 11 complete. Plan 04.1-07 (closure) CLOSED — operator coexistence drill PASS 2026-05-22.**
-Next: Phase 4.2 (Reader↔Chat Bridge) — milestone work pre-spec'd in memory `phase-4.2-deferred-from-4.1`; or Phase 5 (Distribution & Polish).
+Phase: 04.2 (reader-chat-bridge) — **PLANNED 2026-05-22, ready to execute.** (Phase 04.1 chat-true-task COMPLETE & VERIFIED 2026-05-22 — all waves 1+2+3+4+5 closed.)
+Plan: **04.2-01 written 2026-05-22** — 8 tasks (Tasks 1-7 autonomous TDD, Task 8 Countermoves operator drill). 0 of 1 plans executed.
+Next: Execute Plan 04.2-01 — `.planning/phases/04.2-reader-chat-bridge/04.2-01-PLAN.md`.
+
+**Phase 4.2 (Reader↔Chat Bridge) — inserted + planned 2026-05-22.** Inserted after Phase 4.1 via the insert-phase workflow, run manually (the GSD `gsd-sdk` CLI is not installed in this environment — it backs `insert-phase`/`plan-phase`/`execute-phase`; worth installing before the next GSD phase op). RCB-01..RCB-07 coined and registered in REQUIREMENTS.md §"RCB — Reader↔Chat Bridge". Plan 04.2-01 authored directly from the locked 8-task design in project memory `phase-4.2-deferred-from-4.1` §"Phase 4.2 OPENING SCOPE" — operator chose "author PLAN.md from locked design" over the full multi-agent plan-phase pipeline (research/discuss redundant, design already locked 2026-05-21). 8 tasks: migration 0009 `origin_issue_id` → `chat.openForIssue` lineage-routing handler → `ContinueInChatButton` Reader primitive → Reader header wiring → chat deep-link URL-param handling → `About COU-NNNN ↗` chip + Reader reverse-topics list → version bump 0.9.0 → Countermoves 5-path operator drill. Not started.
+
+---
 
 **Plan 04.1-07 — Phase 4.1 closure (coexistence + traceability + REQUIREMENTS flip + VERIFICATION + operator drill): CLOSED 2026-05-22.**
 Non-autonomous. 5 commits land the closure:
@@ -473,6 +477,10 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 4.2 inserted after Phase 4.1 (2026-05-22): **Reader↔Chat Bridge** — deterministic "Continue in chat" Reader primitive + bidirectional issue↔conversation backlinks. Pre-spec'd deferral from Phase 4.1 closure; full locked 8-task design in project memory `phase-4.2-deferred-from-4.1`. Not planned yet.
+
 ### Locked Decisions (carry across phases)
 
 1. **Plugin form factor** - one TypeScript package, one manifest, one UI bundle exporting many React components by name, one out-of-process Node worker over JSON-RPC stdio. Not four plugins per surface.
@@ -519,6 +527,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 - [ ] Verify `usePluginStream` direct host-event subscription (for `issue.comment.created`) before Phase 4 design is locked.
 - [ ] Verify `comment.updated` event existence in PLUGIN_SPEC §16 before Phase 4 (currently absent in documented minimum set; chat edits modeled as append-with-supersedes).
 - [ ] Verify cron timezone interpretation in PLUGIN_SPEC §17 before Phase 3 (use worker-managed `next_due_at` regardless).
+- [ ] **Execute Plan 04.2-01 — Reader↔Chat Bridge** (8 tasks; Tasks 1-7 autonomous TDD, Task 8 Countermoves operator drill). Plan written 2026-05-22 from the locked design in memory `phase-4.2-deferred-from-4.1`. PLAN: `.planning/phases/04.2-reader-chat-bridge/04.2-01-PLAN.md`.
 
 ### Active Blockers
 
