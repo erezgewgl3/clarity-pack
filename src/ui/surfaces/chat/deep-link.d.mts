@@ -1,12 +1,17 @@
 // src/ui/surfaces/chat/deep-link.d.mts
 //
 // Plan 04.2-02 Task 2 — type declarations for the SHARED Reader->Chat
-// deep-link contract module (deep-link.mjs). The contract is implemented in
-// `.mjs` so Node's test runner can load it directly (the same pattern as
-// reasoning-block-parser.mjs), but the `.tsx` consumers
-// (continue-in-chat-button, reverse-topics-link, chat/index) need typed
-// imports to keep `tsc --noEmit` clean (the GREEN gate). This file mirrors
-// the module's JSDoc shape.
+// deep-link contract module (deep-link.mjs).
+// Plan 04.2-03 Task 2 — carrier swapped from `{ state }` to URL_HASH; the
+// `state` field on the returned nav object is now `undefined` (no longer
+// carries a payload) and `parseChatDeepLink` accepts an additional `hash`
+// argument as the canonical channel.
+//
+// The contract is implemented in `.mjs` so Node's test runner can load it
+// directly (the same pattern as reasoning-block-parser.mjs), but the `.tsx`
+// consumers (continue-in-chat-button, reverse-topics-link, chat/index) need
+// typed imports to keep `tsc --noEmit` clean (the GREEN gate). This file
+// mirrors the module's JSDoc shape.
 
 /** The six deep-link params the Reader->Chat bridge carries. */
 export interface ChatDeepLink {
@@ -26,10 +31,16 @@ export interface ChatDeepLink {
   originIssueId: string | null;
 }
 
-/** What navigate() needs: the path-with-?query fallback + the structured state. */
+/**
+ * What navigate() needs: the fragment-bearing path. Plan 04.2-03 URL_HASH
+ * carrier — the encoded payload rides entirely in `to`'s `#h=...` fragment.
+ * `state` is intentionally `undefined`; the 0.9.1 state carrier was proven
+ * stripped by the host wrapper around useNavigate on the live Countermoves
+ * Paperclip instance.
+ */
 export interface ChatDeepLinkNav {
   to: string;
-  state: { clarityChatDeepLink: ChatDeepLink };
+  state: undefined;
 }
 
 export interface BuildChatDeepLinkInput {
@@ -58,11 +69,15 @@ export function buildTopicDeepLink(
 ): ChatDeepLinkNav | null;
 
 /**
- * Read one deep link back from the host router. PREFERS the structured
- * `state` channel; falls back to `search`. Tolerates missing / malformed
+ * Read one deep link back from the host router. The CANONICAL channel is
+ * the URL fragment (`hash` — Plan 04.2-03 URL_HASH carrier). `search` and
+ * `state` are accepted for API compatibility / defensive input handling
+ * but no longer carry the canonical payload (neither survives this host's
+ * navigate() -> useHostLocation() handoff). Tolerates missing / malformed
  * input without throwing.
  */
 export function parseChatDeepLink(location: {
   search?: string | null;
   state?: unknown;
+  hash?: string | null;
 } | null | undefined): ChatDeepLink | null;

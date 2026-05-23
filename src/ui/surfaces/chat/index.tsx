@@ -278,41 +278,47 @@ function ChatPageBody({
     }
   }, [employee, createTopic, companyId, userId]);
 
-  // Plan 04.2-01 (RCB-03) / Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) — chat
-  // surface deep-link handling.
+  // Plan 04.2-01 (RCB-03) / Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) /
+  // Plan 04.2-03 Task 2 (GAP-RCB-03-CARRIER) — chat surface deep-link
+  // handling.
   //
   // The Reader-view ContinueInChatButton + ReverseTopicsLink hand the chat
   // surface an exact destination through the SHARED deep-link contract
-  // (src/ui/surfaces/chat/deep-link.mjs). The contract carries the params on
-  // TWO channels: the structured `state` option of navigate() (the
-  // load-bearing one — the host forwards it verbatim to useHostLocation()
-  // .state, untouched by the company-prefix resolveHref step that the
-  // 04.2-01 live drill proved strips the `?query` tail) AND the `?query`
-  // string as a refresh / copy-link fallback. parseChatDeepLink reads
-  // whichever is present (state first, search fallback). The resolved
-  // ChatDeepLink drives:
+  // (src/ui/surfaces/chat/deep-link.mjs). The canonical channel is the URL
+  // fragment (`#h=<base64-JSON>`) — the Countermoves probe 2026-05-23
+  // proved this is the only carrier this Paperclip host preserves
+  // end-to-end: `?query` is stripped by resolveHref, `{ state }` is
+  // stripped by the host wrapper around useNavigate (history.state.usr ===
+  // null after click), but RFC 3986 URL fragments are client-side-only
+  // and never pass through path-routing. The chat surface destructures
+  // `hash` from useHostLocation() and threads it through
+  // parseChatDeepLink({ search, state, hash }) — search/state remain
+  // accepted by the parser for defensive input handling but no longer
+  // carry the canonical payload. The resolved ChatDeepLink drives:
   //   { topic }                 — switch to that topic
   //   { topic, comment }        — switch + scroll the comment into view +
   //                               flash-highlight it for ~1.6s
   //   { newTopic, seedTitle,    — open the pre-seeded New Topic dialog;
   //     seedBody, originIssueId }  create threads originIssueId (RCB-04)
   //
-  // After consumption BOTH channels are CLEARED via a replace navigation
-  // (pathname only, no state) so a refresh does not re-trigger the dialog or
-  // the flash (T-04.2-02-04 — pinned by the contract test + chat-url-params
-  // Test 4).
-  const { search, pathname, state: locationState } = useHostLocation();
+  // After consumption the canonical channel is CLEARED via a replace
+  // navigation (pathname only, no hash / no search / no state) so a refresh
+  // does not re-trigger the dialog or the flash (T-04.2-03-04 — pinned by
+  // the contract test + chat-url-params Test 4).
+  const { search, pathname, hash, state: locationState } = useHostLocation();
   const nav = useHostNavigation();
   // A ref guards against the effect firing twice for the same deep link
-  // (e.g. a re-render before the replace-navigation lands). The key is built
-  // from BOTH channels so neither a stale search nor a stale state re-fires.
+  // (e.g. a re-render before the replace-navigation lands). The key is the
+  // resolved link itself so neither a stale hash nor a stale search re-fires.
   const consumedDeepLinkRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    // parseChatDeepLink prefers the structured `state` channel and falls back
-    // to the query string; it tolerates missing / malformed input without
-    // throwing (T-04.2-02-05) and returns plain decoded strings only.
-    const link = parseChatDeepLink({ search, state: locationState });
+    // parseChatDeepLink reads the URL fragment (the canonical channel per
+    // Plan 04.2-03 URL_HASH carrier) and tolerates missing / malformed
+    // input without throwing (T-04.2-03-05). search/state are kept on the
+    // argument shape for defensive input handling but the parser now reads
+    // only `hash` as the canonical channel.
+    const link = parseChatDeepLink({ search, state: locationState, hash });
     if (!link) return;
 
     // Consume-once guard — keyed on the resolved link so neither channel
@@ -362,12 +368,12 @@ function ChatPageBody({
       }
     }
 
-    // Clear BOTH consumed channels so a refresh does not re-trigger the
+    // Clear the consumed fragment so a refresh does not re-trigger the
     // dialog or the flash. A replace navigation to the bare pathname (no
-    // state) keeps the history entry clean and drops both the `?query` tail
-    // and the `state` object.
+    // hash, no state) keeps the history entry clean and drops the
+    // `#h=<encoded>` fragment that carried the payload (Plan 04.2-03).
     nav.navigate(pathname, { replace: true });
-  }, [search, pathname, locationState, nav]);
+  }, [search, pathname, hash, locationState, nav]);
 
   // Plan 04.2-01 (RCB-03) — the seeded New Topic dialog's Create action.
   // Threads originIssueId through chat.topic.create (RCB-04) so the created

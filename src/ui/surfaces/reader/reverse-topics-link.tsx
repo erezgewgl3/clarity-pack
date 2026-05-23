@@ -19,13 +19,15 @@
 // never dangerouslySetInnerHTML. Navigation goes through the host nav hook,
 // not a raw <a href> (SCAF-09).
 //
-// Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) — a row click now emits the deep
-// link through the SHARED `buildTopicDeepLink` contract helper and calls
-// navigate() with the structured `state` option, exactly like the
-// Continue-in-chat button. Before this fix the row navigated with a bare
-// `/<prefix>/chat?topic=<id>` path whose `?query` tail the host's
-// company-prefix `resolveHref` step strips — the same root cause as the
-// Continue-button gap. The chat surface reads it back via parseChatDeepLink.
+// Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) — a row click emits the deep
+// link through the SHARED `buildTopicDeepLink` contract helper.
+// Plan 04.2-03 Task 2 (GAP-RCB-03-CARRIER) — carrier swapped to URL_HASH.
+// The deep link is built by `buildTopicDeepLink` (`/<prefix>/chat#h=<base64-
+// JSON>`) and navigate() is called with ONE argument — `deepLink.to`. NO
+// `state:` option. Same shape as the Continue button; the live Countermoves
+// probe 2026-05-23 proved URL fragments survive end-to-end on this host
+// while both `?query` and `{ state }` strip. The chat surface reads the
+// fragment back via parseChatDeepLink({ hash }).
 
 import * as React from 'react';
 import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
@@ -101,12 +103,15 @@ export function ReverseTopicsLink({
               onClick={() => {
                 setOpen(false);
                 // Deep-link into the chat surface via the SHARED contract —
-                // the chat surface's parseChatDeepLink switches to this topic
-                // on arrival. The structured `state` option is the
-                // load-bearing channel (survives the host's resolveHref).
+                // the chat surface's parseChatDeepLink switches to this
+                // topic on arrival. Plan 04.2-03 URL_HASH carrier: the
+                // encoded payload rides in the URL fragment baked into
+                // `deepLink.to`; navigate() takes ONE argument. URL
+                // fragments survive the host's resolveHref and the host
+                // wrapper around useNavigate (probe 2026-05-23).
                 const deepLink = buildTopicDeepLink(companyPrefix, t.topicIssueId);
                 if (deepLink) {
-                  nav.navigate(deepLink.to, { state: deepLink.state });
+                  nav.navigate(deepLink.to);
                 }
               }}
             >

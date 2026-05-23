@@ -35,19 +35,23 @@
 // <button> and routes via the host navigation hook's navigate() so
 // modifier-click etc. stay native where applicable.
 //
-// Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) — the emit side of the verified
-// Reader->Chat deep-link contract. The deep link is built by the SHARED
-// `buildChatDeepLink` helper (src/ui/surfaces/chat/deep-link.mjs) and
-// navigate() is called with BOTH the path (`to`, with a `?query` fallback
-// tail) AND the structured `state` option. `state` is the load-bearing
-// channel: the host router forwards it verbatim to `useHostLocation().state`,
-// untouched by the company-prefix `resolveHref` step that the live drill
-// proved strips the `?query` tail. chat/index.tsx reads it back via the
-// shared `parseChatDeepLink`.
+// Plan 04.2-02 Task 2 (GAP-RCB-03-DEEPLINK) — the emit side of the
+// shared Reader->Chat deep-link contract.
+// Plan 04.2-03 Task 2 (GAP-RCB-03-CARRIER) — carrier swapped to URL_HASH.
+// The deep link is built by the SHARED `buildChatDeepLink` helper
+// (src/ui/surfaces/chat/deep-link.mjs); the encoded payload now rides
+// entirely in the URL fragment (`deepLink.to` carries `#h=<base64-JSON>`).
+// navigate() is called with ONE argument — `deepLink.to`. NO `state:`
+// option. The live Countermoves probe 2026-05-23 proved the host strips
+// BOTH the `?query` tail (resolveHref) AND the `{ state }` argument (host
+// wrapper around useNavigate; history.state.usr === null), but RFC 3986
+// URL fragments survive end-to-end because they never reach the server
+// and the host's path-routing cannot touch them. chat/index.tsx reads
+// the fragment back via the shared `parseChatDeepLink({ hash })`.
 //
-// SECURITY (T-04.2-02-01): seedTitle / seedBody travel as plain structured
-// string fields (in `state`) and as URL-encoded query params (the fallback);
-// downstream they populate controlled React-text input values only — never
+// SECURITY (T-04.2-03-01): seedTitle / seedBody travel as plain structured
+// string fields inside the base64-JSON-encoded fragment payload; downstream
+// they populate controlled React-text input values only — never
 // dangerouslySetInnerHTML. No raw fetch.
 
 import * as React from 'react';
@@ -85,11 +89,13 @@ export type ContinueInChatButtonProps = {
   issue: ContinueInChatIssue;
 };
 
-/** What navigate() needs: the path (with a `?query` fallback) + the
- *  structured state object (the load-bearing channel). null = not navigable. */
+/** What navigate() needs: the fragment-bearing path. Plan 04.2-03 URL_HASH
+ *  carrier — the encoded payload is in `to`'s `#h=...` fragment; `state` is
+ *  intentionally `undefined` (the 0.9.1 state carrier is stripped by the
+ *  host wrapper on this Paperclip instance). null = not navigable. */
 type ChatDeepLinkNav = {
   to: string;
-  state: { clarityChatDeepLink: unknown };
+  state: undefined;
 };
 
 /**
@@ -189,13 +195,16 @@ export function ContinueInChatButton({
       data-clarity-action="continue-in-chat"
       data-clarity-route={result.route}
       onClick={() => {
-        // GAP-RCB-03 fix — navigate() carries the deep link on BOTH channels:
-        // the path `to` (with a ?query tail for refresh/copy-link recovery)
-        // AND the structured `state` option. `state` is the load-bearing
-        // channel — the host forwards it verbatim to useHostLocation().state,
-        // untouched by the company-prefix resolveHref step. chat/index.tsx's
-        // parseChatDeepLink reads it back.
-        nav.navigate(deepLink.to, { state: deepLink.state });
+        // Plan 04.2-03 GAP-RCB-03-CARRIER fix — navigate() carries the
+        // deep link entirely in the URL fragment baked into `deepLink.to`
+        // (`/<prefix>/chat#h=<base64-JSON>`). NO `state:` argument: the
+        // 0.9.1 state carrier was proven stripped by the host wrapper
+        // around useNavigate on the live Countermoves Paperclip instance
+        // (history.state.usr === null after click). URL fragments per
+        // RFC 3986 are client-side-only and never reach the server, so
+        // the host's path-routing / resolveHref step cannot touch them.
+        // chat/index.tsx's parseChatDeepLink reads the fragment back.
+        nav.navigate(deepLink.to);
       }}
     >
       Continue in chat with {employeeLabel} →
