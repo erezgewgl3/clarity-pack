@@ -40,7 +40,12 @@ import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { ToastProvider, useToast } from '../../primitives/toast.tsx';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
-import { RosterRail, type RosterEmployee } from './roster-rail.tsx';
+import {
+  RosterRail,
+  normalizeRoster,
+  type RosterEmployee,
+  type RosterResult,
+} from './roster-rail.tsx';
 import { TopicStrip, type ChatTopic } from './topic-strip.tsx';
 // Plan 04.2-02 Task 2 (GAP-RCB-03) — the SHARED Reader->Chat deep-link
 // contract. parseChatDeepLink is the READ half; the Reader's
@@ -307,6 +312,20 @@ function ChatPageBody({
   // the contract test + chat-url-params Test 4).
   const { search, pathname, hash, state: locationState } = useHostLocation();
   const nav = useHostNavigation();
+
+  // Plan 04.2-04 (GAP-RCB-03-DISPATCH) — the chat shell renders entirely
+  // conditionally on `employee` being non-null (the empty-state below). To
+  // dispatch an existing-topic deep link we need to look up the employee by
+  // the UUID in link.employee and call setEmployee with the matched
+  // RosterEmployee. RosterRail also fetches chat.roster; the host bridge's
+  // usePluginData deduplicates identical (action, params) pairs, so this
+  // parallel call shares the underlying fetch.
+  const { data: rosterData, loading: rosterLoading } = usePluginData<RosterResult>(
+    'chat.roster',
+    { companyId, userId },
+  );
+  const roster = normalizeRoster(rosterData);
+
   // A ref guards against the effect firing twice for the same deep link
   // (e.g. a re-render before the replace-navigation lands). The key is the
   // resolved link itself so neither a stale hash nor a stale search re-fires.
@@ -320,6 +339,18 @@ function ChatPageBody({
     // only `hash` as the canonical channel.
     const link = parseChatDeepLink({ search, state: locationState, hash });
     if (!link) return;
+
+    // Plan 04.2-04 (GAP-RCB-03-DISPATCH) race-safe defer. The chat surface
+    // mount typically lands the deep link in `hash` before chat.roster
+    // returns. If we consumed now, the employee lookup would miss (roster
+    // is null), the consume-once ref would close the door, and replace-nav
+    // would clear the hash — settling the surface on its empty state with
+    // no recovery path. Hold consume back until roster is available (or
+    // until the fetch settles with no data, in which case we proceed with
+    // employeeAgentId set but employee unmatched — graceful degrade).
+    if (link.topic && link.employee && roster === null && rosterLoading) {
+      return;
+    }
 
     // Consume-once guard — keyed on the resolved link so neither channel
     // re-triggers after the replace-navigation clears them.
@@ -338,15 +369,27 @@ function ChatPageBody({
         originIssueId: link.originIssueId,
       });
     } else if (link.topic) {
+      // Plan 04.2-04 (GAP-RCB-03-DISPATCH) — set the employee FIRST so the
+      // chat shell renders the thread region (the empty-state branch checks
+      // `!employee`). The roster lookup matches by UUID; an unmatched id
+      // (employee absent from this user's roster) leaves employee null and
+      // the surface degrades to the empty state — acceptable, this is the
+      // legacy-deep-link case where employee is no longer addressable.
+      if (link.employee && roster) {
+        const matched = roster.find((e) => e.id === link.employee);
+        if (matched) setEmployee(matched);
+      }
       // Topic-switch deep link. `topic` is the topic ISSUE id. We open a
       // minimal ChatTopic — the message thread + topic strip both key on
       // issueId, so the strip reconciles the full row on its own
-      // chat.topics fetch.
+      // chat.topics fetch. employeeAgentId is threaded from link.employee
+      // so the topic-strip / context-rail can reconcile from the topic side
+      // even before the roster lookup completes.
       setTopic({
         topicId: link.topic,
         issueId: link.topic,
         parentIssueId: '',
-        employeeAgentId: '',
+        employeeAgentId: link.employee ?? '',
         title: '',
         lastActivityAt: new Date().toISOString(),
         archived: false,
@@ -373,7 +416,7 @@ function ChatPageBody({
     // hash, no state) keeps the history entry clean and drops the
     // `#h=<encoded>` fragment that carried the payload (Plan 04.2-03).
     nav.navigate(pathname, { replace: true });
-  }, [search, pathname, hash, locationState, nav]);
+  }, [search, pathname, hash, locationState, nav, roster, rosterLoading]);
 
   // Plan 04.2-01 (RCB-03) — the seeded New Topic dialog's Create action.
   // Threads originIssueId through chat.topic.create (RCB-04) so the created

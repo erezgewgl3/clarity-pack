@@ -28,7 +28,7 @@ export type RosterEmployee = {
   status: string;
 };
 
-type RosterResult =
+export type RosterResult =
   | RosterEmployee[]
   | { error: string }
   | { employees: RosterEmployee[] }
@@ -59,7 +59,7 @@ function avatarLetter(name: string | undefined): string {
   return trimmed ? trimmed[0]!.toUpperCase() : '?';
 }
 
-function normalizeRoster(data: RosterResult): RosterEmployee[] | null {
+export function normalizeRoster(data: RosterResult): RosterEmployee[] | null {
   if (!data) return null;
   if (Array.isArray(data)) return data;
   if ('employees' in data && Array.isArray(data.employees)) return data.employees;
