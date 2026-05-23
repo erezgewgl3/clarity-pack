@@ -24,6 +24,7 @@ const CHECKS = [
   { id: 'COEXIST-07', script: '07-bulletin-disable.mjs' },
   { id: 'COEXIST-08', script: '08-chat-disable.mjs' },
   { id: 'COEXIST-09', script: '09-true-task.mjs' },
+  { id: 'COEXIST-10', script: '10-uninstall-runbook.mjs' },
 ];
 
 const results = [];
