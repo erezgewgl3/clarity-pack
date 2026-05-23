@@ -115,6 +115,69 @@ test('Test 4 — PARAMS-CLEARED: params are cleared via a replace navigation aft
   assert.match(c, /replace:\s*true/, 'params cleared via a replace navigation');
 });
 
+test('Test 5 — DISPATCH (GAP-RCB-03-DISPATCH, Plan 04.2-04): existing-topic deep link sets employee from the roster', () => {
+  // Live-host evidence (Countermoves COU-2215 drill, 2026-05-23, 0.9.2):
+  //
+  //   [chat-mount @1666ms] payload = {
+  //     topic: 'e7b7fee8-b432-4422-8a1c-1bb3043a9d43',
+  //     comment: 'df18ae28-34f8-4d59-9344-945667d19c73',
+  //     employee: 'b2a22e50-d772-4b70-bb50-4f4e93c2e984',
+  //   }
+  //   [replace-nav fired @2365ms] hash cleared — consume effect DID run
+  //
+  // Carrier + read both worked end-to-end, but the chat shell renders entirely
+  // conditionally on the `employee` React state being non-null (index.tsx line
+  // 683: `{!employee ? <empty> : <thread>}`). 0.9.2's existing-topic dispatch
+  // calls setTopic with `employeeAgentId: ''` and never calls setEmployee, so
+  // the surface stays on its empty state even though the topic dispatched.
+  //
+  // GAP-RCB-03-DISPATCH fix: look up the employee in chat.roster by
+  // `link.employee` UUID and call setEmployee(matched). Thread link.employee
+  // into setTopic's employeeAgentId so the topic-strip / context-rail can
+  // reconcile from the topic side too.
+  const c = code(readChat('index.tsx'));
+  assert.match(
+    c,
+    /setEmployee\(/,
+    'existing-topic dispatch sets employee (the chat shell renders conditionally on employee)',
+  );
+  assert.match(
+    c,
+    /employeeAgentId:\s*link\.employee/,
+    'setTopic uses link.employee for employeeAgentId (was hardcoded empty in 0.9.2)',
+  );
+  assert.match(
+    c,
+    /usePluginData[<\s][^)]*['"]chat\.roster['"]/,
+    'chat.roster is fetched in ChatPageBody so the dispatch can look up the employee',
+  );
+  assert.match(
+    c,
+    /link\.employee/,
+    'the deep-link employee field is read on the dispatch path',
+  );
+});
+
+test('Test 6 — DISPATCH-RACE (GAP-RCB-03-DISPATCH, Plan 04.2-04): consume defers when roster has not loaded', () => {
+  // Without deferring, the deep link arrives at chat mount before the
+  // chat.roster fetch returns. The roster lookup misses (roster === null),
+  // setEmployee never runs, the consume-once guard marks the link consumed,
+  // replace-nav clears the hash, and the surface settles on the empty state
+  // with no way to retry. The fix gates the consume on roster availability
+  // for the existing-topic+employee case: if `link.employee && roster === null`
+  // and the fetch is still loading, return early WITHOUT setting the
+  // consumed-once ref. The effect re-fires when the roster data arrives (it
+  // is in the effect's dep array) and consume completes correctly.
+  const c = code(readChat('index.tsx'));
+  // The effect's dep array carries `roster` (or the rosterQuery — both reads
+  // refire on data arrival).
+  assert.match(
+    c,
+    /(\[[^\]]*\broster\b[^\]]*\]|\[[^\]]*\brosterData\b[^\]]*\])/,
+    'the deep-link effect depends on roster so it re-fires when chat.roster resolves',
+  );
+});
+
 test('chat.css: defines a .flash-highlight rule + a @keyframes clarity-flash', () => {
   const css = readFileSync(path.join(STYLES_DIR, 'chat.css'), 'utf8');
   assert.match(css, /flash-highlight/, 'a .flash-highlight rule exists');
