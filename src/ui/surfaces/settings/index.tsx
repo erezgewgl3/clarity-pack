@@ -38,6 +38,7 @@ export function SettingsPage(): React.ReactElement {
           <input
             type="checkbox"
             checked={optedIn}
+            aria-label="Enable Clarity Pack for me"
             onChange={() => {
               void toggle();
             }}
@@ -103,6 +104,7 @@ function ErrataComposer(): React.ReactElement {
             type="number"
             min="1"
             value={cycle}
+            aria-label="Bulletin cycle"
             onChange={(event) => setCycle(event.currentTarget.value)}
             required
           />
@@ -113,6 +115,7 @@ function ErrataComposer(): React.ReactElement {
             value={body}
             maxLength={2000}
             rows={5}
+            aria-label="Erratum body"
             onChange={(event) => setBody(event.currentTarget.value)}
             required
           />

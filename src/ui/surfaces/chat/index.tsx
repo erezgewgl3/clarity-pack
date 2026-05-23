@@ -842,6 +842,7 @@ function ChatPageBody({
               <input
                 type="text"
                 value={seedDialog.title}
+                aria-label="New topic title"
                 autoFocus
                 onChange={(e) =>
                   setSeedDialog((s) => (s ? { ...s, title: e.target.value } : s))
@@ -853,6 +854,7 @@ function ChatPageBody({
               First message
               <textarea
                 value={seedDialog.body}
+                aria-label="First message"
                 onChange={(e) =>
                   setSeedDialog((s) => (s ? { ...s, body: e.target.value } : s))
                 }
