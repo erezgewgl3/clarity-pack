@@ -24,8 +24,8 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is 0.9.3 (Plan 04.2-04 — GAP-RCB-03-DISPATCH closure)', () => {
-  assert.equal(manifest.version, '0.9.3');
+test('manifest version is 1.0.0-rc.1 (Phase 5 Plan 05-01 — Distribution & Polish kickoff)', () => {
+  assert.equal(manifest.version, '1.0.0-rc.1');
 });
 
 test('manifest declares the capabilities the chat handlers need', () => {

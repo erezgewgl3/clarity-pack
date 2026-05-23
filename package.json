@@ -1,6 +1,6 @@
 {
   "name": "clarity-pack",
-  "version": "0.9.3",
+  "version": "1.0.0-rc.1",
   "description": "Paperclip plugin — four Clarity surfaces + Editor-Agent (smoke spike).",
   "type": "module",
   "engines": {
@@ -12,7 +12,8 @@
     "build:ui": "node scripts/build-ui.mjs",
     "build:manifest": "tsc --project tsconfig.manifest.json",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"test/**/*.test.mjs\""
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test && node scripts/check-css-scope.mjs"
   },
   "paperclipPlugin": {
     "manifest": "./dist/manifest.js",
