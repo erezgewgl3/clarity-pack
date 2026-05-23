@@ -1,0 +1,31 @@
+name: lockfile-audit
+
+# Phase 5 Plan 05-02 (DIST-05) — fail CI on high+ severity advisories in
+# production dependencies. Production-only because devDeps may carry known
+# unfixable advisories that do not ship in the npm tarball (the `files`
+# field in package.json restricts publish to dist/ + migrations/ + README.md).
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Lockfile drift (npm ci would fail if package-lock.json is out of sync)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --omit=dev
+          else
+            echo "No package-lock.json — skipping ci install (devDep-free dependency tree)"
+          fi
+      - name: Audit production dependencies (high+ blocks)
+        run: npm audit --audit-level=high --omit=dev

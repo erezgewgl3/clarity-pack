@@ -1,0 +1,31 @@
+name: a11y-check
+
+# Phase 5 Plan 05-02 (DIST-05) — static accessibility check. Walks
+# src/ui/**/*.{ts,tsx,jsx} and asserts:
+#   R1 — every <img> has alt
+#   R2 — every <input>/<textarea>/<select> has id/name/aria-label/aria-labelledby
+#   R3 — no dangerouslySetInnerHTML outside the allowlist
+#
+# This is the STATIC substitute for a runtime axe-core pass. A full
+# dynamic a11y pass against the rendered Paperclip dev server is on the
+# roadmap (Plan 05-04 deferred — visual regression infrastructure).
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  a11y:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Static a11y check
+        run: node scripts/check-a11y.mjs
+      - name: Test pin (node --test test/ci/check-a11y.test.mjs)
+        run: node --test test/ci/check-a11y.test.mjs
