@@ -24,8 +24,8 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is 0.9.1 (Plan 04.2-02 — Reader↔Chat Bridge gap closure)', () => {
-  assert.equal(manifest.version, '0.9.1');
+test('manifest version is 0.9.2 (Plan 04.2-03 — Reader↔Chat Bridge GAP-RCB-03-CARRIER closure)', () => {
+  assert.equal(manifest.version, '0.9.2');
 });
 
 test('manifest declares the capabilities the chat handlers need', () => {
