@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.8.4
 milestone_name: phase-4.1-closed
 status: executing
-stopped_at: "Completed Plan 04.1-01 (Wave 1, falsify-first spike). Next: Plan 04.1-02 (createTrueTask shared helper + chat.createTrueTask handler + chat.promote D-04 unification rewrite — Wave 2, autonomous TDD)."
-last_updated: "2026-05-22T21:09:36.345Z"
+stopped_at: "Plan 04.2-02 Tasks 1-3 COMPLETE (gap-closure shipped 0.9.1 — GAP-RCB-01-STYLING + GAP-RCB-03-DEEPLINK both closed in source, real cross-hook regression test + CSS-cascade guard landed, clarity-pack-0.9.1.tgz packed sha256 fb5e6fc6...8b8). Suite 1305 → 1321 pass / 0 fail / 2 skip; tsc clean; CSS-scope guard exit 0. Task 4 — `checkpoint:human-verify gate=blocking` operator re-drill on Countermoves (5-path + RCB-07 spot-check, snapshot-bookended at 0.9.0→0.9.1 upgrade) is PENDING — awaits Eric back at keyboard. SUMMARY: 04.2-02-SUMMARY.md."
+last_updated: "2026-05-23T00:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
@@ -28,8 +28,16 @@ progress:
 
 ## Current Position
 
-Phase: 04.2 (reader-chat-bridge) — EXECUTING (Plan 04.2-01 operator drill FAILED — gap-closure pending)
-Plan: 1 of 1 — Plan 04.2-01 Tasks 1-7 DONE; Task 8 operator drill RAN 2026-05-22 and FAILED with 2 gaps
+Phase: 04.2 (reader-chat-bridge) — EXECUTING
+Plan: 2 of 2 (Tasks 1-3 of 4 complete; Task 4 operator drill PENDING — `checkpoint:human-verify gate=blocking`)
+Next: Eric runs the snapshot-bookended 0.9.0→0.9.1 operator re-drill on live Countermoves (5-path Reader↔Chat Bridge + RCB-07 pre-0009-topic spot-check). On PASS: flip RCB-01..RCB-07 to `Implemented` in REQUIREMENTS.md, set `04.2-VERIFICATION.md` status to `verified`, mark Phase 4.2 COMPLETE. On FAIL: file gaps as Plan 04.2-03 (Plan 04.1-06→10 iterative-drill pattern). Re-enter via `/gsd:resume-work` or `/gsd:verify-work 4.2` when back at keyboard.
+
+**Plan 04.2-02 (gap-closure, v0.9.1) — Tasks 1-3 COMPLETE 2026-05-23; Task 4 operator drill PENDING.** 5 atomic commits `619f537..e094091` close both 04.2-01 drill gaps in source: (1) **GAP-RCB-01-STYLING** — `theme.css` token promotion: the shared `--clarity-*` tokens (`--clarity-you`, `--clarity-you-soft`, `--clarity-ink-3`, `--clarity-line`) moved into the base `[data-clarity-surface]` block so the Reader-surface `.clarity-continue-in-chat` rule resolves with no Reader-undefined custom properties (the VERIFICATION report was partially wrong — the rule existed; its tokens were situation-room-only). Pinned by `test/ui/reader-button-css-cascade.test.mjs` C1-C4. (2) **GAP-RCB-03-DEEPLINK (load-bearing)** — empirical SDK finding documented in `src/ui/surfaces/chat/deep-link.mjs` module header: the Paperclip host's company-prefix `resolveHref` strips/garbles `?query` in `navigate()`'s `to`; the SDK type contract guarantees `state` is forwarded verbatim to `useHostLocation().state`. Fix carries params on `navigate()`'s `state` option (load-bearing) + appends `?query` to `to` as a refresh/copy-link fallback. Extracted pure `buildChatDeepLink` / `parseChatDeepLink` into `deep-link.mjs` (`.mjs` pattern matches `reasoning-block-parser.mjs`) so the real cross-hook regression test `test/ui/continue-in-chat-deeplink-contract.test.mjs` (D1-D4) round-trips ONE shared router-state channel — D3 asserts no-independent-mocks by construction, the exact test-gap that let 0.9.0 ship. (3) **Version bump + pack** — `package.json` + `src/manifest.ts` → 0.9.1; `clarity-pack-0.9.1.tgz` packed (139,702 bytes, sha256 `fb5e6fc622de097cf394da720fd1f19fe18d1aaf8918c66b5a14b0159abdb8b8`). **Suite 1305 → 1321 pass / 0 fail / 2 skip (1323 total, +18 net-new tests); `tsc --noEmit` clean; `node scripts/check-css-scope.mjs` exit 0 (105 selectors all scoped — SCAF-06/COEXIST-01 preserved). 0 deviations.** SUMMARY: `04.2-02-SUMMARY.md`. **Phase 4.2 SOURCE WORK COMPLETE, AWAITING OPERATOR CONFIRMATION.**
+
+---
+
+**Earlier history retained below.**
+
 Next: Plan a gap-closure plan (04.2-02, version 0.9.1) — fix GAP-RCB-01-STYLING + GAP-RCB-03-DEEPLINK, then re-drill paths 1-5 + the RCB-07 pre-0009-topic spot-check on Countermoves. Run `/gsd:plan-phase 4.2 --gaps` to consume `04.2-VERIFICATION.md`.
 
 **Plan 04.2-01 (Reader↔Chat Bridge) — Tasks 1-7 COMPLETE 2026-05-22; Task 8 operator drill RAN 2026-05-22 — install PASS, 5-path drill FAILED with 2 gaps. Plan stays OPEN.** Autonomous-TDD Tasks 1-7 executed continuation-style (a prior agent landed Tasks 1, 2-RED then crashed on a transient API overload; this continuation verified the in-progress Task 2 GREEN and finished Tasks 2-7). 13 atomic commits `2e7ef9b..a8301c3` + mid-drill safety fix `abd950d`. Shipped: migration 0009 `origin_issue_id` (additive, plugin-namespace, idempotent) + `listChatTopicsByOriginIssue` + `insertChatTopic` originIssueId thread-through (RCB-04); `chat.openForIssue` deterministic 5-case lineage-routing DATA handler (RCB-02, read-only); `ContinueInChatButton` Reader primitive — 4 lineage routes (RCB-01) wired into the Reader header; chat-surface deep-link URL-param handling — topic-switch, comment scroll + flash-highlight, seeded New Topic dialog threading `originIssueId`, params cleared via replace-nav (RCB-03); `About <COU-NNNN> ↗` topic-strip backlink chip (RCB-05) + Reader `<N> conversations about this issue ↗` reverse-topics list (RCB-06); version 0.9.0 in package.json + manifest, `clarity-pack-0.9.0.tgz` packed (138502 bytes, sha256 `b7355ababc27e22893882012e196c9c83d6dd9565b1a7edd77250ac0cf8dadb5`). Suite 1235 → 1305 (+70 net-new node --test cases; 1303 pass / 0 fail / 2 skipped); `tsc --noEmit` clean. SUMMARY: `04.2-01-SUMMARY.md`; verification: `04.2-VERIFICATION.md` (status `gaps_found`).
@@ -467,7 +475,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to execute
+**Status:** Executing Phase 04.2
 **Progress:** [########  ] 4/6 phases complete; Phase 4.1 Chat → True Task **6/7 plans done** (Plan 04.1-10 APPROVED-WITH-FOLLOWUPS 2026-05-21; only Plan 04.1-07 closure remains)
 
 ## Performance Metrics
