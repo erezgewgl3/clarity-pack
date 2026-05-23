@@ -33,14 +33,16 @@
 // committed artifact. It does NOT perform the probe itself.
 //
 // ============================================================================
-// CARRIER=PENDING_OPERATOR_PROBE
+// CARRIER=URL_HASH
 // ============================================================================
-// After the operator runs the snippets below and reports verbatim output, a
-// continuation agent replaces this line with one of:
-//   CARRIER=URL_HASH          — useHostLocation().hash preserved end-to-end
-//   CARRIER=SESSION_STORAGE   — sessionStorage.getItem readable on chat mount
-//   CARRIER=WORKER_HANDOFF    — both UI carriers stripped; need a row handoff
-// The line is a single deterministic grep target for Task 2.
+// Operator probe run 2026-05-23 on live Countermoves Paperclip instance,
+// browser DevTools, Reader tab of COU-2215. Snippet 1 set
+// window.__clarityProbeUrlHashTarget = '/COU/chat#h=<encoded>' and the
+// operator navigated via window.location.href = ... . At the chat surface
+// mount, window.location.hash carried the full #h=<encoded> fragment intact;
+// the payload base64+JSON-decodes back to the exact sentinel that was emitted
+// from the Reader tab. See OPERATOR-OUTPUT at the bottom for verbatim values.
+// Task 2 grep-branches on this line: URL_HASH = Branch A.
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -268,30 +270,42 @@ export {
 // OPERATOR-OUTPUT (verbatim console output from Countermoves probe run)
 // ============================================================================
 //
-// PENDING — operator has not yet run the probe.
+// Probe run: 2026-05-23, live Countermoves Paperclip instance
+// (https://countermoves.gl3group.com), browser DevTools Console, Reader tab
+// of issue COU-2215 → navigated to /COU/chat via
+//   window.location.href = window.__clarityProbeUrlHashTarget
+// after Snippet 1 set the target. Chat surface mounted (empty-state — the
+// 0.9.1 chat-side decoder reads search + state, not hash, so the payload
+// arrives unconsumed; that is exactly what Task 2's carrier swap fixes).
 //
-// Once Eric reports the verbatim console output, a continuation agent
-// records the results below in this format:
+// ---
+// ## Snippet 1 — URL HASH
+// - URL (at chat surface mount)                   = "https://countermoves.gl3group.com/COU/chat#h=eyJyb3V0ZSI6InVybEhhc2hQcm9iZSIsInNlbnRpbmVsIjoiQ0FSUklFUl9QUk9CRV8yMDI2XzA1XzIzIn0%3D"
+// - window.location.hash (at chat surface mount)  = "#h=eyJyb3V0ZSI6InVybEhhc2hQcm9iZSIsInNlbnRpbmVsIjoiQ0FSUklFUl9QUk9CRV8yMDI2XzA1XzIzIn0%3D"
+// - window.location.pathname                      = "/COU/chat"
+// - window.location.search                        = ""
+// - history.state                                 = {"idx":0}
+// - Decoded payload                               = {"route":"urlHashProbe","sentinel":"CARRIER_PROBE_2026_05_23"}
+//   (decode = JSON.parse(atob(decodeURIComponent(hash.slice(3)))) — exact
+//    round-trip of the payload that Snippet 1 wrote on the Reader tab)
+// - VERDICT: SURVIVES
 //
-//   ---
-//   ## Snippet 1 — URL HASH
-//   - window.location.hash (AT CHAT MOUNT) = "<verbatim>"
-//   - window.location.pathname             = "<verbatim>"
-//   - history.state                        = "<verbatim JSON>"
-//   - Decoded payload                      = "<verbatim>" OR "(decode failed: ...)"
-//   - VERDICT: SURVIVES | STRIPPED
+// ## Snippet 2 — SESSION_STORAGE
+// - NOT PROBED — Snippet 1 verdict was SURVIVES, so probing stopped per
+//   the priority order in the plan and the file header.
 //
-//   ## Snippet 2 — SESSION_STORAGE  (only if Snippet 1 STRIPPED)
-//   - sessionStorage.getItem('clarity-chat-deep-link') = "<verbatim>"
-//   - Parsed payload                                   = "<verbatim>"
-//   - VERDICT: SURVIVES | STRIPPED
+// ## Snippet 3 — WORKER_HANDOFF
+// - NOT PROBED — heaviest path (migration + handler pair) only justified
+//   if both UI carriers strip; URL_HASH survives, so this is unnecessary.
 //
-//   ## Snippet 3 — WORKER_HANDOFF — NOT PROBED
-//   (rationale)
-//
-//   ## Final chosen carrier: CARRIER=<NAME>
-//   Justification: <one-line — cite the verbatim observed value from Snippet 1 or 2>
-//   ---
-//
-// The continuation agent then writes the chosen CARRIER=<NAME> line at the
-// CARRIER= comment near the top of this file and proceeds to Task 2.
+// ## Final chosen carrier: CARRIER=URL_HASH
+// Justification: window.location.hash at the chat-surface mount carries the
+// full #h=<encoded> fragment that the Reader tab emitted, and the encoded
+// payload base64+JSON-decodes back to the exact sentinel object. history.state
+// is bare {"idx":0} with no `usr` field — confirms the host strips
+// react-router state on cross-route navigation (the 04.2-02 failure mode)
+// while leaving URL fragments untouched. RFC 3986 fragments are
+// client-side-only and never reach the server, never pass through the host's
+// path-routing or resolveHref step — which is exactly why the host cannot
+// strip them.
+// ---
