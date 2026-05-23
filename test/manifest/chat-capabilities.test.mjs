@@ -24,8 +24,8 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is 1.0.0-rc.1 (Phase 5 Plan 05-01 — Distribution & Polish kickoff)', () => {
-  assert.equal(manifest.version, '1.0.0-rc.1');
+test('manifest version is 1.0.0-rc.2 (Phase 5 Plan 05-02 — DIST-05 + COEXIST-05 closure)', () => {
+  assert.equal(manifest.version, '1.0.0-rc.2');
 });
 
 test('manifest declares the capabilities the chat handlers need', () => {
