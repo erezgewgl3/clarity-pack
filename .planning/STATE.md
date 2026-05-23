@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.8.4
-milestone_name: phase-4.1-closed
+milestone: v1.0.0-rc.2
+milestone_name: phase-5-partial
 status: executing
-stopped_at: "Plan 04.2-04 CODE-COMPLETE 2026-05-24, OPERATOR DRILL DEFERRED. `/gsd:execute-phase 4.2` shipped Plan 04.2-03 (v0.9.2 — carrier swap to URL_HASH; carrier closure operator-verified on Countermoves 2026-05-24 — `hashLooksRight: true`, payload `{topic, comment, employee}` decoded clean) AND Plan 04.2-04 (v0.9.3 — GAP-RCB-03-DISPATCH closure: dispatch defect surfaced during the 0.9.2 Path 1 drill, fix lifts chat.roster to ChatPageBody + race-safe defer + setEmployee on dispatch + employeeAgentId thread-through). Per explicit operator authorization 2026-05-24 (`complete everything autonomously don't wait for me to test - I will test after you complete phase 5`), Plan 04.2-04 Task 5 (5-path Reader↔Chat Bridge drill + RCB-07 spot-check) is DEFERRED until after Phase 5 ships. Phase 4.2 status: **code-complete-pending-drill** — RCB-01..RCB-07 NOT yet flipped to Implemented. Suite 1323 → 1329 across 04.2-03 + 04.2-04 (+6 net; 0 fail; 2 pre-existing skip). tsc clean; check-css-scope exit 0. Tarballs packed: clarity-pack-0.9.2.tgz (139,684 bytes; sha256 `8ff99eddb40242822dc518218ee0501eec122926ab58c4ffb6d0b92bc5397fdf`); clarity-pack-0.9.3.tgz (139,766 bytes; sha256 `2b460abbc6850e50300bddf9eabe4a76d93d6cc31ff05d09fd42797c6ccd46f4`). 0.9.2 is live on Countermoves; 0.9.3 awaits the post-Phase-5 sweep. NEXT (per operator authorization): Phase 5 (Distribution & Polish) — `/gsd:discuss-phase 5` → `/gsd:plan-phase 5` → `/gsd:execute-phase 5`."
-last_updated: "2026-05-24T01:15:00.000Z"
+stopped_at: "Phase 5 PARTIAL CLOSURE 2026-05-24. Per explicit operator authorization (Eric 2026-05-24: 'complete everything autonomously don't wait for me to test - I will test after you complete phase 5'), Plan 05-01 (DIST-01 + DIST-02 — npm publish prep + README) and Plan 05-02 (DIST-05 + COEXIST-05 — lockfile-audit + a11y check + uninstall runbook coexistence gate) shipped at the code tier. Version 1.0.0-rc.2 packed (clarity-pack-1.0.0-rc.2.tgz, 142,544 bytes, sha256 `ac2f4df2c3d5de8f86d271dc9b4f77cf8cc14f413fb63a095127ac2797c4cc0a`). Plan 05-03 (DIST-03 — AC auto-status event-derived) and Plan 05-04 (DIST-04 — full-fidelity previewers xlsx/pdf/md/png + the Plan-05-02-deferred visual-regression baseline) are PLAN-READY-AWAITING-DESIGN-REVIEW — each captures 3-5 product/library design questions that need operator alignment before code ships (Q1-Q3 for AC auto-status; Q1-Q5 for previewers + visual regression). Suite 1323 → 1339 across Phase 4.2 closure + Phase 5 work (+16 net; 0 fail; 2 pre-existing skip). tsc clean; check-css-scope exit 0; check-a11y exit 0; coexistence run-all 10/10 PASS. NEXT: post-Phase-5 operator sweep — (a) Eric reviews + answers design questions in Plans 05-03 + 05-04; (b) live drill of the Phase 4.2 dispatch fix (Plan 04.2-04 Task 5: 5-path Reader↔Chat Bridge + RCB-07 spot-check); (c) once published to npm, the install verification on Countermoves. Tarballs in working tree: clarity-pack-0.9.2.tgz (live on Countermoves), 0.9.3.tgz (dispatch fix awaiting drill), 1.0.0-rc.1.tgz, 1.0.0-rc.2.tgz (latest)."
+last_updated: "2026-05-24T01:40:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 38
-  completed_plans: 30
-  percent: 54
+  total_plans: 42
+  completed_plans: 32
+  percent: 56
 ---
 
 # State: Clarity Pack
@@ -28,7 +28,23 @@ progress:
 
 ## Current Position
 
-Phase: 04.2 (reader-chat-bridge) — code-complete-pending-drill (next: Phase 5)
+Phase: 05 (Distribution & Polish) — PARTIAL CLOSURE: 2/4 plans shipped; 2 plans PLAN-READY-AWAITING-DESIGN-REVIEW.
+
+**Phase 5 Plans 05-01 + 05-02 — CODE-COMPLETE 2026-05-24.** Eight atomic commits `ba0b6a6..928e61e` across the two plans.
+
+- **Plan 05-01 (DIST-01 + DIST-02)** — `clarity-pack-1.0.0-rc.1.tgz` packed (142,516 bytes; sha256 `d7bbfa649bf838f7c3e1e4dd83ecad5357be4fc3a0a2710005c154212b894889`). README.md at repo root (install, opt-in, rollback, uninstall + --purge, runbook, trust model, compatibility); `prepublishOnly` guard (`npm run build && npm run typecheck && npm test && node scripts/check-css-scope.mjs`); `test/manifest/publish-readiness.test.mjs` (8 assertions). Live `npm publish` requires Eric's credentials — DEFERRED to post-Phase-5 operator sweep.
+
+- **Plan 05-02 (DIST-05 + COEXIST-05)** — `clarity-pack-1.0.0-rc.2.tgz` packed (142,544 bytes; sha256 `ac2f4df2c3d5de8f86d271dc9b4f77cf8cc14f413fb63a095127ac2797c4cc0a`). `scripts/check-a11y.mjs` (JSX-aware brace-tracking parser; 3 rules: img alt / form-control label / no-dangerouslySetInnerHTML allowlist); `scripts/coexistence-checks/10-uninstall-runbook.mjs` (asserts README documents data-preserving default uninstall + --purge opt-in + safety-CLI rollback reference); `.github/workflows/{lockfile-audit,a11y-check}.yml`. 5 aria-label fixes in chat seed-dialog + settings form controls. DIST-05's visual-regression baseline (the third sub-requirement) DEFERRED to Plan 05-04 (needs design review on infrastructure choice).
+
+- **Plan 05-03 (DIST-03 — AC auto-status event-derived)** — PLAN-READY-AWAITING-DESIGN-REVIEW. Three design questions captured: Q1 what events derive AC completion (recommended default: comment-marker), Q2 how auto-status surfaces alongside manual checkbox (recommended default: side-by-side, manual is source of truth), Q3 conflict resolution model. Plan: `.planning/phases/05-distribution-polish/05-03-PLAN.md`.
+
+- **Plan 05-04 (DIST-04 — previewers xlsx/pdf/md/png + visual regression)** — PLAN-READY-AWAITING-DESIGN-REVIEW. Five design questions: Q1 xlsx library (recommended: server-side conversion), Q2 pdf renderer (recommended: native `<embed>`), Q3 md library (recommended: react-markdown; keeps no-dangerouslySetInnerHTML invariant), Q4 png (trivial: native `<img>`), Q5 visual-regression approach (recommended: static-sketch regression via Playwright + image snapshot of `sketches/*.html`). Plan: `.planning/phases/05-distribution-polish/05-04-PLAN.md`.
+
+**Quality gates across Phase 5 work so far:** suite 1329 → 1339 (+10 net: 8 publish-readiness + 2 check/coexistence pins; 0 fail; 2 pre-existing skip); tsc clean; check-css-scope exit 0; check-a11y exit 0 (64 files / 0 violations); coexistence run-all 10/10 PASS.
+
+---
+
+**Phase 4.2 — code-complete-pending-drill (operator sweep deferred).**
 Plan: 4 of 4 (04.2-01 done-but-OPEN; 04.2-02 done-but-OPEN; **04.2-03 done-but-OPEN — carrier closure operator-verified, dispatch routed to 04.2-04**; **04.2-04 code-complete-pending-drill — DEFERRED per operator 2026-05-24**)
 
 **Plan 04.2-04 (third gap-closure, v0.9.3) — CODE-COMPLETE 2026-05-24, OPERATOR DRILL DEFERRED.** Surgical dispatch fix in `chat/index.tsx`: lift `chat.roster` into `ChatPageBody` (parallel `usePluginData` call — host bridge deduplicates with `RosterRail`'s fetch; `normalizeRoster` + `RosterResult` promoted to `export` on `roster-rail.tsx` for the shared shape); in the deep-link `useEffect`, race-safe defer (`if (link.topic && link.employee && roster === null && rosterLoading) return;` — the deep link arrives at chat mount before chat.roster typically returns; the dep-array on `roster` re-fires the effect when it resolves); in the existing-topic dispatch branch, look up matched RosterEmployee + `setEmployee(matched)` BEFORE `setTopic`; replaced hardcoded `employeeAgentId: ''` with `employeeAgentId: link.employee ?? ''`. Tests pinned: Test 5 (DISPATCH — `setEmployee`, `employeeAgentId: link.employee`, chat.roster fetch in ChatPageBody) + Test 6 (DISPATCH-RACE — dep array carries `roster`). Suite 1327 → 1329 (+2 net). Version 0.9.3 in package.json + src/manifest.ts + chat-capabilities pin updated. Build: `dist/manifest.js` reports `version: '0.9.3'`. Tarball `clarity-pack-0.9.3.tgz` (139,766 bytes; sha256 `2b460abbc6850e50300bddf9eabe4a76d93d6cc31ff05d09fd42797c6ccd46f4`) packed and ready for SCP. Operator drill walkthrough preserved verbatim in 04.2-04-PLAN.md Task 5 for the post-Phase-5 sweep. SUMMARY: `04.2-04-SUMMARY.md`.
