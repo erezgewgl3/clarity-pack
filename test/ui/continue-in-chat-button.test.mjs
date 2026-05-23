@@ -95,18 +95,26 @@ test('Test 6 — new-topic-needed click delegates with originIssueId + seed payl
   assert.match(c, /originIssueId/, 'forwards originIssueId to the contract helper');
 });
 
-test('continue-in-chat-button.tsx: navigate() carries the structured state (GAP-RCB-03 load-bearing)', () => {
-  // The Plan 04.2-02 fix carries the deep link on `navigate()`'s `state`
-  // option — the channel the host forwards verbatim, untouched by the
-  // company-prefix resolveHref step that the 04.2-01 live drill proved
-  // strips the `?query` tail. (The OLD Plan-04.2-01 contract relied on the
-  // query string and on >= 2 explicit encodeURIComponent calls; both moved
-  // into the shared deep-link helper.)
+test('continue-in-chat-button.tsx: navigate() uses URL_HASH carrier (Plan 04.2-03 GAP-RCB-03-CARRIER fix)', () => {
+  // Plan 04.2-03 carrier swap: the live Countermoves probe 2026-05-23 proved
+  // the host strips BOTH the `?query` tail (resolveHref) AND the `{ state }`
+  // argument (host wrapper around react-router's useNavigate). The fragment
+  // (`#h=<encoded>`) survives end-to-end because RFC 3986 fragments never
+  // reach the server and the host's path-routing/resolveHref cannot touch
+  // them. The Continue button now calls `nav.navigate(deepLink.to)` with the
+  // encoded payload baked into `to` — NO second `state:` argument.
   const c = code(readSrc());
+  // The navigate call must NOT pass a `state:` option (carrier swap).
+  assert.doesNotMatch(
+    c,
+    /navigate\([\s\S]{0,160}state\s*:/,
+    'navigate() must NOT carry a state argument (Plan 04.2-03 URL_HASH carrier)',
+  );
+  // The navigate target is `deepLink.to` — the fragment-bearing URL.
   assert.match(
     c,
-    /navigate\([\s\S]{0,160}state/,
-    'navigate() call carries the structured state option (the load-bearing channel)',
+    /navigate\(\s*deepLink\.to\s*\)/,
+    'navigate(deepLink.to) — the fragment-bearing URL carries the payload',
   );
 });
 

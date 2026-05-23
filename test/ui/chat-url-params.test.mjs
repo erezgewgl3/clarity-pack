@@ -1,25 +1,27 @@
 // test/ui/chat-url-params.test.mjs
 //
-// Plan 04.2-01 Task 5 / Plan 04.2-02 Task 2 — source-grep contract tests for
-// the chat surface deep-link handling (RCB-03). Same source-grep idiom as
-// chat-shell.test.mjs / chat-actions-row.test.mjs (Node's runner does not
-// load .tsx).
+// Plan 04.2-01 Task 5 / Plan 04.2-02 Task 2 / Plan 04.2-03 Task 2 — source-grep
+// contract tests for the chat surface deep-link handling (RCB-03). Same
+// source-grep idiom as chat-shell.test.mjs / chat-actions-row.test.mjs (Node's
+// runner does not load .tsx).
 //
-// Plan 04.2-02 GREEN UPDATE: the chat surface NO LONGER hand-parses
-// individual `?topic=` / `?comment=` / `?newTopic=` / seed params with
-// URLSearchParams; it delegates to the SHARED parseChatDeepLink contract
-// helper (src/ui/surfaces/chat/deep-link.mjs) which reads BOTH the
-// structured `state` channel (the load-bearing one — the GAP-RCB-03 fix)
-// AND the `?query` string (refresh / copy-link fallback). The greps below
-// pin the NEW contract — assertions about the resolved ChatDeepLink fields
-// (topic, comment, newTopic, seedTitle, seedBody, originIssueId) being
-// consumed downstream, not about which specific URLSearchParams call site
-// extracted them. The cross-hook round-trip itself is pinned by
-// continue-in-chat-deeplink-contract.test.mjs.
+// Plan 04.2-03 CARRIER SWAP: the empirical carrier-survival probe on live
+// Countermoves 2026-05-23 (CARRIER=URL_HASH in scripts/probes/carrier-survival.
+// mjs) proved that `window.location.hash` SURVIVES the host's
+// useHostNavigation().navigate() -> useHostLocation() handoff while both the
+// `?query` tail (stripped by `resolveHref`) and the `{ state }` argument
+// (stripped before reaching react-router's useNavigate; history.state.usr ===
+// null on the live host) DO NOT. The new contract is therefore: the encoded
+// payload rides entirely in the URL fragment (`#h=<encodeURIComponent(btoa(JSON.
+// stringify(payload)))>`); the chat surface destructures `hash` from
+// useHostLocation() and passes it to parseChatDeepLink along with search and
+// state (search + state are kept as defensive fallbacks; the canonical channel
+// is hash). The cross-hook round-trip is pinned by
+// continue-in-chat-deeplink-contract.test.mjs (E1-E6).
 //
-// After consumption the link is cleared (router.replace) so a refresh does
-// not re-trigger the dialog. The live DOM is covered by the Task 4 operator
-// drill.
+// After consumption the link is cleared (replace navigation to bare pathname)
+// so a refresh does not re-trigger the dialog. The live DOM is covered by the
+// Task 5 operator drill.
 
 import { strict as assert } from 'node:assert';
 import { existsSync, readFileSync } from 'node:fs';
@@ -38,19 +40,22 @@ function code(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
-test('chat/index.tsx: reads the host location (useHostLocation) — both search AND state channels', () => {
+test('chat/index.tsx: reads the host location (useHostLocation) — destructures hash (the load-bearing channel)', () => {
   const c = code(readChat('index.tsx'));
   // The repo convention is useHostLocation() — there is no react-router
-  // useSearchParams in this codebase. The new contract reads BOTH the
-  // structured `state` (load-bearing) AND `search` (refresh fallback).
+  // useSearchParams in this codebase. Plan 04.2-03: the load-bearing channel
+  // is now `hash` (URL_HASH per the Task 1 probe — survives the host's
+  // resolveHref step that strips `?query`, AND survives the host wrapper that
+  // strips `{ state }` before reaching react-router's useNavigate). The
+  // destructure includes `hash`; `search` and `state` are kept as defensive
+  // fallbacks but no longer carry the canonical payload.
   assert.match(c, /useHostLocation/, 'chat surface reads useHostLocation');
-  assert.match(c, /\bsearch\b/, 'destructures search from the host location');
-  assert.match(c, /\bstate\b/, 'destructures state from the host location (the load-bearing channel)');
-  // Both channels feed parseChatDeepLink (the SHARED contract helper).
+  assert.match(c, /\bhash\b/, 'destructures hash from the host location (the load-bearing channel per 04.2-03 probe)');
+  // hash MUST be threaded through to parseChatDeepLink (carrier swap).
   assert.match(
     c,
-    /parseChatDeepLink\(\s*\{[\s\S]{0,80}search[\s\S]{0,80}state|parseChatDeepLink\(\s*\{[\s\S]{0,80}state[\s\S]{0,80}search/,
-    'both search and state are passed to parseChatDeepLink',
+    /parseChatDeepLink\(\s*\{[\s\S]{0,160}\bhash\b/,
+    'hash is passed to parseChatDeepLink',
   );
 });
 
