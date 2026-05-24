@@ -19,13 +19,13 @@
 //   loading / pre-resolution -> render null (no layout flicker — Task 4
 //                               Test 2 pins the absent-while-loading state).
 //
-// EMPLOYEE NAME — DEVIATION (Plan Task 3 <behavior>): the plan says "resolve
-// from the assignee roster the Reader already has, or fall back to
-// assigneeAgentId". The Reader surface carries NO employee roster (confirmed
-// against src/ui/surfaces/reader/* + the issue.reader handler) and
-// chat.openForIssue returns only assigneeAgentId, not a display name. The
-// label therefore uses assigneeAgentId directly. A future plan can thread a
-// roster through issue.reader if a friendly name is wanted.
+// EMPLOYEE NAME — Plan 04.2-06 D9: `chat.openForIssue` now returns an
+// `assigneeName` field resolved server-side via `ctx.agents.get(...)`. The
+// button consumes `assigneeName` when present and falls back to a friendly
+// generic label ("this employee") when the lookup degraded — NEVER to the
+// raw UUID. Pre-04.2-06 (Plan 04.2-01) this fell back to assigneeAgentId,
+// which leaked the agent's UUID into the visible button text — D9 closed
+// that leak.
 //
 // NAVIGATION — DEVIATION (Plan Task 3 <behavior>): the plan says "click
 // handler uses useNavigate" (react-router-dom). The repo convention is
@@ -67,6 +67,10 @@ export type ChatOpenForIssueResult = {
   topicIssueId?: string;
   sourceCommentId?: string;
   assigneeAgentId?: string;
+  /** Plan 04.2-06 D9 — server-resolved display name for the assignee.
+   *  Null when the lookup degraded; the UI then falls back to a friendly
+   *  generic label, never to the raw UUID. */
+  assigneeName?: string | null;
   seedTitle?: string;
   seedBody?: string;
   error?: string;
@@ -158,7 +162,14 @@ export function ContinueInChatButton({
   // topic-itself — the issue IS already a chat surface; render nothing.
   if (result.route === 'topic-itself') return null;
 
-  const employeeLabel = result.assigneeAgentId || 'this employee';
+  // Plan 04.2-06 D9 — assigneeName is the resolved display name from
+  // chat.openForIssue (which calls ctx.agents.get under the hood). When the
+  // name lookup degraded server-side OR the field is unset (pre-04.2-06
+  // payloads), fall back to a friendly generic label — NEVER to the
+  // assigneeAgentId UUID. Leaking a UUID into the visible button text was the
+  // 2026-05-24 drill defect D9.
+  const employeeLabel =
+    (typeof result.assigneeName === 'string' && result.assigneeName) || 'this employee';
 
   // NO_ASSIGNEE — a disabled button + the locked guidance tooltip. The route
   // is still 'new-topic-needed' so the Reader header can position it.

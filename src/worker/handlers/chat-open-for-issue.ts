@@ -37,10 +37,18 @@
 //     (via wrapDataHandler -- fires BEFORE the body)
 
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
-import type { PluginIssuesClient, PluginLogger } from '@paperclipai/plugin-sdk';
+import type {
+  PluginAgentsClient,
+  PluginIssuesClient,
+  PluginLogger,
+} from '@paperclipai/plugin-sdk';
 
 export type ChatOpenForIssueCtx = OptInGuardDataCtx & {
   issues: PluginIssuesClient;
+  // Plan 04.2-06 D9 — resolves assigneeAgentId UUID to a human-friendly
+  // display name so the Reader's Continue-in-chat button reads
+  // "Continue in chat with CMO →" instead of "Continue in chat with <UUID> →".
+  agents: PluginAgentsClient;
   logger?: PluginLogger;
 };
 
@@ -51,6 +59,10 @@ export type ChatOpenForIssueResult = {
   topicIssueId?: string;
   sourceCommentId?: string;
   assigneeAgentId?: string;
+  /** Plan 04.2-06 D9 — display name resolved from `ctx.agents.get`.
+   *  Null when the lookup degrades (offline/permission). The UI then falls
+   *  back to a friendly generic label ("this employee"), NEVER to the UUID. */
+  assigneeName?: string | null;
   seedTitle?: string;
   seedBody?: string;
   error?: string;
@@ -150,6 +162,25 @@ export function registerChatOpenForIssue(ctx: ChatOpenForIssueCtx): void {
       };
     }
 
+    // Plan 04.2-06 D9 -- resolve assignee display name. Degrades to null on
+    // any failure path so the UI can fall back to a generic label ("this
+    // employee") instead of leaking the raw UUID into the button text.
+    let assigneeName: string | null = null;
+    try {
+      const agent = await ctx.agents.get(assigneeAgentId, companyId);
+      if (agent && typeof (agent as { name?: unknown }).name === 'string') {
+        const candidate = (agent as { name: string }).name.trim();
+        if (candidate) assigneeName = candidate;
+      }
+    } catch (e) {
+      ctx.logger?.warn?.('chat.openForIssue: agents.get for assignee failed', {
+        issueId,
+        companyId,
+        assigneeAgentId,
+        err: (e as Error).message,
+      });
+    }
+
     // 6. Chat-spawned task -- jump straight to the source topic + comment.
     const chatTaskMatch = CHAT_TASK_RE.exec(originId);
     if (chatTaskMatch) {
@@ -159,6 +190,7 @@ export function registerChatOpenForIssue(ctx: ChatOpenForIssueCtx): void {
         topicIssueId: chatTaskMatch[1],
         sourceCommentId: chatTaskMatch[2],
         assigneeAgentId,
+        assigneeName,
       };
     }
 
@@ -168,6 +200,7 @@ export function registerChatOpenForIssue(ctx: ChatOpenForIssueCtx): void {
       kind: 'chatOpenForIssue' as const,
       route: 'new-topic-needed' as const,
       assigneeAgentId,
+      assigneeName,
       seedTitle: title,
       seedBody: `Continuing from ${identifier}: ${title}`,
     };
