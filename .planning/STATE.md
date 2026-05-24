@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0.0-rc.3
+milestone: v1.0.0-rc.4
 milestone_name: phase-4.2-closed
 status: executing
-stopped_at: "Plan 04.2-05 DRILLED 2026-05-24 — clarity-pack-1.0.0-rc.3.tgz drilled on Countermoves. VERDICT: D1/D2/D3/D7 PASS, D4/D5 FAIL (real React key warnings on ContextRail/PersistedMessage/TrueTaskDialog/AnchoredToCards/ChatPageBody captured in drill console — the SUMMARY's original 'Defensive-only' disposition was wrong). COEXIST #6 byte-identical across pre/post-uninstall/post-install (10/11/6/2); plugin UUID 0d4fc40a-0541-4b67-8979-9d346cb9c07b preserved; version=1.0.0-rc.3 confirmed in plugin list. D7 code verified shipped in dist/ but live drill blocked because both existing chat-employee parents (CEO COU-989 + CMO COU-1107) predate rc.3 install (2026-05-19) and Editor-Agent is excluded from chat surface by design. Three NEW defects surfaced during the drill (NOT in 04.2-05 scope): D8 (Back-after-deep-link drops chat state — URL_HASH consume side-effect; UX paper cut), D9 (Continue button label leaks assignee UUID — chat-action-row employeeLabel UUID-fallback; same root cause family as D7), D10 (topic strip About chip shows origin issue raw UUID — chip-resolver not translating to BEAAA-NNN identifier). FOLLOW-UP: Plan 04.2-06 covers D4/D5 real fix + D8/D9/D10 (target v1.0.0-rc.4). Phase 4.2 status unchanged (still VERIFIED; Plan 04.2-05 is polish on top, not closure). Phase 5: 2/4 CODE-COMPLETE (05-01 + 05-02), 2/4 PLAN-READY-AWAITING-DESIGN-REVIEW (05-03 + 05-04). NEXT (operator action queue): (a) decide Plan 04.2-06 cadence (ship now → rc.4, or batch with Phase 5 work); (b) npm publish: hold rc.3 — recommend bundling D4/D5 fix into rc.4 before publish; (c) answer Plan 05-03 + 05-04 design questions."
-last_updated: "2026-05-24T18:00:00.000Z"
+stopped_at: "Plan 04.2-06 CODE-COMPLETE 2026-05-24 — D9 (Continue button UUID leak) + D10 (About chip UUID leak) shipped as clarity-pack-1.0.0-rc.4.tgz (143,583 bytes; sha256 d015ebc665c58240e4ea06bf1ff44fde1e08166638293c1c27cb615c7e76789c). 3 atomic commits 21008f6..5d2644b. Suite 1360 → 1364 (+4: D9 +2 source-grep, D10 +2 source-grep); 1362 pass / 0 fail / 2 skip. tsc + check-css-scope + check-a11y all GREEN. OUT OF SCOPE in 04.2-06 (still backlog): D4/D5 (React key warnings on 5 components — Plan 04.2-05's 'Defensive-only' disposition was wrong; needs per-component key audits), D8 (Back-after-deep-link drops chat state — URL_HASH consume side-effect). Phase 4.2 status unchanged (VERIFIED; 04.2-05 + 04.2-06 are polish on top). NEXT SESSION (fresh context recommended for clean execution): Plan 05-03 (DIST-03 — AC auto-status from comment-markers) — design questions LOCKED 2026-05-24 (comment-marker A1, side-by-side A2, no-conflict A3, copy-marker affordance A4); plan now in EXECUTE-READY-FRESH-CONTEXT state with file-by-file blueprint + fresh_context_kickoff block at the bottom of .planning/phases/05-distribution-polish/05-03-PLAN.md. Target version: 1.0.0-rc.5. Plan 05-04 DEFERRED to v1.1 (visual-regression infra overkill for v1 single-user). Operator drill for rc.4 deferred to Eric (paste from chat-window walkthrough). Phase 5 will be 3/4 CODE-COMPLETE once 05-03 lands (05-04 backlog)."
+last_updated: "2026-05-24T18:30:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 43
-  completed_plans: 33
+  completed_plans: 34
   percent: 67
 ---
 

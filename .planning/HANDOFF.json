@@ -1,74 +1,39 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-19T22:16:55.166Z",
-  "source": "auto-postool",
+  "timestamp": "2026-05-24T18:30:00.000Z",
+  "source": "deliberate-handoff",
   "partial": false,
-  "phase": null,
-  "phase_name": "04 (employee-chat) — COMPLETE & VERIFIED 2026-05-19 (11/11 CHAT requirements; CHAT-04 host-blocked & CHAT-07 degraded, both reconciled)",
-  "phase_dir": null,
-  "plan": "6",
+  "phase": "05-distribution-polish",
+  "phase_name": "Distribution & Polish",
+  "phase_dir": ".planning/phases/05-distribution-polish",
+  "plan": "05-03",
   "task": null,
   "total_tasks": null,
-  "status": "auto-checkpoint",
+  "status": "fresh-context-recommended",
   "completed_tasks": [],
-  "remaining_tasks": [],
+  "remaining_tasks": [
+    "Plan 05-03 — execute the AC auto-status from comment-markers feature per the locked design answers in 05-03-PLAN.md (target v1.0.0-rc.5)"
+  ],
   "blockers": [],
-  "human_actions_pending": [],
-  "decisions": [],
-  "uncommitted_files": [
+  "human_actions_pending": [
+    "Optional: SCP clarity-pack-1.0.0-rc.4.tgz to Countermoves + install-helper + smoke D9 (Continue button shows employee name not UUID) + D10 (About chip shows COU-#### not UUID)",
+    "Optional: npm publish clarity-pack@1.0.0-rc.4 (Eric's npm credentials required)"
+  ],
+  "decisions": [
     {
-      "status": "M",
-      "path": ".planning/HANDOFF.json"
+      "id": "Plan 05-03 design answers locked 2026-05-24",
+      "summary": "A1=comment-marker (regex AC: <id>: ✓), A2=side-by-side (manual = source of truth), A3=no-conflict (auto is render-time only, never written), A4=copy-marker affordance optional"
     },
     {
-      "status": "M",
-      "path": ".planning/ROADMAP.md"
+      "id": "Plan 05-04 deferred to v1.1",
+      "summary": "Visual-regression CI infrastructure overkill for v1 audience of 1 per CLAUDE.md. Revisit at next milestone boundary."
     },
     {
-      "status": "M",
-      "path": ".planning/STATE.md"
-    },
-    {
-      "status": "M",
-      "path": "CLAUDE.md"
-    },
-    {
-      "status": "??",
-      "path": ".codex/"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/04.1-chat-true-task/04.1-01-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/04.1-chat-true-task/04.1-02-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/04.1-chat-true-task/04.1-03-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/04.1-chat-true-task/04.1-04-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/04.1-chat-true-task/04.1-05-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/04.1-chat-true-task/04.1-06-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": ".planning/phases/04.1-chat-true-task/04.1-07-PLAN.md"
-    },
-    {
-      "status": "??",
-      "path": "AGENTS.md"
+      "id": "D4/D5 + D8 carried forward",
+      "summary": "Drill-caught polish backlog: D4/D5 (React key warnings — Plan 04.2-05 disposition was wrong; needs per-component audit), D8 (Back-nav drops chat state — URL_HASH consume side-effect; needs design)"
     }
   ],
-  "next_action": "Ready to execute",
-  "context_notes": "Status: Ready to execute\n\nRecent commits:\n52a7585 docs(04.1): pattern map (19 files, 19 analogs found) .planning/phases/04.1-chat-true-task/04.1-PATTERNS.md\nd978a8c docs(04.1): UI-SPEC approved (status frontmatter) .planning/phases/04.1-chat-true-task/04.1-UI-SPEC.md\n9f3d5b7 docs(04.1): UI-SPEC revision 2 — typography active-weights clause, runtime-noise 9.5->10px, gutter carve-out, archive KEEP TOPIC\nd7fef44 docs(04.1): UI-SPEC revision -- multiples-of-4 paddings, dialog heading 18px, cancel-to-keep editing\n4d21bd4 docs(04.1): UI design contract — 7 new affordances on existing chat surface"
+  "uncommitted_files": [],
+  "next_action": "START A FRESH CLAUDE CODE CHAT WINDOW. From the project directory, run: /gsd:execute-phase 05 --gaps with the kickoff prompt at the bottom of .planning/phases/05-distribution-polish/05-03-PLAN.md (under <fresh_context_kickoff>). All Plan 05-03 design answers are LOCKED in that file's <design_answers_locked> block; the executor needs no operator input.",
+  "context_notes": "Plan 04.2-06 just shipped clarity-pack-1.0.0-rc.4.tgz (143,583 bytes, sha256 d015ebc665c58240e4ea06bf1ff44fde1e08166638293c1c27cb615c7e76789c) closing D9 + D10 UUID leaks. 3 atomic commits 21008f6..5d2644b. Suite 1364/1362/0/2 GREEN; all quality gates clean. Next session = Plan 05-03 (AC auto-status from comment-markers) in a FRESH chat window — context was nearly exhausted at handoff time. The 05-03 PLAN.md is fully specced (locked design answers + file-by-file execution shape + fresh_context_kickoff block). Eric's preferred kickoff command is preserved verbatim in that file."
 }
