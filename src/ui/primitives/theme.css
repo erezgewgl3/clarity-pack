@@ -309,6 +309,25 @@
   font-style: italic;
 }
 
+/* Plan 05-03 A4 — copy-marker button per row. Caption-sized chrome button
+ * that puts the exact "AC: <id>: ✓" string on the clipboard. Reduces the
+ * operator discipline cost the comment-marker A1 design introduced. */
+[data-clarity-surface='reader'] .clarity-ac-copy-marker {
+  margin-left: 0.6rem;
+  font-size: 0.75rem;
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+  padding: 0.15rem 0.45rem;
+  background: transparent;
+  color: var(--clarity-muted);
+  border: 1px solid var(--clarity-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+[data-clarity-surface='reader'] .clarity-ac-copy-marker:hover {
+  color: var(--clarity-fg);
+  border-color: var(--clarity-line-bright);
+}
+
 /* Activity timeline */
 [data-clarity-surface='reader'] .clarity-activity-timeline ul {
   list-style: none;

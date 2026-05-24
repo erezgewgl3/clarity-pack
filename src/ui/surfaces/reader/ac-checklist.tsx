@@ -14,6 +14,10 @@
 //     label is `sourceAuthorName ?? 'agent'`.
 //   - The new CSS class `.clarity-ac-autostatus` is scoped under
 //     `[data-clarity-surface]` (the row sits inside ClaritySurfaceRoot).
+//   - A4 affordance: each AC row gets a small "Copy marker" button that
+//     copies the exact `AC: <id>: ✓` string the scanner expects, reducing
+//     operator discipline cost. Falls back to a textarea+execCommand path
+//     when navigator.clipboard is unavailable.
 
 import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
@@ -41,6 +45,39 @@ export type AcAutoStatusEntry = {
 };
 export type AcAutoStatusMap = Record<string, AcAutoStatusEntry>;
 
+/**
+ * Plan 05-03 A4 — copy the exact marker string the scanner expects. Tries
+ * navigator.clipboard.writeText first (modern, async); falls back to a
+ * transient textarea + execCommand('copy') for older / restricted contexts.
+ * Returns true on a clean copy. No throws — failure is silent (the button
+ * just doesn't flash on success).
+ */
+async function copyMarkerToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to the textarea path
+  }
+  try {
+    if (typeof document === 'undefined') return false;
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand?.('copy') === true;
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export function AcChecklist({
   issueId,
   items,
@@ -57,6 +94,10 @@ export function AcChecklist({
   autoStatus?: AcAutoStatusMap | null;
 }): React.ReactElement {
   const toggleAc = usePluginAction('ac-toggle');
+  // A4 — track which row was just copied so the button can flash a brief
+  // "✓ copied" confirmation. Keyed by AcItem.id so multiple rows can each
+  // hold their own transient flash without conflict.
+  const [copiedId, setCopiedId] = React.useState<number | null>(null);
   // DEV-15 (drill 2026-05-14): defensive null-safety. Same pattern as
   // AnchoredToCards — the issue-reader worker handler may return acItems
   // as undefined when a sub-handler degrades, and the host's
@@ -102,6 +143,28 @@ export function AcChecklist({
                     {' '}auto: ✓ via {auto.sourceAuthorName ?? 'agent'} · {shortAgo(auto.sourceCreatedAt)} ago
                   </span>
                 ) : null}
+                {/* Plan 05-03 A4 — copy the exact marker string the scanner
+                    expects. Reduces operator discipline cost A1 introduced. */}
+                <button
+                  type="button"
+                  className="clarity-ac-copy-marker"
+                  data-clarity-region="ac-copy-marker"
+                  data-ac-id={String(it.id)}
+                  aria-label={`Copy AC marker for: ${it.label}`}
+                  title={`Copy "AC: ${String(it.id)}: ✓" to clipboard`}
+                  onClick={() => {
+                    const marker = `AC: ${String(it.id)}: ✓`;
+                    void copyMarkerToClipboard(marker).then((ok) => {
+                      if (!ok) return;
+                      setCopiedId(it.id);
+                      setTimeout(() => {
+                        setCopiedId((prev) => (prev === it.id ? null : prev));
+                      }, 1500);
+                    });
+                  }}
+                >
+                  {copiedId === it.id ? '✓ copied' : 'Copy marker'}
+                </button>
               </li>
             );
           })}
