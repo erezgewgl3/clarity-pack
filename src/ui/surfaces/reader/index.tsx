@@ -63,7 +63,7 @@ import { Breadcrumb, type Ancestry } from './breadcrumb.tsx';
 import { ProseWithRefChips } from './prose-with-ref-chips.tsx';
 import { AnchoredToCards } from './ref-card.tsx';
 import { DeliverablePreview } from './deliverable-preview.tsx';
-import { AcChecklist, type AcItem } from './ac-checklist.tsx';
+import { AcChecklist, type AcItem, type AcAutoStatusMap } from './ac-checklist.tsx';
 import { ActivityTimeline, type ActivityEvent } from './activity-timeline.tsx';
 import { LiveBlockerPanel } from './live-blocker-panel.tsx';
 import { PauseBanner } from './pause-banner.tsx';
@@ -228,6 +228,22 @@ function ReaderViewReady({
     companyId,
     userId,
   });
+  // Plan 05-03 (DIST-03) — AC auto-status from comment-markers. Parallel
+  // round-trip alongside issue.reader; the host bridge dedupes its own
+  // cache key. While loading OR on a structured error response, we pass
+  // null to <AcChecklist> so it falls back to the manual-only path (Phase 2
+  // behaviour) — the indicator simply doesn't render until data arrives.
+  const { data: acAutoData } = usePluginData<
+    { kind: 'acAutoStatus'; detections: AcAutoStatusMap } | { error: string }
+  >('reader.ac.autostatus', {
+    issueId: entityId,
+    companyId,
+    userId,
+  });
+  const acAutoStatus: AcAutoStatusMap | null =
+    acAutoData && !('error' in acAutoData) && acAutoData.kind === 'acAutoStatus'
+      ? acAutoData.detections
+      : null;
   if (loading || !data || 'error' in data) {
     // Loading state OR opt-in-guard short-circuited (shouldn't happen here
     // because we already gated on optedIn upstream AND userId is real).
@@ -280,7 +296,7 @@ function ReaderViewReady({
           <ProseWithRefChips body={data.issueBody} />
           <AnchoredToCards cards={data.refCards} />
           <DeliverablePreview deliverable={data.deliverable} />
-          <AcChecklist issueId={entityId} items={data.acItems} userId={userId} />
+          <AcChecklist issueId={entityId} items={data.acItems} userId={userId} autoStatus={acAutoStatus} />
           <ActivityTimeline events={data.activity} />
         </div>
         <aside className="clarity-reader-rail">

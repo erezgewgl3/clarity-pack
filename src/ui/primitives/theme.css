@@ -298,6 +298,17 @@
   align-items: center;
 }
 
+/* Plan 05-03 (DIST-03) — AC auto-status indicator. Small caption-grey
+ * "auto: ✓ via <name> · <ago> ago" rendered next to the manual checkbox row
+ * when a comment-marker on the same issue matched the AC item's id. The
+ * MANUAL checkbox UX is structurally untouched (A2 side-by-side). */
+[data-clarity-surface='reader'] .clarity-ac-autostatus {
+  margin-left: 0.6rem;
+  font-size: 0.82rem;
+  color: var(--clarity-muted);
+  font-style: italic;
+}
+
 /* Activity timeline */
 [data-clarity-surface='reader'] .clarity-activity-timeline ul {
   list-style: none;
