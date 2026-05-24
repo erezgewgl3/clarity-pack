@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0.0-rc.2
-milestone_name: phase-5-partial
+milestone_name: phase-4.2-closed
 status: executing
-stopped_at: "Phase 5 PARTIAL CLOSURE 2026-05-24. Per explicit operator authorization (Eric 2026-05-24: 'complete everything autonomously don't wait for me to test - I will test after you complete phase 5'), Plan 05-01 (DIST-01 + DIST-02 — npm publish prep + README) and Plan 05-02 (DIST-05 + COEXIST-05 — lockfile-audit + a11y check + uninstall runbook coexistence gate) shipped at the code tier. Version 1.0.0-rc.2 packed (clarity-pack-1.0.0-rc.2.tgz, 142,544 bytes, sha256 `ac2f4df2c3d5de8f86d271dc9b4f77cf8cc14f413fb63a095127ac2797c4cc0a`). Plan 05-03 (DIST-03 — AC auto-status event-derived) and Plan 05-04 (DIST-04 — full-fidelity previewers xlsx/pdf/md/png + the Plan-05-02-deferred visual-regression baseline) are PLAN-READY-AWAITING-DESIGN-REVIEW — each captures 3-5 product/library design questions that need operator alignment before code ships (Q1-Q3 for AC auto-status; Q1-Q5 for previewers + visual regression). Suite 1323 → 1339 across Phase 4.2 closure + Phase 5 work (+16 net; 0 fail; 2 pre-existing skip). tsc clean; check-css-scope exit 0; check-a11y exit 0; coexistence run-all 10/10 PASS. NEXT: post-Phase-5 operator sweep — (a) Eric reviews + answers design questions in Plans 05-03 + 05-04; (b) live drill of the Phase 4.2 dispatch fix (Plan 04.2-04 Task 5: 5-path Reader↔Chat Bridge + RCB-07 spot-check); (c) once published to npm, the install verification on Countermoves. Tarballs in working tree: clarity-pack-0.9.2.tgz (live on Countermoves), 0.9.3.tgz (dispatch fix awaiting drill), 1.0.0-rc.1.tgz, 1.0.0-rc.2.tgz (latest)."
-last_updated: "2026-05-24T01:40:00.000Z"
+stopped_at: "Phase 4.2 COMPLETE & VERIFIED 2026-05-24 — full operator-drill PASS on live Countermoves clarity-pack-1.0.0-rc.2.tgz (which bundles the Plan 04.2-04 dispatch fix originally shipped as 0.9.3 plus Phase 5's polish + npm-publish-prep layer). 5-path Reader↔Chat Bridge drill PASS (Path 1 assigned task COU-2215 → existing-topic + flash-highlight; Path 2 chat-spawned COU-2361 → existing-topic via chat-task lineage; Path 3 cold COU-2396 → new-topic-needed seed dialog with originIssueId thread-through; Path 4 chat-topic COU-1115/CHT-1117 → Continue button HIDDEN; Path 5 no-assignee COU-2399 → Continue button DISABLED with `Assign this issue to an employee before opening chat.` tooltip) + RCB-07 pre-0009-topic spot-check PASS (zero About-chip elements; topic strip rendered 5 pre-0009 topics cleanly; zero console errors). RCB-01..RCB-07 all flipped to Implemented. 04.2-VERIFICATION.md status: verified. Seven polish defects D1-D7 filed in MemPalace for a future Plan 04.2-05 polish pass (D1 newTopic setEmployee gap, D2 missing DialogTitle, D3 unclickable rail rows + inline cards, D4 react-key warnings across 8 components, D5 ToastProvider key warnings, D7 chat-topic body parent-link UX clarity; D6 reserved). None load-bearing for closure. Phase 5 status unchanged from earlier today: 2/4 plans CODE-COMPLETE (05-01 + 05-02), 2/4 PLAN-READY-AWAITING-DESIGN-REVIEW (05-03 + 05-04). NEXT (operator action queue): (a) npm publish 1.0.0-rc.2 using Eric's credentials; (b) answer Plan 05-03 + 05-04 design questions (or accept recommended defaults); (c) Plan 04.2-05 polish pass at v1.0.0-rc.3."
+last_updated: "2026-05-24T07:30:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 42
   completed_plans: 32
-  percent: 56
+  percent: 67
 ---
 
 # State: Clarity Pack
@@ -24,7 +24,7 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 04.2 — reader-chat-bridge
+**Current Focus:** Phase 05 — Distribution & Polish (partial closure). Phase 4.2 closed 2026-05-24.
 
 ## Current Position
 

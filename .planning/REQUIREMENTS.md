@@ -137,13 +137,13 @@ Phase 4.1 extension of CHAT-09. Turns the Employee Chat composer into a real tas
 
 Phase 4.2 — the symmetric inverse of CTT. CTT turns chat into assigned tasks; RCB gives every Paperclip issue a deterministic path back into chat, and makes the issue↔conversation graph navigable in both directions. Coined 2026-05-22 (locked design: project memory `phase-4.2-deferred-from-4.1`).
 
-- [ ] **RCB-01**: From any Paperclip issue's Reader view, a deterministic `Continue in chat` primitive in the header routes by issue lineage — a chat-spawned task (`originId: chat-task:…`) jumps to its source topic and source comment; a cold/standalone task or a regular assigned task opens a pre-seeded New Topic dialog; a chat-topic issue hides the button; an unassigned issue shows it disabled with guidance. *Inverse of CTT-01.*
-- [ ] **RCB-02**: A `chat.openForIssue` worker data handler resolves an issue's `originKind` / `originId` / assignee into exactly one deterministic route (`existing-topic` | `new-topic-needed` | `topic-itself` | `NO_ASSIGNEE` error) — opt-in-gated, company-scoped.
-- [ ] **RCB-03**: The chat surface honors deep-link URL params (`topic`, `comment`, `newTopic`, `seedTitle`, `seedBody`, `originIssueId`) — landing the operator on the exact topic and comment (with a brief flash highlight) or on a pre-seeded New Topic dialog — and clears the params after consumption so a refresh does not re-trigger.
-- [ ] **RCB-04**: A chat topic created via `Continue in chat` persists its source issue as `chat_topics.origin_issue_id` (additive plugin-namespace migration `0009`).
-- [ ] **RCB-05**: When the active chat topic carries an `origin_issue_id`, the topic strip renders a dismissible `About <COU-NNNN> ↗` backlink chip that navigates to the source issue's Reader.
-- [ ] **RCB-06**: The Reader header surfaces `<N> conversations about this issue ↗` when N > 0 — the `issue-reader` response includes `topicsForIssue`, and a popover lists each topic with a click-through into chat.
-- [ ] **RCB-07**: Every RCB change is additive and backward-compatible — migration `0009` is idempotent; chat topics predating it (no `origin_issue_id`) render normally; Reader views and chat topics without the new affordances work unchanged. Coexistence guarantees #3 + #6 preserved.
+- [x] **RCB-01**: From any Paperclip issue's Reader view, a deterministic `Continue in chat` primitive in the header routes by issue lineage — a chat-spawned task (`originId: chat-task:…`) jumps to its source topic and source comment; a cold/standalone task or a regular assigned task opens a pre-seeded New Topic dialog; a chat-topic issue hides the button; an unassigned issue shows it disabled with guidance. *Inverse of CTT-01.*
+- [x] **RCB-02**: A `chat.openForIssue` worker data handler resolves an issue's `originKind` / `originId` / assignee into exactly one deterministic route (`existing-topic` | `new-topic-needed` | `topic-itself` | `NO_ASSIGNEE` error) — opt-in-gated, company-scoped.
+- [x] **RCB-03**: The chat surface honors deep-link URL params (`topic`, `comment`, `newTopic`, `seedTitle`, `seedBody`, `originIssueId`) — landing the operator on the exact topic and comment (with a brief flash highlight) or on a pre-seeded New Topic dialog — and clears the params after consumption so a refresh does not re-trigger.
+- [x] **RCB-04**: A chat topic created via `Continue in chat` persists its source issue as `chat_topics.origin_issue_id` (additive plugin-namespace migration `0009`).
+- [x] **RCB-05**: When the active chat topic carries an `origin_issue_id`, the topic strip renders a dismissible `About <COU-NNNN> ↗` backlink chip that navigates to the source issue's Reader.
+- [x] **RCB-06**: The Reader header surfaces `<N> conversations about this issue ↗` when N > 0 — the `issue-reader` response includes `topicsForIssue`, and a popover lists each topic with a click-through into chat.
+- [x] **RCB-07**: Every RCB change is additive and backward-compatible — migration `0009` is idempotent; chat topics predating it (no `origin_issue_id`) render normally; Reader views and chat topics without the new affordances work unchanged. Coexistence guarantees #3 + #6 preserved.
 
 ### Coexistence Guarantees (COEXIST)
 
@@ -280,13 +280,13 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | CTT-06 | Phase 4.1 | Implemented (Plan 04.1-03 isTopicStuck primitive + Plan 04.1-04 topicStuck + recoveryOwner response shape + Plan 04.1-10 HostStuckBanner UI; never silent, never auto-recover per spike FLAG-1 reconciliation) |
 | CTT-07 | Phase 4.1 | Implemented (Plan 04.1-05 — chat.topic.archive plugin-side ONLY; D-10 invariant pinned by chat-topic-archive.ts spy test (zero ctx.issues.update) + COEXIST-09 CI gate; Plan 04.1-08 archived_at column for sort order; UI archive panel in Plan 04.1-10) |
 | CTT-08 | Phase 4.1 | Implemented (Plan 04.1-05 — chat.taskOwned reads chat_topic_tasks side table; D-08 active-tasks rail; createTrueTask cross-plan retrofit writes the back-link best-effort; Plan 04.1-10 ContextRail Active tasks owned rendering) |
-| RCB-01 | Phase 4.2 | Pending (Plan 04.2-01) |
-| RCB-02 | Phase 4.2 | Pending (Plan 04.2-01) |
-| RCB-03 | Phase 4.2 | Pending (Plan 04.2-01) |
-| RCB-04 | Phase 4.2 | Pending (Plan 04.2-01) |
-| RCB-05 | Phase 4.2 | Pending (Plan 04.2-01) |
-| RCB-06 | Phase 4.2 | Pending (Plan 04.2-01) |
-| RCB-07 | Phase 4.2 | Pending (Plan 04.2-01) |
+| RCB-01 | Phase 4.2 | Implemented (Plans 04.2-01 + 04.2-02 — `ContinueInChatButton` Reader primitive; gold PRIMARY styling fix via theme.css token promotion. Operator-drill PASS 2026-05-24: 5-path lineage routing all green on Countermoves clarity-pack-1.0.0-rc.2.tgz.) |
+| RCB-02 | Phase 4.2 | Implemented (Plan 04.2-01 — `chat.openForIssue` worker handler with deterministic 5-case lineage routing. Operator-drill PASS 2026-05-24.) |
+| RCB-03 | Phase 4.2 | Implemented (Plans 04.2-01 + 04.2-03 + 04.2-04 — chat-surface deep-link handling with URL_HASH carrier + race-safe dispatch. Operator-drill PASS 2026-05-24: payload + carrier + read + dispatch all end-to-end; flash-highlight observed on Path 1.) |
+| RCB-04 | Phase 4.2 | Implemented (Plan 04.2-01 — migration `0009_chat_topics_origin_issue.sql` + `originIssueId` thread-through in `chat.topic.create`. Operator-drill PASS 2026-05-24: Path 3 cold-task payload carried `originIssueId: fbc532ec-…`.) |
+| RCB-05 | Phase 4.2 | Implemented (Plan 04.2-01 — topic-strip `About <COU-NNNN> ↗` backlink chip wired against `chat_topics.origin_issue_id`. RCB-07 spot-check on pre-0009 topics verifies the rendering is conditional and degrades gracefully when `origin_issue_id IS NULL`.) |
+| RCB-06 | Phase 4.2 | Implemented (Plan 04.2-01 — Reader header `N conversations about this issue ↗` popover via `topicsForIssue` extension to `issue-reader` response.) |
+| RCB-07 | Phase 4.2 | Implemented (Plan 04.2-01 — additive plugin-namespace migration `0009` is idempotent; pre-0009 topics render with no `About …` chip and no error. Operator-drill PASS 2026-05-24: zero About-chip elements on the page; zero console errors during topic-strip render.) |
 | COEXIST-01 | Phase 2 | Pending |
 | COEXIST-02 | Phase 2 | Pending |
 | COEXIST-03 | Phase 2 | Pending |
@@ -315,4 +315,4 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 
 ---
 *Requirements defined: 2026-05-07*
-*Last updated: 2026-05-22 — Phase 4.2 planning: registered RCB-01..RCB-07 (Pending, Phase 4.2 — Plan 04.2-01); coined from the locked design in project memory `phase-4.2-deferred-from-4.1`. Per-phase loadings corrected to include the Phase 4.1 CTT-01..08 line. Phase 4.2 closure plan will flip RCB-01..07 to Implemented with delivering-plan references.*
+*Last updated: 2026-05-24 — **Phase 4.2 (Reader↔Chat Bridge) CLOSED 2026-05-24.** RCB-01..RCB-07 all flipped to Implemented. Operator-drill PASS on live Countermoves with clarity-pack-1.0.0-rc.2.tgz (which bundles the Plan 04.2-04 dispatch fix originally shipped as 0.9.3 plus the Phase 5 polish layer at 1.0.0-rc.2): full 5-path Reader↔Chat Bridge drill (assigned task COU-2215 → existing-topic + flash; chat-spawned COU-2361 → existing-topic via chat-task lineage; cold COU-2396 → new-topic-needed seed dialog; chat-topic CHT-1117/COU-1115 → button HIDDEN; no-assignee COU-2399 → button DISABLED with tooltip) + RCB-07 pre-0009-topic spot-check all green. Seven polish defects (D1-D7) filed in MemPalace for a future Plan 04.2-05 polish pass — none load-bearing for closure. Earlier: 2026-05-22 — Phase 4.2 planning: registered RCB-01..RCB-07 from the locked design in project memory `phase-4.2-deferred-from-4.1`.*
