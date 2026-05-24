@@ -852,10 +852,16 @@ function ChatPageBody({
           <div
             className="new-topic-dialog"
             role="dialog"
-            aria-label="Start a new chat topic"
+            // Plan 04.2-05 D2 — the seed dialog uses role='dialog' +
+            // aria-labelledby pointing at the visible <h3> heading.
+            // Equivalent to Radix's `<DialogTitle>` primitive for a
+            // non-Radix custom dialog shell; the 2026-05-24 drill console
+            // captured an "unlabelled dialog" warning that aria-label alone
+            // did not silence on this React/Radix combo.
+            aria-labelledby="new-topic-dialog-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3>Continue in chat — new topic</h3>
+            <h3 id="new-topic-dialog-title">Continue in chat — new topic</h3>
             <label>
               Topic title
               <input
