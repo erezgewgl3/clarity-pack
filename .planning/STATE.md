@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0.0-rc.2
+milestone: v1.0.0-rc.3
 milestone_name: phase-4.2-closed
 status: executing
-stopped_at: "Phase 4.2 COMPLETE & VERIFIED 2026-05-24 — full operator-drill PASS on live Countermoves clarity-pack-1.0.0-rc.2.tgz (which bundles the Plan 04.2-04 dispatch fix originally shipped as 0.9.3 plus Phase 5's polish + npm-publish-prep layer). 5-path Reader↔Chat Bridge drill PASS (Path 1 assigned task COU-2215 → existing-topic + flash-highlight; Path 2 chat-spawned COU-2361 → existing-topic via chat-task lineage; Path 3 cold COU-2396 → new-topic-needed seed dialog with originIssueId thread-through; Path 4 chat-topic COU-1115/CHT-1117 → Continue button HIDDEN; Path 5 no-assignee COU-2399 → Continue button DISABLED with `Assign this issue to an employee before opening chat.` tooltip) + RCB-07 pre-0009-topic spot-check PASS (zero About-chip elements; topic strip rendered 5 pre-0009 topics cleanly; zero console errors). RCB-01..RCB-07 all flipped to Implemented. 04.2-VERIFICATION.md status: verified. Seven polish defects D1-D7 filed in MemPalace for a future Plan 04.2-05 polish pass (D1 newTopic setEmployee gap, D2 missing DialogTitle, D3 unclickable rail rows + inline cards, D4 react-key warnings across 8 components, D5 ToastProvider key warnings, D7 chat-topic body parent-link UX clarity; D6 reserved). None load-bearing for closure. Phase 5 status unchanged from earlier today: 2/4 plans CODE-COMPLETE (05-01 + 05-02), 2/4 PLAN-READY-AWAITING-DESIGN-REVIEW (05-03 + 05-04). NEXT (operator action queue): (a) npm publish 1.0.0-rc.2 using Eric's credentials; (b) answer Plan 05-03 + 05-04 design questions (or accept recommended defaults); (c) Plan 04.2-05 polish pass at v1.0.0-rc.3."
-last_updated: "2026-05-24T07:30:00.000Z"
+stopped_at: "Plan 04.2-05 CODE-COMPLETE 2026-05-24 — D1-D7 polish pass shipped as clarity-pack-1.0.0-rc.3.tgz (143,180 bytes; sha256 13a9a4d9a491e4f0d2c5eee516c6e764905b3ba56474d7e9721464690be37248). 6 atomic commits 4f33c01..06ec6c5 + the closure docs commit. Suite 1339 → 1360 (+21 new: D1 +1 source-grep, D7 +6 formatter, D3 +14 across ref-chip/active-tasks/inline-task-card); 1358 pass / 0 fail / 2 skip. tsc + check-css-scope + check-a11y all GREEN. D-defect disposition: D1 (Implemented — race-safe setEmployee in newTopic branch + defer guard broadened), D2 (Implemented — aria-labelledby on seed dialog wired to visible h3), D3 (Implemented — RefChip+row title+card title wrapped as host-routed anchors to /<prefix>/issues/<id>), D4+D5 (DefensiveOnly — full .map() sweep shows every callsite already keyed; index-only keys in RuntimeNoiseRow sections+rows upgraded to composite stable keys), D7 (Implemented — formatParentIssueTitle pure helper drops UUID-as-name tail; UI threads employee.name through createTopic). D6 reserved (no defect). Phase 4.2 stays VERIFIED (verification re-validated; polish pass does not alter RCB-01..RCB-07 status). OPERATOR DRILL DEFERRED to Eric — verbatim copy-paste walkthrough delivered in the orchestrator response after Task 7 (covers SCP / SSH / snapshot / install-helper / row-count COEXIST #6 / browser drill on D1 + D3 + D7 + D2/D4/D5 console). Phase 5 status unchanged: 2/4 CODE-COMPLETE (05-01 + 05-02), 2/4 PLAN-READY-AWAITING-DESIGN-REVIEW (05-03 + 05-04). NEXT (operator action queue): (a) Plan 04.2-05 Countermoves drill (paste from terminal walkthrough); (b) npm publish 1.0.0-rc.3 using Eric's credentials once drill PASSES; (c) answer Plan 05-03 + 05-04 design questions."
+last_updated: "2026-05-24T17:10:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 42
-  completed_plans: 32
+  total_plans: 43
+  completed_plans: 33
   percent: 67
 ---
 
@@ -24,7 +24,7 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 05 — Distribution & Polish (partial closure). Phase 4.2 closed 2026-05-24.
+**Current Focus:** Phase 05 — Distribution & Polish (partial closure). Phase 4.2 closed 2026-05-24; Plan 04.2-05 polish pass shipped as 1.0.0-rc.3 (operator drill deferred to Eric).
 
 ## Current Position
 
