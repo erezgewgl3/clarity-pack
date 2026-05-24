@@ -178,6 +178,44 @@ test('Test 6 — DISPATCH-RACE (GAP-RCB-03-DISPATCH, Plan 04.2-04): consume defe
   );
 });
 
+test('Test 7 — DISPATCH-NEW-TOPIC (Plan 04.2-05 D1): newTopic dispatch sets employee BEFORE opening the seed dialog', () => {
+  // Live-host evidence (Countermoves cold-task COU-2396 drill, 2026-05-24, 1.0.0-rc.2):
+  //   The seed dialog opens with title/body/originIssueId pre-filled, but
+  //   the CREATE TOPIC button is DISABLED with footer "Pick an employee
+  //   from the roster first." Cause: Plan 04.2-04 added the race-safe
+  //   setEmployee(matched) lookup ONLY to the existing-topic branch
+  //   (`else if (link.topic)`); the `if (link.newTopic)` branch was not
+  //   touched, so the chat surface's `employee` state stayed null even
+  //   though the deep link carried a valid employee UUID.
+  //
+  // Plan 04.2-05 D1 fix: the newTopic branch runs the SAME race-safe
+  // roster lookup and calls setEmployee(matched) BEFORE setSeedDialog.
+  // The defer guard at the top of the effect is broadened from
+  // `link.topic && link.employee && …` to `link.employee && …` so the
+  // defer covers both dispatch branches.
+  const c = code(readChat('index.tsx'));
+  // The defer guard no longer requires `link.topic` — both dispatch
+  // branches need roster to resolve before consume.
+  assert.doesNotMatch(
+    c,
+    /link\.topic\s*&&\s*link\.employee\s*&&\s*roster\s*===\s*null/,
+    'defer guard no longer scopes to existing-topic only (D1: covers newTopic too)',
+  );
+  assert.match(
+    c,
+    /if\s*\(\s*link\.employee\s*&&\s*roster\s*===\s*null\s*&&\s*rosterLoading\s*\)/,
+    'defer guard covers any link with an employee (existing-topic OR newTopic)',
+  );
+  // The newTopic branch sets employee from the roster BEFORE opening the
+  // seed dialog — a single source-grep that locates `setEmployee` between
+  // the `if (link.newTopic)` open and the `setSeedDialog({` open.
+  assert.match(
+    c,
+    /if\s*\(\s*link\.newTopic\s*\)\s*\{[\s\S]{0,800}setEmployee\([\s\S]{0,400}setSeedDialog\(/,
+    'newTopic branch calls setEmployee BEFORE setSeedDialog (D1: enables CREATE TOPIC immediately)',
+  );
+});
+
 test('chat.css: defines a .flash-highlight rule + a @keyframes clarity-flash', () => {
   const css = readFileSync(path.join(STYLES_DIR, 'chat.css'), 'utf8');
   assert.match(css, /flash-highlight/, 'a .flash-highlight rule exists');

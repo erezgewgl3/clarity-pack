@@ -348,7 +348,13 @@ function ChatPageBody({
     // no recovery path. Hold consume back until roster is available (or
     // until the fetch settles with no data, in which case we proceed with
     // employeeAgentId set but employee unmatched — graceful degrade).
-    if (link.topic && link.employee && roster === null && rosterLoading) {
+    //
+    // Plan 04.2-05 D1 — defer applies to BOTH the existing-topic AND the
+    // newTopic branches. The newTopic dispatch also needs a matched
+    // RosterEmployee so setEmployee can run before the seed dialog opens
+    // (otherwise CREATE TOPIC stays disabled with "Pick an employee from
+    // the roster first" — operator drill 2026-05-24).
+    if (link.employee && roster === null && rosterLoading) {
       return;
     }
 
@@ -359,10 +365,23 @@ function ChatPageBody({
     consumedDeepLinkRef.current = linkKey;
 
     if (link.newTopic) {
+      // Plan 04.2-05 D1 — extend the race-safe employee lookup that
+      // existed only in the link.topic branch to ALSO run for newTopic
+      // dispatch. Setting employee BEFORE setSeedDialog means the dialog's
+      // CREATE TOPIC button is enabled immediately (instead of waiting for
+      // the operator to click the roster row manually — the 2026-05-24
+      // drill captured this gap: dialog opened seeded, button disabled,
+      // footer "Pick an employee from the roster first"). An unmatched
+      // link.employee (employee absent from this user's roster) leaves
+      // employee null and the dialog footer still prompts — graceful
+      // degrade for the legacy / cross-user case.
+      if (link.employee && roster) {
+        const matched = roster.find((e) => e.id === link.employee);
+        if (matched) setEmployee(matched);
+      }
       // Open the pre-seeded New Topic dialog. seedTitle / seedBody are plain
       // decoded strings — they populate controlled React inputs only, never
-      // dangerouslySetInnerHTML (T-04.2-02-01). The operator confirms the
-      // assignee in the dialog before Create.
+      // dangerouslySetInnerHTML (T-04.2-02-01).
       setSeedDialog({
         title: link.seedTitle ?? '',
         body: link.seedBody ?? '',
