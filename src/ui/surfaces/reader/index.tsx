@@ -223,7 +223,16 @@ function ReaderViewReady({
   const { pathname } = useHostLocation();
   const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
 
-  const { data, loading } = usePluginData<ReaderViewData | { error: string }>('issue.reader', {
+  // Quick fix 260524-s2y (rc.6) — SDK 2026.512.0 has no manifest-side
+  // `actions[].invalidates` field (verified: PaperclipPluginManifestV1 has
+  // no `actions:` key; SDK type tree contains zero `invalidat*` occurrences).
+  // `PluginDataResult.refresh` returned by `usePluginData` is the UI-side
+  // primitive that delivers the equivalent post-mutation refetch. Both
+  // `issue.reader` AND `reader.ac.autostatus` are refreshed on a successful
+  // manual AC toggle because the auto-status caption derives from the same
+  // row state — refreshing only `issue.reader` would leave the auto-status
+  // caption stale until a manual nav-away.
+  const { data, loading, refresh } = usePluginData<ReaderViewData | { error: string }>('issue.reader', {
     issueId: entityId,
     companyId,
     userId,
@@ -233,7 +242,7 @@ function ReaderViewReady({
   // cache key. While loading OR on a structured error response, we pass
   // null to <AcChecklist> so it falls back to the manual-only path (Phase 2
   // behaviour) — the indicator simply doesn't render until data arrives.
-  const { data: acAutoData } = usePluginData<
+  const { data: acAutoData, refresh: refreshAcAuto } = usePluginData<
     { kind: 'acAutoStatus'; detections: AcAutoStatusMap } | { error: string }
   >('reader.ac.autostatus', {
     issueId: entityId,
@@ -296,7 +305,7 @@ function ReaderViewReady({
           <ProseWithRefChips body={data.issueBody} />
           <AnchoredToCards cards={data.refCards} />
           <DeliverablePreview deliverable={data.deliverable} />
-          <AcChecklist issueId={entityId} items={data.acItems} userId={userId} autoStatus={acAutoStatus} />
+          <AcChecklist issueId={entityId} items={data.acItems} userId={userId} autoStatus={acAutoStatus} onMutated={() => { void refresh(); void refreshAcAuto(); }} />
           <ActivityTimeline events={data.activity} />
         </div>
         <aside className="clarity-reader-rail">

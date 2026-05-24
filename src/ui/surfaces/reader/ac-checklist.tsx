@@ -18,6 +18,19 @@
 //     copies the exact `AC: <id>: ✓` string the scanner expects, reducing
 //     operator discipline cost. Falls back to a textarea+execCommand path
 //     when navigator.clipboard is unavailable.
+//
+// Quick fix 260524-s2y (rc.6) — onMutated post-toggle refresh callback.
+//   The `onMutated` callback exists because @paperclipai/plugin-sdk@2026.512.0
+//   has NO manifest-side `actions[].invalidates` declaration — verified by
+//   reading dist/types.d.ts (PaperclipPluginManifestV1 has no `actions:`
+//   field) and grepping the SDK type tree (zero `invalidat*` occurrences).
+//   Data invalidation is a UI-side concern via `PluginDataResult.refresh()`
+//   returned from `usePluginData`. ReaderViewReady threads its two
+//   `refresh` handles (issue.reader + reader.ac.autostatus) down as an
+//   `onMutated` callback that this component fires ONLY when the
+//   `usePluginAction('ac-toggle')` promise resolves to `{ok:true}` — a
+//   worker-side validation failure (`{ok:false, error:'invalid_id'}`)
+//   must NOT trigger an unnecessary refetch.
 
 import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
@@ -83,6 +96,7 @@ export function AcChecklist({
   items,
   userId,
   autoStatus,
+  onMutated,
 }: {
   issueId: string;
   items: AcItem[] | undefined;
@@ -92,6 +106,11 @@ export function AcChecklist({
   // compiling unchanged. `null` means "no auto-status data" (loading or
   // degraded); a non-null map drives per-row indicators.
   autoStatus?: AcAutoStatusMap | null;
+  // Quick fix 260524-s2y (rc.6) — fired ONLY when the worker handler resolves
+  // with `{ok:true}`. Optional so existing call sites + tests that do not
+  // pass it continue to compile + render unchanged (toggle still calls the
+  // worker, just no refetch). See header comment for SDK-gap rationale.
+  onMutated?: () => void;
 }): React.ReactElement {
   const toggleAc = usePluginAction('ac-toggle');
   // A4 — track which row was just copied so the button can flash a brief
@@ -123,7 +142,19 @@ export function AcChecklist({
                     type="checkbox"
                     checked={it.checked}
                     onChange={(e) => {
-                      void toggleAc({ id: it.id, checked: e.target.checked, userId: userId ?? null });
+                      // Quick fix 260524-s2y (rc.6) — gate the post-toggle
+                      // refresh on the worker's discriminated `{ok:true}`
+                      // shape. `usePluginAction` is typed `Promise<unknown>`
+                      // (the SDK does not narrow action return shapes), so
+                      // the runtime cast is the single-point-of-truth gate.
+                      // The `?.ok === true` check refuses to call onMutated
+                      // on `{ok:false, error:'invalid_id'}` — a worker-side
+                      // validation failure must NOT cause a refetch.
+                      void toggleAc({ id: it.id, checked: e.target.checked, userId: userId ?? null }).then((res) => {
+                        if ((res as { ok?: boolean } | null | undefined)?.ok === true) {
+                          onMutated?.();
+                        }
+                      });
                     }}
                     aria-label={`Toggle: ${it.label}`}
                     data-issue-id={issueId}
