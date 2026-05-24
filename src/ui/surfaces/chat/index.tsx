@@ -243,6 +243,10 @@ function ChatPageBody({
     try {
       const result = await createTopic({
         employeeAgentId: employee.id,
+        // Plan 04.2-05 D7 — thread the operator-friendly employeeName so
+        // any newly-bootstrapped per-employee parent issue gets the "Chat
+        // — CEO" title (not "Chat — <UUID>").
+        employeeName: employee.name,
         title,
         companyId,
         userId,
@@ -449,6 +453,10 @@ function ChatPageBody({
     try {
       const result = await createTopic({
         employeeAgentId: employee.id,
+        // Plan 04.2-05 D7 — same employeeName thread-through as
+        // handleNewTopic so a Reader-originated first-ever topic also
+        // gets a non-UUID parent title.
+        employeeName: employee.name,
         title,
         companyId,
         userId,

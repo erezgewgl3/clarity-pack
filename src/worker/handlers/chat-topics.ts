@@ -112,6 +112,32 @@ function reqStr(params: Record<string, unknown> | undefined, key: string): strin
 // incorrect (ROADMAP scope correction #1: chat-topic issues are not private,
 // any operator with read access on the parent issue can see them). The word
 // is removed.
+/**
+ * Plan 04.2-05 D7 — format the per-employee `Chat — <name>` PARENT issue
+ * title. The classic Paperclip Reader renders the parent issue's title as
+ * a clickable breadcrumb at the top of every child issue. When the UI did
+ * not thread a human-friendly employeeName, the worker's fallback set
+ * `employeeName = employeeAgentId` (a UUID), so the parent title became
+ * "Chat — b2a22e50-d772-…" and on a chat-topic Reader that rendered as an
+ * unstyled clickable text occupying the same vertical position the gold
+ * Continue button occupies on regular task Readers — visually mistaken for
+ * a styling-broken Continue button (Countermoves drill 2026-05-24 D7).
+ *
+ * Fix: when employeeName looks like a UUID, drop the "— UUID" tail and
+ * render the parent as "Chat thread" alone. Real names (CEO, Eric, …) get
+ * the full "Chat — CEO" treatment unchanged.
+ *
+ * Existing parent issues retain their current title; this formatter
+ * applies to NEW parents only (and is the only place the title literal
+ * lives in this codebase, by design — single source of truth).
+ */
+export function formatParentIssueTitle(employeeName: string): string {
+  const trimmed = employeeName.trim();
+  const looksLikeUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+  return looksLikeUuid ? 'Chat thread' : `Chat — ${employeeName}`;
+}
+
 function buildTopicDescription(title: string, employeeName: string): string {
   return [
     `Chat topic: ${title}`,
@@ -204,7 +230,11 @@ export function registerChatTopics(ctx: ChatTopicsCtx): void {
       if (!parentId) {
         const parent = await ctx.issues.create({
           companyId,
-          title: `Chat — ${employeeName}`,
+          // Plan 04.2-05 D7 — formatParentIssueTitle drops the UUID tail
+          // when employeeName fell back to the agent id, so the host-
+          // rendered parent breadcrumb on chat-topic Readers no longer
+          // looks like a styling-broken Continue button.
+          title: formatParentIssueTitle(employeeName),
           description:
             `Parent thread for chat topics with ${employeeName}. ` +
             'Each child issue is a single chat topic.',
