@@ -26,8 +26,11 @@
 // primitive (Plan 02 resolve-refs round-trip is safe).
 
 import * as React from 'react';
+import { useHostLocation } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { RefChip } from '../../../primitives/ref-chip.tsx';
+import { useHostNavigation } from '../../../primitives/use-host-navigation.ts';
+import { extractCompanyPrefixFromPathname } from '../../../primitives/use-resolved-company-id.ts';
 import { ChatTaskStatusPill } from './chat-task-status-pill.tsx';
 
 /** Render a HH:MM timestamp from an ISO string. */
@@ -70,6 +73,20 @@ export function InlineTaskCard({
   const ariaLabel = title
     ? `Task created — ${title}, assigned to ${employeeName}, status ${statusLabel}`
     : `Task created — loading title, assigned to ${employeeName}, status ${statusLabel}`;
+
+  // Plan 04.2-05 D3 — the title is wrapped in a host-routed anchor to the
+  // canonical issue Reader at `/<companyPrefix>/issues/<identifier>` so the
+  // inline TASK CREATED card is clickable (the 2026-05-24 drill captured the
+  // operator typing issue URLs by hand because the card was not clickable).
+  // Falls back to plain text when companyPrefix is unavailable or the
+  // identifier hasn't resolved yet — no broken anchor target. The RefChip
+  // primitive on the meta row already became a clickable anchor under D3 too,
+  // so the operator has two click targets on a fully-resolved card.
+  const nav = useHostNavigation();
+  const { pathname } = useHostLocation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
+  const hasTitleLink = companyPrefix && identifier && title !== null;
+
   return (
     <article
       className="inline-task-card-row"
@@ -81,6 +98,14 @@ export function InlineTaskCard({
         <div className="inline-task-card-title">
           {title === null ? (
             <span className="clarity-loading-skeleton">…</span>
+          ) : hasTitleLink ? (
+            <a
+              {...nav.linkProps(`/${companyPrefix}/issues/${identifier}`)}
+              className="inline-task-card-title-link"
+              data-clarity-action="open-inline-task"
+            >
+              {title}
+            </a>
           ) : (
             title
           )}

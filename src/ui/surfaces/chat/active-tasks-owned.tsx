@@ -20,10 +20,12 @@
 // is added to chat.css's Phase 4.1 section.
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import { useHostLocation, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { usePoll } from '../../primitives/use-poll.ts';
 import { RefChip } from '../../primitives/ref-chip.tsx';
+import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
+import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 import { ChatTaskStatusPill } from './true-task/chat-task-status-pill.tsx';
 
 export type ChatActiveTask = {
@@ -84,6 +86,18 @@ export function ActiveTasksOwned({
 }: {
   tasks: ChatActiveTask[];
 }): React.ReactElement {
+  // Plan 04.2-05 D3 — the rail row title is wrapped in a host-routed anchor
+  // so clicking it lands on the issue's canonical Reader at
+  // `/<companyPrefix>/issues/<identifier>` (MemPalace runbook
+  // `paperclip-issue-url-pattern`). The RefChip primitive (rendered inside
+  // the row's .id span) already became a clickable anchor in Plan 04.2-05
+  // D3; this title wrap gives the operator a larger click target for the
+  // common case of clicking the visible title text. Without companyPrefix
+  // available we render the title as plain text (no broken anchor).
+  const nav = useHostNavigation();
+  const { pathname } = useHostLocation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
+
   if (tasks.length === 0) {
     return (
       <p className="active-tasks-owned-empty">
@@ -98,15 +112,29 @@ export function ActiveTasksOwned({
         <div key={t.issueId} className="task-row">
           {/* The RefChip primitive runs its own resolve-refs round-trip; pass
               the BEAAA-NNN identifier as the refId so it surfaces as a
-              clickable chip into classic Paperclip. */}
+              clickable chip into classic Paperclip. Plan 04.2-05 D3 — the
+              chip itself is now a host-routed anchor to /<prefix>/issues/<id>. */}
           <span className="id">
             <RefChip refId={t.identifier} />
           </span>
           {/* Plan 04.1-09 — `title={t.title}` so hover tooltip shows the full
-              text when the 3-line clamp truncates a long title. */}
-          <span className="ttl" title={t.title}>
-            {t.title}
-          </span>
+              text when the 3-line clamp truncates a long title.
+              Plan 04.2-05 D3 — wrapped in a host-routed anchor when
+              companyPrefix is available; otherwise plain text. */}
+          {companyPrefix && t.identifier ? (
+            <a
+              {...nav.linkProps(`/${companyPrefix}/issues/${t.identifier}`)}
+              className="ttl"
+              title={t.title}
+              data-clarity-action="open-active-task"
+            >
+              {t.title}
+            </a>
+          ) : (
+            <span className="ttl" title={t.title}>
+              {t.title}
+            </span>
+          )}
           <ChatTaskStatusPill status={t.status} />
         </div>
       ))}

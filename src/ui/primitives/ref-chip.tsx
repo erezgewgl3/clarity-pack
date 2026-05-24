@@ -13,12 +13,22 @@
 // Prior to this change we destructured `userId` from useHostContext() and
 // passed `userId ?? ''` — which fail-closed every wrapped handler in
 // detail-tab slots during the host's session-loading window.
+//
+// Plan 04.2-05 D3 — once resolved, the chip is a clickable anchor pointing
+// at `/<companyPrefix>/issues/<identifier>` (the canonical Paperclip issue
+// URL pattern — see MemPalace runbook `paperclip-issue-url-pattern`). The
+// 2026-05-24 drill captured the operator typing issue URLs by hand because
+// the chip + rail row + inline TASK CREATED card were not clickable to the
+// issue's Reader. Pre-resolve (or when companyPrefix is unavailable) the
+// chip stays a span — never a broken anchor target.
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import { useHostLocation, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { RefCardData } from '../../shared/types.ts';
 import { useResolvedUserId } from './use-resolved-user-id.ts';
+import { useHostNavigation } from './use-host-navigation.ts';
+import { extractCompanyPrefixFromPathname } from './use-resolved-company-id.ts';
 
 export function RefChip({ refId }: { refId: string }): React.ReactElement {
   // Plan 02-09 Task 2 — resolver sources the viewer id even when host bridge
@@ -33,15 +43,37 @@ export function RefChip({ refId }: { refId: string }): React.ReactElement {
     'resolve-refs',
     ready ? { ids: [refId], userId } : {},
   );
+  // Plan 04.2-05 D3 — derive the company URL prefix from the current
+  // pathname (the same source-of-truth Reader/Chat surfaces use) so the
+  // resolved anchor can target /<prefix>/issues/<identifier>.
+  const nav = useHostNavigation();
+  const { pathname } = useHostLocation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
+
   const card = Array.isArray(data) ? data[0] : undefined;
   if (loading || userIdLoading || !card) {
     return (
       <span className="clarity-ref-chip clarity-ref-chip--loading">{refId}</span>
     );
   }
+  // Plan 04.2-05 D3 — once resolved AND companyPrefix is available, render
+  // as a host-routed anchor (nav.linkProps — NEVER raw <a href>; SCAF-09 +
+  // ESLint no-raw-anchor rule). Without a prefix the chip stays a span so
+  // there's no broken `/undefined/issues/...` link.
+  if (!companyPrefix) {
+    return (
+      <span className="clarity-ref-chip" data-status={card.status}>
+        {card.id} · {card.status}
+      </span>
+    );
+  }
   return (
-    <span className="clarity-ref-chip" data-status={card.status}>
+    <a
+      {...nav.linkProps(`/${companyPrefix}/issues/${card.id}`)}
+      className="clarity-ref-chip"
+      data-status={card.status}
+    >
       {card.id} · {card.status}
-    </span>
+    </a>
   );
 }
