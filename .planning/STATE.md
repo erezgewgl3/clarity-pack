@@ -16,7 +16,7 @@ progress:
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
-**Last updated:** 2026-05-07
+**Last updated:** 2026-05-24 — Quick task 260524-s2y: AC toggle → Reader refetch via UI-tier refresh; rc.5 → rc.6.
 
 ## Project Reference
 
@@ -610,6 +610,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260516-gx4 | Compile-path host-faithful test-hardening pass + Defect B JSON-extraction fix | 2026-05-16 | 4ed04b1 | [260516-gx4-compile-path-host-faithful-test-hardenin](./quick/260516-gx4-compile-path-host-faithful-test-hardenin/) |
+| 260524-s2y | Fix ac-toggle → Reader refetch via UI-tier `usePluginData.refresh` (SDK has no manifest-side `actions[].invalidates`); rc.5 → rc.6 | 2026-05-24 | bd50484 | [260524-s2y-fix-ac-toggle-invalidates-manifest-gap-a](./quick/260524-s2y-fix-ac-toggle-invalidates-manifest-gap-a/) |
 
 ### Phase History
 
