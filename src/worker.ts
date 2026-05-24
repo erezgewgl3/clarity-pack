@@ -130,6 +130,13 @@ import {
   registerChatOpenForIssue,
   type ChatOpenForIssueCtx,
 } from './worker/handlers/chat-open-for-issue.ts';
+// Plan 05-03 (DIST-03) — reader.ac.autostatus: comment-marker scanner that
+// promotes the Phase 2 manual AC checklist to event-derived auto-status.
+// Read-only over ctx.issues.listComments + ctx.agents.get.
+import {
+  registerReaderAcAutostatus,
+  type ReaderAcAutostatusCtx,
+} from './worker/handlers/reader-ac-autostatus.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -149,6 +156,11 @@ const plugin = definePlugin({
     registerIssueReader(ctx as unknown as IssueReaderCtx);
     registerAcChecklist(ctx as unknown as AcChecklistCtx);
     registerEditorPauseStatus(ctx as unknown as EditorPauseStatusCtx);
+    // Plan 05-03 (DIST-03) — reader.ac.autostatus is a Reader-view data
+    // handler (mounts alongside issue.reader). Lives in the Reader block
+    // because that is the sole consumer (ReaderViewReady's usePluginData
+    // hook in src/ui/surfaces/reader/index.tsx). Read-only — never mutates.
+    registerReaderAcAutostatus(ctx as unknown as ReaderAcAutostatusCtx);
 
     // ---- Plan 02-03c companyId resolver (UI fallback path) ------------------
     // NOTE: companies.resolve-prefix is NOT wrapped — it's also a boot-time
@@ -321,7 +333,7 @@ const plugin = definePlugin({
     registerChatStreamBridge(ctx as unknown as ChatStreamBridgeCtx);
 
     ctx.logger?.info?.(
-      `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status + chat.send/chat.edit + chat-stream-bridge + chat.roster/topics/messages/search/promote/pin registered`,
+      `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status + chat.send/chat.edit + chat-stream-bridge + chat.roster/topics/messages/search/promote/pin + reader.ac.autostatus registered`,
     );
   },
 });

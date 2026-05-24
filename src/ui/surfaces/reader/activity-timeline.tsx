@@ -6,26 +6,17 @@
 
 import * as React from 'react';
 
+// Plan 05-03 (DIST-03) — shortAgo moved to ../../util/humanize.ts so the AC
+// auto-status indicator can reuse the same format. activity-timeline still
+// renders it; the implementation just lives elsewhere now.
+import { shortAgo } from '../../util/humanize.ts';
+
 export type ActivityEvent = {
   kind: 'state_change' | 'comment' | 'work_product_write' | string;
   actor: string;
   at: string;
   detail?: string;
 };
-
-function shortAgo(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  if (!Number.isFinite(then) || then > now) return iso;
-  const sec = Math.floor((now - then) / 1000);
-  if (sec < 60) return `${sec}s`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h`;
-  const day = Math.floor(hr / 24);
-  return `${day}d`;
-}
 
 export function ActivityTimeline({ events }: { events: ActivityEvent[] | undefined }): React.ReactElement {
   // DEV-15 (drill 2026-05-14): defensive null-safety. Same pattern as
