@@ -934,13 +934,28 @@ function RuntimeNoiseRow({ msg }: { msg: ChatMessage }): React.ReactElement {
       {hasStructured ? (
         <details className="runtime-noise-comment-details">
           <summary>{title ?? 'System notice'}</summary>
+          {/* Plan 04.2-05 D4/D5 — composite stable keys. The section + row
+              indices were the only remaining bare-index `key={i}` / `key={j}`
+              callsites in the chat surface. Composing the index with a
+              stable field (section.title for sections; row.type for rows)
+              keeps reconciliation correct if a section is added in the
+              middle or a row's shape changes. Defensive — the 2026-05-24
+              drill captured key-warning attributions on parent components
+              that no longer reproduce on a clean install of 1.0.0-rc.2, but
+              these were the index-only patterns worth hardening. */}
           {sections!.map((section, i) => (
-            <div key={i} className="runtime-noise-comment-section">
+            <div
+              key={`section-${i}-${section.title ?? ''}`}
+              className="runtime-noise-comment-section"
+            >
               {section.title ? (
                 <div className="runtime-noise-comment-section-title">{section.title}</div>
               ) : null}
               {(section.rows ?? []).map((row, j) => (
-                <RuntimeNoiseStructuredRow key={j} row={row as SectionRow} />
+                <RuntimeNoiseStructuredRow
+                  key={`row-${i}-${j}-${(row as SectionRow).type ?? ''}`}
+                  row={row as SectionRow}
+                />
               ))}
             </div>
           ))}
