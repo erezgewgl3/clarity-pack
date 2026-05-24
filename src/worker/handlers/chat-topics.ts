@@ -76,6 +76,14 @@ type TopicEntry = {
    *  created the ordinary way + every pre-0009 row. Drives the topic strip's
    *  `About <COU-NNNN> ↗` backlink chip. */
   originIssueId: string | null;
+  /** Plan 04.2-06 D10 — server-resolved BEAAA-NNN identifier of
+   *  `originIssueId`. The topic-strip's `About ... ↗` chip uses this for
+   *  BOTH the visible text AND the click-through URL (per runbook
+   *  paperclip-issue-url-pattern: `/<companyPrefix>/issues/<identifier>`,
+   *  NOT `<UUID>` — UUID URLs 404). Null when the originIssueId is null OR
+   *  the resolution lookup degraded; the UI then hides the chip rather than
+   *  rendering a broken navigation target. */
+  originIssueIdentifier: string | null;
 };
 
 function mapTopic(row: ChatTopicRow): TopicEntry {
@@ -89,7 +97,61 @@ function mapTopic(row: ChatTopicRow): TopicEntry {
     archived: row.archived,
     // Plan 04.2-01 (RCB-05) — surfaced from the migration-0009 column.
     originIssueId: row.origin_issue_id ?? null,
+    // Plan 04.2-06 D10 — resolved AFTER the map step (see resolveOriginIdentifiers
+    // below). Default null so the shape is stable even when resolution is skipped.
+    originIssueIdentifier: null,
   };
+}
+
+/**
+ * Plan 04.2-06 D10 — resolve each distinct `originIssueId` UUID to its
+ * BEAAA-NNN identifier via a single ctx.issues.get per distinct id. Mutates
+ * the topic entries in-place. Degrades silently per id (a lookup failure
+ * leaves that topic's `originIssueIdentifier` null, and the UI hides the
+ * chip — same fallback as `originIssueId === null`).
+ *
+ * For a typical chat employee with <10 topics this is one host roundtrip
+ * per distinct origin, which in practice is 1–5 calls. We do NOT batch via
+ * a non-existent ctx.issues.list({ ids: [...] }) API — the SDK exposes
+ * `issues.get(id, companyId)` as the only single-issue read; the cost of
+ * sequential calls is bounded and only paid on the chat strip render path.
+ */
+async function resolveOriginIdentifiers(
+  topics: TopicEntry[],
+  companyId: string,
+  ctx: ChatTopicsCtx,
+): Promise<void> {
+  const distinct = Array.from(
+    new Set(
+      topics
+        .map((t) => t.originIssueId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  );
+  if (distinct.length === 0) return;
+
+  const idToIdentifier = new Map<string, string>();
+  for (const originId of distinct) {
+    try {
+      const issue = (await ctx.issues.get(originId, companyId)) as
+        | { identifier?: string | null }
+        | null;
+      const identifier = issue && typeof issue.identifier === 'string' ? issue.identifier : null;
+      if (identifier) idToIdentifier.set(originId, identifier);
+    } catch (e) {
+      ctx.logger?.warn?.('chat.topics: origin issue identifier resolution failed', {
+        originId,
+        companyId,
+        err: (e as Error).message,
+      });
+      // Leave unresolved — topic.originIssueIdentifier stays null.
+    }
+  }
+  for (const topic of topics) {
+    if (topic.originIssueId && idToIdentifier.has(topic.originIssueId)) {
+      topic.originIssueIdentifier = idToIdentifier.get(topic.originIssueId) ?? null;
+    }
+  }
 }
 
 function reqStr(params: Record<string, unknown> | undefined, key: string): string {
@@ -195,7 +257,14 @@ export function registerChatTopics(ctx: ChatTopicsCtx): void {
       return { error: 'TOPICS_FAILED' };
     }
 
-    return { kind: 'topics' as const, employeeAgentId, topics: rows.map(mapTopic) };
+    const topics = rows.map(mapTopic);
+    // Plan 04.2-06 D10 — resolve each distinct origin issue UUID to its
+    // BEAAA-NNN identifier so the topic strip's `About <COU-NNNN> ↗` chip
+    // (a) shows a readable identifier instead of leaking the raw UUID and
+    // (b) navigates to the correct issue URL pattern. See the helper above.
+    await resolveOriginIdentifiers(topics, companyId, ctx);
+
+    return { kind: 'topics' as const, employeeAgentId, topics };
   });
 
   // ---- chat.topic.create — ACTION handler (Task B) ------------------------

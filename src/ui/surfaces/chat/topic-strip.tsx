@@ -50,6 +50,13 @@ export type ChatTopic = {
    *  ChatTopic literals (deep-link minimal topics, archived-panel rows)
    *  compile unchanged. */
   originIssueId?: string | null;
+  /** Plan 04.2-06 D10 — server-resolved BEAAA-NNN identifier for
+   *  `originIssueId`. Used by the About-chip for BOTH the visible text AND
+   *  the click-through URL (per runbook paperclip-issue-url-pattern). Null
+   *  when the resolution degraded; the chip then hides rather than
+   *  rendering a broken `/<prefix>/issues/<UUID>` link. Optional for the
+   *  same compile-compat reason as `originIssueId`. */
+  originIssueIdentifier?: string | null;
 };
 
 type TopicsResult =
@@ -174,9 +181,20 @@ export function TopicStrip({
     () => allTopics.find((t) => t.issueId === activeTopicIssueId) ?? null,
     [allTopics, activeTopicIssueId],
   );
+  // Plan 04.2-06 D10 — the About-chip uses the SERVER-RESOLVED BEAAA-NNN
+  // identifier for both the visible label AND the navigation target. Pre-D10
+  // the chip rendered the raw originIssueId UUID (visible UUID leak) AND
+  // navigated to `/<prefix>/issues/<UUID>` which 404s per runbook
+  // paperclip-issue-url-pattern. When the server resolution degraded
+  // (originIssueIdentifier === null), HIDE the chip entirely rather than
+  // rendering a broken target. The legacy `originIssueId` UUID is intentionally
+  // no longer consumed by this surface — keeping the type field around only
+  // so existing minimal ChatTopic literals compile unchanged.
   const aboutIssueId =
-    activeTopic && typeof activeTopic.originIssueId === 'string' && activeTopic.originIssueId
-      ? activeTopic.originIssueId
+    activeTopic &&
+    typeof activeTopic.originIssueIdentifier === 'string' &&
+    activeTopic.originIssueIdentifier
+      ? activeTopic.originIssueIdentifier
       : null;
   // localStorage key — topic-scoped so each topic's chip dismissal is
   // independent. Read once per render; the Set mirror drives re-render.
