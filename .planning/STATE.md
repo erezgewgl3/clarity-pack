@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0.0-rc.4
-milestone_name: phase-4.2-closed
+milestone: v1.0.0-rc.5
+milestone_name: phase-5-dist-03-shipped
 status: executing
-stopped_at: "Plan 04.2-06 CODE-COMPLETE 2026-05-24 — D9 (Continue button UUID leak) + D10 (About chip UUID leak) shipped as clarity-pack-1.0.0-rc.4.tgz (143,583 bytes; sha256 d015ebc665c58240e4ea06bf1ff44fde1e08166638293c1c27cb615c7e76789c). 3 atomic commits 21008f6..5d2644b. Suite 1360 → 1364 (+4: D9 +2 source-grep, D10 +2 source-grep); 1362 pass / 0 fail / 2 skip. tsc + check-css-scope + check-a11y all GREEN. OUT OF SCOPE in 04.2-06 (still backlog): D4/D5 (React key warnings on 5 components — Plan 04.2-05's 'Defensive-only' disposition was wrong; needs per-component key audits), D8 (Back-after-deep-link drops chat state — URL_HASH consume side-effect). Phase 4.2 status unchanged (VERIFIED; 04.2-05 + 04.2-06 are polish on top). NEXT SESSION (fresh context recommended for clean execution): Plan 05-03 (DIST-03 — AC auto-status from comment-markers) — design questions LOCKED 2026-05-24 (comment-marker A1, side-by-side A2, no-conflict A3, copy-marker affordance A4); plan now in EXECUTE-READY-FRESH-CONTEXT state with file-by-file blueprint + fresh_context_kickoff block at the bottom of .planning/phases/05-distribution-polish/05-03-PLAN.md. Target version: 1.0.0-rc.5. Plan 05-04 DEFERRED to v1.1 (visual-regression infra overkill for v1 single-user). Operator drill for rc.4 deferred to Eric (paste from chat-window walkthrough). Phase 5 will be 3/4 CODE-COMPLETE once 05-03 lands (05-04 backlog)."
-last_updated: "2026-05-24T18:30:00.000Z"
+stopped_at: "Plan 05-03 CODE-COMPLETE 2026-05-24 — DIST-03 AC auto-status from comment-markers shipped as clarity-pack-1.0.0-rc.5.tgz (145,380 bytes; sha256 b91048f84b2ca096915ee283e712c05711b5fabd774be82323a69dcadf72613b). 5 atomic commits ffa6b22..e82dfc0 (worker handler reader.ac.autostatus + AC checklist side-by-side indicator + A4 copy-marker button + tests + version bump). Suite 1364 → 1380 (+16: 12 worker scanner + 4 UI source-grep); 1378 pass / 0 fail / 2 skip. tsc + check-css-scope (108 selectors all scoped) + check-a11y (65 files / 0 violations) + worker/UI/manifest builds + npm pack all GREEN. Phase 5 is now 3/4 CODE-COMPLETE (05-01 + 05-02 + 05-03); only 05-04 (DIST-04 previewers + visual regression) remains, DEFERRED to v1.1 per Eric's 2026-05-24 close-out decision (visual-regression infra overkill for v1 single-user). Phase 4.2 status unchanged (VERIFIED). Worker handler `reader.ac.autostatus` reads ctx.issues.listComments + resolves authorAgentId UUIDs via ctx.agents.get (per-distinct-author cache to avoid N+1); two regex grammars (canonical `AC: <id>: <state>` + bracket alternate `AC[<id>]: <state>`); earliest-comment-wins per ac-id. NO_UUID_LEAK regression-pinned via source-grep test (same family as Plan 04.2-06 D9/D10). UI ac-checklist.tsx keeps the Phase 2 manual checkbox JSX structurally untouched (regression-pin); auto-status indicator renders side-by-side ONLY when detected=true. A3 no-conflict design: manual remains source of truth, auto-status is render-time only. A4 copy-marker button puts `AC: <id>: ✓` on clipboard (navigator.clipboard primary, textarea+execCommand fallback) with 1500ms `✓ copied` flash. NO new schema, NO migrations — read-only over ctx.issues.listComments + ctx.agents.get; COEXIST-safe by construction (guarantees #3 + #6 preserved). Operator drill for rc.5 deferred to Eric (paste from chat-window walkthrough)."
+last_updated: "2026-05-24T22:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 43
-  completed_plans: 34
-  percent: 67
+  completed_plans: 35
+  percent: 69
 ---
 
 # State: Clarity Pack
@@ -24,11 +24,18 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 05 — Distribution & Polish (partial closure). Phase 4.2 closed 2026-05-24; Plan 04.2-05 polish pass shipped as 1.0.0-rc.3 (operator drill deferred to Eric).
+**Current Focus:** Phase 05 — Distribution & Polish (near-final closure). Phase 4.2 closed 2026-05-24; Plan 05-03 (DIST-03) shipped at v1.0.0-rc.5 on 2026-05-24; only 05-04 remains, deferred to v1.1.
 
 ## Current Position
 
-Phase: 05 (Distribution & Polish) — PARTIAL CLOSURE: 2/4 plans shipped; 2 plans PLAN-READY-AWAITING-DESIGN-REVIEW.
+Phase: 05 (Distribution & Polish) — NEAR-FINAL CLOSURE: 3/4 plans CODE-COMPLETE; Plan 05-04 deferred to v1.1.
+
+**Plan 05-03 (DIST-03 — AC auto-status from comment-markers) — CODE-COMPLETE 2026-05-24 at v1.0.0-rc.5.**
+Tarball `clarity-pack-1.0.0-rc.5.tgz` (145,380 bytes; sha256 `b91048f84b2ca096915ee283e712c05711b5fabd774be82323a69dcadf72613b`). 5 atomic commits `ffa6b22..e82dfc0`. Suite 1364 → 1380 (+16: 12 worker scanner + 4 UI source-grep). 1378 pass / 0 fail / 2 skip. All quality gates GREEN (tsc, check-css-scope 108 selectors, check-a11y 65 files / 0 violations, worker/UI/manifest builds, npm pack 14 files). Worker handler `reader.ac.autostatus` lives at `src/worker/handlers/reader-ac-autostatus.ts`; opted-in callers receive `{ kind: 'acAutoStatus', detections: { [acItemId]: { detected, sourceCommentId, sourceAuthorAgentId, sourceAuthorName, sourceCreatedAt } } }`. Two regex grammars match the canonical `AC: <id>: <state>` + bracket alternate `AC[<id>]: <state>` (multiline, case-insensitive on state ∈ {✓, done, complete, x}). Earliest-comment-wins per ac-id. Agent display name resolved via `ctx.agents.get` per distinct UUID (cached); degrades to null on lookup failure (warn-logged), NEVER to the UUID. UI tier: `ac-checklist.tsx` adds an optional `autoStatus?: AcAutoStatusMap | null` prop (default null — existing call sites unchanged); per-row indicator renders `auto: ✓ via <name> · <ago> ago` when `auto.detected === true`. A4 copy-marker button per row puts `AC: <id>: ✓` on the clipboard. `ReaderViewReady` mounts a parallel `usePluginData('reader.ac.autostatus', ...)` next to `issue.reader`. NO new schema, NO migrations; read-only over ctx.issues.listComments + ctx.agents.get. SUMMARY: `.planning/phases/05-distribution-polish/05-03-SUMMARY.md`.
+
+---
+
+**Earlier Phase 5 plans (carried forward):**
 
 **Phase 5 Plans 05-01 + 05-02 — CODE-COMPLETE 2026-05-24.** Eight atomic commits `ba0b6a6..928e61e` across the two plans.
 

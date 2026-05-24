@@ -162,7 +162,7 @@ Phase 5 work — unblocks broader use without blocking BEAAA value.
 
 - [ ] **DIST-01**: Plugin is published to npm as `clarity-pack` with the `paperclipPlugin` field in `package.json` pointing at `dist/manifest.js`, `dist/worker.js`, and `dist/ui/`.
 - [ ] **DIST-02**: README documents install + opt-in toggle + rollback flow + the runbook reference.
-- [ ] **DIST-03**: Acceptance-criteria auto-status promotes from manual checklist (Phase 2) to event-derived auto-status — without breaking Phase 2's manual UX.
+- [x] **DIST-03**: Acceptance-criteria auto-status promotes from manual checklist (Phase 2) to event-derived auto-status — without breaking Phase 2's manual UX.
 - [ ] **DIST-04**: XLSX / PDF deliverable preview promotes from Phase 2's placeholder to a registry of full-fidelity previewers (xlsx → grid, pdf → embed, md → rendered, png → img).
 - [ ] **DIST-05**: Lockfile audit + accessibility pass (axe-core or equivalent) + visual regression baseline run in CI; results recorded in the milestone audit.
 
@@ -295,7 +295,7 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | COEXIST-06 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | DIST-01 | Phase 5 | Pending |
 | DIST-02 | Phase 5 | Pending |
-| DIST-03 | Phase 5 | Pending |
+| DIST-03 | Phase 5 | Implemented (Plan 05-03 — comment-marker scanner via reader.ac.autostatus; side-by-side with manual checklist; v1.0.0-rc.5) |
 | DIST-04 | Phase 5 | Pending |
 | DIST-05 | Phase 5 | Pending |
 
