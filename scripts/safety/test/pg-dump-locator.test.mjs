@@ -28,11 +28,11 @@ import {
   assertVersionMatch,
 } from '../lib/pg-dump-locator.mjs';
 
-const FIXTURES = path.join(
+const FAKE_CLONE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
-  'fixtures',
+  '..', '..', '..',
+  'test', 'fixtures', 'external', 'fake-paperclip-clone',
 );
-const FAKE_CLONE = path.join(FIXTURES, 'fake-paperclip-clone');
 
 test('P1 — explicit --pg-bin override returns that path without filesystem touch', async () => {
   const result = await locatePgDump({ pgBinOverride: '/explicit/path/to/pg_dump' });

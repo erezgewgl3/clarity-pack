@@ -3,3 +3,21 @@
 # (linguist-generated so it doesn't pollute language stats).
 test/visual/baselines/*.png binary
 test/visual/diffs/* linguist-generated=true
+
+# Plan 05-09 Task 2 (D-22) — exclude test-only fixtures from npm-pack /
+# git-archive output. The fake-paperclip-clone fixture exercises
+# scripts/safety/lib/pg-dump-locator.mjs under Linux + Windows +
+# missing-bundle conditions; it is irrelevant to the plugin tarball ingested
+# by `pnpm paperclipai plugin install`.
+#
+# Note: `export-ignore` is honored by `npm pack` (which uses git ls-files
+# under the hood) and `git archive`; it is NOT honored by `git clone` /
+# `actions/checkout@v4` — those operations always materialize the path.
+# CI Linux runs therefore still see the fixture and pg-dump-locator tests
+# still pass against it. This guard is purely tarball hygiene.
+#
+# Consumer: Plan 05-10's `npm pack` step (v1.0.0 tarball production). The
+# tarball MUST NOT include test/fixtures/external/** — verified by
+# `tar -tzf clarity-pack-1.0.0.tgz | grep -c fake-paperclip-clone == 0`.
+test/fixtures/external/   export-ignore
+test/fixtures/external/** export-ignore
