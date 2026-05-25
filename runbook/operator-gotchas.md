@@ -159,3 +159,51 @@ Time: ~70 seconds. The git-tracked clone source is untouched.
 **Why it happens:** the visible UI signals the drill expects to see change (TL;DR refresh + AC checklist state shift) can ALL be decoupled from the underlying contract for a given test issue. Concretely: a cache-warm TL;DR will not refresh visually because there is nothing new to render; AC markers whose toggle does not affect the auto-status derivation can flip without any downstream caption change; and an audit comment that froze AC state via canonical markers can mask the live re-derivation path. The drill closed PASS on the rc.6 run only because the operator observed the refetch via DevTools Network — not a documented step.
 
 **Resolution:** Step 9 of every subsequent rc.X drill MUST capture either (a) a DevTools Network HAR or screenshot showing the `issue.reader` + `reader.ac.autostatus` refetch firing in response to a manual AC toggle, OR (b) a test issue with a cached TL;DR + ≥2 AC sources whose manual toggle materially changes the auto-status derivation (i.e. the visible auto-status caption text changes between the pre-toggle and post-toggle screenshots). Either proof is acceptable; one of the two MUST be recorded in the drill SUMMARY before the path is marked PASS.
+
+---
+
+## §vps-clarity-pack-scripts-sync
+
+**Symptom:** Safety CLI or install-helper.sh exits with an error referencing a script that does not exist on the VPS, OR a partial-clone state where `scripts/safety/` is stale relative to master.
+
+**Discovered:** 2026-05-25 Plan 04.2-07 rc.7 drill (second incident; first surfaced 2026-05-22 Plan 04.2-01 drill — see STATE.md Current Position notes).
+
+**Why it happens:** `~/clarity-pack` on Countermoves is a partial git checkout that predates Plan 01-05's `pg-dump-locator.mjs` and several Phase 4 safety updates. New scripts shipped via the repo are NOT reflected on the VPS until `git pull` runs against the checkout.
+
+**Resolution:** Before every drill, sync from origin:
+
+```bash
+cd ~/clarity-pack && git pull
+```
+
+Long-term remediation: documented operator step ONLY. The rejected alternative — silently auto-syncing the VPS scripts via an install-helper.sh hook — would mutate VPS state without operator review and is filed as a footgun in `.planning/phases/05-distribution-polish/05-CONTEXT.md` `<deferred>`.
+
+---
+
+## §paperclipai-plugin-install-upgrade-path
+
+**Symptom:** `pnpm paperclipai plugin install <new-tarball.tgz>` against an already-installed clarity-pack rejects with `400 "already installed"` — no in-place upgrade option, no `--force` flag, no `--upgrade` flag. The operator wants to ship a new version; the host wants the old one uninstalled first.
+
+**Discovered:** 2026-05-22 Plan 04.2-01 rc.0 → 0.9.0 upgrade drill; re-confirmed across Plan 04.2-02 (0.9.0 → 0.9.1), 04.2-03 (0.9.1 → 0.9.2), 04.2-04 (0.9.2 → 0.9.3), 04.2-07 (rc.6 → rc.7). Three+ separate drills hit this; documenting closes the rediscovery loop.
+
+**Why it happens:** The host's `paperclipai plugin install` is `install-from-scratch` only — there is no upgrade verb on the surface, and the host refuses to overwrite an existing plugin with the same `id`. By design the host preserves the plugin namespace UUID + the plugin-namespace tables across an `uninstall → install` cycle (COEXIST guarantees #3 + #6), so the upgrade pattern is `uninstall` followed by `install` — but the host CLI does not chain them automatically.
+
+**Resolution:** On the VPS, use the existing helper script which performs the dance:
+
+```bash
+# 1. Sync VPS scripts (see §vps-clarity-pack-scripts-sync above):
+cd ~/clarity-pack && git pull
+
+# 2. Run install-helper.sh from the clarity-pack checkout. The script
+#    (a) uninstalls the currently-installed clarity-pack via pnpm paperclipai,
+#    (b) extracts the new tarball, (c) installs the extracted dir.
+#    Plugin namespace UUID + plugin-namespace tables are preserved.
+~/clarity-pack/scripts/install-helper.sh /home/eric/clarity-pack-<NEW-VERSION>.tgz
+
+# 3. Confirm the new version is live:
+cd ~/paperclip && pnpm paperclipai plugin list
+```
+
+Note: `paperclipai` is a pnpm workspace script — step 3's `cd ~/paperclip` is MANDATORY (memory `paperclipai-workspace-script-gotcha`). The install-helper.sh script handles the cd itself for step 2; the operator only needs to cd manually when invoking `plugin list` afterwards.
+
+Long-term remediation: a host-side `paperclipai plugin upgrade <tgz>` verb would collapse this to one call. Filed as a Paperclip-host enhancement request out of scope for clarity-pack v1.0.0.

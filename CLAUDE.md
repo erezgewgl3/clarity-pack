@@ -89,7 +89,7 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 | Surface | Slot type | Notes |
 |---|---|---|
 | **Surface 1 — Task Detail Reader view** | `taskDetailView` (or `detailTab` with `entityTypes: ["issue"]`) | Adds an additional tab on issue pages without replacing classic UI. Coexistence guarantee #2 satisfied. |
-| **Surface 2 — Situation Room** | `page` with `routePath: "situation-room"` | Lives at `/:companyPrefix/plugins/clarity-pack/situation-room`. |
+| **Surface 2 — Situation Room** | `page` with `routePath: "situation-room"` | Lives at `/<companyPrefix>/situation-room` (e.g. `/COU/situation-room`). Plugin pages mount at `/<companyPrefix>/<routePath>` — NOT under a `/plugins/<plugin-id>/...` namespace — per project memory `clarity-pack-plugin-page-routes`. |
 | **Surface 3 — Daily Bulletin** | `page` with `routePath: "bulletin"` | Same routing namespace. |
 | **Surface 4 — Employee Chat** | `page` with `routePath: "chat"` | Same. |
 | Per-user opt-in toggle | `settingsPage` | Profile/settings page hosting the per-user toggle. |
@@ -274,7 +274,7 @@ Architecture not yet mapped. Follow existing patterns found in the codebase.
 <!-- GSD:skills-start source:skills/ -->
 ## Project Skills
 
-No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
+- **Sketch findings for clarity-pack** (design decisions, CSS patterns, visual direction from sketch experiments) → `Skill("sketch-findings-clarity-pack")`
 <!-- GSD:skills-end -->
 
 <!-- GSD:session-continuity-start source:GSD defaults -->
