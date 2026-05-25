@@ -16,7 +16,7 @@ progress:
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
-**Last updated:** 2026-05-24 — Quick task 260524-s2y: AC toggle → Reader refetch via UI-tier refresh; rc.5 → rc.6.
+**Last updated:** 2026-05-25 — Quick task 260524-sm8: rc.6 drill PASS on live Countermoves Paperclip — AC toggle → Reader refetch contract verified via DevTools Network 3-call cluster (2+ cycles, all 200); plugin-id UUID `0d4fc40a-0541-4b67-8979-9d346cb9c07b` preserved across uninstall→install; 7 defects filed (D-1..D-4 fixed in-flight; D-5/D-6/D-7 forward MemPalace).
 
 ## Project Reference
 
@@ -611,6 +611,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 |---|-------------|------|--------|-----------|
 | 260516-gx4 | Compile-path host-faithful test-hardening pass + Defect B JSON-extraction fix | 2026-05-16 | 4ed04b1 | [260516-gx4-compile-path-host-faithful-test-hardenin](./quick/260516-gx4-compile-path-host-faithful-test-hardenin/) |
 | 260524-s2y | Fix ac-toggle → Reader refetch via UI-tier `usePluginData.refresh` (SDK has no manifest-side `actions[].invalidates`); rc.5 → rc.6 | 2026-05-24 | bd50484 | [260524-s2y-fix-ac-toggle-invalidates-manifest-gap-a](./quick/260524-s2y-fix-ac-toggle-invalidates-manifest-gap-a/) |
+| 260524-sm8 | Drill rc.6 on Countermoves — AC toggle → Reader refetch contract verified live (DevTools Network 3-call cluster, 2+ cycles, all 200); plugin-id UUID preserved; 7 defects filed (D-1..D-4 fixed in-flight; D-5/D-6/D-7 forward MemPalace) | 2026-05-25 | 90e760f | [260524-sm8-drill-clarity-pack-1-0-0-rc-6-tgz-on-cou](./quick/260524-sm8-drill-clarity-pack-1-0-0-rc-6-tgz-on-cou/) |
 
 ### Phase History
 
