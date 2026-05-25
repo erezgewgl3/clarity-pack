@@ -990,3 +990,51 @@
   font-size: 11px;
   color: var(--clarity-ink-3);
 }
+
+/* ---------------------------------------------------------------------
+ * Plan 05-08 Task 5 (D-17) — ClaritySurfaceHeader styles.
+ *
+ * The shared `+ Create task` header is mounted on Reader / Situation Room
+ * / Bulletin / Chat / Archive. CSS rules are scoped under each surface
+ * root via [data-clarity-region='surface-header'] so the selectors honor
+ * the SCAF-06 isolation contract.
+ *
+ * Per-surface rules with the data-clarity-surface ancestor ensure the
+ * check-css-scope gate stays green (every selector starts under
+ * [data-clarity-surface]).
+ * --------------------------------------------------------------------- */
+
+[data-clarity-surface='reader'] [data-clarity-region='surface-header'],
+[data-clarity-surface='situation-room'] [data-clarity-region='surface-header'],
+[data-clarity-surface='bulletin'] [data-clarity-region='surface-header'],
+[data-clarity-surface='chat'] [data-clarity-region='surface-header'],
+[data-clarity-surface='archive'] [data-clarity-region='surface-header'] {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 8px 16px;
+  gap: 8px;
+}
+
+[data-clarity-surface='reader'] .clarity-cold-task-btn,
+[data-clarity-surface='situation-room'] .clarity-cold-task-btn,
+[data-clarity-surface='bulletin'] .clarity-cold-task-btn,
+[data-clarity-surface='chat'] .clarity-cold-task-btn,
+[data-clarity-surface='archive'] .clarity-cold-task-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--clarity-line, var(--clarity-border));
+  border-radius: 6px;
+  background: var(--clarity-you-soft, transparent);
+  color: var(--clarity-fg, inherit);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-clarity-surface='reader'] .clarity-cold-task-btn:hover,
+[data-clarity-surface='situation-room'] .clarity-cold-task-btn:hover,
+[data-clarity-surface='bulletin'] .clarity-cold-task-btn:hover,
+[data-clarity-surface='chat'] .clarity-cold-task-btn:hover,
+[data-clarity-surface='archive'] .clarity-cold-task-btn:hover {
+  background: var(--clarity-bg-3, var(--clarity-you-soft, transparent));
+}

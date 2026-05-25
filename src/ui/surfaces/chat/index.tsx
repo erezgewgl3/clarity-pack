@@ -47,10 +47,15 @@ import {
 import type { PluginPageProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
+import { ClaritySurfaceHeader } from '../../primitives/clarity-surface-header.tsx';
 import { useOptIn } from '../../primitives/use-opt-in.ts';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
-import { ToastProvider, useToast } from '../../primitives/toast.tsx';
+// Plan 05-08 Task 5 (D-17) — `ToastProvider` is now hoisted into
+// ClaritySurfaceRoot; ChatPage no longer wraps a duplicate provider here.
+// `useToast` is still imported because ChatPageBody calls it for the
+// in-body task-created + pause-toast surfaces.
+import { useToast } from '../../primitives/toast.tsx';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import {
@@ -150,12 +155,11 @@ function ChatPageOptedIn(): React.ReactElement {
 
   return (
     <ClaritySurfaceRoot name="chat">
-      {/* Plan 04.1-09 — ToastProvider wraps the chat body so the right rail's
-          Pause heartbeat Quick Action (and any future transient-feedback
-          surface) can showToast(). */}
-      <ToastProvider>
-        <ChatPageBody companyId={companyId} userId={userId} />
-      </ToastProvider>
+      {/* Plan 05-08 Task 5 (D-17) — the in-body <ToastProvider> wrapper that
+          existed under Plan 04.1-09 has been REMOVED. ToastProvider now
+          lives in ClaritySurfaceRoot (Task 4 hoist), so ChatPageBody's
+          useToast() finds the provider one level up. */}
+      <ChatPageBody companyId={companyId} userId={userId} />
     </ClaritySurfaceRoot>
   );
 }
@@ -713,6 +717,21 @@ function ChatPageBody({
 
   return (
     <>
+      {/* Plan 05-08 (D-17) — shared `+ Create task` header. Mounted above
+          the paused-agent banner so the affordance is consistently in the
+          top-right regardless of pause state. Defaults thread the current
+          employee context so the dialog opens with the chatted employee
+          preselected; the actions-row T-shortcut continues to handle the
+          in-thread cold-task affordance. */}
+      <ClaritySurfaceHeader
+        companyId={companyId}
+        userId={userId}
+        surface="chat"
+        defaultAssigneeAgentId={employee?.id ?? ''}
+        defaultEmployeeName={employee?.name ?? ''}
+        employeeAgentId={employee?.id ?? ''}
+        onTaskCreated={() => setRefreshKey((k) => k + 1)}
+      />
       {/* Plan 05-05 (D-06 + D-07) — generic paused-agent banner. Sits above
           the .clarity-chat-shell so it spans the full chat surface width
           and is visible regardless of which employee/topic is selected.

@@ -24,6 +24,7 @@ import {
 import type { PluginPageProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
+import { ClaritySurfaceHeader } from '../../primitives/clarity-surface-header.tsx';
 import { useOptIn } from '../../primitives/use-opt-in.ts';
 import { useInstanceConfig } from '../../primitives/use-instance-config.ts';
 import { usePollWithLeader } from '../../primitives/use-poll-with-leader.ts';
@@ -127,6 +128,12 @@ function SituationRoomOptedIn(): React.ReactElement {
 
   return (
     <ClaritySurfaceRoot name="situation-room">
+      {/* Plan 05-08 (D-17) — shared `+ Create task` header. */}
+      <ClaritySurfaceHeader
+        companyId={companyId}
+        userId={userId ?? ''}
+        surface="situation-room"
+      />
       <SituationRoomBody
         companyId={companyId}
         userId={userId ?? ''}

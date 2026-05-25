@@ -256,15 +256,32 @@ test('active-tasks-owned.tsx (Plan 04.1-09): .ttl carries a hover-tooltip title 
 // index.tsx — ToastProvider mount + activeTasks fetch wiring
 // ---------------------------------------------------------------------------
 
-test('index.tsx (Plan 04.1-09): ToastProvider wraps ChatPageBody', () => {
+test('index.tsx (Plan 05-08 Task 5 D-17 supersedes Plan 04.1-09 ToastProvider lock): ToastProvider hoisted to ClaritySurfaceRoot; chat no longer wraps it locally', () => {
   const src = readFileSync(path.join(CHAT_DIR, 'index.tsx'), 'utf8');
-  assert.match(src, /import\s*\{?\s*ToastProvider/, 'must import ToastProvider');
-  // ChatPageBody is wrapped so any descendant can useToast().
-  assert.match(
-    src,
-    /<ToastProvider>[\s\S]*?<ChatPageBody/,
-    '<ToastProvider> must wrap <ChatPageBody>',
+  // Plan 05-08 D-17 (checker BLOCKER 4) hoisted ToastProvider into
+  // ClaritySurfaceRoot so EVERY clarity-pack surface gets useToast() in
+  // scope (Reader / Situation Room / Bulletin / Chat / Archive). The
+  // chat surface's in-body <ToastProvider> wrapper was removed to avoid
+  // nested providers (Task 5 of Plan 05-08).
+  //
+  // The 04.1-09 lock (must wrap ChatPageBody) is explicitly superseded.
+  // We re-pin the new contract: chat/index.tsx does NOT mount a
+  // <ToastProvider> wrapper, and ClaritySurfaceRoot does.
+  const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(
+    codeOnly,
+    /<ToastProvider>/,
+    'chat/index.tsx must NOT mount a <ToastProvider> wrapper (D-17 hoist supersedes)',
   );
+  // useToast is still imported because ChatPageBody calls it for the
+  // task-created + pause toasts.
+  assert.match(src, /useToast/);
+  // Pin the hoist: ClaritySurfaceRoot is the source of ToastProvider.
+  const rootSrc = readFileSync(
+    path.join(CHAT_DIR, '..', '..', 'primitives', 'clarity-surface-root.tsx'),
+    'utf8',
+  );
+  assert.match(rootSrc, /<ToastProvider>/, 'ClaritySurfaceRoot must mount ToastProvider');
 });
 
 test('index.tsx (Plan 04.1-09): chat.taskOwned fetch lifted via useChatActiveTasks', () => {

@@ -22,6 +22,7 @@ import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 import type { PluginPageProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
+import { ClaritySurfaceHeader } from '../../primitives/clarity-surface-header.tsx';
 import { useOptIn } from '../../primitives/use-opt-in.ts';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
@@ -146,9 +147,20 @@ function BulletinPageBody({
     userId,
   });
 
+  // Plan 05-08 (D-17) — shared `+ Create task` header for cross-surface
+  // cold-task creation. Mounted at the top of every BulletinPageBody return.
+  const header = (
+    <ClaritySurfaceHeader
+      companyId={companyId}
+      userId={userId}
+      surface="bulletin"
+    />
+  );
+
   if (loading && !data) {
     return (
       <>
+        {header}
         <FailedCompileBanner />
         <p className="clarity-bulletin-loading">Loading the morning bulletin…</p>
       </>
@@ -163,6 +175,7 @@ function BulletinPageBody({
   if (!data || ('kind' in data && data.kind === 'not-yet-published')) {
     return (
       <>
+        {header}
         <FailedCompileBanner />
         <div className="clarity-bulletin-first-edition">
           <p className="clarity-bulletin-quiet">
@@ -193,6 +206,7 @@ function BulletinPageBody({
 
   return (
     <>
+      {header}
       <FailedCompileBanner />
       <Masthead
         volume={masthead.volume}

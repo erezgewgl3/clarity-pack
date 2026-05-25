@@ -45,6 +45,7 @@ import { usePluginData, useHostLocation } from '@paperclipai/plugin-sdk/ui/hooks
 import type { PluginDetailTabProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
+import { ClaritySurfaceHeader } from '../../primitives/clarity-surface-header.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 // Plan 04.2-01 — the URL-prefix parser is re-imported separately so the
 // reader-view-null-context.test.mjs single-import grep for useResolvedCompanyId
@@ -283,6 +284,14 @@ function ReaderViewReady({
   }
   return (
     <ClaritySurfaceRoot name="reader">
+      {/* Plan 05-08 (D-17) — shared `+ Create task` header above the
+          banner / breadcrumb / TLDR. Mounted at the top of every
+          populated render. */}
+      <ClaritySurfaceHeader
+        companyId={companyId}
+        userId={userId}
+        surface="reader"
+      />
       {/* Plan 05-05 (D-06 + D-07) — top-of-tab generic paused-agent banner.
           Renders nothing when the Editor-Agent (or future per-employee
           handler) is healthy. The editor-only PauseBanner at the FOOTER
