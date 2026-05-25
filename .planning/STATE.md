@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.7
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: "Plan 05-04 CODE-COMPLETE 2026-05-25 (DIST-04 previewers + DIST-05 visual-regression infra); no version bump (reserved for Plan 05-10); next: any Wave-1 plan (05-05/06/07/09)"
-last_updated: "2026-05-25T22:00:00.000Z"
+stopped_at: "Plan 05-09 CODE-COMPLETE 2026-05-25 (tooling + infra cleanup: CLAUDE.md plugin-route fix + 2 new runbook sections + fake-paperclip-clone fixture relocation + .gitattributes export-ignore); no version bump (reserved for Plan 05-10); next: any remaining Wave-1/Wave-2 plan (05-05/06/07/08) or closure (05-10 gates on 04/05/06/07/08/09)"
+last_updated: "2026-05-25T19:15:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 50
-  completed_plans: 38
-  percent: 68
+  completed_plans: 39
+  percent: 70
 ---
 
 # State: Clarity Pack
@@ -27,6 +27,23 @@ progress:
 **Current Focus:** Phase 05 — distribution-polish
 
 ## Current Position
+
+**Plan 05-09 (Tooling + infra cleanup, version UNCHANGED at rc.7) — CODE-COMPLETE 2026-05-25.** 3 atomic commits `7269442..<closure>` on master.
+
+- **(item a) CLAUDE.md plugin-route doc correction** — §2 Plugin Manifest Shape Slot-types table Surface 2 row now reflects the canonical `/<companyPrefix>/situation-room` pattern with `/COU/situation-room` example + cross-reference to project memory `clarity-pack-plugin-page-routes`. `grep -c "/plugins/clarity-pack/" CLAUDE.md` = 0 (was 1).
+- **(item b — D-21) `§vps-clarity-pack-scripts-sync` runbook entry** — documents pre-drill `cd ~/clarity-pack && git pull` step. Canonical 4-field shape (Symptom / Discovered / Why it happens / Resolution). Rejected silent-auto-sync alternative explicitly out of scope.
+- **(item c) `§paperclipai-plugin-install-upgrade-path` runbook entry** — documents host's `400 "already installed"` rejection on in-place upgrade + `install-helper.sh` uninstall→install dance. Closes 3+ drill rediscovery loop (Plans 04.2-01/02/03/04/07).
+- **(item d — D-22) Windows max-path worktree fix** — `git mv scripts/safety/test/fixtures/fake-paperclip-clone/` → `test/fixtures/external/fake-paperclip-clone/` (byte-identical tree; rendered as git rename). FAKE_CLONE constant in `scripts/safety/test/pg-dump-locator.test.mjs` rewritten to inline new path with explicit `'..', '..', '..'` segments; obsolete FIXTURES constant REMOVED entirely per checker WARNING #13 (single-consumer audit; leaving it would be a footgun). `.gitattributes` adds export-ignore for `test/fixtures/external/{,**}` so Plan 05-10's npm pack excludes the test-only fixture (empirically verified: `npm pack --dry-run | grep -c fake-paperclip-clone` = 0).
+- **Quality gates GREEN:** typecheck clean; check-css-scope 108 selectors; check-a11y 65 files / 0 violations; check-ui-bundle-size OK (606487 bytes / 665600 ceiling); coexistence run-all 10/10 PASS; pg-dump-locator P1-P7 all PASS against new path; full test suite 1444 / 1442 pass / 0 fail / 2 pre-existing skip (unchanged from rc.7 baseline). Worker + UI + manifest builds all exit 0.
+- **No version bump.** package.json + src/manifest.ts stay at `1.0.0-rc.7` per checker BLOCKER-1; the phase-wide rc.7 → 1.0.0 bump lives EXCLUSIVELY in Plan 05-10. No new tarball produced.
+- **0 deviations** — plan executed exactly as written (modulo one inline anti-example rephrasing during Task 1, caught by the Task 1 verify gate, not a deviation per the rule taxonomy).
+- **1 issue encountered (non-defect):** `npm run build` script chains via `pnpm` which is not on the Bash tool's PATH; resolved by invoking the three build sub-scripts directly (`node scripts/build-worker.mjs`, `node scripts/build-ui.mjs`, `npx tsc --project tsconfig.manifest.json`). All three exit 0. Eric's PowerShell environment has pnpm; the Bash tool inherits a different one. Flagged for future executors.
+
+SUMMARY: `.planning/phases/05-distribution-polish/05-09-SUMMARY.md`.
+
+**Next action:** Any remaining Wave-1/Wave-2 Phase 5 plan (05-05 / 05-06 / 05-07 / 05-08 are autonomous and parallel-safe). Plan 05-10 (v1.0.0 closure) gates on all of 05-04..05-09 completing. Run `/gsd:execute-phase 5` to pick up the next one, or `/gsd:execute-phase 5 --plan 05-05` for a specific one.
+
+---
 
 **Plan 05-04 (DIST-04 + DIST-05 visual half) — CODE-COMPLETE 2026-05-25.** 4 atomic commits `5085e18..ceb8e9a` on master.
 
