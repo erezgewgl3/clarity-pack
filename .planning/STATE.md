@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.7
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: "Plan 05-09 CODE-COMPLETE 2026-05-25 (tooling + infra cleanup: CLAUDE.md plugin-route fix + 2 new runbook sections + fake-paperclip-clone fixture relocation + .gitattributes export-ignore); no version bump (reserved for Plan 05-10); next: any remaining Wave-1/Wave-2 plan (05-05/06/07/08) or closure (05-10 gates on 04/05/06/07/08/09)"
-last_updated: "2026-05-25T19:15:00.000Z"
+stopped_at: "Plan 05-05 CODE-COMPLETE 2026-05-25 (zero-rabbit-holes finishers: AgentPauseBanner shared by Reader + chat with 3 cause-discriminated copies; ref-chip hover peek + resolve-refs payload extension with NO_UUID_LEAK ownerName; buildTopicDeepLink employee third-arg extension closes GAP-PICKER-ROW-DISPATCH); 3 atomic commits 19527e6..4de9c5a; suite 1444→1493 (+49); no version bump (reserved for Plan 05-10); next: any remaining Wave-2 plan (05-06/05-07/05-08) or closure (05-10 gates on 04/05/06/07/08/09)"
+last_updated: "2026-05-25T19:08:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 50
-  completed_plans: 39
-  percent: 70
+  completed_plans: 40
+  percent: 72
 ---
 
 # State: Clarity Pack
@@ -27,6 +27,23 @@ progress:
 **Current Focus:** Phase 05 — distribution-polish
 
 ## Current Position
+
+**Plan 05-05 (Zero-rabbit-holes finishers — D-06+D-07 paused-agent banner + D-08+D-09 ref-chip peek + D-10 picker-row dispatch, version UNCHANGED at rc.7) — CODE-COMPLETE 2026-05-25.** 3 atomic commits `19527e6..4de9c5a` on master in sequential mode.
+
+- **Task 1 (D-06 + D-07) — Generic paused-agent banner.** NEW `src/ui/primitives/agent-pause-banner.tsx` mounts on BOTH Reader top-of-tab (above the header-actions row in the populated render) AND chat ChatPageBody (above `.clarity-chat-shell`). Three locked copies dispatch on `data.cause`: operator → "<name> paused by operator — ▶ Resume heartbeat"; budget → "<name> stopped — budget exhausted; check budget caps — ▶ Resume heartbeat"; adapter → "<name> stopped — codex adapter error <HH:MM>; ▶ Retry heartbeat". Worker handler `editor.pause-status` extended to return a discriminated union; cause derived via lowercase substring scan on reason text (`budget` / `codex` / `adapter` / default operator); agentName resolved via `ctx.agents.get(EDITOR_AGENT_KEY, companyId)` with friendly literal `'this employee'` fallback (NO_UUID_LEAK; mirrors chat-open-for-issue D9 pattern). LEGACY fields (`lastFailureAt` + `reason`) PRESERVED on paused payload so editor-only `pause-banner.tsx` keeps its locked literal — one worker call, two consumers (PRIM-01 spirit). Editor-only banner UNCHANGED; reader-view.test.mjs string lock preserved. Commit `19527e6`.
+- **Task 2 (D-08 + D-09) — Ref-chip hover peek + resolve-refs payload extension.** Click navigation to `/<companyPrefix>/issues/<identifier>` UNCHANGED (D-08 lock). Hover peek opens on `mouseEnter`/closes on `mouseLeave`; 500ms touch long-press fallback via `onTouchStart`/`onTouchEnd`/`onTouchMove`; timer cleaned up on unmount. Peek popover (`clarity-ref-chip-peek`, `role="tooltip"`) renders title + status + ownerName + descriptionExcerpt (conditional on presence). Worker `resolve-refs` extended with `descriptionExcerpt` (first line, 120-char cap with ellipsis, viewer-gated by `_viewer_can_read === false ? null : firstLineExcerpt(body)` — PRIM-02 inheritance) AND `ownerName` (server-resolved via `ctx.agents.get(ownerUserId, companyId)` POST-fetch, batched across distinct owner UUIDs — M `agents.get` calls for M ≤ N distinct owners, NO quadratic storm). PRIM-01 single-round-trip preserved (ONE `ctx.http.fetch` per handler call; agents.get is local enrichment inside the same invocation). UI peek owner fallback is the LITERAL `'unassigned'` — NEVER the UUID. RefCardData extended additively (`ownerName?: string | null`, `descriptionExcerpt?: string | null`). Commit `426a977`.
+- **Task 3 (D-10) — buildTopicDeepLink employeeUserId extension + caller audit. CLOSES GAP-PICKER-ROW-DISPATCH from the rc.7 drill.** `buildTopicDeepLink(companyPrefix, topicIssueId, employeeUserId?)` — optional third parameter threads into the encoded URL_HASH payload as `employee`. `.d.mts` signature mirrors. Caller audit returns EXACTLY 3 occurrences of `buildTopicDeepLink(` in `src/`: the .mjs export, the .d.mts declaration, and the fixed `reverse-topics-link.tsx` line 162 caller (now passes `t.employeeAgentId`). Chat-surface dispatch (Plan 04.2-04) already reads `link.employee` → matches roster → `setEmployee(matched)` → `setTopic` — no chat-side change in this plan. The audit + emitter fix IS the load-bearing work. NO version bump. Commit `4de9c5a`.
+- **Quality gates GREEN:** `tsc --noEmit` clean; `check-css-scope.mjs` 118 selectors all scoped under `[data-clarity-surface]`; `check-a11y.mjs` 66 files / 0 violations; `coexistence-checks/run-all.mjs` 10/10 PASS; `check-ui-bundle-size.mjs` 615,421 bytes / 665,600 byte ceiling (no SheetJS sentinels — Task 2 is pure code; xlsx still lives only in worker bundle); worker build 2.1 MB / UI build 601.0 kB / manifest build all exit 0. Full test suite **1493 pass / 0 fail / 2 pre-existing skip** (suite delta 1444 → 1493 = **+49 net tests**, target was +15).
+- **No version bump.** `package.json` + `src/manifest.ts` stay at `1.0.0-rc.7`; phase-wide rc.7 → 1.0.0 bump lives EXCLUSIVELY in Plan 05-10. No new tarball produced.
+- **1 deviation (Rule 1 — Bug):** `test/ui/reverse-topics-link-entry-point.test.mjs` T6 updated. Plan 04.2-07 D-07 locked the OLD 2-arg `buildTopicDeepLink(companyPrefix, t.topicIssueId)` call shape; Plan 05-05 D-10 EXPLICITLY supersedes that lock — the whole point of D-10 is the third-arg extension. Updated regex pins the new 3-arg shape with multi-line tolerance (`s` flag); test comment cites the supersession.
+- **Forward defects closed by this plan:** GAP-PICKER-ROW-DISPATCH (Task 3). The other three rc.7 forward defects (`GAP-D8-LINEAGE-TOOLTIP`, `GAP-D8-REVERSE-TOOLTIP-FALLBACK`, `GAP-RCB-05-CHIP-STYLING`) continue to be carried by **Plan 05-07** (Phase 4.2 polish bundle).
+- **Wave-2 coordination — Plan 05-04 file ordering re-verified:** `src/ui/surfaces/reader/index.tsx` line numbers re-read post-05-04 before inserting `<AgentPauseBanner />`. 05-04's `<DeliverablePreview />` mount lives at line 336–341; banner inserts BEFORE the header-actions row at line ~289 — structurally above all of 05-04's previewer mount path. No merge friction.
+
+SUMMARY: `.planning/phases/05-distribution-polish/05-05-SUMMARY.md`.
+
+**Next action:** Any remaining Wave-2 plan (05-06 / 05-07 / 05-08 are autonomous and parallel-safe). Plan 05-10 (v1.0.0 closure) gates on all of 05-04..05-09 completing — Plans 05-04, 05-05, 05-09 are now CODE-COMPLETE; 05-06 / 05-07 / 05-08 remain. Run `/gsd:execute-phase 5` to pick up the next one, or `/gsd:execute-phase 5 --plan 05-06` for a specific one.
+
+---
 
 **Plan 05-09 (Tooling + infra cleanup, version UNCHANGED at rc.7) — CODE-COMPLETE 2026-05-25.** 3 atomic commits `7269442..<closure>` on master.
 
