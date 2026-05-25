@@ -36,6 +36,18 @@
 // SECURITY (T-04-18): every field renders as untrusted React text. NO
 // dangerouslySetInnerHTML. No raw fetch — chat.createTrueTask goes through
 // usePluginAction.
+//
+// Plan 05-07 Task 2 (D-14) — React-key audit pass for TrueTaskDialog.
+// Audit verdict: both JSX-returning `.map(...)` callbacks (the roster
+// <option> map at line 327 keyed on `emp.id`; the topics <option> map
+// at line 346 keyed on `t.issueId`) are stable. The single closed-state
+// return `<></>` (line 277) is an empty fragment for the not-rendered
+// path — not a sibling-in-list pattern. Sibling files
+// `chat-task-status-pill.tsx` + `inline-task-card.tsx` contain no
+// `.map()` calls at all. The 2026-05-25 drill attribution likely
+// surfaced from a parent (the dialog is mounted by ChatPageBody —
+// audited separately) rather than from this component's own JSX.
+// Verified by the test/ui/chat-react-key-console-capture.test.mjs gate.
 
 import * as React from 'react';
 import { usePluginAction, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
