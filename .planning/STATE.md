@@ -3,20 +3,20 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.7
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: "Plan 05-07 CODE-COMPLETE 2026-05-25 (Phase 4.2 rc.7 forward-defect polish bundle — D-08 lineage + reverse-lookup tooltip identifier resolution, RCB-05 rectangular chip CSS, D-13 Browser-Back URL_HASH preservation, D-14 React-key audit 5 commits + static console-capture proxy gate, D-03 cross-employee fall-through fixture; 9 atomic commits 4b9d855..4add621; suite 1414→1575 +161; no version bump (reserved for Plan 05-10)); next: Wave-4 Plan 05-08 (Phase 4.1 power features) or 05-10 closure (gates on 05-04..05-09)"
-last_updated: "2026-05-25T20:00:10.042Z"
+stopped_at: "Plan 05-08 CODE-COMPLETE 2026-05-25 (Phase 4.1 power features — D-15 archive full-view + D-16 bulk-unarchive + D-17 cold-task-from-global + D-18 diagnostics persistence + D-19 composer shortcuts popover + D-20 storage-pin exempt-from-archive; 6 atomic commits 2d19947..ce9d1e0; suite 1775→1801 +26; no version bump (reserved for Plan 05-10)); next: Plan 05-10 closure (v1.0.0 final, ALL gates 05-04..05-09 now CODE-COMPLETE)"
+last_updated: "2026-05-25T20:41:36Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 50
-  completed_plans: 42
-  percent: 67
+  completed_plans: 43
+  percent: 68
 ---
 
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
-**Last updated:** 2026-05-25 — Plan 04.2-07 SHIPPED at clarity-pack-1.0.0-rc.7.tgz (147,533 bytes; sha256 `763354cce39dca67a4c25141142507aad88d24de9588e24566019f2b3829a63d`). D-7 routing fix operator-confirmed live on Countermoves: load-bearing path 6 PASS (silent resume + auto-unarchive on COU-2441 fresh fixture; CTT-07 invariant holds at the DB layer — `chat_topics.archived_at` flipped to NULL + `public.issues.updated_at` byte-identical across handler window); 5 closure-baseline fixtures (paths 1-5) all PASS; scenario 7 ambiguous picker PARTIAL (auto-opens with N=2 candidates ✓, but row-click dispatch lands empty → GAP-PICKER-ROW-DISPATCH filed); plugin UUID `0d4fc40a-...` preserved across 4 uninstall/install cycles. 4 forward defects (GAP-D8-LINEAGE-TOOLTIP, GAP-D8-REVERSE-TOOLTIP-FALLBACK, GAP-PICKER-ROW-DISPATCH, GAP-RCB-05-CHIP-STYLING) routed to Plan 04.2-08.
+**Last updated:** 2026-05-25 — Plan 05-08 CODE-COMPLETE. Phase 5 wave-5 closure complete (all of 05-04..05-09 now CODE-COMPLETE). Plan 05-10 (v1.0.0 final closure: rc.7 → 1.0.0 bump + npm publish + canonical ALL-paths drill) is now unblocked. 6 atomic commits `2d19947..ce9d1e0` shipped D-15..D-20 power features (archive full-view, bulk-unarchive, cold-task-from-global, per-topic diagnostics persistence, composer shortcuts popover, storage-pin = exempt from archive) + migration 0010 (additive pinned_at column) + ClaritySurfaceRoot ToastProvider hoist (checker BLOCKER 4 closed). No version bump (rc.7 → 1.0.0 lives in Plan 05-10 per checker BLOCKER 1). Suite 1801 pass / 0 fail / 3 skip.
 
 ## Project Reference
 
@@ -27,6 +27,25 @@ progress:
 **Current Focus:** Phase 05 — distribution-polish
 
 ## Current Position
+
+**Plan 05-08 (Phase 4.1 power features — 5 items D-15..D-20, version UNCHANGED at rc.7) — CODE-COMPLETE 2026-05-25.** 6 atomic commits `2d19947..ce9d1e0` on master in sequential mode.
+
+- **Task 1 (D-15 + D-16 + D-20 schema) — Migration 0010 + repo extensions.** Additive `migrations/0010_chat_topics_pinned.sql` adding `pinned_at timestamptz DEFAULT NULL` to plugin-namespace `chat_topics`; validator-conformant (apostrophe-free comments, no standalone CREATE INDEX, semicolon-terminated). `ChatTopicRow.pinned_at?: string | null`; 4 new repo helpers: `setChatTopicPinned`, `isChatTopicPinned`, `bulkSetChatTopicArchived` (single-round-trip multi-row UPDATE with SQL guard `pinned_at IS NULL OR $1 = false` — load-bearing for any future bulk-archive), `listAllArchivedChatTopics` (company-scoped, drops employee filter). `listChatTopicsForEmployee` SELECT pulls `pinned_at`. 9 new tests. Commit `2d19947`.
+- **Task 2 (D-15 + D-16 + D-20 handlers + carriers) — chat.topic.pin + bulkUnarchive + archivedTopics extension + chat.topics carrier.** `chat-topic-pin.ts` (verbatim clone of chat-topic-archive.ts; CTT-07 by construction); `chat-topic-bulk-unarchive.ts` (validates `topicIssueIds: string[]`; empty-array short-circuit; CTT-07 zero `ctx.issues.update`). `chat-archived-topics.ts` extended: `employeeAgentId` now OPTIONAL → omit for company-scoped listing; `EMPLOYEE_AGENT_ID_REQUIRED` error code RETIRED; payload grows `pinnedAt: string | null` (D-20 carrier). `chat-topics.ts` per-row mapping adds `pinnedAt: row.pinned_at ?? null` (D-20 carrier). `worker.ts` registers both new handlers. 28 new tests across 4 handler test files. Commit `340f2ed`.
+- **Task 3 (D-20 reverse invariant) — chat.topic.archive PIN_EXEMPT guard.** Inside the existing try block, when archive=true, the handler reads `isChatTopicPinned` and returns `{ error: 'PIN_EXEMPT', topicIssueId }` BEFORE setChatTopicArchived. Un-archive direction unchanged. Pinned-read failure routes to `ARCHIVE_FAILED` (deny-by-default). 6 new PE tests; existing chat-topic-archive suite green (no regression). PE5 spy confirms `ctx.issues.update` zero-calls across all PE paths. Commit `c830aa5`.
+- **Task 4 (D-15 + D-17 surface scaffold) — ArchivePage page-slot + ClaritySurfaceRoot ToastProvider hoist.** Manifest grows the `clarity-archive` page slot at `routePath: 'archive'` → resolves to `/<companyPrefix>/archive` (NOT `/clarity-pack/archive` — per memory `clarity-pack-plugin-page-routes`; CONTEXT.md D-15 slip corrected). `ClaritySurfaceName` grows `'archive'` AND ClaritySurfaceRoot wraps `{children}` in `<ToastProvider>` so every surface inherits `useToast()`. ArchivePage three-gate composition + bulk-select checkboxes + sticky `Selected (N) — Unarchive` bar + employee filter from chat.roster (NO_UUID_LEAK: `'unassigned'` fallback). Bulk dispatch fires toast `N topics unarchived` (no confirmation modal). Chat archive-panel View-all link wired to the new route (`nav.navigate`); console.warn no-op stub removed. 11 new ArchivePage tests + 3 manifest slot tests + 1 chat-archive-panel test update (Plan 04.1-08 console.warn lock superseded). Commit `be3d5cd`.
+- **Task 5 (D-17 + D-17 toast hoist) — ClaritySurfaceHeader + cross-surface mount.** New shared `<header>` with right-aligned `+ Create task` button. Opens TrueTaskDialog in COLD mode; `onSuccess` fires `showToast({ message: 'Task created' })` from the hoisted `useToast()` — works on Reader / Situation Room / Bulletin / Chat regardless of which surface mounted it (D-17 cross-surface toast, checker BLOCKER 4 closed). No window keydown listener; chat's actions-row keeps the `T` shortcut. Chat surface's in-body `<ToastProvider>` REMOVED (Plan 04.1-09 lock explicitly superseded by D-17 hoist). 14 new CSH tests + 1 chat-context-rail test updated to pin the new contract. Commit `c653d8f`.
+- **Task 6 (D-18 + D-19 + D-20 UI) — diagnostics persistence + shortcuts popover + storage-pin UI + ChatTopic type.** `DiagnosticsToggle` accepts `topicId` + persists per-topic in localStorage `clarity:diagnostics:<topic-id>`; reads on mount/topicId-change, writes on toggle; try/catch swallow on privacy mode; null/undefined topicId is the graceful-degrade session-only path. `shortcuts-popover.tsx` lists shortcuts as React text (NO innerHTML); composer's `handleKeyDown` opens on `e.key === '?'` regardless of buffer state (SP1 + SP3 paths collapse on US keyboards); Esc closes + restores focus; printable key closes (no preventDefault → keystroke reaches textarea). `ChatTopic.pinnedAt?: string | null` added to topic-strip.tsx. Context-rail Storage pin block becomes a `<button>` dispatching `chat.topic.pin`; visual reflects `topic.pinnedAt` (`📌 Pinned — exempt from archive` vs rc.7 copy); success toast + `onPinChanged` callback bumps chat.topics refetch. 26 new tests. Commit `ce9d1e0`.
+- **Quality gates GREEN:** `tsc --noEmit` clean; `check-css-scope.mjs` **121 selectors all scoped under `[data-clarity-surface]`**; `check-a11y.mjs` 69 files / 0 violations; `coexistence-checks/run-all.mjs` 10/10 PASS; `check-ui-bundle-size.mjs` **652,913 bytes (637.6 kB) / 665,600 byte ceiling**; worker build 2.1 MB / UI build 637.6 kB / manifest build all exit 0; DDL prefix validator covers migration 0010. Full test suite **1801 pass / 0 fail / 3 pre-existing skip** (suite delta 1775 → 1801 = **+26 net tests** for Task 6 alone; full plan delta +89 vs the start-of-plan 1712 baseline once all 6 task commits roll in).
+- **No version bump.** `package.json` + `src/manifest.ts` stay at `1.0.0-rc.7` (checker BLOCKER 1); phase-wide rc.7 → 1.0.0 bump lives EXCLUSIVELY in Plan 05-10. No new tarball produced.
+- **3 deviations** documented (all auto-fixed Rule 1/3): updated 2 superseded test locks (`chat-archive-panel.test.mjs` Plan 04.1-08 console-warn → Plan 05-08 D-15 nav; `chat-context-rail.test.mjs` Plan 04.1-09 ToastProvider-wraps-ChatPageBody → Plan 05-08 D-17 hoist); mass-converted 12 chat.css selectors from single to double quotes to match the pre-existing `chat-shell.test.mjs` scope-test convention (the test wants `"chat"` with double quotes; newly appended D-19/D-20 rules used single quotes by general CSS convention).
+- **CTT-07 invariant preserved:** `chat-topic-pin.ts` + `chat-topic-bulk-unarchive.ts` zero `ctx.issues.update` calls by construction (handler-level spy regression guards). `chat-topic-archive.ts` PIN_EXEMPT guard does NOT introduce host-issue mutation. UI-tier `context-rail.tsx` Storage pin dispatches the plugin action only.
+
+SUMMARY: `.planning/phases/05-distribution-polish/05-08-SUMMARY.md`.
+
+**Next action:** **Plan 05-10 — v1.0.0 final closure (rc.7 → 1.0.0 bump + npm publish + canonical ALL-paths drill on Countermoves).** ALL gates (05-04..05-09) are now CODE-COMPLETE. Run `/gsd:execute-phase 5 --plan 05-10`.
+
+---
 
 **Plan 05-06 (Phase 4.1 surface polish bundle — 7 drill-deferred items, version UNCHANGED at rc.7) — CODE-COMPLETE 2026-05-25.** 3 atomic commits `ec94b92..a655111` on master in sequential mode.
 
