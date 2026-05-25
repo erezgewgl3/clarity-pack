@@ -38,6 +38,16 @@ Clarity Pack defaults to **OFF** for every existing user. To enable it for your 
 
 Toggling OFF leaves all plugin data intact — your `chat_topics`, TL;DRs, bulletins, and acceptance-criteria checklist state remain in their plugin-namespaced Postgres schema. Re-enabling restores everything exactly as it was.
 
+## Acceptance criteria markers
+
+The Reader view's acceptance-criteria checklist derives its auto-status from textual markers in issue comments. Two grammars are recognised; only one is canonical.
+
+**Canonical:** `AC: <id>: <state>` where `<state>` is one of `✓`, `done`, `complete`, or `x`. Use the glyph `✓` in agent-authored audit comments. Example: `AC: 1: ✓` marks acceptance criterion 1 as satisfied; `AC: 2: x` marks it as failed.
+
+**Accepted bracket-alternate:** `AC[<id>]: <state>` is tolerated by the Plan 05-03 scanner (`src/worker/handlers/reader-ac-autostatus.ts`) for robustness against historical audit comments, but it is NOT canonical and should be avoided in new agent-authored audit comments. Example to AVOID in new comments: `AC[2]: done`.
+
+**Why it matters:** consistent grammar makes the Reader auto-status derivation predictable and human-readable. Mixed grammar within one comment body (some lines canonical, others bracketed) is the audit-comment pathology that surfaced D-6 in the 2026-05-25 rc.6 drill — the canonical text is the prescribed form for everything written from rc.7 onward.
+
 ## Rollback
 
 Plugin upgrades and uninstalls on a live Paperclip instance MUST be bookended by a verified Postgres + filesystem snapshot. Clarity Pack ships the safety CLI for exactly this:
