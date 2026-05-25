@@ -182,6 +182,10 @@ export async function getChatTopicByIssueId(
  * `About <COU-NNNN> ↗` backlink chip on the active topic. Topics created the
  * ordinary way (and every pre-0009 row) carry NULL there — the chip is then
  * simply not rendered.
+ *
+ * Plan 05-08 (D-20 carrier) — the SELECT also pulls the migration-0010
+ * `pinned_at` column so the chat.topics handler can surface pinnedAt on
+ * every returned topic. The right-rail Storage pin card reads it.
  */
 export async function listChatTopicsForEmployee(
   ctx: ChatTopicsRepoCtx,
@@ -189,7 +193,7 @@ export async function listChatTopicsForEmployee(
   employeeAgentId: string,
 ): Promise<ChatTopicRow[]> {
   return ctx.db.query<ChatTopicRow>(
-    `SELECT ${CHAT_TOPIC_COLS}, origin_issue_id
+    `SELECT ${CHAT_TOPIC_COLS}, origin_issue_id, pinned_at
      FROM plugin_clarity_pack_cdd6bda4bd.chat_topics
      WHERE company_id = $1 AND employee_agent_id = $2
      ORDER BY last_activity_at DESC`,

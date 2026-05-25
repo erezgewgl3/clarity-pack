@@ -28,6 +28,7 @@ import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 import type { PluginIssuesClient, PluginLogger } from '@paperclipai/plugin-sdk';
 import {
   listArchivedChatTopicsForEmployee,
+  listAllArchivedChatTopics,
   type ChatTopicsRepoCtx,
   type ChatTopicRow,
 } from '../db/chat-topics-repo.ts';
@@ -38,7 +39,16 @@ export type ChatArchivedTopicsCtx = OptInGuardDataCtx &
     logger?: PluginLogger;
   };
 
-/** Shape the archive-panel UI consumes. */
+/**
+ * Shape the archive-panel UI consumes.
+ *
+ * Plan 05-08 (D-15 + D-20 carrier) — `pinnedAt` is populated from the
+ * migration-0010 column so the archive full-view page at
+ * `/<companyPrefix>/archive` can render a 📌 indicator on pinned rows. The
+ * existing chat right-rail archive panel (employee-scoped path) also
+ * receives this field; consumers that ignore it remain unaffected (additive
+ * on payload — non-breaking).
+ */
 export type ArchivedTopicEntry = {
   topicIssueId: string;
   topicId: string;
@@ -48,6 +58,9 @@ export type ArchivedTopicEntry = {
   messageCount: number;
   lastActiveAt: string;
   archivedAt: string | null;
+  /** Plan 05-08 (D-20) — non-NULL ISO timestamp means the topic is pinned
+   *  (archive-exempt). NULL for unpinned + every pre-0010 row. */
+  pinnedAt: string | null;
 };
 
 function mapArchivedTopic(row: ChatTopicRow): ArchivedTopicEntry {
@@ -61,6 +74,8 @@ function mapArchivedTopic(row: ChatTopicRow): ArchivedTopicEntry {
     messageCount: 0,
     lastActiveAt: row.last_activity_at,
     archivedAt: row.archived_at ?? null,
+    // Plan 05-08 D-20 carrier — surface pinned state to the archive full-view.
+    pinnedAt: row.pinned_at ?? null,
   };
 }
 
@@ -77,14 +92,18 @@ export function registerChatArchivedTopics(ctx: ChatArchivedTopicsCtx): void {
 
     if (!companyId) return { error: 'COMPANY_ID_REQUIRED' };
     if (!userId) return { error: 'USER_ID_REQUIRED' };
-    if (!employeeAgentId) return { error: 'EMPLOYEE_AGENT_ID_REQUIRED' };
+    // Plan 05-08 (D-15) — employeeAgentId is now OPTIONAL. When omitted /
+    // empty, return the company-scoped archived listing for the archive
+    // full-view page at /<companyPrefix>/archive. When present, the
+    // existing employee-scoped path (Plan 04.1-08 archive panel) runs
+    // unchanged. The EMPLOYEE_AGENT_ID_REQUIRED error code is RETIRED;
+    // downstream callers that previously hit it now succeed with the
+    // all-archived listing.
 
     try {
-      const rows = await listArchivedChatTopicsForEmployee(
-        ctx,
-        companyId,
-        employeeAgentId,
-      );
+      const rows = employeeAgentId
+        ? await listArchivedChatTopicsForEmployee(ctx, companyId, employeeAgentId)
+        : await listAllArchivedChatTopics(ctx, companyId);
       return {
         kind: 'archivedTopics' as const,
         topics: rows.map(mapArchivedTopic),

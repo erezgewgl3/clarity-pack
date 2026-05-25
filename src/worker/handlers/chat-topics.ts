@@ -84,6 +84,13 @@ type TopicEntry = {
    *  the resolution lookup degraded; the UI then hides the chip rather than
    *  rendering a broken navigation target. */
   originIssueIdentifier: string | null;
+  /** Plan 05-08 (D-20) — non-NULL ISO timestamp when the topic is PINNED
+   *  (storage-pin = exempt from archive, per migration 0010 pinned_at
+   *  column). NULL for unpinned + every pre-0010 row. The chat right-rail
+   *  Storage pin card reads this to render the live pinned state without a
+   *  second round-trip. Additive output field; existing consumers ignoring
+   *  it remain unaffected. */
+  pinnedAt: string | null;
 };
 
 function mapTopic(row: ChatTopicRow): TopicEntry {
@@ -100,6 +107,11 @@ function mapTopic(row: ChatTopicRow): TopicEntry {
     // Plan 04.2-06 D10 — resolved AFTER the map step (see resolveOriginIdentifiers
     // below). Default null so the shape is stable even when resolution is skipped.
     originIssueIdentifier: null,
+    // Plan 05-08 (D-20 carrier) — surface pinned state from migration 0010
+    // so the chat right-rail Storage pin card can render live state without
+    // a second round-trip. Explicit null (never undefined) so UI consumers
+    // can treat null as "not pinned" without checking field presence.
+    pinnedAt: row.pinned_at ?? null,
   };
 }
 

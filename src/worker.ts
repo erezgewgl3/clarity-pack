@@ -114,6 +114,18 @@ import {
   registerChatTopicArchive,
   type ChatTopicArchiveCtx,
 } from './worker/handlers/chat-topic-archive.ts';
+// Plan 05-08 — D-20 storage-pin = topic exempt from archive (chat.topic.pin)
+// AND D-16 bulk-unarchive for archive full-view (chat.topic.bulkUnarchive).
+// Both are plugin-side only; CTT-07 invariant preserved (no host issue
+// mutation -- regression-guarded by handler tests).
+import {
+  registerChatTopicPin,
+  type ChatTopicPinCtx,
+} from './worker/handlers/chat-topic-pin.ts';
+import {
+  registerChatTopicBulkUnarchive,
+  type ChatTopicBulkUnarchiveCtx,
+} from './worker/handlers/chat-topic-bulk-unarchive.ts';
 import {
   registerChatActiveTasks,
   type ChatActiveTasksCtx,
@@ -243,6 +255,13 @@ const plugin = definePlugin({
     // attempt-2 evidence shows the host's disposition-recovery service
     // engages on terminal chat-topic issues).
     registerChatTopicArchive(ctx as unknown as ChatTopicArchiveCtx);
+    // Plan 05-08 — D-20 chat.topic.pin (storage-pin toggle; pinned topics
+    // are exempt from archive — see chat-topic-archive.ts PIN_EXEMPT guard).
+    // D-16 chat.topic.bulkUnarchive (archive full-view's bulk-select action;
+    // single round-trip multi-row flip). Both CTT-07 invariant by
+    // construction — plugin-namespace UPDATE only, never ctx.issues.update.
+    registerChatTopicPin(ctx as unknown as ChatTopicPinCtx);
+    registerChatTopicBulkUnarchive(ctx as unknown as ChatTopicBulkUnarchiveCtx);
     // Plan 04.1-05 — D-08 active-tasks-per-topic data handler. Reads the
     // chat_topic_tasks side table (populated by createTrueTask's retrofit
     // best-effort write) + enriches per-row via ctx.issues.get. Never
