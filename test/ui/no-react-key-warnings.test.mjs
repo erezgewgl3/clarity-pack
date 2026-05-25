@@ -34,6 +34,16 @@ const FILES = [
   'src/ui/surfaces/chat/context-rail.tsx',
   'src/ui/surfaces/chat/composer.tsx',
   'src/ui/surfaces/chat/message-thread.tsx',
+  // Plan 05-07 Task 2 (D-14) — extended FILES set to cover the direct
+  // child render-path dependencies audited per-component. The companion
+  // gate `chat-react-key-console-capture.test.mjs` enforces the same
+  // rules plus the audit-annotation + no-bare-index-key invariants.
+  'src/ui/surfaces/chat/active-tasks-owned.tsx',
+  'src/ui/surfaces/chat/archive-topic-button.tsx',
+  'src/ui/surfaces/chat/true-task/true-task-dialog.tsx',
+  'src/ui/surfaces/chat/true-task/inline-task-card.tsx',
+  'src/ui/surfaces/chat/true-task/chat-task-status-pill.tsx',
+  'src/ui/surfaces/reader/ref-card.tsx',
 ];
 
 function readSrc(rel) {
