@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.7
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: "Plan 05-05 CODE-COMPLETE 2026-05-25 (zero-rabbit-holes finishers: AgentPauseBanner shared by Reader + chat with 3 cause-discriminated copies; ref-chip hover peek + resolve-refs payload extension with NO_UUID_LEAK ownerName; buildTopicDeepLink employee third-arg extension closes GAP-PICKER-ROW-DISPATCH); 3 atomic commits 19527e6..4de9c5a; suite 1444→1493 (+49); no version bump (reserved for Plan 05-10); next: any remaining Wave-2 plan (05-06/05-07/05-08) or closure (05-10 gates on 04/05/06/07/08/09)"
-last_updated: "2026-05-25T19:08:00.000Z"
+stopped_at: "Plan 05-06 CODE-COMPLETE 2026-05-25 (Phase 4.1 surface polish bundle — 7 drill-deferred items: D-11 Pin/Unpin silent-toggle + clarity-pack toast; D-12 right-rail Pinned-chip flash-highlight reusing Plan 04.2-04 keyframe; auto-scroll after Create-Task; pause-toast copy → ▶ Resume below; LIVE sticky restore — named breaker margin:-24px on .auto-refresh + Playwright convergence gate; clarity-toast --you stripe + ↗ glyph; inline-task-card optimistic Todo); 3 atomic commits ec94b92..a655111; suite 1493→1524 (+31); no version bump (reserved for Plan 05-10); next: any remaining Wave-3/Wave-4 plan (05-07/05-08) or closure (05-10 gates on 04/05/06/07/08/09)"
+last_updated: "2026-05-25T19:31:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 50
-  completed_plans: 40
-  percent: 72
+  completed_plans: 41
+  percent: 74
 ---
 
 # State: Clarity Pack
@@ -28,6 +28,22 @@ progress:
 
 ## Current Position
 
+**Plan 05-06 (Phase 4.1 surface polish bundle — 7 drill-deferred items, version UNCHANGED at rc.7) — CODE-COMPLETE 2026-05-25.** 3 atomic commits `ec94b92..a655111` on master in sequential mode.
+
+- **Task 1 (items a + b — D-11 + D-12) — Pin/Unpin silent-toast + Pinned-chip flash-highlight.** PromoteActions.onPin success path swaps inline `setFeedback({ kind: 'ok', text: '⚑ Pinned' })` for `showToast({ message: 'Message pinned' | 'Message unpinned' })` — mirrors `chat.topic.archive` toggle shape from Plan 04.1-05; error path keeps loud inline setFeedback (errors stay loud). NEW `<h3>Pinned</h3>` chip block in `context-rail.tsx` (above Storage pin) renders pinned-message chips driven by a parallel `chat.messages` `usePluginData` fetch (host-bridge dedup, matches Plan 04.2-04 chat.roster pattern). Click handler: `document.getElementById('msg-<commentId>')` → `scrollIntoView({ behavior: 'smooth', block: 'center' })` → `classList.add('flash-highlight')` → `setTimeout(remove, 1500)`. NO new keyframe — chat.css 2367-2380 already owns the Plan 04.2-04 scroll-and-flash animation. NEW `.pin-chip` + `.pin-chips` rules scoped under `[data-clarity-surface="chat"]`. Commit `ec94b92`.
+- **Task 2 (items c + d + g) — auto-scroll-after-Create-Task + pause-toast copy + optimistic Todo.** (c) `message-thread.tsx` scrollIntoView effect dep array extended with `pendingTaskCard?.issueId` so a null→set transition (the optimistic card mount) fires the scroll; uses `.issueId` (not the object reference) because object identity changes every re-render but issueId is stable per card. (d) `context-rail.tsx` pause-toast copy flipped to `Use ▶ Resume heartbeat below to restart` — points operators at Plan 04.1-10's inline `▶ Resume heartbeat` row (same component lines 215-224) instead of the agent page. (g) `inline-task-card.tsx` coerces `status` null/undefined to `'todo'` before passing to ChatTaskStatusPill (scoped to this primitive — pill's null branch unchanged) so the operator sees `Todo` immediately; statusLabel default also flipped `'pending'` → `'todo'`. Commit `0cc7869`.
+- **Task 3 (items e + f) — LIVE sticky restore + clarity-toast --you stripe + ↗ glyph.** **Item (e) audited breaker** (via Playwright headless deterministic test, NOT CSS source-grep alone): the breaker is ON THE STICKY ELEMENT ITSELF, not on an ancestor — selector `[data-clarity-surface="chat"] .auto-refresh`, property `margin`, value `-24px -22px 6px` (the GAP-8 full-bleed trick). The -24px top margin pulled the static-flow position 24px above the `.messages` padding-box top edge, so the sticky element kept its -24px offset on scroll (Playwright measured `elTop=25 / containerTop=1 / drift=24` after 200px scroll — exactly the margin offset). FIX: `margin: 0 -22px 6px` (drop negative top, keep horizontal full-bleed) + `.messages padding-top: 0` (was 24px) so the indicator naturally sits at the content edge. Post-fix Playwright: position === 'sticky', drift `0px` after scroll, ancestor-chain audit reports zero runtime breakers. **Item (f)** — `.clarity-toast` gains `border-left: 3px solid var(--you)` + padding-left bumped 12px→21px; new `.clarity-toast::before` rule with `content: '↗ '; color: var(--you);`. No new color token (reuses --you). Commit `a655111`.
+- **Quality gates GREEN:** `tsc --noEmit` clean; `check-css-scope.mjs` 118 selectors all scoped under `[data-clarity-surface]`; `check-a11y.mjs` 66 files / 0 violations; `coexistence-checks/run-all.mjs` 10/10 PASS; `check-ui-bundle-size.mjs` 622,697 bytes / 665,600 byte ceiling (no SheetJS sentinels); UI build 608.1 kB exit 0. Full test suite **1522 pass / 0 fail / 2 pre-existing skip** (suite delta 1493 → 1524 = **+31 net tests**).
+- **No version bump.** `package.json` + `src/manifest.ts` stay at `1.0.0-rc.7`; phase-wide rc.7 → 1.0.0 bump lives EXCLUSIVELY in Plan 05-10. No new tarball produced.
+- **0 deviations** — plan executed exactly as written. The one judgment call (audited breaker on sticky element itself, not the ancestor that PLAN-text hypothesized as the likely culprit) is documented inline in chat.css + SUMMARY.md.
+- **CTT-07 invariant preserved:** `chat-pin.ts` UNCHANGED (pure UI-tier plan); zero `ctx.issues.update` call sites.
+
+SUMMARY: `.planning/phases/05-distribution-polish/05-06-SUMMARY.md`.
+
+**Next action:** Wave-3/Wave-4 plans remaining: 05-07 (Phase 4.2 polish bundle — D8 Back-after-deep-link + React-key warnings) and 05-08 (Phase 4.1 power features — 5 items including storage-pin + archive full-view). Both are autonomous and parallel-safe. Plan 05-10 (v1.0.0 closure) gates on all of 05-04..05-09 completing — 05-04 / 05-05 / 05-06 / 05-09 are now CODE-COMPLETE; 05-07 / 05-08 remain. Run `/gsd:execute-phase 5` to pick up the next one, or `/gsd:execute-phase 5 --plan 05-07` for a specific one.
+
+---
+
 **Plan 05-05 (Zero-rabbit-holes finishers — D-06+D-07 paused-agent banner + D-08+D-09 ref-chip peek + D-10 picker-row dispatch, version UNCHANGED at rc.7) — CODE-COMPLETE 2026-05-25.** 3 atomic commits `19527e6..4de9c5a` on master in sequential mode.
 
 - **Task 1 (D-06 + D-07) — Generic paused-agent banner.** NEW `src/ui/primitives/agent-pause-banner.tsx` mounts on BOTH Reader top-of-tab (above the header-actions row in the populated render) AND chat ChatPageBody (above `.clarity-chat-shell`). Three locked copies dispatch on `data.cause`: operator → "<name> paused by operator — ▶ Resume heartbeat"; budget → "<name> stopped — budget exhausted; check budget caps — ▶ Resume heartbeat"; adapter → "<name> stopped — codex adapter error <HH:MM>; ▶ Retry heartbeat". Worker handler `editor.pause-status` extended to return a discriminated union; cause derived via lowercase substring scan on reason text (`budget` / `codex` / `adapter` / default operator); agentName resolved via `ctx.agents.get(EDITOR_AGENT_KEY, companyId)` with friendly literal `'this employee'` fallback (NO_UUID_LEAK; mirrors chat-open-for-issue D9 pattern). LEGACY fields (`lastFailureAt` + `reason`) PRESERVED on paused payload so editor-only `pause-banner.tsx` keeps its locked literal — one worker call, two consumers (PRIM-01 spirit). Editor-only banner UNCHANGED; reader-view.test.mjs string lock preserved. Commit `19527e6`.
@@ -41,7 +57,7 @@ progress:
 
 SUMMARY: `.planning/phases/05-distribution-polish/05-05-SUMMARY.md`.
 
-**Next action:** Any remaining Wave-2 plan (05-06 / 05-07 / 05-08 are autonomous and parallel-safe). Plan 05-10 (v1.0.0 closure) gates on all of 05-04..05-09 completing — Plans 05-04, 05-05, 05-09 are now CODE-COMPLETE; 05-06 / 05-07 / 05-08 remain. Run `/gsd:execute-phase 5` to pick up the next one, or `/gsd:execute-phase 5 --plan 05-06` for a specific one.
+(Plan 05-06 picked this up in the following session — see the current-position block at the top of this file.)
 
 ---
 
