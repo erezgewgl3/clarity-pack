@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.7
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: Plan 04.2-07 SHIPPED at rc.7 (live on Countermoves); Phase 5 expanded 4 → 10 plans 2026-05-25 to absorb ALL deferred polish + 4 rc.7 forward defects for v1.0.0 final. Next step — `/gsd:discuss-phase 5 --power` to lock open design decisions before `/gsd:plan-phase 5 --chunked`.
-last_updated: "2026-05-25T16:00:00.000Z"
+stopped_at: "Phase 5 context gathered (power mode — 23 design Qs answered, 4 operator deviations from recommended; ready for /gsd:plan-phase 5 --chunked)"
+last_updated: "2026-05-25T16:45:38.526Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 50
+  total_plans: 44
   completed_plans: 37
-  percent: 56
+  percent: 67
 ---
 
 # State: Clarity Pack
@@ -41,11 +41,13 @@ progress:
 **Operator drill on Countermoves 2026-05-25 — PASS-WITH-FORWARD-DEFECTS.** Bookend snapshot `2026-05-25T13-39-24Z` (DB 17.6 MB + FS 11.2 GB, sha256-verified); verify-with-sibling-instance skipped (sibling not staged; 2026-05-23 Plan 04.2-01 drill already rehearsed the rollback path against same VPS); COEXIST #6 row counts byte-identical pre-uninstall / post-install (chat_topics=11 / chat_messages=11 / chat_topic_tasks=6 → 11/11/6); plugin UUID `0d4fc40a-0541-4b67-8979-9d346cb9c07b` preserved across 4 uninstall/install cycles (rc.6→rc.7→rc.6→rc.7).
 
 **Drill scorecard:**
+
 - Paths 1-5 (closure-baseline fixtures — COU-2215 / COU-2361 / COU-2396 / COU-1115 / COU-2399): **all PASS** for routing. RCB-01..RCB-07 not regressed; `04.2-VERIFICATION.md` baseline preserved.
 - **Path 6 (NEW load-bearing fixture — COU-2441 silent resume + auto-unarchive): PASS.** Fresh issue created during drill; topic created via Continue → archived via Quick Actions → second Continue click silently resumed (NOT a New Topic dialog). DB probe: `chat_topics.archived_at IS NULL` (D-04 auto-unarchive ✓) AND `public.issues.updated_at = 2026-05-25 14:24:19.32+00` byte-identical across the handler window (CTT-07 invariant holds — `ctx.issues.update` never called by the resume/unarchive path). Postgres-computed equality returned `t`.
 - **Scenario 7 (NEW N=2 ambiguous-picker fixture): PARTIAL.** N=2 seeded naturally by clicking Continue on COU-2441 at rc.6 (the bug itself created `0c1a320c-...`/CHT-1120 alongside existing `3d9b9362-...`/CHT-1119 — same employee b2a22e50-CEO, both `archived=f`). Upgraded back to rc.7 and clicked Continue on COU-2441: tooltip `Pick from 2 conversations about COU-2441 →` (D-08 hygiene PASS on this path — uses BEAAA-NNN identifier); RCB-06 popover **auto-opens** with both candidates pre-filtered to same-assignee ✓; **but picker row click lands at chat-surface "Select an employee" empty state** — picker emits topic-only URL_HASH via unchanged `buildTopicDeepLink` (D-07 lock), and chat-surface existing-topic dispatch from Plan 04.2-04 requires `link.employee` for the roster-match → `setEmployee(matched)` chain.
 
 **Forward defects routed to Plan 04.2-08:**
+
 1. **GAP-D8-LINEAGE-TOOLTIP** — originId-lineage Continue tooltip on path 1 (COU-2215) shows raw topic-issue UUID `e7b7fee8-b432-4422-8a1c-1bb3043a9d43` instead of CHT-NN (CHT-1117). Fix: thread `topicIdentifier?: string` from worker handler.
 2. **GAP-D8-REVERSE-TOOLTIP-FALLBACK** — reverse-lookup Continue tooltip on path 6 shows fallback `Resume conversation about this issue →` instead of `Resume conversation about COU-2441 →`. Fix: ensure `sourceIssueIdentifier` returns on both `existing-topic` (reverse-lookup) and `existing-topics-ambiguous` branches, and UI tooltip expression consumes it.
 3. **GAP-PICKER-ROW-DISPATCH** — picker row click lands at empty state. Fix options: (a) `buildTopicDeepLink` includes employee in URL_HASH (picker has `employeeAgentId` at row-render time); (b) chat-surface dispatch derives employee from topic when `link.employee` undefined.
@@ -657,9 +659,9 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-25T10:01:01.871Z
+**Last session:** 2026-05-25T16:45:38.502Z
 
-**Stopped at:** Phase 04.2 context gathered (D-7 routing rewrite + D-5/D-6 fold-in)
+**Stopped at:** Phase 5 context gathered (power mode — 23 design Qs answered, 4 operator deviations from recommended; ready for /gsd:plan-phase 5 --chunked)
 
 **Last session (prior):** 2026-05-19T21:35:31.176Z
 
