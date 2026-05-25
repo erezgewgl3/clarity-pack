@@ -149,7 +149,21 @@ export function ReverseTopicsLink({
                 // `deepLink.to`; navigate() takes ONE argument. URL
                 // fragments survive the host's resolveHref and the host
                 // wrapper around useNavigate (probe 2026-05-23).
-                const deepLink = buildTopicDeepLink(companyPrefix, t.topicIssueId);
+                //
+                // Plan 05-05 Task 3 (D-10) — pass t.employeeAgentId as the
+                // third arg so the chat-surface dispatch (Plan 04.2-04) can
+                // setEmployee(matched) BEFORE setTopic. Closes
+                // GAP-PICKER-ROW-DISPATCH from the rc.7 drill: picker row
+                // click landed on the empty `Select an employee` state
+                // because the deep link carried no employee field.
+                // t.employeeAgentId is optional on the ReverseTopic row
+                // (added by Plan 04.2-07); when missing, buildTopicDeepLink
+                // degrades to the 2-arg back-compat path.
+                const deepLink = buildTopicDeepLink(
+                  companyPrefix,
+                  t.topicIssueId,
+                  t.employeeAgentId,
+                );
                 if (deepLink) {
                   nav.navigate(deepLink.to);
                 }

@@ -140,17 +140,33 @@ export function buildChatDeepLink(input) {
 
 /**
  * Build a topic-only deep link — the shape ReverseTopicsLink (RCB-06) needs.
- * Same contract as `buildChatDeepLink` existing-topic, no comment/employee.
+ * Same contract as `buildChatDeepLink` existing-topic with optional employee.
+ *
+ * Plan 05-05 Task 3 (D-10) — added optional third parameter `employeeUserId`.
+ * When provided AND non-empty, it threads into the encoded payload as
+ * `employee` so the chat-surface dispatch (Plan 04.2-04) can match the roster
+ * row and `setEmployee` BEFORE `setTopic`. Closes GAP-PICKER-ROW-DISPATCH
+ * from the rc.7 drill — picker-row click lands on the thread, not the empty
+ * `Select an employee` state. When omitted OR empty, behaviour is exactly the
+ * pre-05-05 2-arg form (back-compat preserved).
  *
  * @param {string} companyPrefix
  * @param {string} topicIssueId
+ * @param {string} [employeeUserId] — Plan 05-05 D-10. Optional.
  * @returns {{ to: string, state: undefined } | null}
  */
-export function buildTopicDeepLink(companyPrefix, topicIssueId) {
+export function buildTopicDeepLink(companyPrefix, topicIssueId, employeeUserId) {
   return buildChatDeepLink({
     route: 'existing-topic',
     companyPrefix,
     topicIssueId,
+    // Belt-and-suspenders: explicit type+length check here AND the str()
+    // helper inside buildChatDeepLink also handles empty-string defensively.
+    // Both arms converge on the same null/non-null fork.
+    assigneeAgentId:
+      typeof employeeUserId === 'string' && employeeUserId.length > 0
+        ? employeeUserId
+        : undefined,
   });
 }
 

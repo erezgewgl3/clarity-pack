@@ -62,10 +62,21 @@ export function buildChatDeepLink(
   input: BuildChatDeepLinkInput | null | undefined,
 ): ChatDeepLinkNav | null;
 
-/** Build a topic-only deep link — the shape ReverseTopicsLink (RCB-06) needs. */
+/**
+ * Build a topic-only deep link — the shape ReverseTopicsLink (RCB-06) needs.
+ *
+ * Plan 05-05 Task 3 (D-10) — added optional third parameter `employeeUserId`.
+ * When provided AND non-empty, it threads into the encoded payload as
+ * `employee` so the chat-surface dispatch (Plan 04.2-04) can match the
+ * roster row and `setEmployee` BEFORE `setTopic`. Closes
+ * GAP-PICKER-ROW-DISPATCH from the rc.7 drill — picker-row click lands on
+ * the thread, not the empty `Select an employee` state. When omitted, the
+ * 2-arg back-compat path is preserved.
+ */
 export function buildTopicDeepLink(
   companyPrefix: string,
   topicIssueId: string,
+  employeeUserId?: string,
 ): ChatDeepLinkNav | null;
 
 /**

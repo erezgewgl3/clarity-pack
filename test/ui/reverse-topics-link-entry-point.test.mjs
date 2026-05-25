@@ -97,14 +97,25 @@ test('T5 — visibleTopics derivation filters by employeeAgentId === filterToAss
   );
 });
 
-// ---- T6 — buildTopicDeepLink row navigation unchanged (D-07 lock) --------
+// ---- T6 — buildTopicDeepLink row navigation extended (D-10 closure) ------
+//
+// Plan 04.2-07 D-07 locked the row click on the 2-arg form:
+//   buildTopicDeepLink(companyPrefix, t.topicIssueId)
+// Plan 05-05 Task 3 (D-10) SUPERSEDES that lock — the row click now passes
+// t.employeeAgentId as the third arg so the chat-surface dispatch
+// (Plan 04.2-04) can `setEmployee(matched)` BEFORE `setTopic`. Closes
+// GAP-PICKER-ROW-DISPATCH from the rc.7 drill (picker row click landed at
+// chat-surface empty `Select an employee` state because the URL_HASH
+// payload carried no employee field). The carrier shape itself
+// (URL_HASH `#h=<base64-JSON>`) is unchanged — see Plan 04.2-03.
 
-test('T6 — row click still calls buildTopicDeepLink(companyPrefix, t.topicIssueId) (D-07 lock)', () => {
+test('T6 — row click calls buildTopicDeepLink(companyPrefix, t.topicIssueId, t.employeeAgentId) (D-10 closure)', () => {
   const src = code();
+  // Multi-line tolerated — semantics, not whitespace. `s` flag = dotall.
   assert.match(
     src,
-    /buildTopicDeepLink\s*\(\s*companyPrefix\s*,\s*t\.topicIssueId\s*\)/,
-    'expected buildTopicDeepLink(companyPrefix, t.topicIssueId) call (D-07 deep-link contract unchanged)',
+    /buildTopicDeepLink\s*\(\s*companyPrefix\s*,\s*t\.topicIssueId\s*,\s*t\.employeeAgentId\s*,?\s*\)/s,
+    'expected buildTopicDeepLink(companyPrefix, t.topicIssueId, t.employeeAgentId) call (D-10 closes GAP-PICKER-ROW-DISPATCH)',
   );
 });
 
