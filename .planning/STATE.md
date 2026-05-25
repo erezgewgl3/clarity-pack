@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.5
 milestone_name: phase-5-dist-03-shipped
 status: executing
-stopped_at: "Plan 05-03 CODE-COMPLETE 2026-05-24 — DIST-03 AC auto-status from comment-markers shipped as clarity-pack-1.0.0-rc.5.tgz (145,380 bytes; sha256 b91048f84b2ca096915ee283e712c05711b5fabd774be82323a69dcadf72613b). 5 atomic commits ffa6b22..e82dfc0 (worker handler reader.ac.autostatus + AC checklist side-by-side indicator + A4 copy-marker button + tests + version bump). Suite 1364 → 1380 (+16: 12 worker scanner + 4 UI source-grep); 1378 pass / 0 fail / 2 skip. tsc + check-css-scope (108 selectors all scoped) + check-a11y (65 files / 0 violations) + worker/UI/manifest builds + npm pack all GREEN. Phase 5 is now 3/4 CODE-COMPLETE (05-01 + 05-02 + 05-03); only 05-04 (DIST-04 previewers + visual regression) remains, DEFERRED to v1.1 per Eric's 2026-05-24 close-out decision (visual-regression infra overkill for v1 single-user). Phase 4.2 status unchanged (VERIFIED). Worker handler `reader.ac.autostatus` reads ctx.issues.listComments + resolves authorAgentId UUIDs via ctx.agents.get (per-distinct-author cache to avoid N+1); two regex grammars (canonical `AC: <id>: <state>` + bracket alternate `AC[<id>]: <state>`); earliest-comment-wins per ac-id. NO_UUID_LEAK regression-pinned via source-grep test (same family as Plan 04.2-06 D9/D10). UI ac-checklist.tsx keeps the Phase 2 manual checkbox JSX structurally untouched (regression-pin); auto-status indicator renders side-by-side ONLY when detected=true. A3 no-conflict design: manual remains source of truth, auto-status is render-time only. A4 copy-marker button puts `AC: <id>: ✓` on clipboard (navigator.clipboard primary, textarea+execCommand fallback) with 1500ms `✓ copied` flash. NO new schema, NO migrations — read-only over ctx.issues.listComments + ctx.agents.get; COEXIST-safe by construction (guarantees #3 + #6 preserved). Operator drill for rc.5 deferred to Eric (paste from chat-window walkthrough)."
-last_updated: "2026-05-24T22:00:00.000Z"
+stopped_at: Phase 04.2 context gathered (D-7 routing rewrite + D-5/D-6 fold-in)
+last_updated: "2026-05-25T10:01:01.897Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 43
-  completed_plans: 35
-  percent: 69
+  completed_plans: 36
+  percent: 67
 ---
 
 # State: Clarity Pack
@@ -622,9 +622,9 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
 
 ## Session Continuity
 
-**Last session:** 2026-05-20T00:00:00.000Z — Plan 04.1-01 Tasks 2 + 3 continuation. Eric ran the falsify-first spike probe on Countermoves and pasted the JSON summary; continuation agent replaced the STUB findings doc with the locked findings (status: locked, verdict: GO), wrote the traceability test (`test/phases/04.1-01-spike-findings.test.mjs`, 9 tests RED→GREEN), and produced the SUMMARY. Phase 4.1 Wave 1 CLOSED with Gate Verdict GO. Plans 04.1-02 / 04.1-03 / 04.1-04 (Wave 2, autonomous TDD) unblocked. 4 commits `9703dbe..db29504` (Task 1 build `9703dbe`, Task 2 lock findings `eb44303`, Task 3 test `30cba12`, Task 3 SUMMARY `db29504`).
+**Last session:** 2026-05-25T10:01:01.871Z
 
-**Stopped at:** Completed Plan 04.1-01 (Wave 1, falsify-first spike). Next: Plan 04.1-02 (createTrueTask shared helper + chat.createTrueTask handler + chat.promote D-04 unification rewrite — Wave 2, autonomous TDD).
+**Stopped at:** Phase 04.2 context gathered (D-7 routing rewrite + D-5/D-6 fold-in)
 
 **Last session (prior):** 2026-05-19T21:35:31.176Z
 
