@@ -29,7 +29,6 @@ import {
   usePluginAction,
   usePluginData,
   useHostLocation,
-  useHostNavigation,
 } from '@paperclipai/plugin-sdk/ui/hooks';
 import type { PluginPageProps } from '@paperclipai/plugin-sdk/ui';
 
@@ -319,8 +318,11 @@ function ChatPageBody({
   // navigation (pathname only, no hash / no search / no state) so a refresh
   // does not re-trigger the dialog or the flash (T-04.2-03-04 — pinned by
   // the contract test + chat-url-params Test 4).
+  // Plan 05-07 Task 2 (D-13) — `nav` (useHostNavigation) was previously
+  // used to scrub `#h=` from the URL after the deep-link consume effect
+  // ran. That replace-nav has been removed (see the React.useEffect
+  // comment block below), so the hook is no longer needed in this file.
   const { search, pathname, hash, state: locationState } = useHostLocation();
-  const nav = useHostNavigation();
 
   // Plan 04.2-04 (GAP-RCB-03-DISPATCH) — the chat shell renders entirely
   // conditionally on `employee` being non-null (the empty-state below). To
@@ -439,12 +441,26 @@ function ChatPageBody({
       }
     }
 
-    // Clear the consumed fragment so a refresh does not re-trigger the
-    // dialog or the flash. A replace navigation to the bare pathname (no
-    // hash, no state) keeps the history entry clean and drops the
-    // `#h=<encoded>` fragment that carried the payload (Plan 04.2-03).
-    nav.navigate(pathname, { replace: true });
-  }, [search, pathname, hash, locationState, nav, roster, rosterLoading]);
+    // Plan 05-07 Task 2 (D-13) — the URL_HASH fragment is now LEFT IN PLACE
+    // post-consume. The 1.0.0-rc.7 drill captured the operator gotcha:
+    // pre-05-07 the consume effect ended with a `nav.navigate(pathname,
+    // { replace: true })` that scrubbed `#h=<base64-JSON>` from the address
+    // bar. Hitting Browser-Back after a Reader→Chat jump then returned to
+    // the chat surface with NO hash, and Forward landed on a hash-less chat
+    // URL — the deep-link state was destroyed. The fix: do not replace-nav.
+    //
+    // The `consumedDeepLinkRef` guard above (keyed on JSON.stringify(link))
+    // owns the consume-once invariant — even though the hash sits in the
+    // URL after consumption, the effect's body short-circuits on the next
+    // re-render because the linkKey matches. Refresh re-evaluates `link`
+    // from the still-present hash and dispatches once more (same destination
+    // — idempotent), which is the intended behaviour: the URL is honest
+    // about the SPA state. Browser-Back navigates to the previous
+    // Paperclip page (the host owns this via history.back). Forward then
+    // lands on the chat surface with `#h=` intact, the effect runs, the
+    // guard matches the cached linkKey, and the consume is a no-op —
+    // chat state already reflects the dispatched destination.
+  }, [search, pathname, hash, locationState, roster, rosterLoading]);
 
   // Plan 04.2-01 (RCB-03) — the seeded New Topic dialog's Create action.
   // Threads originIssueId through chat.topic.create (RCB-04) so the created

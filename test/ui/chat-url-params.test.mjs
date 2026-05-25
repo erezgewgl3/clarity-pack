@@ -108,11 +108,24 @@ test('Test 3b — message-thread.tsx gives each comment bubble a stable DOM id f
   assert.match(c, /id=\{`msg-\$\{|id=\{['"]msg-|msg-\$\{.*commentId/, 'comment bubbles carry an id keyed on commentId');
 });
 
-test('Test 4 — PARAMS-CLEARED: params are cleared via a replace navigation after consumption', () => {
-  const c = code(readChat('index.tsx'));
-  // After consuming the deep-link params the surface clears them so a refresh
-  // does not re-open the dialog — navigate(pathname, { replace: true }).
-  assert.match(c, /replace:\s*true/, 'params cleared via a replace navigation');
+test('Test 4 — D-13 (Plan 05-07): URL_HASH preserved post-consume; consumedDeepLinkRef owns consume-once', () => {
+  // Plan 05-07 Task 2 D-13 REVERSES the rc.7 behaviour: pre-05-07 the
+  // surface called `nav.navigate(pathname, { replace: true })` after the
+  // deep-link consume effect ran, scrubbing `#h=` from the URL. The 1.0.0-rc.7
+  // drill captured the gotcha — Back returned to a hash-less chat URL and
+  // forward landed there too; the deep-link state was destroyed. The fix
+  // removes the replace-nav and leans on the existing `consumedDeepLinkRef`
+  // (keyed on JSON.stringify(link)) for the consume-once invariant: the
+  // hash sits in the URL, Back/Forward preserve it, refresh re-renders the
+  // same destination (idempotent).
+  const rawSrc = readChat('index.tsx');
+  // The replace-nav call MUST be gone (RAW src — comments may still
+  // mention it historically).
+  const replaceNavMatches =
+    rawSrc.match(/nav\.navigate\(\s*pathname\s*,\s*\{\s*replace\s*:\s*true\s*\}\s*\)/g) ?? [];
+  assert.equal(replaceNavMatches.length, 0, 'D-13: replace-nav must be removed');
+  // The consume-once invariant MUST still live in `consumedDeepLinkRef`.
+  assert.match(rawSrc, /consumedDeepLinkRef/, 'consumedDeepLinkRef owns the consume-once invariant');
 });
 
 test('Test 5 — DISPATCH (GAP-RCB-03-DISPATCH, Plan 04.2-04): existing-topic deep link sets employee from the roster', () => {

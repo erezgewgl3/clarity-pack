@@ -558,9 +558,26 @@ test('reverse-topics-link.tsx: deep-links via the same shared URL_HASH contract'
   );
 });
 
-test('chat/index.tsx: consumed deep link is still cleared via a replace navigation (T-04.2-03-04)', () => {
+test('chat/index.tsx: D-13 (Plan 05-07) — consumed deep link is preserved in URL_HASH; consumedDeepLinkRef owns consume-once', () => {
+  // Plan 05-07 Task 2 D-13 REVERSES the rc.7 T-04.2-03-04 behaviour. The
+  // operator drill showed Browser-Back was destructive because the
+  // post-consume replace-nav scrubbed `#h=` from the URL. The new
+  // contract: the URL fragment IS the canonical channel for both the
+  // initial dispatch AND the back/forward navigation; the consume-once
+  // invariant lives entirely in the `consumedDeepLinkRef` (keyed on
+  // JSON.stringify(link)) so a re-render with the same hash short-circuits.
+  // Refresh re-runs the dispatch (idempotent — same destination).
   const c = stripComments(readSrc('src/ui/surfaces/chat/index.tsx'));
-  assert.match(c, /replace:\s*true/, 'consumed fragment cleared via a replace navigation');
+  assert.doesNotMatch(
+    c,
+    /nav\.navigate\(\s*pathname\s*,\s*\{\s*replace\s*:\s*true\s*\}\s*\)/,
+    'D-13: no replace-nav after consume (URL_HASH preserved for Browser-Back)',
+  );
+  assert.match(
+    c,
+    /consumedDeepLinkRef/,
+    'consumedDeepLinkRef owns the consume-once invariant post-D-13',
+  );
 });
 
 test('chat/index.tsx: no dangerouslySetInnerHTML on the deep-link path (T-04.2-03-01/02)', () => {
