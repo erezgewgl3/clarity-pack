@@ -29,6 +29,14 @@ function makeCtx({
   reverseTopicRows = [],
   // When true, the step-2 SELECT throws.
   reverseLookupThrows = false,
+  // Plan 05-07 Task 1 — second-call issues.get (chat-task lineage topic
+  // identifier resolution). Keyed by issueId so a single fake can serve both
+  // the primary issue read AND the topic identifier read on the same fake.
+  // Default: when set to null, the second issues.get returns null (no
+  // identifier resolution); when an object, returns it (e.g. { identifier:
+  // 'CHT-1117' }). When set to the special string 'throws', the second
+  // issues.get throws.
+  topicIssueLookup = null,
 } = {}) {
   const handlers = new Map();
   const warnLogs = [];
@@ -81,8 +89,18 @@ function makeCtx({
     issues: {
       async get(issueId, companyId) {
         issueGetCalls.push({ issueId, companyId });
-        if (issueGetThrows) throw new Error('host issues.get 503');
-        return issue;
+        // First call resolves the primary issue. Subsequent calls (Plan
+        // 05-07 Task 1 — topic identifier resolution on the chat-task
+        // lineage branch) are routed through topicIssueLookup.
+        if (issueGetCalls.length === 1) {
+          if (issueGetThrows) throw new Error('host issues.get 503');
+          return issue;
+        }
+        // Second+ call — topic identifier resolution.
+        if (topicIssueLookup === 'throws') {
+          throw new Error('host issues.get 503 (topic identifier)');
+        }
+        return topicIssueLookup;
       },
       async update(issueId, patch, companyId) {
         issueUpdateCalls.push({ issueId, patch, companyId });
@@ -323,4 +341,144 @@ test('RED 8: step-2 SELECT throws → handler falls through to new-topic-needed 
   // The throw was logged at warn level.
   const warn = ctx._warnLogs.find((l) => /listTopicsForIssueAndAssignee|step-2/i.test(l.msg));
   assert.ok(warn, 'warn-logs the step-2 throw');
+});
+
+// ---- Plan 05-07 Task 1 — D-08 topicIdentifier + sourceIssueIdentifier ----
+// GAP-D8-LINEAGE-TOOLTIP / GAP-D8-REVERSE-TOOLTIP-FALLBACK closure tests.
+
+test('D-08 lineage: chat-task lineage branch ships topicIdentifier resolved via ctx.issues.get', async () => {
+  const ctx = makeCtx({
+    issue: issueRow({
+      originId: 'chat-task:topic-uuid-1117:cmt-9',
+      identifier: 'COU-2361',
+    }),
+    agent: { id: 'agent-cmo', name: 'CMO' },
+    // The second ctx.issues.get(topic-uuid-1117, COU) returns this row.
+    topicIssueLookup: { identifier: 'CHT-1117', id: 'topic-uuid-1117' },
+  });
+  registerChatOpenForIssue(ctx);
+  const result = await ctx._handlers.get('chat.openForIssue')(params());
+  assert.equal(result.route, 'existing-topic');
+  assert.equal(result.topicIssueId, 'topic-uuid-1117');
+  assert.equal(result.sourceCommentId, 'cmt-9');
+  assert.equal(
+    result.topicIdentifier,
+    'CHT-1117',
+    'D-08: topicIdentifier resolved via ctx.issues.get(topicIssueId)',
+  );
+  // Two issues.get calls — primary + topic identifier resolution.
+  assert.equal(ctx._issueGetCalls.length, 2, 'two issues.get calls');
+  assert.equal(
+    ctx._issueGetCalls[1].issueId,
+    'topic-uuid-1117',
+    'second issues.get targets the topic UUID',
+  );
+  // CTT-07 invariant — purely read; no host issue mutation.
+  assert.equal(ctx._issueUpdateCalls.length, 0, 'CTT-07: ctx.issues.update zero times');
+});
+
+test('D-08 lineage: topicIdentifier undefined when ctx.issues.get for topic throws (warn-log; no throw bubbled)', async () => {
+  const ctx = makeCtx({
+    issue: issueRow({
+      originId: 'chat-task:topic-uuid-9999:cmt-x',
+      identifier: 'COU-2361',
+    }),
+    topicIssueLookup: 'throws',
+  });
+  registerChatOpenForIssue(ctx);
+  const result = await ctx._handlers.get('chat.openForIssue')(params());
+  assert.equal(result.route, 'existing-topic');
+  assert.equal(result.topicIssueId, 'topic-uuid-9999');
+  assert.equal(
+    result.topicIdentifier,
+    undefined,
+    'D-08: topicIdentifier left undefined on resolver throw (no UUID fallback)',
+  );
+  const warn = ctx._warnLogs.find((l) => /topic identifier/i.test(l.msg));
+  assert.ok(warn, 'warn-logged the topic identifier resolver throw');
+});
+
+test('D-08 lineage: topicIdentifier undefined when topic issue row has no identifier', async () => {
+  const ctx = makeCtx({
+    issue: issueRow({
+      originId: 'chat-task:topic-uuid-noid:cmt-x',
+      identifier: 'COU-2361',
+    }),
+    // Topic issue exists but lacks an identifier field — no CHT-N to ship.
+    topicIssueLookup: { id: 'topic-uuid-noid' },
+  });
+  registerChatOpenForIssue(ctx);
+  const result = await ctx._handlers.get('chat.openForIssue')(params());
+  assert.equal(result.route, 'existing-topic');
+  assert.equal(
+    result.topicIdentifier,
+    undefined,
+    'D-08: topicIdentifier left undefined when resolved row lacks identifier',
+  );
+});
+
+test('D-08 reverse-lookup: N=1 branch ships topicIdentifier from match.topicId', async () => {
+  const ctx = makeCtx({
+    issue: issueRow({ identifier: 'COU-2215' }),
+    reverseTopicRows: [
+      topicRow({ topic_id: 'CHT-501', issue_id: 'topic-uuid-rev1', archived: false }),
+    ],
+  });
+  registerChatOpenForIssue(ctx);
+  const result = await ctx._handlers.get('chat.openForIssue')(params());
+  assert.equal(result.route, 'existing-topic');
+  assert.equal(result.topicIssueId, 'topic-uuid-rev1');
+  assert.equal(result.sourceCommentId, undefined, 'reverse-lookup has no source comment');
+  assert.equal(
+    result.topicIdentifier,
+    'CHT-501',
+    'D-08: topicIdentifier comes from match.topicId on the reverse-lookup branch',
+  );
+});
+
+test('D-08 reverse-lookup: N=1 branch ships sourceIssueIdentifier (BEAAA-NNN from source issue)', async () => {
+  const ctx = makeCtx({
+    issue: issueRow({ identifier: 'COU-2215' }),
+    reverseTopicRows: [
+      topicRow({ topic_id: 'CHT-502', issue_id: 'topic-uuid-rev2', archived: false }),
+    ],
+  });
+  registerChatOpenForIssue(ctx);
+  const result = await ctx._handlers.get('chat.openForIssue')(params());
+  assert.equal(
+    result.sourceIssueIdentifier,
+    'COU-2215',
+    'D-08: sourceIssueIdentifier ships on reverse-lookup N=1 (was: ambiguous-only)',
+  );
+  // CTT-07 anti-regression on the new payload field path.
+  assert.equal(ctx._issueUpdateCalls.length, 0, 'CTT-07: read-only path');
+});
+
+test('D-08 invariant: chat-task lineage branch does NOT trigger reverse-lookup step-2 SELECT', async () => {
+  // Pinned by RED 7 already, but re-asserted here in the context of the
+  // new identifier-resolution path: adding the second issues.get call
+  // must NOT change the routing precedence (lineage wins).
+  const queriedSql = [];
+  const ctx = makeCtx({
+    issue: issueRow({
+      originId: 'chat-task:topic-uuid-pin:cmt-z',
+      identifier: 'COU-2361',
+    }),
+    topicIssueLookup: { identifier: 'CHT-9001' },
+    reverseTopicRows: [topicRow({ topic_id: 'CHT-NEVER', issue_id: 'never-used' })],
+  });
+  const innerQuery = ctx.db.query.bind(ctx.db);
+  ctx.db.query = async (sql, p) => {
+    queriedSql.push(sql);
+    return innerQuery(sql, p);
+  };
+  registerChatOpenForIssue(ctx);
+  const result = await ctx._handlers.get('chat.openForIssue')(params());
+  assert.equal(result.route, 'existing-topic');
+  assert.equal(result.topicIssueId, 'topic-uuid-pin');
+  assert.equal(result.topicIdentifier, 'CHT-9001');
+  const step2 = queriedSql.find(
+    (s) => /origin_issue_id\s*=\s*\$2/i.test(s) && /employee_agent_id\s*=\s*\$3/i.test(s),
+  );
+  assert.equal(step2, undefined, 'step-2 reverse-lookup never fires when lineage matches');
 });

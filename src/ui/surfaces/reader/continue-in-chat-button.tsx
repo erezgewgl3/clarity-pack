@@ -53,6 +53,28 @@
 // string fields inside the base64-JSON-encoded fragment payload; downstream
 // they populate controlled React-text input values only — never
 // dangerouslySetInnerHTML. No raw fetch.
+//
+// Plan 05-07 Task 1 — D-08 closure (GAP-D8-LINEAGE-TOOLTIP +
+// GAP-D8-REVERSE-TOOLTIP-FALLBACK). The 1.0.0-rc.7 drill captured two
+// remaining UUID-leakage paths in the Reader Continue button tooltip:
+//   1. The chat-task lineage branch tooltip ("Open source topic <id> →")
+//      leaked the topic UUID because chat.openForIssue did not ship the
+//      CHT-NN identifier. The worker now resolves it via ctx.issues.get
+//      and emits `topicIdentifier`; the tooltip consumes that with a
+//      `?? result.topicIssueId` last-resort degrade for the edge case
+//      where the host lookup throws (still UUID, but only on the
+//      degraded path — strictly better than the rc.7 baseline that
+//      ALWAYS leaked).
+//   2. The reverse-lookup branch tooltip ("Resume conversation about
+//      <id> →") fell to the literal `'this issue'` string because
+//      sourceIssueIdentifier shipped only on the ambiguous branch. The
+//      worker now also emits it on the N=1 reverse-lookup branch; the
+//      `?? 'this issue'` fallback in the tooltip is PRESERVED as a
+//      defensive guard against a future regression in chat.openForIssue
+//      that drops the field on the existing-topic branch — that would
+//      be a worker contract violation; the fallback should never fire
+//      on the in-tree handler post-05-07. If it ever does, surface it
+//      as a defect, not as expected behaviour.
 
 import * as React from 'react';
 import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
@@ -97,8 +119,20 @@ export type ChatOpenForIssueResult = {
    *  popover renders without UUID leakage. */
   candidates?: ChatOpenForIssueCandidate[];
   /** Plan 04.2-07 (D-01 step 2 + D-08) — BEAAA-NNN identifier for the source
-   *  issue, used in the D-06 ambiguous-route tooltip text. */
+   *  issue, used in the D-06 ambiguous-route tooltip text.
+   *
+   *  Plan 05-07 Task 1 (GAP-D8-REVERSE-TOOLTIP-FALLBACK) — also emitted on
+   *  the existing-topic reverse-lookup branch (N=1) so the tooltip can read
+   *  "Resume conversation about COU-NNN →" instead of "this issue". */
   sourceIssueIdentifier?: string;
+  /** Plan 05-07 Task 1 (GAP-D8-LINEAGE-TOOLTIP) — CHT-NN identifier for the
+   *  resolved chat topic. Worker resolves it server-side via
+   *  ctx.issues.get(topicIssueId).identifier on the chat-task lineage
+   *  branch, and threads it from match.topicId on the reverse-lookup
+   *  branch. Undefined when host lookup degrades; the tooltip then falls
+   *  back to `result.topicIssueId` (operator-visible UUID — strictly
+   *  better than the rc.7 baseline that ALWAYS leaked). */
+  topicIdentifier?: string;
   seedTitle?: string;
   seedBody?: string;
   error?: string;
@@ -261,9 +295,23 @@ export function ContinueInChatButton({
   //   - new-topic-needed (default) → mirrors the button label.
   // BUTTON LABEL stays "Continue in chat with <employeeLabel> →" unchanged
   // across every arm (D-06 lock).
+  //
+  // Plan 05-07 Task 1 D-08:
+  //   - Lineage tooltip now consumes `result.topicIdentifier` (CHT-NN)
+  //     first; the `?? result.topicIssueId` degrade catches the rare
+  //     ctx.issues.get-failed / missing-identifier edge cases — still a
+  //     UUID, but ONLY on the degraded path. Pre-05-07 this ALWAYS
+  //     leaked the UUID.
+  //   - Reverse-lookup tooltip keeps the `?? 'this issue'` fallback as a
+  //     defensive guard against a future worker contract violation
+  //     (chat.openForIssue dropping sourceIssueIdentifier on the
+  //     existing-topic branch). On the in-tree handler post-05-07 the
+  //     field IS shipped, so the fallback should never fire; if it ever
+  //     does in production logs, that's a defect to surface — not
+  //     expected behaviour.
   const tooltip =
     result.route === 'existing-topic' && result.topicIssueId && result.sourceCommentId
-      ? `Open source topic ${result.topicIssueId} →`
+      ? `Open source topic ${result.topicIdentifier ?? result.topicIssueId} →`
       : result.route === 'existing-topic'
         ? `Resume conversation about ${result.sourceIssueIdentifier ?? 'this issue'} →`
         : `Continue in chat with ${employeeLabel} →`;

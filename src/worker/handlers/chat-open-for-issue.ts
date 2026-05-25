@@ -93,8 +93,27 @@ export type ChatOpenForIssueResult = {
   candidates?: ChatOpenForIssueCandidate[];
   /** Plan 04.2-07 (D-01 step 2 + D-08) — for ambiguous-route tooltips: the
    *  BEAAA-NNN identifier of the source issue (already resolved from
-   *  issue.identifier earlier in this handler — no new resolver call). */
+   *  issue.identifier earlier in this handler — no new resolver call).
+   *
+   *  Plan 05-07 Task 1 (GAP-D8-REVERSE-TOOLTIP-FALLBACK) — also emitted on
+   *  the existing-topic REVERSE-LOOKUP branch (N=1) so the Reader's tooltip
+   *  for that path reads "Resume conversation about COU-NNN →" instead of
+   *  the "this issue" fallback. The fallback in the UI stays as a defensive
+   *  guard against a future regression that drops this field on the
+   *  existing-topic branch (worker contract violation). */
   sourceIssueIdentifier?: string;
+  /** Plan 05-07 Task 1 (GAP-D8-LINEAGE-TOOLTIP) — CHT-NN identifier of the
+   *  resolved chat-topic. Emitted on BOTH existing-topic branches:
+   *    - chat-task LINEAGE: resolved via ctx.issues.get(chatTaskMatch[1])
+   *      and read from `.identifier`. Best-effort: on throw / missing
+   *      identifier, left undefined (NEVER fall back to UUID — D-08
+   *      NO_UUID_LEAK hygiene). The UI degrade is a tooltip-only fallback
+   *      to result.topicIssueId (operator-visible but still preferable to
+   *      a literal "this topic" string).
+   *    - REVERSE-LOOKUP N=1: threaded directly from match.topicId (already
+   *      CHT-NN per ChatTopicByOriginEntry; no extra round-trip).
+   *  See 04.2-07-SUMMARY for the D-09/D-10 hygiene precedent. */
+  topicIdentifier?: string;
   seedTitle?: string;
   seedBody?: string;
   error?: string;
@@ -216,13 +235,46 @@ export function registerChatOpenForIssue(ctx: ChatOpenForIssueCtx): void {
     // 6. Chat-spawned task -- jump straight to the source topic + comment.
     const chatTaskMatch = CHAT_TASK_RE.exec(originId);
     if (chatTaskMatch) {
+      // Plan 05-07 Task 1 (GAP-D8-LINEAGE-TOOLTIP) — resolve the topic
+      // issue's CHT-NN identifier so the Reader tooltip reads "Open
+      // source topic CHT-NN →" instead of leaking the raw topic UUID. The
+      // host RPC is best-effort: a throw or a missing identifier leaves
+      // topicIdentifier undefined; the UI tooltip then degrades to the
+      // raw topicIssueId (operator-visible but still preferable to a
+      // literal "this topic" string). NEVER fall back to UUID inside this
+      // field — D-08 NO_UUID_LEAK hygiene (the field carries CHT-NN
+      // semantics; consumers may render it without further checking).
+      const lineageTopicIssueId = chatTaskMatch[1];
+      let topicIdentifier: string | undefined;
+      try {
+        const topicIssue = (await ctx.issues.get(
+          lineageTopicIssueId,
+          companyId,
+        )) as { identifier?: string } | null;
+        const candidate =
+          topicIssue && typeof topicIssue.identifier === 'string'
+            ? topicIssue.identifier.trim()
+            : '';
+        if (candidate) topicIdentifier = candidate;
+      } catch (e) {
+        ctx.logger?.warn?.(
+          'chat.openForIssue: ctx.issues.get for topic identifier threw',
+          {
+            issueId,
+            companyId,
+            topicIssueId: lineageTopicIssueId,
+            err: (e as Error).message,
+          },
+        );
+      }
       return {
         kind: 'chatOpenForIssue' as const,
         route: 'existing-topic' as const,
-        topicIssueId: chatTaskMatch[1],
+        topicIssueId: lineageTopicIssueId,
         sourceCommentId: chatTaskMatch[2],
         assigneeAgentId,
         assigneeName,
+        topicIdentifier,
       };
     }
 
@@ -312,6 +364,19 @@ export function registerChatOpenForIssue(ctx: ChatOpenForIssueCtx): void {
         // No sourceCommentId — D-01 resumes the thread, not a comment.
         assigneeAgentId,
         assigneeName,
+        // Plan 05-07 Task 1 (GAP-D8-LINEAGE-TOOLTIP) — match.topicId is
+        // already CHT-NN per ChatTopicByOriginEntry (chat-topics-repo
+        // listTopicsForIssueAndAssignee). Threading it as topicIdentifier
+        // gives the Reader tooltip CHT-NN on this branch too — symmetric
+        // with the chat-task lineage path above.
+        topicIdentifier: match.topicId,
+        // Plan 05-07 Task 1 (GAP-D8-REVERSE-TOOLTIP-FALLBACK) — the
+        // BEAAA-NNN already resolved at lines 174-177 from issue.identifier.
+        // Pre-05-07 this only shipped on the ambiguous branch; the
+        // Reader's reverse-lookup tooltip ("Resume conversation about
+        // …") therefore fell to the 'this issue' fallback on the live
+        // 1.0.0-rc.7 drill. Threading it here closes that leak.
+        sourceIssueIdentifier: identifier,
       };
     }
 
