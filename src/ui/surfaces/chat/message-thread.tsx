@@ -31,6 +31,19 @@
 // SECURITY (T-04-18): every message body renders as untrusted text through
 // ProseWithRefChips / ReasoningPanel — no dangerouslySetInnerHTML, no raw
 // HTML. No raw fetch — all host I/O via the SDK bridge hooks.
+//
+// Plan 05-07 Task 2 (D-14) — React-key audit pass for PersistedMessage.
+// Audit verdict: PersistedMessage returns ONE <article> per call; it has
+// no `.map()` of its own. The outer `ordered.map(...)` (line 472) calls
+// PersistedMessage with `key={msg.commentId}` already (via the wrapping
+// React.Fragment at line 553), and the parent's three sibling-arm
+// returns (lines 508, 541, 553) all carry the same stable key. Child
+// helpers ProseWithRefChips + ReasoningPanel ship their own keyed
+// Fragments. PromoteActions returns a single fragment of conditional
+// JSX — no map. Composite stable keys for the diagnostics
+// RuntimeNoiseRow's nested section.title/row.type map (lines 990/998)
+// were already added in Plan 04.2-05 D4/D5; no further action needed.
+// Verified by the test/ui/chat-react-key-console-capture.test.mjs gate.
 
 import * as React from 'react';
 import {
