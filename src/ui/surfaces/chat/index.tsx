@@ -23,6 +23,20 @@
 // All chat text renders as untrusted React text — never
 // dangerouslySetInnerHTML. SPA navigation via useHostNavigation().linkProps,
 // never raw <a href>.
+//
+// Plan 05-07 Task 2 (D-14) — React-key audit pass for ChatPageBody.
+// Audit verdict: the body's only `.map()` (line 538 archivedRaw.topics)
+// is a pure data projection — no JSX, no key needed. The outer
+// `return (<>...</>)` (line 701) wraps two children (AgentPauseBanner +
+// .clarity-chat-shell) as the single root return of a component, NOT
+// as a sibling-in-list — no key required. Every conditional render
+// branch (`{!employee ? … : !topic ? … : <Composer/>}`, archive panel,
+// dialog, seed dialog) is in its own curly-brace slot — positional
+// children, no key warning. Child components (RosterRail, TopicStrip,
+// ChatActionsRow, ArchivePanel, MessageThread, Composer, ContextRail,
+// TrueTaskDialog) are audited in their own Plan 05-07 commits or in
+// no-react-key-warnings.test.mjs's static FILES set. Verified by
+// test/ui/chat-react-key-console-capture.test.mjs.
 
 import * as React from 'react';
 import {
