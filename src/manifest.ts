@@ -18,7 +18,7 @@ import type { PaperclipPluginManifestV1 } from '@paperclipai/plugin-sdk';
 const manifest: PaperclipPluginManifestV1 = {
   id: 'clarity-pack',
   apiVersion: 1,
-  // 1.0.0-rc.6 (Quick fix 260524-s2y — AC manual toggle -> Reader refetch).
+  // Release-history note (rc.6 release of 1.0.0 series, Quick fix 260524-s2y — AC manual toggle -> Reader refetch).
   // Wires `PluginDataResult.refresh` from `usePluginData('issue.reader', ...)`
   // AND `usePluginData('reader.ac.autostatus', ...)` down through
   // `AcChecklist` as an `onMutated` callback, called ONLY when
@@ -334,7 +334,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '1.0.0-rc.7',
+  version: '1.0.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

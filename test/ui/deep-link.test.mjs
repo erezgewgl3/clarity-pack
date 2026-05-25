@@ -133,13 +133,15 @@ test('caller audit — .d.mts signature mirrors the .mjs change (optional employ
 });
 
 // ---------------------------------------------------------------------------
-// No version bump — package.json + src/manifest.ts UNTOUCHED by this plan
+// Plan 05-10 — package.json flipped to 1.0.0 by the single canonical bump
+// (Plans 05-04..05-09 deferred ALL version bumps to this single closure;
+// Plan 05-10 Task 2 lands the atomic rc.7 -> 1.0.0 commit.)
 // ---------------------------------------------------------------------------
 
-test('NO version bump — package.json stays at rc.7 (the phase-wide bump lives in Plan 05-10 only)', () => {
+test('Plan 05-10 atomic version bump — package.json reads 1.0.0 (phase-wide rc.7 -> 1.0.0 single canonical bump)', () => {
   const pkgPath = path.join(SRC, '..', 'package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-  assert.equal(pkg.version, '1.0.0-rc.7', 'package.json version unchanged by Plan 05-05');
+  assert.equal(pkg.version, '1.0.0', 'package.json version flipped by Plan 05-10 atomic bump');
 });
 
 // ---------------------------------------------------------------------------
