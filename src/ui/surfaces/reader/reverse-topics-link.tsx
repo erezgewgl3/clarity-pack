@@ -39,6 +39,11 @@ export type ReverseTopic = {
   topicId: string;
   title: string;
   lastActivityAt: string;
+  /** Plan 04.2-07 D-02 — owner of this chat topic. When the popover is
+   *  auto-opened in continue-in-chat mode with filterToAssignee set, rows
+   *  not matching are filtered out. Optional so cached pre-04.2-07 payloads
+   *  still type-check (the filter then degrades to "show all"). */
+  employeeAgentId?: string;
 };
 
 export type ReverseTopicsLinkProps = {
@@ -46,6 +51,18 @@ export type ReverseTopicsLinkProps = {
   companyPrefix: string;
   /** The chat topics started from this issue (issue.reader topicsForIssue). */
   topicsForIssue: ReverseTopic[];
+  /** Plan 04.2-07 D-01/D-02 — distinguishes the auto-opened picker case
+   *  (from the Continue-in-chat button) from the manual header-click case.
+   *  Default: 'manual' (today's behaviour). */
+  entryPoint?: 'continue-in-chat' | 'manual';
+  /** Plan 04.2-07 D-02 — when set, the popover filters rows by
+   *  `t.employeeAgentId === filterToAssignee`. When null / undefined the
+   *  popover shows all topics (today's behaviour). */
+  filterToAssignee?: string | null;
+  /** Plan 04.2-07 D-02 — controlled-mode flag the parent Reader index uses
+   *  to request auto-open when the Continue button resolves to the
+   *  ambiguous route. The local toggle still owns close. */
+  autoOpen?: boolean;
 };
 
 /** Format an ISO timestamp as a compact `YYYY-MM-DD HH:MM` for the popover. */
@@ -62,12 +79,34 @@ function formatActivity(iso: string): string {
 export function ReverseTopicsLink({
   companyPrefix,
   topicsForIssue,
+  entryPoint = 'manual',
+  filterToAssignee = null,
+  autoOpen = false,
 }: ReverseTopicsLinkProps): React.ReactElement | null {
   const nav = useHostNavigation();
   const [open, setOpen] = React.useState(false);
 
+  // Plan 04.2-07 D-02 — controlled auto-open from the Continue-in-chat
+  // button. When the parent flips autoOpen true (in response to the button
+  // click), the popover opens; the local toggle still owns close.
+  // entryPoint is consumed via the className data attribute so the test +
+  // future styling can differentiate manual vs continue-in-chat opens.
+  React.useEffect(() => {
+    if (autoOpen) setOpen(true);
+  }, [autoOpen]);
+
   // Empty list — render nothing. The Reader header simply has no reverse link.
   if (!topicsForIssue || topicsForIssue.length === 0) return null;
+
+  // Plan 04.2-07 D-02 — filter rows by same-assignee when the popover is
+  // auto-opened in continue-in-chat mode with filterToAssignee set. When
+  // null / undefined / empty, fall back to the full topicsForIssue list
+  // (today's behaviour). Topics whose employeeAgentId is missing (pre-04.2-07
+  // payloads) are excluded from the filtered view by construction.
+  const visibleTopics =
+    typeof filterToAssignee === 'string' && filterToAssignee.length > 0
+      ? topicsForIssue.filter((t) => t.employeeAgentId === filterToAssignee)
+      : topicsForIssue;
 
   const n = topicsForIssue.length;
   // "1 conversation" vs "N conversations" — but the locked label copy is
@@ -78,6 +117,7 @@ export function ReverseTopicsLink({
     <span
       className="clarity-reverse-topics"
       data-clarity-region="reverse-topics-link"
+      data-clarity-entry-point={entryPoint}
     >
       <button
         type="button"
@@ -94,7 +134,7 @@ export function ReverseTopicsLink({
           role="menu"
           data-clarity-region="reverse-topics-popover"
         >
-          {topicsForIssue.map((t) => (
+          {visibleTopics.map((t) => (
             <button
               key={t.topicIssueId}
               type="button"
