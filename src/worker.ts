@@ -137,6 +137,15 @@ import {
   registerReaderAcAutostatus,
   type ReaderAcAutostatusCtx,
 } from './worker/handlers/reader-ac-autostatus.ts';
+// Plan 05-04 (DIST-04) — deliverable.preview: full-fidelity previewer
+// dispatch (xlsx-grid / pdf-embed / md / img / placeholder). SheetJS
+// (xlsx) lives ONLY in this file's worker-bundle dependency graph; the
+// UI bundle imports react-markdown but never xlsx (T-05-04-06 supply-
+// chain split). Read-only over ctx.issues.documents.{list,get}.
+import {
+  registerDeliverablePreview,
+  type DeliverablePreviewCtx,
+} from './worker/handlers/deliverable-preview.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -161,6 +170,13 @@ const plugin = definePlugin({
     // because that is the sole consumer (ReaderViewReady's usePluginData
     // hook in src/ui/surfaces/reader/index.tsx). Read-only — never mutates.
     registerReaderAcAutostatus(ctx as unknown as ReaderAcAutostatusCtx);
+    // Plan 05-04 (DIST-04) — deliverable.preview is the Reader-view data
+    // handler that replaces the locked "Phase 5 (DIST-04)" placeholder. It
+    // dispatches per documentKey extension and returns a discriminated
+    // union the UI mounts directly (xlsx-grid / pdf-embed / md / img /
+    // placeholder). SheetJS lives ONLY in this handler's import graph;
+    // the UI bundle never imports xlsx.
+    registerDeliverablePreview(ctx as unknown as DeliverablePreviewCtx);
 
     // ---- Plan 02-03c companyId resolver (UI fallback path) ------------------
     // NOTE: companies.resolve-prefix is NOT wrapped — it's also a boot-time
@@ -333,7 +349,7 @@ const plugin = definePlugin({
     registerChatStreamBridge(ctx as unknown as ChatStreamBridgeCtx);
 
     ctx.logger?.info?.(
-      `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status + chat.send/chat.edit + chat-stream-bridge + chat.roster/topics/messages/search/promote/pin + reader.ac.autostatus registered`,
+      `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status + chat.send/chat.edit + chat-stream-bridge + chat.roster/topics/messages/search/promote/pin + reader.ac.autostatus + deliverable.preview registered`,
     );
   },
 });
