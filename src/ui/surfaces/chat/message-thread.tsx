@@ -40,6 +40,11 @@ import {
 } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { deriveLiveness, usePoll, type LivenessState } from '../../primitives/use-poll.ts';
+// Plan 05-06 Task 1 (D-11) — Pin/Unpin success path swaps inline setFeedback
+// for the bottom-right clarity-pack toast (silent-toggle invariant). The hook
+// is safe to call inside PromoteActions because ChatPageBody mounts
+// <ToastProvider> above MessageThread in the tree.
+import { useToast } from '../../primitives/toast.tsx';
 import { ProseWithRefChips } from '../reader/prose-with-ref-chips.tsx';
 import { parseReasoning, ReasoningPanel } from './reasoning-panel.tsx';
 // Plan 04.1-06 — Patterns C, F (RuntimeNoiseRow inline), G.
@@ -720,6 +725,11 @@ function PromoteActions({
   // hook itself is cheap and safe to call per-bubble.
   const promote = usePromote();
   const pin = usePin();
+  // Plan 05-06 Task 1 (D-11) — toast handle for the Pin/Unpin success path
+  // (silent toggle). Errors still surface via the inline setFeedback span
+  // below so a transient toast that auto-dismisses doesn't leave the operator
+  // without recourse.
+  const { showToast } = useToast();
   const [busy, setBusy] = React.useState(false);
   // Visible feedback — replaces the old silent empty-catch (GAP 12).
   const [feedback, setFeedback] = React.useState<{
@@ -798,22 +808,35 @@ function PromoteActions({
   const onPin = React.useCallback(async () => {
     setBusy(true);
     setFeedback(null);
+    // Plan 05-06 Task 1 (D-11) — the new toggle-target boolean for this click.
+    // `nextPinned === true` means we're flipping unpinned → pinned ("Message
+    // pinned"); `false` means pinned → unpinned ("Message unpinned"). Mirrors
+    // chat.topic.archive's silent-toggle shape from Plan 04.1-05.
+    const nextPinned = !(pinned || optimisticPinned);
     try {
       const result = await pin({
         commentId,
         topicIssueId,
         companyId,
         userId,
-        pinned: !(pinned || optimisticPinned),
+        pinned: nextPinned,
       });
       const err = resultError(result);
       if (err) {
+        // Errors stay LOUD on the bubble. A transient toast that auto-dismisses
+        // is not a safe channel for failure (operator might miss it). D-11
+        // silent-toggle is success-only.
         setFeedback({ kind: 'error', text: `Could not pin (${err})` });
       } else {
-        // Optimistic marker now; the thread refresh below makes the persisted
-        // ⚑ Pinned marker on the bubble itself appear.
+        // Plan 05-06 Task 1 (D-11) — D-11 silent-toggle: success path NO
+        // longer mounts the `⚑ Pinned` inline span. The clarity-pack toast
+        // is the sole operator confirmation. The persisted `⚑ Pinned` marker
+        // on the bubble (rendered by the `msg.pinned` branch in PersistedMessage)
+        // appears after onRefresh re-fetches the thread.
         setOptimisticPinned(true);
-        setFeedback({ kind: 'ok', text: '⚑ Pinned' });
+        showToast({
+          message: nextPinned ? 'Message pinned' : 'Message unpinned',
+        });
         onRefresh?.();
       }
     } catch {
@@ -821,7 +844,17 @@ function PromoteActions({
     } finally {
       setBusy(false);
     }
-  }, [pin, commentId, topicIssueId, companyId, userId, pinned, optimisticPinned, onRefresh]);
+  }, [
+    pin,
+    commentId,
+    topicIssueId,
+    companyId,
+    userId,
+    pinned,
+    optimisticPinned,
+    onRefresh,
+    showToast,
+  ]);
 
   return (
     <span className={`promote${feedback ? ' has-feedback' : ''}`}>

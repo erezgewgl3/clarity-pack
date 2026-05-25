@@ -1196,6 +1196,51 @@
   color: var(--ink);
 }
 
+/* ---------------------------------------------------------------------------
+ * Plan 05-06 Task 1 (D-12) — Pinned-messages chip block in the right rail.
+ *
+ * Renders only when the active topic has at least one pinned chat_messages
+ * row. Each `.pin-chip` is a button that scrolls the source `#msg-<commentId>`
+ * bubble into view and toggles the existing scroll-and-flash class for 1500ms
+ * (the keyframe + selector are OWNED by Plan 04.2-04 at chat.css:2261-2281 —
+ * this block adds NO new keyframe). Styling matches the existing `.qa` aesthetic so the chip
+ * visually belongs to the rail. Hover lifts the border to --you (gold) so
+ * the affordance reads as "go to the pinned spot" (matches the .ref-chip
+ * + ↗ Promote family). All selectors rooted under [data-clarity-surface]
+ * (check-css-scope.mjs invariant). */
+[data-clarity-surface="chat"] .pin-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-clarity-surface="chat"] .pin-chip {
+  font-family: "Geist Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  text-align: left;
+  cursor: pointer;
+  /* Plan 04.1-09 right-rail width discipline — long pinned-body previews
+   * never push past the rail. The 40-char JS truncation is the primary
+   * defense; this rule is belt-and-suspenders against tokenless emoji /
+   * long unbroken words. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-clarity-surface="chat"] .pin-chip:hover {
+  border-color: var(--you);
+  color: var(--ink);
+}
+[data-clarity-surface="chat"] .pin-chip:focus-visible {
+  outline: 1px solid var(--you);
+  outline-offset: 1px;
+}
+
 /* ---- Empty / placeholder thread state ---- */
 [data-clarity-surface="chat"] .thread-empty {
   flex: 1;

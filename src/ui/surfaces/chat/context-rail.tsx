@@ -32,7 +32,7 @@
 // All text renders as untrusted React text (T-04-18).
 
 import * as React from 'react';
-import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginAction, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { useToast } from '../../primitives/toast.tsx';
 
@@ -40,6 +40,30 @@ import type { RosterEmployee } from './roster-rail.tsx';
 import type { ChatTopic } from './topic-strip.tsx';
 import { ActiveTasksOwned, type ChatActiveTask } from './active-tasks-owned.tsx';
 import { ArchiveTopicButton } from './archive-topic-button.tsx';
+import type { ChatMessage } from './message-thread.tsx';
+
+// Plan 05-06 Task 1 (D-12) — parallel chat.messages fetch shape. The host
+// bridge's usePluginData deduplicates identical (action, params) pairs, so
+// pulling messages here shares MessageThread's underlying poll (Plan 04.2-04
+// chat.roster dedup pattern). The chip block renders only when at least one
+// message in the active topic has `pinned === true`.
+type MessagesResult =
+  | {
+      kind: 'messages';
+      topicIssueId: string;
+      messages: ChatMessage[];
+      topicStuck?: boolean;
+      recoveryOwner?: string | null;
+    }
+  | { error: string }
+  | null;
+
+/** Plan 05-06 Task 1 (D-12) — preview text for the Pinned chip row. */
+function pinChipPreview(body: string | null | undefined): string {
+  const trimmed = (body ?? '').trim().replace(/\s+/g, ' ');
+  if (trimmed.length <= 40) return trimmed;
+  return `${trimmed.slice(0, 40)}…`;
+}
 
 export function ContextRail({
   employee,
@@ -139,6 +163,47 @@ export function ContextRail({
   const displayedStatus = pausedOverride ?? employee?.status ?? '—';
   const isPausedDisplay = displayedStatus === 'paused';
 
+  // Plan 05-06 Task 1 (D-12) — parallel chat.messages fetch so the right rail
+  // can list pinned messages alongside MessageThread. The bridge dedups —
+  // MessageThread's identical usePluginData call shares this fetch. Empty
+  // params when no topic is selected so the opt-in-guard short-circuits to
+  // OPT_IN_REQUIRED (cheap; no spurious worker call).
+  const { data: messagesData } = usePluginData<MessagesResult>(
+    'chat.messages',
+    topic ? { topicIssueId: topic.issueId, companyId, userId } : {},
+  );
+  const pinnedMessages: Array<{ commentId: string; body: string }> = React.useMemo(() => {
+    if (
+      !messagesData ||
+      typeof messagesData !== 'object' ||
+      !('kind' in messagesData) ||
+      messagesData.kind !== 'messages'
+    ) {
+      return [];
+    }
+    return messagesData.messages
+      .filter((m) => m.pinned === true && !m.superseded)
+      .map((m) => ({ commentId: m.commentId, body: m.body ?? '' }));
+  }, [messagesData]);
+
+  // Plan 05-06 Task 1 (D-12) — scroll-and-flash handler. The target id
+  // `msg-<commentId>` is the stable scroll target set by message-thread.tsx
+  // line 635 (Plan 04.2-01 RCB-03). NO new keyframe — chat.css lines 2261-2281
+  // already own `.flash-highlight`'s animation. The 1500ms removal matches the
+  // 1.5s keyframe duration.
+  const handlePinnedClick = React.useCallback((commentId: string): void => {
+    const el =
+      typeof document !== 'undefined'
+        ? document.getElementById(`msg-${commentId}`)
+        : null;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('flash-highlight');
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => el.classList.remove('flash-highlight'), 1500);
+    }
+  }, []);
+
   return (
     <aside className="ctx" data-clarity-region="context-rail">
       {employee ? (
@@ -234,6 +299,32 @@ export function ContextRail({
           </button>
         )}
       </div>
+
+      {/* Plan 05-06 Task 1 (D-12) — Pinned-messages chip block. Renders only
+          when the active topic has at least one pinned message. Each chip
+          row scrolls to the source comment and flashes for 1.5s (reusing
+          Plan 04.2-04's existing .flash-highlight keyframe). Mounted ABOVE
+          the Storage pin block — Plan 05-08 owns the Storage pin live wiring
+          and this plan stays out of that block's region. */}
+      {topic && pinnedMessages.length > 0 ? (
+        <>
+          <h3>Pinned</h3>
+          <div className="pin-chips" data-clarity-region="pinned-chips">
+            {pinnedMessages.map((m) => (
+              <button
+                key={m.commentId}
+                type="button"
+                className="pin-chip"
+                onClick={() => handlePinnedClick(m.commentId)}
+                data-clarity-action="pinned-chip"
+                title={m.body}
+              >
+                ⚑ {pinChipPreview(m.body)}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       {topic ? (
         <>
