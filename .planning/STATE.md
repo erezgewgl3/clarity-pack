@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.7
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: "Plan 05-08 CODE-COMPLETE 2026-05-25 (Phase 4.1 power features — D-15 archive full-view + D-16 bulk-unarchive + D-17 cold-task-from-global + D-18 diagnostics persistence + D-19 composer shortcuts popover + D-20 storage-pin exempt-from-archive; 6 atomic commits 2d19947..ce9d1e0; suite 1775→1801 +26; no version bump (reserved for Plan 05-10)); next: Plan 05-10 closure (v1.0.0 final, ALL gates 05-04..05-09 now CODE-COMPLETE)"
-last_updated: "2026-05-25T20:41:36Z"
+stopped_at: "Plan 05-10 Tasks 1-3 COMPLETE 2026-05-26 (atomic rc.7 -> 1.0.0 version bump landed in commit e1e0d44 touching package.json + src/manifest.ts + 2 test pins; clarity-pack-1.0.0.tgz packed at repo root sha256=53567012d6f5cb6a724351972f2f9545dc208f439af2d7757bbc456722e033da 625394 bytes 15 files; SUMMARY at .planning/phases/05-distribution-polish/05-10-SUMMARY.md status=closure-pending-operator-drill); next: Eric runs Task 4 Countermoves drill via SSH (10-step sequence in SUMMARY.md 'Pending operator gates') then Task 9 npm publish — milestone field stays at v1.0.0-rc.7 until Task 8 flips it post-drill"
+last_updated: "2026-05-26T00:15:00Z"
 progress:
   total_phases: 6
   completed_phases: 4
@@ -16,7 +16,7 @@ progress:
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
-**Last updated:** 2026-05-25 — Plan 05-08 CODE-COMPLETE. Phase 5 wave-5 closure complete (all of 05-04..05-09 now CODE-COMPLETE). Plan 05-10 (v1.0.0 final closure: rc.7 → 1.0.0 bump + npm publish + canonical ALL-paths drill) is now unblocked. 6 atomic commits `2d19947..ce9d1e0` shipped D-15..D-20 power features (archive full-view, bulk-unarchive, cold-task-from-global, per-topic diagnostics persistence, composer shortcuts popover, storage-pin = exempt from archive) + migration 0010 (additive pinned_at column) + ClaritySurfaceRoot ToastProvider hoist (checker BLOCKER 4 closed). No version bump (rc.7 → 1.0.0 lives in Plan 05-10 per checker BLOCKER 1). Suite 1801 pass / 0 fail / 3 skip.
+**Last updated:** 2026-05-26 — Plan 05-10 Tasks 1-3 COMPLETE (pre-flight invariants confirmed; atomic rc.7 -> 1.0.0 version bump commit `e1e0d44`; production tarball `clarity-pack-1.0.0.tgz` packed at repo root, sha256 `53567012d6f5cb6a724351972f2f9545dc208f439af2d7757bbc456722e033da`, 625,394 bytes, 15 files, zero src/test/.planning/sketches entries). Status: `closure-pending-operator-drill`. Tasks 4-9 are operator-gated; Eric runs the Countermoves drill (Task 4 — 10-step SSH sequence per SUMMARY.md) and `npm publish` (Task 9). Milestone field intentionally UNCHANGED at `v1.0.0-rc.7` until Task 8 flips it post-drill.
 
 ## Project Reference
 
@@ -27,6 +27,14 @@ progress:
 **Current Focus:** Phase 05 — distribution-polish
 
 ## Current Position
+
+**Plan 05-10 Tasks 1-3 COMPLETE 2026-05-26 — closure-pending-operator-drill.** Tasks 4-9 are operator-gated. Single atomic version-bump commit `e1e0d44` on master flipped `package.json` + `src/manifest.ts` from `1.0.0-rc.7` to `1.0.0` (the load-bearing two-source bump per memory `plugin-version-bump-two-sources`); two test pins updated in the same commit (`test/manifest/chat-capabilities.test.mjs` version-pin flip; `test/ui/deep-link.test.mjs` Plan 05-05 consolidation-invariant guard flipped to its mirror). Pre-flight invariants all GREEN (all six 05-04..05-09 SUMMARYs present; tsc clean; check-css-scope 121/121 scoped; check-a11y 69/0; coexistence 10/10 PASS; suite 1675 / 1673 pass / 0 fail / 2 skip; version-bump consolidation invariant held — no rc.8/rc.9+ leaked from any sub-plan). Production tarball `clarity-pack-1.0.0.tgz` packed at repo root: sha256 `53567012d6f5cb6a724351972f2f9545dc208f439af2d7757bbc456722e033da`, **625,394 bytes** (the Plan 05-10 size-range gate of [140000, 160000] is stale pre-05-04 baseline; actual is well-under the Plan 05-04-calibrated 665,600-byte UI ceiling — UI bundle 637.6 kB), 15 files. Tarball content hygiene: 0 src/, 0 test/, 0 .planning/, 0 sketches/, 0 fake-paperclip-clone entries (Plan 05-09 D-22 export-ignore validated). `dist/manifest.js` rebuild reports `version: '1.0.0'` (the literal Paperclip's host reads). 4 deviations (1 Rule 1 — designed-to-flip guard test; 3 Rule 3 — over-broad residual gate / no pnpm on PATH / stale size-range) all in SUMMARY.md.
+
+SUMMARY: `.planning/phases/05-distribution-polish/05-10-SUMMARY.md`.
+
+**Next action:** Eric runs Task 4 operator drill on Countermoves VPS — full 10-step CLI sequence with canonical env re-export lives in 05-10-SUMMARY.md "Pending operator gates / Task 4". After drill returns PASS verdict, planning agent writes 05-VERIFICATION.md (Task 5) + 05-10-DRILL-LOG.md (Task 6) → flips REQUIREMENTS.md DIST-01..DIST-05 + COEXIST-05 (Task 7) → flips ROADMAP.md Phase 5 COMPLETE + STATE.md `milestone` v1.0.0-rc.7 → v1.0.0 (Task 8) → Eric runs `npm publish` (Task 9) → files MemPalace `clarity_pack/decisions/v1.0.0-shipped` drawer.
+
+---
 
 **Plan 05-08 (Phase 4.1 power features — 5 items D-15..D-20, version UNCHANGED at rc.7) — CODE-COMPLETE 2026-05-25.** 6 atomic commits `2d19947..ce9d1e0` on master in sequential mode.
 
