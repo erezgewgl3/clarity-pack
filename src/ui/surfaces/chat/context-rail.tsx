@@ -1,5 +1,24 @@
 // src/ui/surfaces/chat/context-rail.tsx
 //
+// Plan 05-07 Task 2 (D-14) — React-key audit pass. The 2026-05-25 drill
+// flagged "Warning: Each child in a list should have a unique key" with
+// ContextRail in the component-stack attribution. Audit verdict:
+//   - The file's only `.map(...)` (line 190) is a pure data projection
+//     that DOES NOT return JSX — no key required.
+//   - The pinnedMessages JSX map (line 317) is already keyed on
+//     `m.commentId` (stable, server-provided).
+//   - The two `<>…</>` Fragment siblings (lines 314 + 334) are
+//     CONDITIONAL renders in different curly-brace slots of the parent
+//     <aside> — React treats them as positional children, NOT siblings
+//     in a list. No key warning fires from this file's own JSX.
+//   - The attribution likely points at child components mounted by
+//     ContextRail (ActiveTasksOwned, ArchiveTopicButton). Those files
+//     are audited in their own Plan 05-07 commits — both already have
+//     stable keys on their JSX-returning maps (line 111 of
+//     active-tasks-owned.tsx keyed on `t.issueId`; archive-topic-button
+//     has no `.map()` call).
+// Verified by the test/ui/chat-react-key-console-capture.test.mjs gate.
+//
 // Plan 04-05 Task 1 — CHAT-01 — the Employee Chat context rail (right column).
 // Plan 04.1-06 Task 2 — mounts Pattern D (ActiveTasksOwned) + Pattern E
 // (ArchiveTopicButton). The active tasks owned stub is REPLACED with the
