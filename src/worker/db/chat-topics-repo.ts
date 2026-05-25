@@ -55,12 +55,18 @@ export type ChatTopicRow = {
  * Plan 04.2-01 (RCB-04 / RCB-06) — a chat topic as the Reader reverse-topics
  * list consumes it (issue-reader.ts `topicsForIssue` + the ReverseTopicsLink
  * popover). camelCase shape; mapped from a ChatTopicRow.
+ *
+ * Plan 04.2-07 (D-02) — extended with optional `employeeAgentId` so the
+ * popover's same-assignee filter (`filterToAssignee`) can match without a
+ * second round-trip. Field is optional so pre-04.2-07 cached payloads still
+ * type-check; the filter degrades to "show all" when absent.
  */
 export type ChatTopicByOriginEntry = {
   topicIssueId: string;
   topicId: string;
   title: string;
   lastActivityAt: string;
+  employeeAgentId?: string;
 };
 
 /** A chat_messages row — D-09 idempotency / supersedes / pin side table. */
@@ -211,6 +217,7 @@ export async function listChatTopicsByOriginIssue(
     topicId: r.topic_id,
     title: r.title,
     lastActivityAt: r.last_activity_at,
+    employeeAgentId: r.employee_agent_id,
   }));
 }
 

@@ -223,6 +223,16 @@ function ReaderViewReady({
   const { pathname } = useHostLocation();
   const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
 
+  // Plan 04.2-07 (D-02 popover lift) — parent-owned picker state. When the
+  // Continue button resolves to the 'existing-topics-ambiguous' route, it
+  // calls onRequestPickerOpen with the assignee id; this state flips the
+  // ReverseTopicsLink popover into auto-open mode pre-filtered to same-
+  // assignee candidates. Cleared either by clicking a popover row (handled
+  // inside reverse-topics-link.tsx) or by re-clicking the Continue button.
+  const [pickerRequest, setPickerRequest] = React.useState<{
+    filterToAssignee: string | null;
+  } | null>(null);
+
   // Quick fix 260524-s2y (rc.6) — SDK 2026.512.0 has no manifest-side
   // `actions[].invalidates` field (verified: PaperclipPluginManifestV1 has
   // no `actions:` key; SDK type tree contains zero `invalidat*` occurrences).
@@ -288,14 +298,27 @@ function ReaderViewReady({
           // identifier falls back to the issue id; title is left null (the
           // Reader's ReaderViewData carries no raw issue title).
           issue={{ identifier: entityId, title: null }}
+          // Plan 04.2-07 D-02 — lift the picker-open request to this parent.
+          // When chat.openForIssue resolves to 'existing-topics-ambiguous'
+          // the button calls this with the assignee id and we plumb it
+          // into ReverseTopicsLink's autoOpen + filterToAssignee props
+          // below. No React context — explicit prop plumbing per PATTERNS.
+          onRequestPickerOpen={setPickerRequest}
         />
         {/* Plan 04.2-01 (RCB-06) — the reverse-topics list. Renders nothing
             when no chat topics were started from this issue (the common case
             + every pre-0009 issue); otherwise `<N> conversations about this
-            issue ↗` with a popover. Fed from issue.reader's topicsForIssue. */}
+            issue ↗` with a popover. Fed from issue.reader's topicsForIssue.
+            Plan 04.2-07 D-02 — entryPoint, filterToAssignee, autoOpen
+            forwarded from pickerRequest so the popover auto-opens
+            pre-filtered to same-assignee candidates when the button
+            resolves to existing-topics-ambiguous. */}
         <ReverseTopicsLink
           companyPrefix={companyPrefix}
           topicsForIssue={data.topicsForIssue ?? []}
+          entryPoint={pickerRequest ? 'continue-in-chat' : 'manual'}
+          filterToAssignee={pickerRequest?.filterToAssignee ?? null}
+          autoOpen={pickerRequest !== null}
         />
       </div>
       <Breadcrumb ancestry={data.ancestry} />
