@@ -24,8 +24,8 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is 1.0.0-rc.6 (Quick fix 260524-s2y — AC manual toggle -> Reader refetch via UI-tier refresh)', () => {
-  assert.equal(manifest.version, '1.0.0-rc.6');
+test('manifest version is 1.0.0-rc.7 (Plan 04.2-07 — D-7 routing rewrite + D-5/D-6 polish fold-in)', () => {
+  assert.equal(manifest.version, '1.0.0-rc.7');
 });
 
 test('manifest declares the capabilities the chat handlers need', () => {

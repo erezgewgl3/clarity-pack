@@ -134,7 +134,7 @@ test('R1: listChatTopicsByOriginIssue issues one company+origin-scoped SELECT, n
 // R2 -- LIST-BY-ORIGIN-MAPS-ROWS
 // ---------------------------------------------------------------------------
 
-test('R2: listChatTopicsByOriginIssue maps rows to { topicIssueId, topicId, title, lastActivityAt }, newest-first', async () => {
+test('R2: listChatTopicsByOriginIssue maps rows to { topicIssueId, topicId, title, lastActivityAt, employeeAgentId }, newest-first', async () => {
   const { ctx } = makeFakeDbCtx({
     topics: [
       {
@@ -157,17 +157,22 @@ test('R2: listChatTopicsByOriginIssue maps rows to { topicIssueId, topicId, titl
   });
   const list = await listChatTopicsByOriginIssue(ctx, 'COU', 'COU-77');
   assert.equal(list.length, 2);
+  // Plan 04.2-07 D-02 — entries now carry employeeAgentId so the Reader's
+  // RCB-06 popover can filter to same-assignee candidates when auto-opened
+  // from the Continue-in-chat button's existing-topics-ambiguous arm.
   assert.deepEqual(list[0], {
     topicIssueId: 'issue-new',
     topicId: 'CHT-2',
     title: 'Newer topic',
     lastActivityAt: '2026-05-21T10:00:00Z',
+    employeeAgentId: 'agent-cfo',
   });
   assert.deepEqual(list[1], {
     topicIssueId: 'issue-old',
     topicId: 'CHT-1',
     title: 'Older topic',
     lastActivityAt: '2026-05-20T10:00:00Z',
+    employeeAgentId: 'agent-cfo',
   });
 });
 
