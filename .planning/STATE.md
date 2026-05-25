@@ -1,22 +1,22 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0.0-rc.5
-milestone_name: phase-5-dist-03-shipped
+milestone: v1.0.0-rc.7
+milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: Plan 04.2-07 PLANNED — addendum sub-plan for D-7 routing rewrite + D-5/D-6 polish fold-in; ready to execute via `/gsd:execute-phase 4.2 --gaps`
-last_updated: "2026-05-25T14:00:00.000Z"
+stopped_at: Plan 04.2-07 SHIPPED at rc.7 (live on Countermoves); Phase 5 expanded 4 → 10 plans 2026-05-25 to absorb ALL deferred polish + 4 rc.7 forward defects for v1.0.0 final. Next step — `/gsd:discuss-phase 5 --power` to lock open design decisions before `/gsd:plan-phase 5 --chunked`.
+last_updated: "2026-05-25T16:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 44
-  completed_plans: 36
-  percent: 64
+  total_plans: 50
+  completed_plans: 37
+  percent: 56
 ---
 
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
-**Last updated:** 2026-05-25 — Quick task 260524-sm8: rc.6 drill PASS on live Countermoves Paperclip — AC toggle → Reader refetch contract verified via DevTools Network 3-call cluster (2+ cycles, all 200); plugin-id UUID `0d4fc40a-0541-4b67-8979-9d346cb9c07b` preserved across uninstall→install; 7 defects filed (D-1..D-4 fixed in-flight; D-5/D-6/D-7 forward MemPalace).
+**Last updated:** 2026-05-25 — Plan 04.2-07 SHIPPED at clarity-pack-1.0.0-rc.7.tgz (147,533 bytes; sha256 `763354cce39dca67a4c25141142507aad88d24de9588e24566019f2b3829a63d`). D-7 routing fix operator-confirmed live on Countermoves: load-bearing path 6 PASS (silent resume + auto-unarchive on COU-2441 fresh fixture; CTT-07 invariant holds at the DB layer — `chat_topics.archived_at` flipped to NULL + `public.issues.updated_at` byte-identical across handler window); 5 closure-baseline fixtures (paths 1-5) all PASS; scenario 7 ambiguous picker PARTIAL (auto-opens with N=2 candidates ✓, but row-click dispatch lands empty → GAP-PICKER-ROW-DISPATCH filed); plugin UUID `0d4fc40a-...` preserved across 4 uninstall/install cycles. 4 forward defects (GAP-D8-LINEAGE-TOOLTIP, GAP-D8-REVERSE-TOOLTIP-FALLBACK, GAP-PICKER-ROW-DISPATCH, GAP-RCB-05-CHIP-STYLING) routed to Plan 04.2-08.
 
 ## Project Reference
 
@@ -24,15 +24,42 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 4.2 addendum sub-plan 04.2-07 — PLANNED 2026-05-25, ready for execution. Forward-defects work (D-7/D-5/D-6) on closed Phase 4.2; Phase 5 stays in near-final closure (Plan 05-03 shipped; Plan 05-04 deferred to v1.1).
+**Current Focus:** Plan 04.2-07 shipped at rc.7 (live on Countermoves). **Phase 5 expanded 2026-05-25 from 4 → 10 plans for v1.0.0 final.** Operator decision: ship ALL deferred polish + 4 rc.7 forward defects (GAP-D8-LINEAGE-TOOLTIP, GAP-D8-REVERSE-TOOLTIP-FALLBACK, GAP-PICKER-ROW-DISPATCH, GAP-RCB-05-CHIP-STYLING) as part of v1.0.0 final rather than defer to v1.1 / Plan 04.2-08. Forward defects routed to Phase 5 plan 05-07 (Phase 4.2 polish bundle). Two backlog items dropped on principle — task templates + smart-prefill — per the `feedback_trust-the-clarification-loop` principle (the agent+chat+comment clarification loop IS the feature; pre-loading operator guesses works against it). Next action: `/gsd:discuss-phase 5 --power` to lock open design decisions (D8 Back-after-deeplink shape; peek-card UI; DIST-04 library choices + visual-regression CI vs local) before `/gsd:plan-phase 5 --chunked`.
 
 ## Current Position
 
-**Plan 04.2-07 (addendum, v1.0.0-rc.7) — PLANNED 2026-05-25; READY-TO-EXECUTE.**
+**Plan 04.2-07 (addendum, v1.0.0-rc.7) — SHIPPED-WITH-FORWARD-DEFECTS 2026-05-25; PRODUCTION ON COUNTERMOVES.**
 
-Forward-defects addendum sub-plan added to closed Phase 4.2 (RCB-01..RCB-07 stay Implemented at v1.0.0-rc.2 — VERIFICATION.md untouched). Plan addresses three defects filed during the 2026-05-25 rc.6 drill (`260524-sm8`): D-7 Reader→Chat continuation routing rewrite (`chat.openForIssue` step-2 reverse-lookup on `chat_topics.origin_issue_id`; new `existing-topics-ambiguous` route shape for ≥2 matches; D-04 silent auto-unarchive on N=1 archived match; D-02 reuse of RCB-06 popover as picker), D-5 operator-drill proof-method gotcha in `runbook/operator-gotchas.md`, D-6 canonical AC marker grammar in `README.md`. 8 tasks, wave 1 (2 TDD on routing + repo helper + 5 execute + 1 checkpoint:human-verify closure drill with 6+1 fixtures + rc.7→rc.6→rc.7 rollback rehearsal). Plan-checker verdict PASS on first iteration (12/12 gates: standard + add-only special-case + D-5/D-6/D-7 goal-backward). Commit `e8ded4d` carries `04.2-07-PLAN.md`, `04.2-07-PLAN-CHECK.md`, and `04.2-PATTERNS.md` (line-numbered analog excerpts for all 6 touchpoints). Frontmatter is `gap_closure: false`, `requirements: []`, `defects_addressed: [D-7, D-5, D-6]` — empty-requirements is intentional per closed-phase addendum pattern (filed to MemPalace drawer `clarity_pack/decisions/ac1e392e6cf1d93e40b1d92e`).
+10 atomic commits `511f301..a9e8b30` + closure commit (this commit) on master in sequential mode (worktree spawn blew up on Windows max-path inside `scripts/safety/test/fixtures/fake-paperclip-clone/node_modules/.pnpm/@embedded-postgres+linux-x64@.../node_modules/@embedded-postgres/linux-x64` — documented fallback to sequential on master; no isolation loss in single-plan wave). Suite 1364 → 1414 (+50 net / +28 from this plan; 0 fail; 2 pre-existing skip). `tsc --noEmit` clean; `check-css-scope.mjs` exit 0 (108 selectors); `check-a11y.mjs` exit 0 (65 files / 0 violations); `npm pack` produces `clarity-pack-1.0.0-rc.7.tgz` 147,533 bytes sha256 `763354cce39dca67a4c25141142507aad88d24de9588e24566019f2b3829a63d`.
 
-**Next action:** `/gsd:execute-phase 4.2 --gaps` to execute Plan 04.2-07 (the `--gaps` mode is the correct invocation path for forward-defects work after closure; there is NO `/gsd:execute-plan` skill and NO `--addendum` flag — those are common confusions). Plans 04.2-01..06 stay untouched; ROADMAP.md / REQUIREMENTS.md / VERIFICATION.md are not modified.
+**Worker tier:** `chat-topics-repo.ts` new helper `listTopicsForIssueAndAssignee` (D-04 includes archived; D-05 GREATEST tiebreak over `chat_topics.last_activity_at` + `chat_messages.sent_at`). `chat-open-for-issue.ts` step-2 reverse-lookup against `(origin_issue_id, employee_agent_id)`: N=1 silent-resume + auto-unarchive (CTT-07 invariant — `setChatTopicArchived(ctx, companyId, topicIssueId, false)`; NEVER calls `ctx.issues.update`); N≥2 returns new `existing-topics-ambiguous` route with `candidates[]` + `sourceIssueIdentifier`. 6-case route switch: lineage-existing-topic | reverse-lookup-existing-topic | existing-topics-ambiguous | topic-itself | NO_ASSIGNEE | new-topic-needed.
+
+**UI tier:** `continue-in-chat-button.tsx` adds `onRequestPickerOpen` prop + dispatch arm for `existing-topics-ambiguous` (NO `nav.navigate`) + 3-way tooltip differentiation per D-06. `reverse-topics-link.tsx` adds `entryPoint` + `filterToAssignee` + `autoOpen` props + `useEffect(autoOpen)` parent-controlled open + `visibleTopics` filter. `reader/index.tsx` parent-owned `pickerRequest` state plumbed through both Continue button and ReverseTopicsLink + threads `employeeAgentId` through `chat.reverseTopicsForIssue` payload.
+
+**Docs:** `runbook/operator-gotchas.md` new `§ac-autostatus-drill-proof` section (D-09). `README.md` new `## Acceptance criteria markers` section (D-10) documenting canonical `AC: <id>: <state>` grammar + bracket-alternate `AC[<id>]:` tolerance.
+
+**Operator drill on Countermoves 2026-05-25 — PASS-WITH-FORWARD-DEFECTS.** Bookend snapshot `2026-05-25T13-39-24Z` (DB 17.6 MB + FS 11.2 GB, sha256-verified); verify-with-sibling-instance skipped (sibling not staged; 2026-05-23 Plan 04.2-01 drill already rehearsed the rollback path against same VPS); COEXIST #6 row counts byte-identical pre-uninstall / post-install (chat_topics=11 / chat_messages=11 / chat_topic_tasks=6 → 11/11/6); plugin UUID `0d4fc40a-0541-4b67-8979-9d346cb9c07b` preserved across 4 uninstall/install cycles (rc.6→rc.7→rc.6→rc.7).
+
+**Drill scorecard:**
+- Paths 1-5 (closure-baseline fixtures — COU-2215 / COU-2361 / COU-2396 / COU-1115 / COU-2399): **all PASS** for routing. RCB-01..RCB-07 not regressed; `04.2-VERIFICATION.md` baseline preserved.
+- **Path 6 (NEW load-bearing fixture — COU-2441 silent resume + auto-unarchive): PASS.** Fresh issue created during drill; topic created via Continue → archived via Quick Actions → second Continue click silently resumed (NOT a New Topic dialog). DB probe: `chat_topics.archived_at IS NULL` (D-04 auto-unarchive ✓) AND `public.issues.updated_at = 2026-05-25 14:24:19.32+00` byte-identical across the handler window (CTT-07 invariant holds — `ctx.issues.update` never called by the resume/unarchive path). Postgres-computed equality returned `t`.
+- **Scenario 7 (NEW N=2 ambiguous-picker fixture): PARTIAL.** N=2 seeded naturally by clicking Continue on COU-2441 at rc.6 (the bug itself created `0c1a320c-...`/CHT-1120 alongside existing `3d9b9362-...`/CHT-1119 — same employee b2a22e50-CEO, both `archived=f`). Upgraded back to rc.7 and clicked Continue on COU-2441: tooltip `Pick from 2 conversations about COU-2441 →` (D-08 hygiene PASS on this path — uses BEAAA-NNN identifier); RCB-06 popover **auto-opens** with both candidates pre-filtered to same-assignee ✓; **but picker row click lands at chat-surface "Select an employee" empty state** — picker emits topic-only URL_HASH via unchanged `buildTopicDeepLink` (D-07 lock), and chat-surface existing-topic dispatch from Plan 04.2-04 requires `link.employee` for the roster-match → `setEmployee(matched)` chain.
+
+**Forward defects routed to Plan 04.2-08:**
+1. **GAP-D8-LINEAGE-TOOLTIP** — originId-lineage Continue tooltip on path 1 (COU-2215) shows raw topic-issue UUID `e7b7fee8-b432-4422-8a1c-1bb3043a9d43` instead of CHT-NN (CHT-1117). Fix: thread `topicIdentifier?: string` from worker handler.
+2. **GAP-D8-REVERSE-TOOLTIP-FALLBACK** — reverse-lookup Continue tooltip on path 6 shows fallback `Resume conversation about this issue →` instead of `Resume conversation about COU-2441 →`. Fix: ensure `sourceIssueIdentifier` returns on both `existing-topic` (reverse-lookup) and `existing-topics-ambiguous` branches, and UI tooltip expression consumes it.
+3. **GAP-PICKER-ROW-DISPATCH** — picker row click lands at empty state. Fix options: (a) `buildTopicDeepLink` includes employee in URL_HASH (picker has `employeeAgentId` at row-render time); (b) chat-surface dispatch derives employee from topic when `link.employee` undefined.
+4. **GAP-RCB-05-CHIP-STYLING** — `About COU-NNNN →` backlink chip on chat surface renders as a circle/oval with wrapped text; should be a rectangular chip. Pre-existing visual glitch.
+
+**Console (DevTools) verdict: PASS-with-known-backlog.** Vite HMR WebSocket noise from Paperclip dev-server client shipped in production bundle (MemPalace `countermoves-paperclip-parked-bugs`); React key warnings on `ToastProvider`/`ChatPageBody`/`RosterRail`/`ChatActionsRow` — all Chat-surface components NOT touched by Plan 04.2-07 (MemPalace `phase-4.2-drill-polish-defects-2026-05-24`). No NEW warnings introduced. Tolerated per plan success criterion 8.
+
+**Data anomaly (non-blocking):** COU-2215 + COU-2361 share byte-identical `chat-task:` origin_id — two distinct tasks claiming the same single source comment. Pre-existing drill artifact; routing PASS unaffected.
+
+**One deviation (Rule 1 — Bug):** `test/worker/chat/chat-topics-repo.test.mjs` R2 `deepEqual` updated to include new optional `employeeAgentId` field added to `ChatTopicByOriginEntry` for D-02 reverse-topics popover row-render filter. Additive payload change; test correctly caught it.
+
+**SUMMARY:** `.planning/phases/04.2-reader-chat-bridge/04.2-07-SUMMARY.md`.
+
+**Next action:** Plan 04.2-08 (gap-closure sub-plan for the 4 forward defects above) — none block rc.7's production deployment; all are UX/hygiene polish in the routes Plan 04.2-07 introduced. OR shift focus to Phase 5 close. Decide at next session start.
 
 ---
 
