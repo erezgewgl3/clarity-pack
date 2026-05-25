@@ -5,6 +5,15 @@
 // excerpt is the SUBSTANTIVE quote (>= ~40 chars when permissions allow) —
 // PRIM-02 says null excerpt means viewer lacks permission, in which case we
 // render an explicit "Quote unavailable (permission-gated)" line.
+//
+// Plan 05-07 Task 2 (D-14) — React-key audit pass for AnchoredToCards.
+// Audit verdict: the safe.map() at line 44 is already keyed on `c.id`
+// (the BEAAA-NNN identifier — stable, server-provided). The child
+// RefCard contains no `.map()` of its own. The 2026-05-25 drill
+// attribution to "AnchoredToCards" maps to this file only when the
+// Reader is open; on the chat-only console capture path the source
+// likely lives elsewhere in the host's React tree. Verified by
+// test/ui/chat-react-key-console-capture.test.mjs.
 
 import * as React from 'react';
 
