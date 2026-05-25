@@ -774,6 +774,15 @@ function ChatPageBody({
           onClose={() => setArchivePanelOpen(false)}
           onOpenTopic={handleOpenArchivedTopic}
           onUnarchive={(topicIssueId) => void handleUnarchiveFromPanel(topicIssueId)}
+          // Plan 05-08 (D-15) — derive companyPrefix from the current URL so
+          // the View-all link can navigate to /<companyPrefix>/archive. The
+          // chat page is mounted at /<prefix>/chat so prefix is the first
+          // non-empty path segment.
+          companyPrefix={
+            typeof window !== 'undefined'
+              ? window.location.pathname.split('/').filter(Boolean)[0] ?? ''
+              : ''
+          }
         />
 
         {/* Plan 04.1-08 — actions row sits between the topic strip and the

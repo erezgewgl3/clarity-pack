@@ -71,11 +71,16 @@ test('archive-panel.tsx: footer shows "Showing N of M" + the View all stub', () 
   assert.match(SRC, /View all archived/);
 });
 
-test('archive-panel.tsx: View all link is a no-op stub for Phase 4.2', () => {
+test('archive-panel.tsx: View all link navigates to /<companyPrefix>/archive (Plan 05-08 D-15 supersedes Plan 04.1-08 stub)', () => {
   const c = code(SRC);
-  // The stub must log a console.warn referencing the 4.2 deferral memory.
-  assert.match(c, /console\.warn/);
-  assert.match(SRC, /phase-4\.2-deferred-from-4\.1/, 'memory pointer present');
+  // Plan 05-08 D-15 promoted the View-all link from a console.warn no-op
+  // to a real navigation. The new shape: navigate via useHostNavigation
+  // to /<companyPrefix>/archive when companyPrefix is non-empty.
+  assert.match(c, /nav\.navigate/, 'useHostNavigation().navigate called');
+  assert.match(c, /\/archive/, 'destination includes /archive');
+  assert.match(c, /companyPrefix/, 'companyPrefix prop threaded through');
+  // The dead console.warn stub must be gone.
+  assert.doesNotMatch(c, /console\.warn/);
 });
 
 test('archive-panel.tsx: Escape key closes the panel', () => {

@@ -467,6 +467,18 @@ const manifest: PaperclipPluginManifestV1 = {
         exportName: 'ChatPage',
         routePath: 'chat',
       },
+      // Plan 05-08 (D-15) — Archive full-view page. Resolves to
+      // /<companyPrefix>/archive (NOT /clarity-pack/archive — see runbook
+      // memory `clarity-pack-plugin-page-routes`). The host concatenates
+      // the company prefix with the routePath; matching the existing
+      // bulletin / situation-room / chat shape.
+      {
+        type: 'page',
+        id: 'clarity-archive',
+        displayName: 'Archive',
+        exportName: 'ArchivePage',
+        routePath: 'archive',
+      },
       {
         type: 'settingsPage',
         id: 'clarity-settings',

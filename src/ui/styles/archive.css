@@ -1,0 +1,161 @@
+/* src/ui/styles/archive.css
+ *
+ * Plan 05-08 (D-15) — Archive full-view page styles.
+ *
+ * All selectors are scoped under [data-clarity-surface="archive"] to preserve
+ * the SCAF-06 / COEXIST-01 isolation contract. The page lives at
+ * /<companyPrefix>/archive (NOT /clarity-pack/archive — see runbook memory
+ * `clarity-pack-plugin-page-routes`).
+ */
+
+[data-clarity-surface="archive"] {
+  display: block;
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  color: var(--ink-1, #1a1a1a);
+  font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-loading,
+[data-clarity-surface="archive"] .clarity-archive-error {
+  padding: 24px;
+  color: var(--ink-2, #555);
+}
+
+[data-clarity-surface="archive"] .clarity-archive-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line, #e3e3e3);
+}
+
+[data-clarity-surface="archive"] .clarity-archive-header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-header .clarity-archive-count {
+  color: var(--ink-2, #555);
+  font-size: 13px;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-toolbar input[type="text"],
+[data-clarity-surface="archive"] .clarity-archive-toolbar select {
+  padding: 6px 10px;
+  border: 1px solid var(--line, #e3e3e3);
+  border-radius: 6px;
+  font: inherit;
+  background: var(--bg-1, #fff);
+}
+
+[data-clarity-surface="archive"] .clarity-archive-toolbar input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--ink-2, #555);
+  background: var(--bg-2, #f7f7f7);
+  border-radius: 8px;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #e3e3e3);
+  border-radius: 6px;
+  background: var(--bg-1, #fff);
+}
+
+[data-clarity-surface="archive"] .clarity-archive-row:hover {
+  background: var(--bg-2, #f7f7f7);
+}
+
+[data-clarity-surface="archive"] .clarity-archive-row__title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-row__pin {
+  font-size: 14px;
+  color: var(--accent, #d4830a);
+}
+
+[data-clarity-surface="archive"] .clarity-archive-row__employee,
+[data-clarity-surface="archive"] .clarity-archive-row__when {
+  color: var(--ink-2, #555);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-row__open {
+  padding: 4px 10px;
+  border: 1px solid var(--line, #e3e3e3);
+  border-radius: 4px;
+  background: var(--bg-1, #fff);
+  cursor: pointer;
+  font: inherit;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-row__open:hover {
+  background: var(--bg-2, #f7f7f7);
+}
+
+[data-clarity-surface="archive"] .clarity-archive-bulk-bar {
+  position: sticky;
+  bottom: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-1, #fff);
+  border: 1px solid var(--line, #e3e3e3);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+[data-clarity-surface="archive"] .clarity-archive-bulk-bar__count {
+  font-weight: 500;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-bulk-bar button {
+  padding: 6px 14px;
+  border: 1px solid var(--line, #e3e3e3);
+  border-radius: 6px;
+  background: var(--accent, #d4830a);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+}
+
+[data-clarity-surface="archive"] .clarity-archive-bulk-bar button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

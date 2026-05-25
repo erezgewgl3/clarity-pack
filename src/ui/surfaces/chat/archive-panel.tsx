@@ -16,9 +16,10 @@
 //     debounce — list is small).
 //   - Empty state: when archivedTopics is empty, render only the header +
 //     the "No archived topics" line. No search, no footer.
-//   - Footer: "Showing N of M" + "View all archived →" (the View all link is
-//     a NO-OP STUB for Phase 4.2 per memory phase-4.2-deferred-from-4.1; the
-//     click handler logs a console.warn and does nothing else).
+//   - Footer: "Showing N of M" + "View all archived →" — Plan 05-08 D-15
+//     replaces the Plan 04.1-08 console-warn no-op stub with a real
+//     navigation to /<companyPrefix>/archive via useHostNavigation. The
+//     parent threads companyPrefix as a prop.
 //   - Escape key closes; click outside the panel closes.
 //
 // SECURITY (T-04-18): all rendered fields (title, employeeName, dates) come
@@ -26,6 +27,7 @@
 // dangerouslySetInnerHTML. No raw fetch.
 
 import * as React from 'react';
+import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
 
 /** A single archived topic as chat.archivedTopics returns it. */
 export type ArchivedTopic = {
@@ -72,15 +74,19 @@ export function ArchivePanel({
   onClose,
   onOpenTopic,
   onUnarchive,
+  companyPrefix,
 }: {
   open: boolean;
   archivedTopics: ArchivedTopic[];
   onClose: () => void;
   onOpenTopic: (topicIssueId: string) => void;
   onUnarchive: (topicIssueId: string) => void;
+  /** Plan 05-08 D-15 — drives the View-all link's navigation target. */
+  companyPrefix?: string;
 }): React.ReactElement | null {
   const [searchQuery, setSearchQuery] = React.useState('');
   const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const nav = useHostNavigation();
 
   // Reset search when the panel reopens — a stale query feels wrong.
   React.useEffect(() => {
@@ -204,20 +210,20 @@ export function ArchivePanel({
             <span>
               Showing {filtered.length} of {totalCount}
             </span>
-            {/* TODO(4.2): full archive view per memory phase-4.2-deferred-from-4.1.
-                For now this link is a NO-OP STUB; the click handler logs a
-                warn and does nothing else. Plan 04.1-08 ships without the
-                full archive page. */}
+            {/* Plan 05-08 (D-15) — View-all link navigates to the new full
+                archive page at /<companyPrefix>/archive. Replaces the Plan
+                04.1-08 console-warn no-op stub. SCAF-09 + no-raw-anchor —
+                use useHostNavigation(), never raw <a href>. */}
             <button
               type="button"
               onClick={() => {
-                // eslint-disable-next-line no-console
-                console.warn(
-                  '[clarity-pack] Phase 4.2 — full archive view not yet implemented. ' +
-                    'Tracked in memory phase-4.2-deferred-from-4.1.',
-                );
+                if (companyPrefix) {
+                  onClose();
+                  nav.navigate(`/${companyPrefix}/archive`);
+                }
               }}
-              data-clarity-archive-view-all="stub"
+              disabled={!companyPrefix}
+              data-clarity-archive-view-all="full"
             >
               View all archived →
             </button>
