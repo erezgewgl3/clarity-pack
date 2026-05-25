@@ -1,0 +1,41 @@
+-- 0010_chat_topics_pinned.sql
+-- Plan 05-08 (D-20) -- Storage-pin = topic exempt from archive.
+--
+-- Adds an additive plugin-namespace pinned_at timestamptz column to the
+-- chat_topics table. A non-NULL pinned_at means the topic is PINNED and
+-- therefore EXEMPT from archive: chat.topic.archive returns
+-- { error: PIN_EXEMPT } when a caller tries to archive a pinned topic, and
+-- the bulk-unarchive helper carries an UPDATE-time guard so a future
+-- bulk-archive variant can never sweep up a pinned row.
+--
+-- Pin semantics (Plan 05-08 D-20 lock per CONTEXT.md):
+--   - pinned_at = now()  -> topic is pinned, exempt from archive.
+--   - pinned_at = NULL   -> topic is not pinned (default for every row).
+-- Pinning does NOT change topic sort order; this is NOT pin-to-top. The
+-- column drives ONE invariant only: archive is denied while pinned.
+--
+-- All DDL targets the deterministic plugin namespace
+-- plugin_clarity_pack_cdd6bda4bd literally per 02-01 SMOKE-FINDINGS.md
+-- Finding #4 (the Paperclip host validator requires fully-qualified schema
+-- names; there is NO template substitution).
+--
+-- Validator constraints honored (matches 0006_chat.sql + 0007 + 0008 + 0009):
+--   - apostrophe-free comments (greedy string-literal strip hazard);
+--   - no anonymous procedural blocks (DO dollar-quoted patterns rejected);
+--   - NO standalone CREATE INDEX -- the host extractQualifiedRefs has no
+--     pattern for CREATE INDEX ... ON schema.table, so a standalone index
+--     statement yields zero qualified refs and is rejected at install with
+--     the fully-qualified-schema-names error (Plan 03-03 Countermoves drill,
+--     verbatim-ported in test/migrations/ddl-prefix-validator.test.mjs).
+--     The pin-exempt SELECT runs by primary key (company_id + issue_id) so
+--     no extra index is needed.
+--   - file ends on a semicolon-terminated statement (no trailing comment).
+--
+-- Additive-only per CLAUDE.md coexistence guarantee #3: only ADD COLUMN IF
+-- NOT EXISTS in the plugin namespace; the host-owned schema is never touched.
+-- Coexistence guarantee #6 (clean uninstall preserves data): the column lives
+-- in the plugin namespace and survives a disable; --purge is opt-in only.
+-- Idempotent -- re-running the migration is a no-op.
+
+ALTER TABLE plugin_clarity_pack_cdd6bda4bd.chat_topics
+  ADD COLUMN IF NOT EXISTS pinned_at timestamptz DEFAULT NULL;

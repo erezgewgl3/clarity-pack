@@ -49,6 +49,12 @@ export type ChatTopicRow = {
    *  migration 0009. The repo writes it via insertChatTopic's OPTIONAL
    *  `originIssueId` field; listChatTopicsByOriginIssue reads it. */
   origin_issue_id?: string | null;
+  /** Plan 05-08 (D-20) — non-NULL when the topic is PINNED (Storage-pin =
+   *  exempt from archive). Added by migration 0010. The repo writes it via
+   *  setChatTopicPinned; isChatTopicPinned reads it; the chat.topic.archive
+   *  handler returns { error: 'PIN_EXEMPT' } when a caller tries to archive
+   *  a pinned topic. NULL for every pre-0010 row. */
+  pinned_at?: string | null;
 };
 
 /**
@@ -436,6 +442,117 @@ export async function listArchivedChatTopicsForEmployee(
        AND archived = true
      ORDER BY archived_at DESC NULLS LAST, last_activity_at DESC`,
     [companyId, employeeAgentId],
+  );
+}
+
+/**
+ * Plan 05-08 (D-20) — flip the pinned_at flag on one chat topic.
+ *
+ * Mirrors setChatTopicArchived byte-for-byte except the column written is
+ * pinned_at (migration 0010). pinned=true stamps `now()`; pinned=false
+ * clears to NULL. Company-scoped so a pin never crosses companies.
+ *
+ * Pinning makes a topic EXEMPT from archive: the chat.topic.archive
+ * handler reads via isChatTopicPinned and returns { error: 'PIN_EXEMPT' }
+ * when archive=true on a pinned row. This helper itself NEVER touches the
+ * host issue — CTT-07 invariant (plugin actions never modify
+ * public.issues.updated_at) holds by construction.
+ */
+export async function setChatTopicPinned(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  topicIssueId: string,
+  pinned: boolean,
+): Promise<void> {
+  await ctx.db.execute(
+    `UPDATE plugin_clarity_pack_cdd6bda4bd.chat_topics
+     SET pinned_at = CASE WHEN $1 = true THEN now() ELSE NULL END
+     WHERE issue_id = $2 AND company_id = $3`,
+    [pinned, topicIssueId, companyId],
+  );
+}
+
+/**
+ * Plan 05-08 (D-20) — read the pinned state of one chat topic. Returns true
+ * when the row's pinned_at IS NOT NULL; false when NULL OR the row is
+ * absent. Used by the chat.topic.archive PIN_EXEMPT guard. SELECT-only,
+ * single round-trip, company-scoped.
+ */
+export async function isChatTopicPinned(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  topicIssueId: string,
+): Promise<boolean> {
+  const rows = await ctx.db.query<{ pinned_at: string | null }>(
+    `SELECT pinned_at
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_topics
+     WHERE issue_id = $1 AND company_id = $2
+     LIMIT 1`,
+    [topicIssueId, companyId],
+  );
+  return rows[0]?.pinned_at != null;
+}
+
+/**
+ * Plan 05-08 (D-16) — bulk-flip chat_topics.archived for an array of
+ * topicIssueIds in a single round-trip. Used by the archive full-view's
+ * bulk-unarchive button.
+ *
+ * The SQL guard `pinned_at IS NULL OR $1 = false` enforces the D-20
+ * invariant inside the UPDATE itself: pinned topics CAN be UN-archived
+ * (rare race; harmless), but a future bulk-ARCHIVE variant can never sweep
+ * up a pinned row. This plan only ships bulk-UNARCHIVE (archived=false);
+ * the archive direction stays single-row via the existing chat.topic.archive
+ * handler with its own PIN_EXEMPT guard (Task 3).
+ *
+ * Empty input array short-circuits: returns { updated: 0 } without a DB
+ * round-trip. Returns the host's reported rowCount (the number of rows the
+ * UPDATE actually mutated).
+ *
+ * Plugin-namespace UPDATE only; CTT-07 invariant preserved by construction.
+ */
+export async function bulkSetChatTopicArchived(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  topicIssueIds: string[],
+  archived: boolean,
+): Promise<{ updated: number }> {
+  if (!Array.isArray(topicIssueIds) || topicIssueIds.length === 0) {
+    return { updated: 0 };
+  }
+  const result = await ctx.db.execute(
+    `UPDATE plugin_clarity_pack_cdd6bda4bd.chat_topics
+     SET archived = $1,
+         archived_at = CASE WHEN $1 = true THEN now() ELSE NULL END
+     WHERE company_id = $2
+       AND issue_id = ANY($3::text[])
+       AND (pinned_at IS NULL OR $1 = false)`,
+    [archived, companyId, topicIssueIds],
+  );
+  return { updated: result?.rowCount ?? 0 };
+}
+
+/**
+ * Plan 05-08 (D-15) — list every ARCHIVED chat topic for one company,
+ * across all employees. Powers the archive full-view page at
+ * `/<companyPrefix>/archive`. Mirrors listArchivedChatTopicsForEmployee but
+ * drops the employee_agent_id filter. Sort order is identical:
+ * ORDER BY archived_at DESC NULLS LAST, last_activity_at DESC.
+ *
+ * SELECT also pulls the migration-0010 pinned_at column so the archive
+ * full-view can render a 📌 indicator on pinned rows (D-20 carrier).
+ */
+export async function listAllArchivedChatTopics(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+): Promise<ChatTopicRow[]> {
+  return ctx.db.query<ChatTopicRow>(
+    `SELECT ${CHAT_TOPIC_COLS}, archived_at, origin_issue_id, pinned_at
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_topics
+     WHERE company_id = $1
+       AND archived = true
+     ORDER BY archived_at DESC NULLS LAST, last_activity_at DESC`,
+    [companyId],
   );
 }
 
