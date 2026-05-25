@@ -147,3 +147,15 @@ Time: ~70 seconds. The git-tracked clone source is untouched.
 - BEAAA — the data is irreplaceable; snapshot bookend is mandatory.
 - Hostinger Countermoves — single dev/staging Paperclip; snapshot bookend works for it (hosted Postgres, matching client). Use safety CLI's snapshot/restore.
 - Any Paperclip you'd be unhappy to lose. If unsure, snapshot first; restore-by-deletion is the FALLBACK for clones where loss is acceptable.
+
+---
+
+## §ac-autostatus-drill-proof
+
+**Symptom:** the next drill's Step 9 (AC-toggle → Reader-refetch contract) finishes without recoverable evidence that the contract fired — the test issue's cached TL;DR was already current, AC sources were decoupled from the auto-status derivation, or AC markers were frozen.
+
+**Discovered:** 2026-05-25 rc.6 drill `260524-sm8` (Plan 04.2-07 / Phase 4.2 addendum D-5).
+
+**Why it happens:** the visible UI signals the drill expects to see change (TL;DR refresh + AC checklist state shift) can ALL be decoupled from the underlying contract for a given test issue. Concretely: a cache-warm TL;DR will not refresh visually because there is nothing new to render; AC markers whose toggle does not affect the auto-status derivation can flip without any downstream caption change; and an audit comment that froze AC state via canonical markers can mask the live re-derivation path. The drill closed PASS on the rc.6 run only because the operator observed the refetch via DevTools Network — not a documented step.
+
+**Resolution:** Step 9 of every subsequent rc.X drill MUST capture either (a) a DevTools Network HAR or screenshot showing the `issue.reader` + `reader.ac.autostatus` refetch firing in response to a manual AC toggle, OR (b) a test issue with a cached TL;DR + ≥2 AC sources whose manual toggle materially changes the auto-status derivation (i.e. the visible auto-status caption text changes between the pre-toggle and post-toggle screenshots). Either proof is acceptable; one of the two MUST be recorded in the drill SUMMARY before the path is marked PASS.
