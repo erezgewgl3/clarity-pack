@@ -2441,18 +2441,30 @@
  * Plan 04.2-01 (RCB-05) — the About-issue backlink chip in the topic strip.
  *
  * Rendered at the left end of the strip when the active topic was started
- * from a Reader (origin_issue_id set). A `--you`-tinted pill: the link half
- * navigates to the source issue's Reader, the × half dismisses it for the
- * session.
+ * from a Reader (origin_issue_id set). A `--you`-tinted chip: the link
+ * half navigates to the source issue's Reader, the × half dismisses it
+ * for the session.
+ *
+ * Plan 05-07 Task 2 — GAP-RCB-05-CHIP-STYLING: the rc.7 build used
+ * `border-radius: 999px` which collapsed to a circle/oval on long
+ * content ("About COU-2215 ↗" ≈ 13 chars at font-size 11px wrapped to
+ * an oval). Rectangular `border-radius: 4px` matches the existing
+ * `.btn` / `.qa` chip precedents in this stylesheet and renders cleanly
+ * regardless of content width. Padding moved onto the parent so the chip
+ * is one rectangle (parent border + background) instead of a parent +
+ * two inset pill children with asymmetric padding tuned for the pill
+ * curve. The children become flush in-line affordances.
  * ------------------------------------------------------------------------- */
 [data-clarity-surface="chat"] .topic-about-chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   margin-right: 8px;
+  padding: 2px 6px;
   border: 1px solid var(--you);
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--you-soft);
+  white-space: nowrap;
 }
 [data-clarity-surface="chat"] .topic-about-chip-link {
   background: transparent;
@@ -2461,7 +2473,7 @@
   font: inherit;
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 4px 2px 9px;
+  padding: 0;
   cursor: pointer;
 }
 [data-clarity-surface="chat"] .topic-about-chip-link:hover {
@@ -2472,7 +2484,7 @@
   border: none;
   color: var(--ink-3);
   font: inherit;
-  padding: 2px 7px 2px 2px;
+  padding: 0 2px;
   cursor: pointer;
   line-height: 1;
 }
