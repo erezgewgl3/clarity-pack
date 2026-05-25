@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.7
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: "Plan 05-06 CODE-COMPLETE 2026-05-25 (Phase 4.1 surface polish bundle — 7 drill-deferred items: D-11 Pin/Unpin silent-toggle + clarity-pack toast; D-12 right-rail Pinned-chip flash-highlight reusing Plan 04.2-04 keyframe; auto-scroll after Create-Task; pause-toast copy → ▶ Resume below; LIVE sticky restore — named breaker margin:-24px on .auto-refresh + Playwright convergence gate; clarity-toast --you stripe + ↗ glyph; inline-task-card optimistic Todo); 3 atomic commits ec94b92..a655111; suite 1493→1524 (+31); no version bump (reserved for Plan 05-10); next: any remaining Wave-3/Wave-4 plan (05-07/05-08) or closure (05-10 gates on 04/05/06/07/08/09)"
-last_updated: "2026-05-25T19:31:00.000Z"
+stopped_at: "Plan 05-07 CODE-COMPLETE 2026-05-25 (Phase 4.2 rc.7 forward-defect polish bundle — D-08 lineage + reverse-lookup tooltip identifier resolution, RCB-05 rectangular chip CSS, D-13 Browser-Back URL_HASH preservation, D-14 React-key audit 5 commits + static console-capture proxy gate, D-03 cross-employee fall-through fixture; 9 atomic commits 4b9d855..4add621; suite 1414→1575 +161; no version bump (reserved for Plan 05-10)); next: Wave-4 Plan 05-08 (Phase 4.1 power features) or 05-10 closure (gates on 05-04..05-09)"
+last_updated: "2026-05-25T20:00:10.042Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 50
-  completed_plans: 41
-  percent: 74
+  completed_plans: 42
+  percent: 67
 ---
 
 # State: Clarity Pack
@@ -161,7 +161,7 @@ Tarball `clarity-pack-1.0.0-rc.5.tgz` (145,380 bytes; sha256 `b91048f84b2ca09691
 ---
 
 **Phase 4.2 — CLOSED & VERIFIED 2026-05-24 at v1.0.0-rc.2; addendum sub-plan 04.2-07 PLANNED 2026-05-25.**
-Plan: 1 of 10
+Plan: 2 of 10
 
 **Plan 04.2-04 (third gap-closure, v0.9.3) — CODE-COMPLETE 2026-05-24, OPERATOR DRILL DEFERRED.** Surgical dispatch fix in `chat/index.tsx`: lift `chat.roster` into `ChatPageBody` (parallel `usePluginData` call — host bridge deduplicates with `RosterRail`'s fetch; `normalizeRoster` + `RosterResult` promoted to `export` on `roster-rail.tsx` for the shared shape); in the deep-link `useEffect`, race-safe defer (`if (link.topic && link.employee && roster === null && rosterLoading) return;` — the deep link arrives at chat mount before chat.roster typically returns; the dep-array on `roster` re-fires the effect when it resolves); in the existing-topic dispatch branch, look up matched RosterEmployee + `setEmployee(matched)` BEFORE `setTopic`; replaced hardcoded `employeeAgentId: ''` with `employeeAgentId: link.employee ?? ''`. Tests pinned: Test 5 (DISPATCH — `setEmployee`, `employeeAgentId: link.employee`, chat.roster fetch in ChatPageBody) + Test 6 (DISPATCH-RACE — dep array carries `roster`). Suite 1327 → 1329 (+2 net). Version 0.9.3 in package.json + src/manifest.ts + chat-capabilities pin updated. Build: `dist/manifest.js` reports `version: '0.9.3'`. Tarball `clarity-pack-0.9.3.tgz` (139,766 bytes; sha256 `2b460abbc6850e50300bddf9eabe4a76d93d6cc31ff05d09fd42797c6ccd46f4`) packed and ready for SCP. Operator drill walkthrough preserved verbatim in 04.2-04-PLAN.md Task 5 for the post-Phase-5 sweep. SUMMARY: `04.2-04-SUMMARY.md`.
 
@@ -625,8 +625,8 @@ Phase: 05 (distribution-polish) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Executing Phase 05
-**Progress:** [########  ] 4/6 phases complete; Phase 4.1 Chat → True Task **6/7 plans done** (Plan 04.1-10 APPROVED-WITH-FOLLOWUPS 2026-05-21; only Plan 04.1-07 closure remains)
+**Status:** Ready to execute
+**Progress:** [████████░░] 84%
 
 ## Performance Metrics
 
@@ -644,6 +644,7 @@ Phase: 05 (distribution-polish) — EXECUTING
 | Plan 04-02 | ~12 min, 7 commits (6 TDD + 1 deviation fix), 8 files (5 created), suite 762→767 (+5; 765 pass / 0 fail / 2 skip) |
 | Plan 04-03 | ~7 min, 7 commits (6 TDD + 1 wiring), 7 files (6 created), suite 767→798 (+31; 796 pass / 0 fail / 2 skip) |
 | Plan 04.1-01 | 3 tasks across 2 sessions (Task 1 autonomous build + Task 2 Eric Countermoves live drill 4 min + Task 3 continuation lock), 4 commits `9703dbe..db29504`, 3 files created (probe + findings + traceability test), 3 modified (REQUIREMENTS + STATE + ROADMAP), 9 new tests RED→GREEN; Phase 4.1 Gate Verdict GO |
+| Phase 05-distribution-polish P05-07 | 19min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -731,7 +732,7 @@ Phase: 05 (distribution-polish) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-05-25T16:45:38.502Z
+**Last session:** 2026-05-25T19:59:49.228Z
 
 **Stopped at:** Phase 5 context gathered (power mode — 23 design Qs answered, 4 operator deviations from recommended; ready for /gsd:plan-phase 5 --chunked)
 
