@@ -395,10 +395,21 @@ export function MessageThread({
   const pendingOverlay = optimistic.filter((o) => !serverBodies.has(o.body.trim()));
 
   // Auto-scroll to the newest message.
+  //
+  // Plan 05-06 item (c) — auto-scroll-after-create-task. The optimistic
+  // pendingTaskCard (set by chat/index.tsx onDialogSuccess after a promote-
+  // mode Create-Task lands) renders as the TRAILING JSX element in this
+  // component; it is NOT inserted into `ordered` (the marker comment lands
+  // on the next 15s poll). Without `pendingTaskCard?.issueId` in this dep
+  // array the card mount would NOT fire the scroll — the operator would
+  // have to scroll manually to find the new card. We key on `issueId` (NOT
+  // the object reference) because object identity changes on every parent
+  // re-render but issueId is stable per card, so the effect re-fires only
+  // on a true card transition (null → set or set-A → set-B).
   const endRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
-  }, [ordered.length, pendingOverlay.length]);
+  }, [ordered.length, pendingOverlay.length, pendingTaskCard?.issueId]);
 
   if (loading && messages.length === 0) {
     return <div className="messages" data-clarity-region="messages">

@@ -148,6 +148,60 @@ test('inline-task-card.tsx (Plan 04.1-09): a11y label degrades gracefully when t
   );
 });
 
+// ---------------------------------------------------------------------------
+// Plan 05-06 item (g) — optimistic Todo render. The Plan 04.1-09 build mapped
+// null/undefined status through ChatTaskStatusPill's null branch which renders
+// the muted `· — ·` loader. Item (g): InlineTaskCard now coerces status to
+// 'todo' before passing to the pill, so the operator sees `Todo` immediately
+// while waiting for chat.taskOwned to reconcile. Coercion is scoped to
+// InlineTaskCard — ChatTaskStatusPill's null branch is unchanged, so any
+// other call site that genuinely wants the `· — ·` loader still gets it.
+// ---------------------------------------------------------------------------
+
+test('inline-task-card.tsx (Plan 05-06 item g): pill receives optimistic "todo" coercion when status is null', () => {
+  const c = code(TSX);
+  // The pill call site must apply the optimistic coercion — either by passing
+  // `status ?? 'todo'` directly, or via an intermediate `statusForPill`
+  // variable computed as `status ?? 'todo'`.
+  assert.match(
+    c,
+    /status\s*\?\?\s*['"]todo['"]/,
+    'inline-task-card must coerce a null status to "todo" before passing to the pill',
+  );
+});
+
+test('inline-task-card.tsx (Plan 05-06 item g): statusLabel default is "todo" (was "pending")', () => {
+  const c = code(TSX);
+  // The aria-label string carries the human-readable status. The Plan 04.1-09
+  // build defaulted to "pending" (which contradicts the visible Todo render).
+  // Item (g): default is "todo".
+  assert.match(
+    c,
+    /statusLabel\s*=\s*status\s*\?\?\s*['"]todo['"]/,
+    'statusLabel default must be "todo" (matches the optimistic pill render)',
+  );
+  assert.doesNotMatch(
+    c,
+    /statusLabel\s*=\s*status\s*\?\?\s*['"]pending['"]/,
+    'old "pending" default must be REMOVED — Plan 05-06 item (g)',
+  );
+});
+
+test('inline-task-card.tsx (Plan 05-06 item g): ChatTaskStatusPill null branch is NOT modified', () => {
+  // The optimism is scoped to InlineTaskCard. The chat-task-status-pill
+  // primitive must keep its null/undefined branch (`· — ·`) for other
+  // potential callers. The pill module is unchanged by this plan.
+  const PILL = readFileSync(
+    path.join(TT_DIR, 'chat-task-status-pill.tsx'),
+    'utf8',
+  );
+  assert.match(
+    PILL,
+    /Status: loading/,
+    'pill must keep the "Status: loading" aria-label branch (the null/undefined render)',
+  );
+});
+
 test('chat.css (Plan 04.1-09): .inline-task-card-row is a non-grid block that lets the card breathe full width', () => {
   // The .inline-task-card-row rule must set display: block (NOT a grid),
   // width: 100%, and a reasonable max-width.

@@ -858,3 +858,26 @@ test('Chat thread (Plan 04.1-09): identifier + status threaded from matchedTask 
     'status passes matchedTask.status when present',
   );
 });
+
+// ---------------------------------------------------------------------------
+// Plan 05-06 item (c) — auto-scroll-after-create-task. The existing
+// endRef.scrollIntoView effect at the top of MessageThread fires on
+// `ordered.length` / `pendingOverlay.length` transitions, but the optimistic
+// pendingTaskCard (set by onDialogSuccess in chat/index.tsx) renders as a
+// TRAILING JSX element NOT inserted into `ordered`. Extending the dep array
+// with `pendingTaskCard?.issueId` makes a non-null transition (the card
+// mount) fire the scroll so the new card lands in the viewport. Object
+// identity changes on every parent re-render but issueId is stable per
+// card, so the effect re-fires only on a true card transition.
+// ---------------------------------------------------------------------------
+
+test('Chat thread (Plan 05-06 item c): scrollIntoView effect dep array carries pendingTaskCard.issueId', () => {
+  const c = readChatCode('message-thread.tsx');
+  // The dep array signature: `[ordered.length, pendingOverlay.length,
+  // pendingTaskCard?.issueId]`. Match flexibly across formatting.
+  assert.match(
+    c,
+    /endRef\.current\?\.scrollIntoView[\s\S]{0,300}pendingTaskCard\?\.issueId/,
+    'scrollIntoView effect must include pendingTaskCard.issueId in its dep array',
+  );
+});

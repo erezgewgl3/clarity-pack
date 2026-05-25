@@ -94,14 +94,22 @@ test('context-rail.tsx: imports + uses the new useToast() hook', () => {
   assert.match(c, /showToast/, 'must expose showToast from the hook');
 });
 
-test('context-rail.tsx: pause-heartbeat click invokes showToast with a helpful message', () => {
+test('context-rail.tsx (Plan 05-06 item d): pause-heartbeat toast points at the inline ▶ Resume affordance', () => {
   const c = code(SRC);
-  // The toast message tells the operator the canonical pause path is the
-  // agent page (the real host RPC for pause-heartbeat is deferred to 4.2).
+  // Plan 05-06 item (d): the toast copy NO LONGER says "Resume from the
+  // agent page." The inline ▶ Resume heartbeat row landed in Plan 04.1-10
+  // (same component, lines 215-224) — it IS the canonical resume surface, so
+  // the toast directs the operator there. Pinned-string regression guard for
+  // both the new copy AND the absence of the old copy.
   assert.match(
     c,
-    /showToast\(\{[\s\S]*?message:[\s\S]*?Resume from the agent page/,
-    'showToast must include a "Resume from the agent page" hint',
+    /showToast\(\{[\s\S]*?message:[\s\S]*?Use ▶ Resume heartbeat below to restart/,
+    'pause-toast must read "Use ▶ Resume heartbeat below to restart"',
+  );
+  assert.doesNotMatch(
+    c,
+    /Resume from the agent page/,
+    'old pause-toast string ("Resume from the agent page.") must be REMOVED — Plan 05-06 item (d)',
   );
 });
 

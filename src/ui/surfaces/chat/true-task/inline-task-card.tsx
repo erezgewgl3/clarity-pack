@@ -41,6 +41,19 @@ function clock(iso: string | null | undefined): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/**
+ * Plan 05-06 item (g) — optimistic Todo render. The Plan 04.1-09 build mapped
+ * null/undefined status through `ChatTaskStatusPill`'s null branch which renders
+ * the muted `· — ·` loader. This card now coerces null/undefined to 'todo'
+ * before passing to the pill, so the operator sees `Todo` immediately while
+ * waiting for chat.taskOwned to reconcile. Once the real status arrives via
+ * the `matchedTask?.status` lookup at message-thread.tsx line 504, the
+ * coercion becomes a no-op (the real value passes through unchanged).
+ *
+ * The coercion is SCOPED to InlineTaskCard — `ChatTaskStatusPill`'s null
+ * branch is intentionally unchanged so any other call site that genuinely
+ * wants the `· — ·` loader still gets it.
+ */
 export function InlineTaskCard({
   identifier,
   issueId,
@@ -62,11 +75,20 @@ export function InlineTaskCard({
   employeeName: string;
   /** Optional employee role suffix; rendered as " · {role}" when present. */
   role?: string | null;
-  /** Host issue status — `null` while loading (renders the "· — ·" pill). */
+  /** Host issue status — Plan 05-06 item (g): null/undefined now renders as
+   *  an optimistic "Todo" pill rather than the muted `· — ·` loader. Real
+   *  status arrives via chat.taskOwned on the next 15s poll. */
   status: string | null | undefined;
   createdAt: string | null;
 }): React.ReactElement {
-  const statusLabel = status ?? 'pending';
+  // Plan 05-06 item (g) — optimistic Todo coercion. Default for the a11y
+  // label is now 'todo' (was 'pending'); the a11y text matches the visible
+  // pill render so screen-reader announcements track sighted experience.
+  const statusLabel = status ?? 'todo';
+  // Plan 05-06 item (g) — coerce null/undefined to 'todo' before the pill.
+  // Scoped to this card so other (potential future) call sites of
+  // ChatTaskStatusPill can still render the loader form.
+  const statusForPill = status ?? 'todo';
   // Plan 04.1-09 — the a11y label degrades gracefully when the title hasn't
   // resolved yet (the operator hears "Task created" without the UUID-as-title
   // gibberish the Plan 04.1-08 build leaked).
@@ -124,7 +146,7 @@ export function InlineTaskCard({
           ) : (
             <span className="clarity-ref-chip clarity-ref-chip--loading">…</span>
           )}
-          <ChatTaskStatusPill status={status} />
+          <ChatTaskStatusPill status={statusForPill} />
           <span className="ts">{clock(createdAt)}</span>
         </div>
       </div>

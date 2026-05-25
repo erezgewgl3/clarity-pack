@@ -116,11 +116,15 @@ export function ContextRail({
   const onPauseHeartbeat = React.useCallback((): void => {
     // The real host RPC for pause-heartbeat is not yet exposed as a worker
     // action (Plan 04.1-09 ships visual feedback only; the action wiring
-    // lands in Phase 4.2). The toast tells the operator the canonical
-    // pause path is the agent page.
+    // lands in Phase 4.2). Plan 05-06 item (d) — the toast copy directs the
+    // operator at the INLINE ▶ Resume heartbeat row (lines 215-224 of this
+    // same component, shipped in Plan 04.1-10) which IS the canonical resume
+    // surface — NOT the agent page (which the original 04.1-09 copy pointed
+    // at, but the drill flagged as the wrong target since the inline Resume
+    // affordance closes the loop without leaving chat).
     const name = employee?.name ?? 'this employee';
     showToast({
-      message: `Heartbeat paused for ${name}. Resume from the agent page.`,
+      message: `Heartbeat paused for ${name}. Use ▶ Resume heartbeat below to restart.`,
     });
     setPausedOverride('paused');
   }, [employee?.name, showToast]);
