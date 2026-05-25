@@ -13,7 +13,8 @@
     "build:manifest": "tsc --project tsconfig.manifest.json",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"test/**/*.test.mjs\"",
-    "prepublishOnly": "npm run build && npm run typecheck && npm test && node scripts/check-css-scope.mjs"
+    "check-ui-bundle-size": "node scripts/check-ui-bundle-size.mjs",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test && node scripts/check-css-scope.mjs && node scripts/check-ui-bundle-size.mjs"
   },
   "paperclipPlugin": {
     "manifest": "./dist/manifest.js",
