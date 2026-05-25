@@ -4,11 +4,11 @@ milestone: v1.0.0-rc.7
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
 stopped_at: "Phase 5 context gathered (power mode — 23 design Qs answered, 4 operator deviations from recommended; ready for /gsd:plan-phase 5 --chunked)"
-last_updated: "2026-05-25T16:45:38.526Z"
+last_updated: "2026-05-25T17:52:46.388Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 44
+  total_plans: 50
   completed_plans: 37
   percent: 67
 ---
@@ -553,7 +553,7 @@ Phase: 2 (Scaffold + Primitives + Reader View + Situation Room + Editor-Agent + 
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Executing Phase 04.2
+**Status:** Ready to execute
 **Progress:** [########  ] 4/6 phases complete; Phase 4.1 Chat → True Task **6/7 plans done** (Plan 04.1-10 APPROVED-WITH-FOLLOWUPS 2026-05-21; only Plan 04.1-07 closure remains)
 
 ## Performance Metrics
