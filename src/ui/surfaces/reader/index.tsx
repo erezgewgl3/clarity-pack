@@ -67,6 +67,11 @@ import { AcChecklist, type AcItem, type AcAutoStatusMap } from './ac-checklist.t
 import { ActivityTimeline, type ActivityEvent } from './activity-timeline.tsx';
 import { LiveBlockerPanel } from './live-blocker-panel.tsx';
 import { PauseBanner } from './pause-banner.tsx';
+// Plan 05-05 (D-06 + D-07) — generic paused-agent banner shared with chat.
+// Renders at the TOP of the Reader surface (above the header-actions row);
+// the editor-only PauseBanner above stays mounted at the FOOTER and is
+// unchanged (its literal is locked by reader-view.test.mjs).
+import { AgentPauseBanner } from '../../primitives/agent-pause-banner.tsx';
 import type { RefCardData, TLDR } from '../../../shared/types.ts';
 
 export type ReaderViewData = {
@@ -278,6 +283,15 @@ function ReaderViewReady({
   }
   return (
     <ClaritySurfaceRoot name="reader">
+      {/* Plan 05-05 (D-06 + D-07) — top-of-tab generic paused-agent banner.
+          Renders nothing when the Editor-Agent (or future per-employee
+          handler) is healthy. The editor-only PauseBanner at the FOOTER
+          (line ~360) stays UNCHANGED — its literal is locked by
+          reader-view.test.mjs. companyId is the resolved UUID at this
+          render path; userId is sourced from useResolvedUserId() inside
+          the banner. agentId stays null — the worker currently keys on
+          EDITOR_AGENT_KEY; the prop is plumbed for forward-compat. */}
+      <AgentPauseBanner companyId={companyId} agentId={null} />
       {/* Plan 04.2-01 (RCB-01) — Reader-header action row. The deterministic
           Continue-in-chat affordance sits above the breadcrumb; its render
           (enabled / disabled / nothing) is fully driven by chat.openForIssue.

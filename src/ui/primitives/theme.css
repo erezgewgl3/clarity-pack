@@ -411,6 +411,52 @@
   padding: 0 0.3rem;
 }
 
+/* Plan 05-05 (D-06 + D-07) — generic paused-agent banner. Shared by Reader
+ * top-of-tab and chat header; three locked copies per cause. */
+[data-clarity-surface] .clarity-agent-pause-banner {
+  margin: 0 0 0.75rem 0;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--clarity-state-stuck-bg);
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--clarity-state-stuck-bg), var(--clarity-bg) 82%);
+  color: var(--clarity-fg);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+[data-clarity-surface] .clarity-agent-pause-banner-copy {
+  flex: 1 1 auto;
+  line-height: 1.35;
+}
+
+[data-clarity-surface] .clarity-agent-pause-banner-action {
+  background: var(--clarity-state-stuck-bg);
+  color: var(--clarity-bg);
+  border: 1px solid var(--clarity-state-stuck-bg);
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-clarity-surface] .clarity-agent-pause-banner-action[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+[data-clarity-surface] .clarity-agent-pause-banner-dismiss {
+  background: transparent;
+  color: var(--clarity-fg);
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 0.3rem;
+}
+
 /* ===========================================================================
  * Plan 02-08 Task 1 — Situation Room CSS chrome (DEV-06 closure).
  *

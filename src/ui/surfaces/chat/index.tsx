@@ -46,6 +46,11 @@ import {
   type RosterEmployee,
   type RosterResult,
 } from './roster-rail.tsx';
+// Plan 05-05 (D-06 + D-07) — generic paused-agent banner shared with Reader.
+// Mounted at the TOP of ChatPageBody (above the .clarity-chat-shell). When
+// the selected employee changes, the banner's agentId prop re-keys
+// usePluginData and the new pause status fetches automatically.
+import { AgentPauseBanner } from '../../primitives/agent-pause-banner.tsx';
 import { TopicStrip, type ChatTopic } from './topic-strip.tsx';
 // Plan 04.2-02 Task 2 (GAP-RCB-03) — the SHARED Reader->Chat deep-link
 // contract. parseChatDeepLink is the READ half; the Reader's
@@ -677,7 +682,16 @@ function ChatPageBody({
   );
 
   return (
-    <div className="clarity-chat-shell" data-clarity-region="chat-shell">
+    <>
+      {/* Plan 05-05 (D-06 + D-07) — generic paused-agent banner. Sits above
+          the .clarity-chat-shell so it spans the full chat surface width
+          and is visible regardless of which employee/topic is selected.
+          agentId tracks the currently-selected employee; when no employee
+          is selected the banner keys on the Editor-Agent default (the
+          worker's hard-coded EDITOR_AGENT_KEY). Renders nothing when the
+          targeted agent is healthy. */}
+      <AgentPauseBanner companyId={companyId} agentId={employee?.id ?? null} />
+      <div className="clarity-chat-shell" data-clarity-region="chat-shell">
       <RosterRail
         companyId={companyId}
         userId={userId}
@@ -926,6 +940,7 @@ function ChatPageBody({
         </div>
       ) : null}
 
-    </div>
+      </div>
+    </>
   );
 }
