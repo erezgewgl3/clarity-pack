@@ -42,6 +42,11 @@ import type {
   PluginIssuesClient,
   PluginLogger,
 } from '@paperclipai/plugin-sdk';
+// Plan 04.2-07 (D-01 step 2 + D-04) — reverse-lookup helper + auto-unarchive.
+import {
+  listTopicsForIssueAndAssignee,
+  setChatTopicArchived,
+} from '../db/chat-topics-repo.ts';
 
 export type ChatOpenForIssueCtx = OptInGuardDataCtx & {
   issues: PluginIssuesClient;
@@ -52,10 +57,27 @@ export type ChatOpenForIssueCtx = OptInGuardDataCtx & {
   logger?: PluginLogger;
 };
 
+/** Plan 04.2-07 D-01 — one candidate the ambiguous-route popover renders. */
+export type ChatOpenForIssueCandidate = {
+  /** chat-topic UUID — internal id; never operator-visible. */
+  topicIssueId: string;
+  /** CHT-NN — operator-visible (D-08 hygiene). */
+  topicId: string;
+  title: string;
+  lastActivityAt: string;
+  archived: boolean;
+};
+
 /** The deterministic route + payload the Reader-view button consumes. */
 export type ChatOpenForIssueResult = {
   kind: 'chatOpenForIssue';
-  route: 'existing-topic' | 'new-topic-needed' | 'topic-itself';
+  /** Plan 04.2-07 — added 'existing-topics-ambiguous' for N>=2 same-assignee
+   *  reverse-link matches (D-01 step 2 + D-02 popover reuse). */
+  route:
+    | 'existing-topic'
+    | 'existing-topics-ambiguous'
+    | 'new-topic-needed'
+    | 'topic-itself';
   topicIssueId?: string;
   sourceCommentId?: string;
   assigneeAgentId?: string;
@@ -63,6 +85,16 @@ export type ChatOpenForIssueResult = {
    *  Null when the lookup degrades (offline/permission). The UI then falls
    *  back to a friendly generic label ("this employee"), NEVER to the UUID. */
   assigneeName?: string | null;
+  /** Plan 04.2-07 (D-01 step 2 + D-08) — for the 'existing-topics-ambiguous'
+   *  route only: the same-assignee candidate topics, sorted via the D-05
+   *  GREATEST(last_activity_at, max chat_messages.sent_at) DESC tiebreaker
+   *  (see chat-topics-repo.ts listTopicsForIssueAndAssignee). Always carries
+   *  CHT-NN (topicId) for operator-visible UI text — never raw UUIDs. */
+  candidates?: ChatOpenForIssueCandidate[];
+  /** Plan 04.2-07 (D-01 step 2 + D-08) — for ambiguous-route tooltips: the
+   *  BEAAA-NNN identifier of the source issue (already resolved from
+   *  issue.identifier earlier in this handler — no new resolver call). */
+  sourceIssueIdentifier?: string;
   seedTitle?: string;
   seedBody?: string;
   error?: string;
@@ -191,6 +223,118 @@ export function registerChatOpenForIssue(ctx: ChatOpenForIssueCtx): void {
         sourceCommentId: chatTaskMatch[2],
         assigneeAgentId,
         assigneeName,
+      };
+    }
+
+    // 6b. Plan 04.2-07 (D-01 step 2 + D-04 + D-08) -- reverse-lookup against
+    //     chat_topics.origin_issue_id + employee_agent_id. This catches
+    //     "cold but conversed-about" issues: the Reader-originated chat
+    //     topic that already references this issue is silently resumed.
+    //
+    //     Cardinality semantics:
+    //       0 same-assignee matches -> fall through to step 7 (D-03 +
+    //         D-11: cross-employee threads stay reachable via the manual
+    //         RCB-06 popover; cold issues still get the seeded dialog).
+    //       1 match -> route 'existing-topic' WITHOUT sourceCommentId
+    //         (resuming the THREAD, not a comment). When that one match
+    //         is archived, auto-unarchive via setChatTopicArchived(false)
+    //         -- plugin-side only; ctx.issues.update is NEVER called
+    //         (CTT-07 invariant pinned by Test 6 of chat-topic-archive
+    //         and Test RED 3 of this plan).
+    //       >=2 matches -> route 'existing-topics-ambiguous' carrying the
+    //         candidates list (D-08: topicId is CHT-NN, never UUID) +
+    //         sourceIssueIdentifier (BEAAA-NNN already resolved above).
+    //         UI auto-opens the RCB-06 popover pre-filtered to same-
+    //         assignee candidates (D-02).
+    //
+    //     Failure handling mirrors the issue-get pattern (lines 121-130):
+    //     on throw, warn-log and fall through to step 7 (fail-open keeps
+    //     cold-issue routing working when the side-table query degrades).
+    let reverseMatches: Awaited<
+      ReturnType<typeof listTopicsForIssueAndAssignee>
+    > = [];
+    try {
+      reverseMatches = await listTopicsForIssueAndAssignee(
+        ctx,
+        companyId,
+        issueId,
+        assigneeAgentId,
+      );
+    } catch (e) {
+      ctx.logger?.warn?.(
+        'chat.openForIssue: listTopicsForIssueAndAssignee threw',
+        {
+          issueId,
+          companyId,
+          assigneeAgentId,
+          err: (e as Error).message,
+        },
+      );
+      // Fall through to step 7 (new-topic-needed).
+    }
+
+    if (reverseMatches.length === 1) {
+      const match = reverseMatches[0];
+      // D-04 auto-unarchive: if the single match is archived, flip
+      // archived_at to NULL via the existing plugin-side helper. Host
+      // issue stays untouched (CTT-07).
+      if (match.archived) {
+        try {
+          await setChatTopicArchived(ctx, companyId, match.topicIssueId, false);
+          ctx.logger?.info?.(
+            'chat.openForIssue: auto-unarchive on silent resume',
+            {
+              issueId,
+              companyId,
+              topicIssueId: match.topicIssueId,
+              topicId: match.topicId,
+            },
+          );
+        } catch (e) {
+          ctx.logger?.warn?.(
+            'chat.openForIssue: setChatTopicArchived (unarchive) threw',
+            {
+              issueId,
+              companyId,
+              topicIssueId: match.topicIssueId,
+              err: (e as Error).message,
+            },
+          );
+          // Proceed with the resume even if the unarchive UPDATE failed —
+          // the chat surface can still open the topic; the archived flag
+          // is a UI hint, not a routing gate.
+        }
+      }
+      return {
+        kind: 'chatOpenForIssue' as const,
+        route: 'existing-topic' as const,
+        topicIssueId: match.topicIssueId,
+        // No sourceCommentId — D-01 resumes the thread, not a comment.
+        assigneeAgentId,
+        assigneeName,
+      };
+    }
+
+    if (reverseMatches.length >= 2) {
+      // D-03 fall-through is implicit here: the helper's WHERE clause
+      // already filters by employee_agent_id, so cross-employee topics
+      // about the same issue do not appear in `reverseMatches`. If only
+      // cross-employee threads exist, reverseMatches.length === 0 and
+      // execution drops to step 7 (same as cold-task). The
+      // implementation reduces D-03 to the N=0 case by construction.
+      return {
+        kind: 'chatOpenForIssue' as const,
+        route: 'existing-topics-ambiguous' as const,
+        assigneeAgentId,
+        assigneeName,
+        sourceIssueIdentifier: identifier,
+        candidates: reverseMatches.map((m) => ({
+          topicIssueId: m.topicIssueId,
+          topicId: m.topicId,
+          title: m.title,
+          lastActivityAt: m.lastActivityAt,
+          archived: m.archived,
+        })),
       };
     }
 
