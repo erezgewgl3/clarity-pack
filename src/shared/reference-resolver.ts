@@ -15,6 +15,10 @@ export type RefResolverFetcher = (ids: string[]) => Promise<
     ownerUserId: string | null;
     bodyExcerptForViewer: string | null; // null means viewer can't see this ref
     url: string;
+    // Plan 05-05 Task 2 (D-09) — peek-card fields. Optional so legacy fetchers
+    // still type-check; the worker handler always populates them.
+    descriptionExcerpt?: string | null;
+    ownerName?: string | null;
   }>
 >;
 
@@ -42,6 +46,10 @@ export async function resolveRefs(
         ownerUserId: null,
         excerpt: null,
         url: '',
+        // Plan 05-05 Task 2 (D-09) — peek fields stay null on the unknown
+        // placeholder. UI peek section conditionally renders on presence.
+        descriptionExcerpt: null,
+        ownerName: null,
       };
     }
     return {
@@ -51,6 +59,12 @@ export async function resolveRefs(
       ownerUserId: r.ownerUserId,
       excerpt: r.bodyExcerptForViewer, // PRIM-02: null = permission denied
       url: r.url,
+      // Plan 05-05 Task 2 (D-09) — forward the new peek-card fields. The
+      // fetcher (resolve-refs.ts handler) is the source of truth; if it
+      // didn't populate them they propagate as undefined which the UI
+      // consumer tolerates.
+      descriptionExcerpt: r.descriptionExcerpt ?? null,
+      ownerName: r.ownerName ?? null,
     };
   });
 }

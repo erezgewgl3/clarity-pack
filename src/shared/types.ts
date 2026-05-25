@@ -11,6 +11,18 @@ export type RefCardData = {
   ownerUserId: string | null;
   excerpt: string | null; // null = viewer lacks permission (PRIM-02)
   url: string; // host route; opened via useHostNavigation, never raw <a>
+  // Plan 05-05 Task 2 (D-09) — optional fields the ref-chip hover peek
+  // consumes. Optional so pre-05-05 cached payloads + the unknown-fallback
+  // placeholder (resolve-refs.ts line ~75) still type-check; new consumers
+  // tolerate undefined gracefully.
+  /** Plan 05-05 D-09 — first line of issue body, truncated to 120 chars with
+   *  ellipsis when truncated. Null when viewer cannot read (PRIM-02 gate
+   *  inherited from the legacy excerpt field). */
+  descriptionExcerpt?: string | null;
+  /** Plan 05-05 D-09 — owner display name resolved via ctx.agents.get
+   *  server-side. Null when ownerUserId is null OR when the lookup degraded.
+   *  UI fallback is the literal 'unassigned' — NEVER the UUID. */
+  ownerName?: string | null;
 };
 
 export type Terminal =

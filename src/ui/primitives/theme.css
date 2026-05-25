@@ -119,6 +119,50 @@
   border-color: var(--clarity-state-stuck-bg);
 }
 
+/* Plan 05-05 Task 2 (D-08 + D-09) — ref-chip hover peek popover. Sibling to
+ * the anchor inside .clarity-ref-chip-wrap. Hover-only; click on the anchor
+ * still routes to /<prefix>/issues/<id>. */
+[data-clarity-surface] .clarity-ref-chip-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+[data-clarity-surface] .clarity-ref-chip-peek {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 16rem;
+  max-width: 24rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--clarity-border);
+  border-radius: 6px;
+  background: var(--clarity-bg);
+  color: var(--clarity-fg);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+[data-clarity-surface] .clarity-ref-chip-peek-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+[data-clarity-surface] .clarity-ref-chip-peek-meta {
+  color: var(--clarity-fg);
+  opacity: 0.75;
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.78rem;
+  margin-bottom: 0.35rem;
+}
+
+[data-clarity-surface] .clarity-ref-chip-peek-excerpt {
+  color: var(--clarity-fg);
+  opacity: 0.95;
+}
+
 /* Reader view layout — Plan 02-03 Task 2 */
 [data-clarity-surface='reader'] .clarity-reader-body {
   display: grid;
