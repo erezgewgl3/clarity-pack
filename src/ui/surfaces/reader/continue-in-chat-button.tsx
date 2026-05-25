@@ -60,10 +60,31 @@ import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
 import { buildChatDeepLink } from '../../surfaces/chat/deep-link.mjs';
 
+/** Plan 04.2-07 — one same-assignee candidate for the existing-topics-ambiguous
+ *  route. CHT-NN topicId is operator-visible (D-08 hygiene); topicIssueId is
+ *  the internal chat-topic UUID, never rendered as text. */
+export type ChatOpenForIssueCandidate = {
+  topicIssueId: string;
+  topicId: string;
+  title: string;
+  lastActivityAt: string;
+  lastMessagePreview?: string;
+  archived: boolean;
+  /** Plan 04.2-07 D-02 — passed through so reverse-topics-link.tsx can filter
+   *  the popover rows by same-assignee when the picker auto-opens. */
+  employeeAgentId?: string;
+};
+
 /** The chat.openForIssue route payload (Task 2 — chat-open-for-issue.ts). */
 export type ChatOpenForIssueResult = {
   kind: 'chatOpenForIssue';
-  route: 'existing-topic' | 'new-topic-needed' | 'topic-itself';
+  /** Plan 04.2-07 — added 'existing-topics-ambiguous' for N>=2 same-assignee
+   *  reverse-link matches (D-01 step 2 + D-02 popover reuse). */
+  route:
+    | 'existing-topic'
+    | 'existing-topics-ambiguous'
+    | 'new-topic-needed'
+    | 'topic-itself';
   topicIssueId?: string;
   sourceCommentId?: string;
   assigneeAgentId?: string;
@@ -71,6 +92,13 @@ export type ChatOpenForIssueResult = {
    *  Null when the lookup degraded; the UI then falls back to a friendly
    *  generic label, never to the raw UUID. */
   assigneeName?: string | null;
+  /** Plan 04.2-07 (D-01 step 2 + D-08) — only present on the
+   *  'existing-topics-ambiguous' route. CHT-NN topicId per candidate so the
+   *  popover renders without UUID leakage. */
+  candidates?: ChatOpenForIssueCandidate[];
+  /** Plan 04.2-07 (D-01 step 2 + D-08) — BEAAA-NNN identifier for the source
+   *  issue, used in the D-06 ambiguous-route tooltip text. */
+  sourceIssueIdentifier?: string;
   seedTitle?: string;
   seedBody?: string;
   error?: string;
@@ -91,6 +119,12 @@ export type ContinueInChatButtonProps = {
   companyPrefix: string;
   /** The loaded Reader issue data (identifier + title for the seed payload). */
   issue: ContinueInChatIssue;
+  /** Plan 04.2-07 (D-02 popover lift) — when the resolved route is
+   *  'existing-topics-ambiguous', the button calls this prop instead of
+   *  navigating, asking the parent Reader index to auto-open the RCB-06
+   *  popover pre-filtered to same-assignee candidates. The chat surface
+   *  never sees the ambiguous route (D-07 deep-link contract). */
+  onRequestPickerOpen?: (req: { filterToAssignee: string | null }) => void;
 };
 
 /** What navigate() needs: the fragment-bearing path. Plan 04.2-03 URL_HASH
@@ -142,6 +176,7 @@ export function ContinueInChatButton({
   userId,
   companyPrefix,
   issue,
+  onRequestPickerOpen,
 }: ContinueInChatButtonProps): React.ReactElement | null {
   const nav = useHostNavigation();
   const { data, loading } = usePluginData<ChatOpenForIssueResult | { error: string }>(
@@ -188,15 +223,50 @@ export function ContinueInChatButton({
     );
   }
 
+  // Plan 04.2-07 (D-01 step 2 + D-02 + D-06 + D-08) — existing-topics-ambiguous
+  // dispatch arm. The chat surface never sees this route (D-07 lock); the
+  // button asks the parent Reader index to auto-open the RCB-06 popover
+  // pre-filtered to same-assignee candidates. NO `nav.navigate` here.
+  if (result.route === 'existing-topics-ambiguous') {
+    const candidateCount = result.candidates?.length ?? 0;
+    const sourceLabel = result.sourceIssueIdentifier ?? 'this issue';
+    const ambiguousTooltip =
+      `Pick from ${candidateCount} conversations about ${sourceLabel} →`;
+    return (
+      <button
+        type="button"
+        className="btn primary clarity-continue-in-chat"
+        title={ambiguousTooltip}
+        data-clarity-action="continue-in-chat"
+        data-clarity-route="existing-topics-ambiguous"
+        onClick={() => {
+          onRequestPickerOpen?.({
+            filterToAssignee: result.assigneeAgentId ?? null,
+          });
+        }}
+      >
+        Continue in chat with {employeeLabel} →
+      </button>
+    );
+  }
+
   const deepLink = buildChatNav(result, companyPrefix, issueId);
   if (!deepLink) return null;
 
-  // existing-topic — the tooltip names the source topic; new-topic-needed —
-  // the tooltip mirrors the label.
+  // Plan 04.2-07 D-06 — three-way tooltip differentiation:
+  //   - chat-task lineage 'existing-topic' (has sourceCommentId) → name the
+  //     source topic id (rc.6 behaviour preserved).
+  //   - reverse-lookup 'existing-topic' (no sourceCommentId) → "Resume
+  //     conversation about <BEAAA-NNN> →" using sourceIssueIdentifier.
+  //   - new-topic-needed (default) → mirrors the button label.
+  // BUTTON LABEL stays "Continue in chat with <employeeLabel> →" unchanged
+  // across every arm (D-06 lock).
   const tooltip =
-    result.route === 'existing-topic' && result.topicIssueId
+    result.route === 'existing-topic' && result.topicIssueId && result.sourceCommentId
       ? `Open source topic ${result.topicIssueId} →`
-      : `Continue in chat with ${employeeLabel} →`;
+      : result.route === 'existing-topic'
+        ? `Resume conversation about ${result.sourceIssueIdentifier ?? 'this issue'} →`
+        : `Continue in chat with ${employeeLabel} →`;
 
   return (
     <button
