@@ -215,6 +215,62 @@ export async function listChatTopicsByOriginIssue(
 }
 
 /**
+ * Plan 04.2-07 (D-01 step 2) — list every chat topic that was started from
+ * one source Paperclip issue AND is owned by one specific employee-agent,
+ * company-scoped. INCLUDES archived rows (D-04: the resolver silently
+ * unarchives on single-match resume; the candidate-picker shows archived
+ * topics with their archived flag so the operator can choose deliberately).
+ *
+ * D-05 sort order: most recent activity DESC, tiebroken with the latest
+ * message timestamp from `chat_messages` so a topic with a fresh inbound
+ * comment beats a topic whose `last_activity_at` is stale. Column is
+ * `chat_messages.sent_at` per CHAT_MESSAGE_COLS — NOT `created_at`.
+ *
+ * No new migration — schema already has both `origin_issue_id`
+ * (migration 0009) and `employee_agent_id` (migration 0006). Read-only.
+ */
+export async function listTopicsForIssueAndAssignee(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  originIssueId: string,
+  employeeAgentId: string,
+): Promise<
+  Array<{
+    topicIssueId: string;
+    topicId: string;
+    title: string;
+    lastActivityAt: string;
+    archived: boolean;
+  }>
+> {
+  const rows = await ctx.db.query<ChatTopicRow>(
+    `SELECT ${CHAT_TOPIC_COLS}, origin_issue_id
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_topics
+     WHERE company_id = $1
+       AND origin_issue_id = $2
+       AND employee_agent_id = $3
+     ORDER BY GREATEST(
+       chat_topics.last_activity_at,
+       COALESCE(
+         (SELECT MAX(m.sent_at)
+            FROM plugin_clarity_pack_cdd6bda4bd.chat_messages m
+           WHERE m.topic_issue_id = chat_topics.issue_id
+             AND m.company_id = chat_topics.company_id),
+         chat_topics.last_activity_at
+       )
+     ) DESC`,
+    [companyId, originIssueId, employeeAgentId],
+  );
+  return rows.map((r) => ({
+    topicIssueId: r.issue_id,
+    topicId: r.topic_id,
+    title: r.title,
+    lastActivityAt: r.last_activity_at,
+    archived: r.archived === true,
+  }));
+}
+
+/**
  * Allocate the next per-company sequential CHT-NN topic id. Mirrors
  * upsertBulletin's `MAX(...) + 1` allocator: the numeric suffix of every
  * `topic_id` for the company is taken, MAX is computed, and the result is
