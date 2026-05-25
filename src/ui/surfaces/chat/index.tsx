@@ -813,7 +813,14 @@ function ChatPageBody({
           onNewTopic={() => void handleNewTopic()}
           newTopicDisabled={!employee || creating}
           diagnosticsOn={diagnostics}
-          onDiagnosticsToggle={() => setDiagnostics((a) => !a)}
+          // Plan 05-08 (D-18) — the toggle's localStorage-restore path
+          // can set the value directly; bare-click path bubbles undefined
+          // (toggle behavior unchanged).
+          onDiagnosticsToggle={(next) =>
+            setDiagnostics((a) => (typeof next === 'boolean' ? next : !a))
+          }
+          // Plan 05-08 (D-18) — per-topic persistence; null when no active topic.
+          diagnosticsTopicId={topic?.issueId ?? null}
         />
 
         {createError ? (
@@ -895,6 +902,10 @@ function ChatPageBody({
           setRefreshKey((k) => k + 1);
           void refreshArchived?.();
         }}
+        // Plan 05-08 (D-20) — bump refreshKey so chat.topics refetches the
+        // updated pinned_at and the topic strip / Storage pin card render
+        // live state.
+        onPinChanged={() => setRefreshKey((k) => k + 1)}
       />
 
       {/* Plan 04.1-08 — dual-mode dialog. Mounted at the shell root so the

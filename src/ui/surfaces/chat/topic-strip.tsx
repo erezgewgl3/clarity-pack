@@ -57,6 +57,13 @@ export type ChatTopic = {
    *  rendering a broken `/<prefix>/issues/<UUID>` link. Optional for the
    *  same compile-compat reason as `originIssueId`. */
   originIssueIdentifier?: string | null;
+  /** Plan 05-08 (D-20) — non-NULL ISO timestamp when this topic is
+   *  Storage-pinned (exempt from archive, per migration 0010 pinned_at
+   *  column). NULL/undefined for unpinned + every pre-0010 row. Surfaced
+   *  by the chat.topics worker handler; the right-rail Storage pin card
+   *  (context-rail.tsx) reads it to render live pinned state. Optional
+   *  so deep-link minimal topics + pre-05-08 fixtures still compile. */
+  pinnedAt?: string | null;
 };
 
 type TopicsResult =

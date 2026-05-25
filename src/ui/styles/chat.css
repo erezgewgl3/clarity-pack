@@ -2492,3 +2492,87 @@
   color: var(--ink);
 }
 
+
+/* ---------------------------------------------------------------------
+ * Plan 05-08 (D-19 + D-20) — Storage pin button + composer shortcuts popover.
+ * All selectors scoped under [data-clarity-surface="chat"].
+ * --------------------------------------------------------------------- */
+
+/* D-20 — storage pin is now a button. Inherit .pin-row base styling (above),
+ * override interaction-affordance properties. */
+[data-clarity-surface="chat"] .pin-row.pin-row--btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  font-family: "Geist Mono", monospace;
+}
+
+[data-clarity-surface="chat"] .pin-row.pin-row--btn:hover {
+  border-color: var(--ink-2, var(--ctx-line));
+}
+
+[data-clarity-surface="chat"] .pin-row.pin-row--pinned {
+  border-color: var(--you, var(--ctx-line));
+  background: var(--you-soft, var(--bg));
+}
+
+/* D-19 — composer shortcuts popover. Anchored above the composer. */
+[data-clarity-surface="chat"] .composer {
+  position: relative;
+}
+
+[data-clarity-surface="chat"] .composer-shortcuts-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 16px;
+  z-index: 20;
+  min-width: 280px;
+  padding: 12px 14px;
+  border: 1px solid var(--line, var(--ctx-line));
+  border-radius: 8px;
+  background: var(--bg-1, var(--bg));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+[data-clarity-surface="chat"] .composer-shortcuts-popover__heading {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-clarity-surface="chat"] .composer-shortcuts-popover__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+[data-clarity-surface="chat"] .composer-shortcuts-popover__row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+[data-clarity-surface="chat"] .composer-shortcuts-popover__keys {
+  font-family: "Geist Mono", monospace;
+  background: var(--bg-2, var(--bg));
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--line, var(--ctx-line));
+  text-align: center;
+}
+
+[data-clarity-surface="chat"] .composer-shortcuts-popover__desc {
+  color: var(--ink-2);
+}
+
+[data-clarity-surface="chat"] .composer-shortcuts-popover__hint {
+  margin: 8px 0 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line, var(--ctx-line));
+  font-size: 11px;
+  color: var(--ink-3);
+}

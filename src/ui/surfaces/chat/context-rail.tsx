@@ -91,6 +91,7 @@ export function ContextRail({
   userId,
   activeTasks,
   onArchived,
+  onPinChanged,
 }: {
   employee: RosterEmployee | null;
   topic: ChatTopic | null;
@@ -105,8 +106,14 @@ export function ContextRail({
    *  here so ActiveTasksOwned and MessageThread share one source of truth. */
   activeTasks: ChatActiveTask[];
   onArchived: () => void;
+  /** Plan 05-08 (D-20) — fired after a successful chat.topic.pin flip so
+   *  the parent can bump refreshKey and chat.topics refetches the new
+   *  pinned_at state. */
+  onPinChanged?: () => void;
 }): React.ReactElement {
   const { showToast } = useToast();
+  // Plan 05-08 (D-20) — storage-pin toggle action handle.
+  const pinAction = usePluginAction('chat.topic.pin');
 
   // Plan 04.1-09 — optimistic local override for the CEO status pill. Set
   // to 'paused' on Pause-heartbeat click; the next 15s poll re-fetches the
@@ -352,13 +359,45 @@ export function ContextRail({
       {topic ? (
         <>
           <h3>Storage pin</h3>
-          <div className="pin-row">
-            📁 <b>{topic.title}</b>
+          {/* Plan 05-08 (D-20) — Storage pin live wiring. Pinned topics are
+              EXEMPT from archive (the worker's chat.topic.archive returns
+              { error: 'PIN_EXEMPT' } when archive=true on a pinned row).
+              Click toggles chat.topic.pin; the chat.topics refetch surfaces
+              the new pinned_at via the ChatTopic type's pinnedAt field. */}
+          <button
+            type="button"
+            className={`pin-row pin-row--btn${topic.pinnedAt ? ' pin-row--pinned' : ''}`}
+            data-clarity-action="storage-pin-toggle"
+            data-clarity-pinned={topic.pinnedAt ? 'true' : 'false'}
+            onClick={async () => {
+              const nextPinned = !topic.pinnedAt;
+              try {
+                await pinAction({
+                  topicIssueId: topic.issueId,
+                  pinned: nextPinned,
+                  companyId,
+                  userId,
+                });
+                showToast({
+                  message: nextPinned ? 'Topic pinned' : 'Topic unpinned',
+                });
+                if (onPinChanged) onPinChanged();
+              } catch {
+                showToast({
+                  message: 'Could not toggle pin — try again',
+                });
+              }
+            }}
+            aria-pressed={topic.pinnedAt ? 'true' : 'false'}
+          >
+            {topic.pinnedAt ? '📌' : '📁'} <b>{topic.title}</b>
             <br />
             <span style={{ color: 'var(--ink-3)' }}>
-              all messages persist as issue comments · single source of truth
+              {topic.pinnedAt
+                ? 'Pinned — exempt from archive'
+                : 'all messages persist as issue comments · single source of truth'}
             </span>
-          </div>
+          </button>
         </>
       ) : null}
     </aside>

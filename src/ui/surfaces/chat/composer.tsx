@@ -44,6 +44,8 @@ import {
   type PromoteSourceMessagePayload,
 } from './message-thread.tsx';
 import type { ChatActiveTask } from './active-tasks-owned.tsx';
+// Plan 05-08 (D-19) — composer shortcuts popover with TWO parallel `?` triggers.
+import { ComposerShortcutsPopover } from './shortcuts-popover.tsx';
 
 // 04-01 spike OQ-1 verdict: NO-PATH. No plugin-accessible attachment-upload
 // route exists on the live host. CHAT-07 ships degraded. A future PATH-FOUND
@@ -131,6 +133,17 @@ export function Composer({
   // The optimistic overlay — messages sent this session, keyed by uuid.
   const [optimistic, setOptimistic] = React.useState<OptimisticMessage[]>([]);
 
+  // Plan 05-08 (D-19) — composer shortcuts popover state.
+  const [shortcutsPopoverOpen, setShortcutsPopoverOpen] = React.useState(false);
+  const composerWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+
+  const closeShortcutsPopover = React.useCallback(() => {
+    setShortcutsPopoverOpen(false);
+    // Restore focus to the textarea so Esc keeps the operator in the composer.
+    if (textareaRef.current) textareaRef.current.focus();
+  }, []);
+
   // doSend is shared by the initial send and Retry. Retry passes the SAME
   // uuid + body so chat.send's message_uuid dedup makes it idempotent.
   const doSend = React.useCallback(
@@ -191,12 +204,42 @@ export function Composer({
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (disabled) return;
+
+      // Plan 05-08 (D-19) — popover dismissal paths when already open.
+      if (shortcutsPopoverOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeShortcutsPopover();
+          return;
+        }
+        // Any printable key while open: close popover; the keystroke
+        // continues into the textarea (no preventDefault).
+        if (e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace') {
+          setShortcutsPopoverOpen(false);
+          // Fall through to Enter handling below.
+        }
+      }
+
+      // Plan 05-08 (D-19) — TWO parallel `?` triggers (per checker BLOCKER 3):
+      //   - PRIMARY: bare `?` in EMPTY textarea opens the popover (SP1).
+      //   - PARALLEL DISCOVERABILITY: Shift-? in ANY textarea state opens
+      //     the popover (SP3). On most US keyboards `?` requires Shift+/,
+      //     so both paths collapse to the same `event.key === '?'` check;
+      //     the SP2 literal-? path is reachable by dismissing the popover.
+      // Bind to the textarea's onKeyDown — never a window listener (the
+      // popover stays composer-scoped per D-19 operator deviation).
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setShortcutsPopoverOpen(true);
+        return;
+      }
+
       if (e.key !== 'Enter') return;
       if (e.shiftKey) return; // Shift+Enter → newline.
       e.preventDefault();
       handleSend();
     },
-    [handleSend, disabled],
+    [handleSend, disabled, shortcutsPopoverOpen, closeShortcutsPopover],
   );
 
   const placeholder = disabled
@@ -221,6 +264,7 @@ export function Composer({
         archivedBanner={archivedBanner}
       />
       <div
+        ref={composerWrapperRef}
         className={`composer${disabled ? ' composer--disabled' : ''}`}
         data-clarity-region="composer"
         data-clarity-disabled={disabled ? 'true' : 'false'}
@@ -231,8 +275,17 @@ export function Composer({
           </span>
           <span>messages persist as comments on the topic issue</span>
         </div>
+        {/* Plan 05-08 (D-19) — composer shortcuts popover. Opens on either
+            the bare-? (empty composer) trigger OR the Shift-? trigger; both
+            paths route through the textarea's onKeyDown handler above. */}
+        <ComposerShortcutsPopover
+          open={shortcutsPopoverOpen}
+          onClose={closeShortcutsPopover}
+          anchorRef={composerWrapperRef}
+        />
         <div className="composer-box">
           <textarea
+            ref={textareaRef}
             className="composer-input"
             placeholder={placeholder}
             value={draft}

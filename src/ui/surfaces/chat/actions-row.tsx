@@ -33,6 +33,7 @@ export function ChatActionsRow({
   newTopicDisabled = false,
   diagnosticsOn,
   onDiagnosticsToggle,
+  diagnosticsTopicId = null,
 }: {
   /** Open the task dialog in COLD mode (no source message). */
   onCreateTask: () => void;
@@ -41,7 +42,11 @@ export function ChatActionsRow({
   /** True when no employee is selected or a create is already in flight. */
   newTopicDisabled?: boolean;
   diagnosticsOn: boolean;
-  onDiagnosticsToggle: () => void;
+  /** Plan 05-08 (D-18) — accepts an OPTIONAL next-state argument so the
+   *  toggle's localStorage-restore path can set the value directly. */
+  onDiagnosticsToggle: (next?: boolean) => void;
+  /** Plan 05-08 (D-18) — per-topic persistence key. Null when no active topic. */
+  diagnosticsTopicId?: string | null;
 }): React.ReactElement {
   // Plan 04.1-09 — single-key `T` (no modifier) opens the dialog when no
   // editable is focused. Any modifier (Ctrl/Cmd/Alt/Shift) → bail so browser
@@ -98,6 +103,7 @@ export function ChatActionsRow({
       <DiagnosticsToggle
         armed={diagnosticsOn}
         onToggle={onDiagnosticsToggle}
+        topicId={diagnosticsTopicId}
       />
       <span className="spacer" aria-hidden="true" />
       <span className="kbd-hint" aria-hidden="true">
