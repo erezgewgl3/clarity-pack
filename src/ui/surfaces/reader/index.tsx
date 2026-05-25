@@ -327,7 +327,18 @@ function ReaderViewReady({
         <div className="clarity-reader-main">
           <ProseWithRefChips body={data.issueBody} />
           <AnchoredToCards cards={data.refCards} />
-          <DeliverablePreview deliverable={data.deliverable} />
+          {/* Plan 05-04 (DIST-04) — DeliverablePreview now dispatches the
+              deliverable.preview worker handler per documentKey extension.
+              companyId / userId / entityId are real strings at this render
+              path (all three resolvers settled upstream), so the handler
+              gets non-empty params and the placeholder fallback is only
+              reached on the worker's structured `{ error }` envelope. */}
+          <DeliverablePreview
+            deliverable={data.deliverable}
+            companyId={companyId}
+            userId={userId}
+            issueId={entityId}
+          />
           <AcChecklist issueId={entityId} items={data.acItems} userId={userId} autoStatus={acAutoStatus} onMutated={() => { void refresh(); void refreshAcAuto(); }} />
           <ActivityTimeline events={data.activity} />
         </div>

@@ -6,7 +6,8 @@
 // test/ui/eslint-no-raw-fetch.test.mjs from 02-02). They verify:
 //   - every required component file exists (Task 2 file plan)
 //   - each component imports / wires the right contracts
-//   - the locked literal strings appear (PauseBanner message; Phase 5 marker)
+//   - the locked literal strings appear (PauseBanner message; deliverable
+//     dispatch wires usePluginData('deliverable.preview') per Plan 05-04 D-24)
 //   - ProseWithRefChips uses RefChip from the 02-02 primitives
 //   - LiveBlockerPanel renders exactly one terminal kind (no nested chains)
 //
@@ -85,10 +86,28 @@ test('prose-with-ref-chips.tsx exports ProseWithRefChips and renders <RefChip />
   assert.match(src, /BEAAA-\\d\+|BEAAA-\\\\d\\\\+/, 'splits prose on BEAAA-NNN regex');
 });
 
-test('deliverable-preview.tsx exports DeliverablePreview and includes the literal "Phase 5" deferred-message marker (READER-05)', () => {
+test('deliverable-preview.tsx exports DeliverablePreview and dispatches on data.kind via usePluginData and renders four real previewers (DIST-04)', () => {
+  // Plan 05-04 D-24 — the locked deferred-message literal from Plan 02-03
+  // is REMOVED in the same commit that ships the worker-handler-backed
+  // dispatcher. The export contract (`export function DeliverablePreview`)
+  // is preserved.
   const src = readSrc('deliverable-preview.tsx');
   assert.match(src, /export function DeliverablePreview/);
-  assert.match(src, /Phase 5/, 'literal "Phase 5" appears (READER-05 deferred preview)');
+  assert.match(
+    src,
+    /usePluginData[\s\S]*['"]deliverable\.preview['"]/,
+    'wires the deliverable.preview worker handler',
+  );
+  assert.match(
+    src,
+    /switch\s*\(\s*data\.kind\s*\)/,
+    'dispatches on data.kind discriminator',
+  );
+  assert.match(
+    src,
+    /<embed[\s\S]*type=["']application\/pdf["']/,
+    'pdf branch uses native <embed>',
+  );
 });
 
 test('pause-banner.tsx contains the locked literal "Editorial Desk paused — last compile failed at" (D-07)', () => {
