@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.5
 milestone_name: phase-5-dist-03-shipped
 status: executing
-stopped_at: Phase 04.2 context gathered (D-7 routing rewrite + D-5/D-6 fold-in)
-last_updated: "2026-05-25T10:01:01.897Z"
+stopped_at: Plan 04.2-07 PLANNED — addendum sub-plan for D-7 routing rewrite + D-5/D-6 polish fold-in; ready to execute via `/gsd:execute-phase 4.2 --gaps`
+last_updated: "2026-05-25T14:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 43
+  total_plans: 44
   completed_plans: 36
-  percent: 67
+  percent: 64
 ---
 
 # State: Clarity Pack
@@ -24,11 +24,19 @@ progress:
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 05 — Distribution & Polish (near-final closure). Phase 4.2 closed 2026-05-24; Plan 05-03 (DIST-03) shipped at v1.0.0-rc.5 on 2026-05-24; only 05-04 remains, deferred to v1.1.
+**Current Focus:** Phase 4.2 addendum sub-plan 04.2-07 — PLANNED 2026-05-25, ready for execution. Forward-defects work (D-7/D-5/D-6) on closed Phase 4.2; Phase 5 stays in near-final closure (Plan 05-03 shipped; Plan 05-04 deferred to v1.1).
 
 ## Current Position
 
-Phase: 05 (Distribution & Polish) — NEAR-FINAL CLOSURE: 3/4 plans CODE-COMPLETE; Plan 05-04 deferred to v1.1.
+**Plan 04.2-07 (addendum, v1.0.0-rc.7) — PLANNED 2026-05-25; READY-TO-EXECUTE.**
+
+Forward-defects addendum sub-plan added to closed Phase 4.2 (RCB-01..RCB-07 stay Implemented at v1.0.0-rc.2 — VERIFICATION.md untouched). Plan addresses three defects filed during the 2026-05-25 rc.6 drill (`260524-sm8`): D-7 Reader→Chat continuation routing rewrite (`chat.openForIssue` step-2 reverse-lookup on `chat_topics.origin_issue_id`; new `existing-topics-ambiguous` route shape for ≥2 matches; D-04 silent auto-unarchive on N=1 archived match; D-02 reuse of RCB-06 popover as picker), D-5 operator-drill proof-method gotcha in `runbook/operator-gotchas.md`, D-6 canonical AC marker grammar in `README.md`. 8 tasks, wave 1 (2 TDD on routing + repo helper + 5 execute + 1 checkpoint:human-verify closure drill with 6+1 fixtures + rc.7→rc.6→rc.7 rollback rehearsal). Plan-checker verdict PASS on first iteration (12/12 gates: standard + add-only special-case + D-5/D-6/D-7 goal-backward). Commit `e8ded4d` carries `04.2-07-PLAN.md`, `04.2-07-PLAN-CHECK.md`, and `04.2-PATTERNS.md` (line-numbered analog excerpts for all 6 touchpoints). Frontmatter is `gap_closure: false`, `requirements: []`, `defects_addressed: [D-7, D-5, D-6]` — empty-requirements is intentional per closed-phase addendum pattern (filed to MemPalace drawer `clarity_pack/decisions/ac1e392e6cf1d93e40b1d92e`).
+
+**Next action:** `/gsd:execute-phase 4.2 --gaps` to execute Plan 04.2-07 (the `--gaps` mode is the correct invocation path for forward-defects work after closure; there is NO `/gsd:execute-plan` skill and NO `--addendum` flag — those are common confusions). Plans 04.2-01..06 stay untouched; ROADMAP.md / REQUIREMENTS.md / VERIFICATION.md are not modified.
+
+---
+
+**Phase: 05 (Distribution & Polish) — NEAR-FINAL CLOSURE: 3/4 plans CODE-COMPLETE; Plan 05-04 deferred to v1.1.**
 
 **Plan 05-03 (DIST-03 — AC auto-status from comment-markers) — CODE-COMPLETE 2026-05-24 at v1.0.0-rc.5.**
 Tarball `clarity-pack-1.0.0-rc.5.tgz` (145,380 bytes; sha256 `b91048f84b2ca096915ee283e712c05711b5fabd774be82323a69dcadf72613b`). 5 atomic commits `ffa6b22..e82dfc0`. Suite 1364 → 1380 (+16: 12 worker scanner + 4 UI source-grep). 1378 pass / 0 fail / 2 skip. All quality gates GREEN (tsc, check-css-scope 108 selectors, check-a11y 65 files / 0 violations, worker/UI/manifest builds, npm pack 14 files). Worker handler `reader.ac.autostatus` lives at `src/worker/handlers/reader-ac-autostatus.ts`; opted-in callers receive `{ kind: 'acAutoStatus', detections: { [acItemId]: { detected, sourceCommentId, sourceAuthorAgentId, sourceAuthorName, sourceCreatedAt } } }`. Two regex grammars match the canonical `AC: <id>: <state>` + bracket alternate `AC[<id>]: <state>` (multiline, case-insensitive on state ∈ {✓, done, complete, x}). Earliest-comment-wins per ac-id. Agent display name resolved via `ctx.agents.get` per distinct UUID (cached); degrades to null on lookup failure (warn-logged), NEVER to the UUID. UI tier: `ac-checklist.tsx` adds an optional `autoStatus?: AcAutoStatusMap | null` prop (default null — existing call sites unchanged); per-row indicator renders `auto: ✓ via <name> · <ago> ago` when `auto.detected === true`. A4 copy-marker button per row puts `AC: <id>: ✓` on the clipboard. `ReaderViewReady` mounts a parallel `usePluginData('reader.ac.autostatus', ...)` next to `issue.reader`. NO new schema, NO migrations; read-only over ctx.issues.listComments + ctx.agents.get. SUMMARY: `.planning/phases/05-distribution-polish/05-03-SUMMARY.md`.
@@ -51,8 +59,8 @@ Tarball `clarity-pack-1.0.0-rc.5.tgz` (145,380 bytes; sha256 `b91048f84b2ca09691
 
 ---
 
-**Phase 4.2 — code-complete-pending-drill (operator sweep deferred).**
-Plan: 4 of 4 (04.2-01 done-but-OPEN; 04.2-02 done-but-OPEN; **04.2-03 done-but-OPEN — carrier closure operator-verified, dispatch routed to 04.2-04**; **04.2-04 code-complete-pending-drill — DEFERRED per operator 2026-05-24**)
+**Phase 4.2 — CLOSED & VERIFIED 2026-05-24 at v1.0.0-rc.2; addendum sub-plan 04.2-07 PLANNED 2026-05-25.**
+Plan: 5 of 7 closed (04.2-01..04.2-04 closed at rc.2 — RCB-01..RCB-07 Implemented; 04.2-05 polish rc.3; 04.2-06 D9/D10 rc.4; **04.2-07 PLANNED rc.7 — forward-defects addendum, not a gap-closure, see Current Position above**)
 
 **Plan 04.2-04 (third gap-closure, v0.9.3) — CODE-COMPLETE 2026-05-24, OPERATOR DRILL DEFERRED.** Surgical dispatch fix in `chat/index.tsx`: lift `chat.roster` into `ChatPageBody` (parallel `usePluginData` call — host bridge deduplicates with `RosterRail`'s fetch; `normalizeRoster` + `RosterResult` promoted to `export` on `roster-rail.tsx` for the shared shape); in the deep-link `useEffect`, race-safe defer (`if (link.topic && link.employee && roster === null && rosterLoading) return;` — the deep link arrives at chat mount before chat.roster typically returns; the dep-array on `roster` re-fires the effect when it resolves); in the existing-topic dispatch branch, look up matched RosterEmployee + `setEmployee(matched)` BEFORE `setTopic`; replaced hardcoded `employeeAgentId: ''` with `employeeAgentId: link.employee ?? ''`. Tests pinned: Test 5 (DISPATCH — `setEmployee`, `employeeAgentId: link.employee`, chat.roster fetch in ChatPageBody) + Test 6 (DISPATCH-RACE — dep array carries `roster`). Suite 1327 → 1329 (+2 net). Version 0.9.3 in package.json + src/manifest.ts + chat-capabilities pin updated. Build: `dist/manifest.js` reports `version: '0.9.3'`. Tarball `clarity-pack-0.9.3.tgz` (139,766 bytes; sha256 `2b460abbc6850e50300bddf9eabe4a76d93d6cc31ff05d09fd42797c6ccd46f4`) packed and ready for SCP. Operator drill walkthrough preserved verbatim in 04.2-04-PLAN.md Task 5 for the post-Phase-5 sweep. SUMMARY: `04.2-04-SUMMARY.md`.
 

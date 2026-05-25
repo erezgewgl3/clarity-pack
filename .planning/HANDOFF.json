@@ -1,39 +1,41 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-24T18:30:00.000Z",
-  "source": "deliberate-handoff",
+  "timestamp": "2026-05-25T14:00:00.000Z",
+  "source": "plan-phase-orchestrator",
   "partial": false,
-  "phase": "05-distribution-polish",
-  "phase_name": "Distribution & Polish",
-  "phase_dir": ".planning/phases/05-distribution-polish",
-  "plan": "05-03",
+  "phase": "04.2",
+  "phase_name": "reader-chat-bridge",
+  "phase_dir": ".planning/phases/04.2-reader-chat-bridge",
+  "plan": "04.2-07",
   "task": null,
-  "total_tasks": null,
-  "status": "fresh-context-recommended",
+  "total_tasks": 8,
+  "status": "planned-ready-to-execute",
   "completed_tasks": [],
   "remaining_tasks": [
-    "Plan 05-03 — execute the AC auto-status from comment-markers feature per the locked design answers in 05-03-PLAN.md (target v1.0.0-rc.5)"
+    "Task 1 — tdd: chat-topics-repo.ts listTopicsForIssueAndAssignee helper",
+    "Task 2 — tdd: chat-open-for-issue.ts step-2 reverse-lookup + existing-topics-ambiguous route + D-04 auto-unarchive",
+    "Task 3 — execute: continue-in-chat-button.tsx dispatch arm + tooltip differentiation",
+    "Task 4 — execute: reverse-topics-link.tsx entryPoint/filterToAssignee/autoOpen props",
+    "Task 5 — execute: reader/index.tsx parent-owned popover state",
+    "Task 6 — execute: runbook/operator-gotchas.md D-09 fold-in",
+    "Task 7 — execute: README.md D-10 AC marker grammar section",
+    "Task 8 — checkpoint:human-verify: version bump (rc.6 → rc.7) + npm pack + snapshot-bookended Countermoves drill (5 existing fixtures + 6th archived-fixture + scenario 7 ambiguous-popover + rc.7→rc.6→rc.7 rollback rehearsal)"
   ],
   "blockers": [],
-  "human_actions_pending": [
-    "Optional: SCP clarity-pack-1.0.0-rc.4.tgz to Countermoves + install-helper + smoke D9 (Continue button shows employee name not UUID) + D10 (About chip shows COU-#### not UUID)",
-    "Optional: npm publish clarity-pack@1.0.0-rc.4 (Eric's npm credentials required)"
-  ],
+  "human_actions_pending": [],
   "decisions": [
-    {
-      "id": "Plan 05-03 design answers locked 2026-05-24",
-      "summary": "A1=comment-marker (regex AC: <id>: ✓), A2=side-by-side (manual = source of truth), A3=no-conflict (auto is render-time only, never written), A4=copy-marker affordance optional"
-    },
-    {
-      "id": "Plan 05-04 deferred to v1.1",
-      "summary": "Visual-regression CI infrastructure overkill for v1 audience of 1 per CLAUDE.md. Revisit at next milestone boundary."
-    },
-    {
-      "id": "D4/D5 + D8 carried forward",
-      "summary": "Drill-caught polish backlog: D4/D5 (React key warnings — Plan 04.2-05 disposition was wrong; needs per-component audit), D8 (Back-nav drops chat state — URL_HASH consume side-effect; needs design)"
-    }
+    "D-01 step-2 reverse-lookup on chat_topics.origin_issue_id between chat-task lineage and cold-task fallback",
+    "D-02 reuse RCB-06 popover as picker — zero new picker component",
+    "D-03 cross-employee fall-through returns new-topic-needed (today's seeded dialog)",
+    "D-04 silent auto-unarchive on N=1 archived match via setChatTopicArchived (CTT-07 plugin-side, host issue untouched)",
+    "D-05 last_activity_at DESC tiebreaker = MAX(chat_topics.last_activity_at, max(chat_messages.sent_at))",
+    "D-06 button label unchanged; tooltip differentiates destination",
+    "D-07 deep-link contract unchanged — picker resolves to existing existing-topic URL_HASH shape; parseChatDeepLink NOT extended",
+    "D-08 server-side display-name hygiene (Plan 04.2-06 pattern) — NEVER leak UUID in visible payload",
+    "D-09 D-5 fold-in — operator runbook gotcha for next drill Step 9",
+    "D-10 D-6 fold-in — canonical AC marker grammar in README"
   ],
   "uncommitted_files": [],
-  "next_action": "START A FRESH CLAUDE CODE CHAT WINDOW. From the project directory, run: /gsd:execute-phase 05 --gaps with the kickoff prompt at the bottom of .planning/phases/05-distribution-polish/05-03-PLAN.md (under <fresh_context_kickoff>). All Plan 05-03 design answers are LOCKED in that file's <design_answers_locked> block; the executor needs no operator input.",
-  "context_notes": "Plan 04.2-06 just shipped clarity-pack-1.0.0-rc.4.tgz (143,583 bytes, sha256 d015ebc665c58240e4ea06bf1ff44fde1e08166638293c1c27cb615c7e76789c) closing D9 + D10 UUID leaks. 3 atomic commits 21008f6..5d2644b. Suite 1364/1362/0/2 GREEN; all quality gates clean. Next session = Plan 05-03 (AC auto-status from comment-markers) in a FRESH chat window — context was nearly exhausted at handoff time. The 05-03 PLAN.md is fully specced (locked design answers + file-by-file execution shape + fresh_context_kickoff block). Eric's preferred kickoff command is preserved verbatim in that file."
+  "next_action": "Run /gsd:execute-phase 4.2 --gaps (forward-defects addendum execution; no /gsd:execute-plan skill exists; no --addendum flag exists). Plan 04.2-07 is the only outstanding plan in Phase 4.2.",
+  "context_notes": "Phase 4.2 closed-phase addendum pattern: phase_status stays 'Executed', RCB-01..RCB-07 stay Implemented, VERIFICATION.md untouched. Plan adds work without reopening the phase. Plan-checker PASS on first iteration confirms the empty-requirements + <addresses>-block convention is sound. See MemPalace drawer clarity_pack/decisions/ac1e392e6cf1d93e40b1d92e for the reusable recipe."
 }
