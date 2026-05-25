@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Phase 5: Distribution & Polish — Discussion Questions</title>
+<style>
+  :root {
+    --bg: #0b0b0c;
+    --surface: #18181a;
+    --surface-2: #1f1f22;
+    --border: #2a2a2e;
+    --border-strong: #3a3a3e;
+    --text: #e8e8ea;
+    --muted: #9a9aa0;
+    --dim: #6a6a70;
+    --accent: #d9b14a;      /* gold — the "you" / clarity-pack accent */
+    --success: #22c55e;
+    --success-bg: #0e1f14;
+    --warning: #f97316;
+    --warning-bg: #1f130c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif; -webkit-font-smoothing: antialiased; }
+  body { line-height: 1.5; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 24px 28px 96px; }
+  header.app { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+  header.app h1 { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 32px; letter-spacing: -0.01em; margin: 0; }
+  header.app .sub { color: var(--muted); font-size: 13px; }
+  header.app .sub code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  /* Stats bar */
+  .stats { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 24px; }
+  .stats .metric { display: flex; align-items: baseline; gap: 6px; }
+  .stats .metric .num { font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; font-size: 18px; }
+  .stats .metric .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stats .num.answered { color: var(--success); }
+  .stats .num.chat-more { color: var(--warning); }
+  .stats .progress { flex: 1; min-width: 200px; height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+  .stats .progress .fill { display: block; height: 100%; background: linear-gradient(90deg, var(--success), #5fd28a); transition: width 0.3s ease; }
+  .stats .actions { display: flex; gap: 8px; }
+  .btn { background: var(--accent); color: #1a1a1a; border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .btn:hover { background: #e7c060; }
+  .btn.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); }
+  .btn.secondary:hover { background: var(--border); }
+  .hint { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 12px 16px; margin-bottom: 24px; color: var(--muted); font-size: 13px; }
+  .hint strong { color: var(--text); }
+  .hint code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--accent); }
+  /* Sections */
+  section.area { margin-bottom: 32px; }
+  section.area > header { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  section.area > header h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  section.area > header .toggle { color: var(--dim); font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; }
+  section.area > header .area-count { color: var(--muted); font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; }
+  section.area.collapsed .grid { display: none; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+  /* Question card */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; transition: background 0.15s, border-color 0.15s; }
+  .card.answered { background: var(--success-bg); border: 2px solid var(--success); padding: 15px 17px; }
+  .card.chat-only { border-left: 3px solid var(--warning); }
+  .card .qid { display: inline-block; background: var(--surface-2); color: var(--accent); font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; padding: 2px 7px; border-radius: 4px; margin-bottom: 8px; letter-spacing: 0.04em; }
+  .card.answered .qid { background: var(--success); color: #08200f; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; line-height: 1.35; }
+  .card .ctx { color: var(--muted); font-size: 12px; font-style: italic; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: background 0.1s, border-color 0.1s; }
+  .opt:hover { background: var(--border); }
+  .opt input[type="radio"] { margin-top: 4px; accent-color: var(--accent); }
+  .opt:has(input:checked) { background: var(--success-bg); border-color: var(--success); }
+  .opt .label-block { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+  .opt .label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .opt .desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .chat-more { margin-top: 12px; }
+  .chat-more label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+  .chat-more textarea { width: 100%; min-height: 70px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; font-size: 13px; font-family: inherit; line-height: 1.4; resize: vertical; transition: border-color 0.15s; }
+  .chat-more textarea::placeholder { color: var(--dim); }
+  .chat-more textarea:focus { outline: none; border-color: var(--accent); }
+  .chat-more textarea.has-content { border: 2px solid var(--warning); padding: 8px 10px; }
+  /* Save bar at the bottom */
+  .save-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border-strong); padding: 12px 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; z-index: 100; }
+  .save-bar .status { color: var(--muted); font-size: 13px; }
+  .save-bar .status strong { color: var(--text); }
+  .save-bar .actions { display: flex; gap: 8px; align-items: center; }
+  .save-bar .saved-flash { color: var(--success); font-size: 13px; opacity: 0; transition: opacity 0.2s; }
+  .save-bar .saved-flash.visible { opacity: 1; }
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    .wrap { padding: 16px 12px 96px; }
+    header.app h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app">
+    <div>
+      <h1>Phase 5: Distribution &amp; Polish</h1>
+      <div class="sub">Power-mode discussion · 23 questions across 7 sections · <code>v1.0.0 final scope lock</code></div>
+    </div>
+  </header>
+
+  <div class="stats" id="stats">
+    <div class="metric"><span class="num" id="m-total">0</span><span class="lbl">Total</span></div>
+    <div class="metric"><span class="num answered" id="m-answered">0</span><span class="lbl">Answered</span></div>
+    <div class="metric"><span class="num chat-more" id="m-chatmore">0</span><span class="lbl">Chat-more</span></div>
+    <div class="metric"><span class="num" id="m-remaining">0</span><span class="lbl">Remaining</span></div>
+    <div class="progress"><span class="fill" id="m-progress" style="width:0%"></span></div>
+    <div class="actions">
+      <button class="btn" id="save-top">Save answers</button>
+    </div>
+  </div>
+
+  <div class="hint">
+    <strong>How this works.</strong> Answer each question by picking an option. Use the <strong>chat-more</strong> textarea for context, nuance, or to override the suggested options. When done, click <strong>Save answers</strong> to download an updated JSON — replace <code>05-QUESTIONS.json</code> with it. Then tell Claude <strong>"refresh"</strong> (to re-read your state) or <strong>"finalize"</strong> (to generate <code>05-CONTEXT.md</code>).
+  </div>
+
+  <div id="sections"></div>
+</div>
+
+<div class="save-bar">
+  <div class="status" id="bottom-status">Loading…</div>
+  <div class="actions">
+    <span class="saved-flash" id="saved-flash">Downloaded — replace 05-QUESTIONS.json with the file in your downloads folder.</span>
+    <button class="btn secondary" id="save-bottom">Save answers</button>
+  </div>
+</div>
+
+<script>
+const STATE = {
+  phase: "05-distribution-polish",
+  generated_at: "2026-05-25T16:30:00.000Z",
+  stats: { total: 0, answered: 0, chat_more: 0, remaining: 0 },
+  sections: [
+    {
+      id: "plan-05-04-previewers",
+      title: "Plan 05-04 — Full-fidelity previewers + Visual-regression baseline (DIST-04)",
+      questions: [
+        { id: "Q-01", title: "xlsx → grid renderer",
+          context: "Reader's 'The deliverable' section is currently a placeholder (src/ui/surfaces/reader/deliverable-preview.tsx) with literal 'Phase 5 (DIST-04)' deferred-message text locked by reader-view.test.mjs. UI bundle is currently 288 kB; SheetJS alone would push it to ~800 kB. Trust model is same-origin trusted JS — no extra sandboxing on top.",
+          options: [
+            { id: "a", label: "SheetJS in UI bundle", description: "Industry-standard parsing; +500 kB to UI bundle (288 → ~800 kB); loads on every render of Reader/chat-attachment surface." },
+            { id: "b", label: "@e965/xlsx in UI bundle", description: "Community fork without SheetJS security-advisory baggage. Same size, same trade-offs." },
+            { id: "c", label: "Server-side conversion via worker handler (Recommended)", description: "Worker handler 'deliverable.preview' returns parsed {sheets: [{name, rows: string[][]}]}; UI bundle stays small; latency on first preview; central file-size guards. Recommended default." },
+            { id: "d", label: "Defer xlsx; keep placeholder", description: "Ship pdf/md/png in this plan; address xlsx in a follow-up. Keeps v1.0 small but leaves Reader incomplete." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-02", title: "pdf → embed renderer",
+          context: "Goal is inline preview in Reader's deliverable section. No current pdf preview exists. Browsers have native pdf rendering since 2020.",
+          options: [
+            { id: "a", label: "Native <embed type=\"application/pdf\"> (Recommended)", description: "Zero JS deps; browser-native; works in Chrome/Firefox/Safari/Edge. Trade-off: no JS-side hooks (no search, no scroll-sync with comments). Recommended default — smallest blast radius." },
+            { id: "b", label: "pdfjs-dist (Mozilla pdf.js)", description: "~2 MB WASM + JS; supports search, annotations, text-layer. Massive bundle; defer to a 'Pro preview' mode later if needed." },
+            { id: "c", label: "<iframe src=\"/path/to.pdf\">", description: "Equivalent to (a) in effect; different DOM container. No real upside over <embed>." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-03", title: "md → rendered renderer",
+          context: "check-a11y rule R3 forbids dangerouslySetInnerHTML. 'react-markdown' emits React elements directly — keeps the invariant.",
+          options: [
+            { id: "a", label: "marked + DOMPurify + dangerouslySetInnerHTML", description: "Add the previewer file to R3 allowlist; DOMPurify as load-bearing safety. Breaks the no-dangerouslySetInnerHTML invariant for one file." },
+            { id: "b", label: "react-markdown (Recommended)", description: "Parses md to React elements; no HTML, no dangerouslySetInnerHTML. ~50 kB bundle. Keeps R3 invariant clean. Recommended default." },
+            { id: "c", label: "markdown-it + custom React renderer", description: "More flexible; more code to maintain. No clear win over react-markdown for our use case." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-04", title: "Visual-regression infrastructure",
+          context: "Plan 05-02 deferred this. v1 audience is Eric on BEAAA only (CLAUDE.md). sketches/*.html are the locked design contract. Plan 05-04 is currently marked DEFERRED-TO-V1.1-BACKLOG for the visual-regression half, but Eric's 2026-05-25 expansion un-deferred it.",
+          options: [
+            { id: "a", label: "Static-sketch regression via Playwright (Recommended)", description: "Playwright loads sketches/*.html, takes image snapshot, diffs against test/visual/baselines/. Catches design-system / token / theme drift. Scope: 4 sketches → 4 baselines. ~30 min infra setup; Playwright as devDep only. Recommended default." },
+            { id: "b", label: "Live-host regression (Playwright + Paperclip dev-server in CI)", description: "Catches REAL runtime UI drift. Significant infra: CI needs Postgres + Paperclip workspace + plugin install before each run. Expensive; correct for a multi-user product." },
+            { id: "c", label: "Storybook + Chromatic (SaaS)", description: "Lowest dev effort; external dependency + cost; overkill for v1 audience of 1." },
+            { id: "d", label: "Skip visual-regression for v1.0", description: "Defer entirely to v1.1. Accept design-system drift risk during v1 ship. Lockfile + a11y already in CI; visual is the third leg of DIST-05." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-05", title: "Visual-regression CI cadence",
+          context: "Once chosen, the regression check can fire on every PR (slow signal, hard fail) or nightly (fast PRs, slower drift detection). Playwright snapshot test ~10s per sketch.",
+          options: [
+            { id: "a", label: "Run on every PR (Recommended)", description: "Same lane as lockfile + a11y checks. ~40s overhead per PR. Failure uploads diff image as artifact. Recommended default — matches existing CI shape." },
+            { id: "b", label: "Nightly + on push to master", description: "Fast PRs; weekly drift signal. Risk: design-system regression lands and we discover it next morning." },
+            { id: "c", label: "On-demand via `pnpm visual:check` only", description: "No CI; manual operator step before drilling. Cheap; relies on operator discipline." }
+          ], answer: null, chat_more: "", status: "unanswered" }
+      ]
+    },
+    {
+      id: "plan-05-05-zero-rabbit-holes",
+      title: "Plan 05-05 — Zero-rabbit-holes finishers (paused-agent banner + peek cards + picker-row dispatch)",
+      questions: [
+        { id: "Q-06", title: "Paused-agent banner — surface placement",
+          context: "The existing src/ui/surfaces/reader/pause-banner.tsx is editor-agent-only ('Editorial Desk paused — last compile failed at <HH:MM>. Resume in agent panel.'). Plan 05-05 asks for a GENERIC paused-agent banner for ANY assignee. Plan 04.1-10 already has an inline 'Resume heartbeat' row pattern in chat that should be reused.",
+          options: [
+            { id: "a", label: "Chat header (above thread) only", description: "Per-topic context — shows only when the topic's assignee is paused. Eric sees it when he's about to send a message that won't be answered." },
+            { id: "b", label: "Reader top-of-tab only", description: "Per-issue context — Eric sees the agent is paused before he tries to Continue-in-chat. Pairs with continue-in-chat-button disabled state." },
+            { id: "c", label: "Both chat header AND Reader top-of-tab (Recommended)", description: "Surfaces the pause wherever the operator is about to interact. Two surfaces, same component, same inline ▶ Resume heartbeat affordance. Recommended — matches 'zero rabbit-holes' principle." },
+            { id: "d", label: "Situation Room only", description: "Cockpit view shows all paused agents. Doesn't fix the Reader/chat surprise; just adds a global view." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-07", title: "Paused-agent banner — copy variants per pause cause",
+          context: "Agents can pause for: (1) heartbeat-pause (operator clicked Pause), (2) budget exhaustion (Paperclip stopped them automatically), (3) codex adapter failure (transient error during heartbeat). Each implies a different recovery action.",
+          options: [
+            { id: "a", label: "Single copy: 'Agent <name> paused — ▶ Resume heartbeat' (Recommended)", description: "Same affordance for all three causes; resume restarts heartbeat regardless. Simpler implementation, simpler operator mental model. Recommended default." },
+            { id: "b", label: "Three distinct copies per cause", description: "'<name> paused by operator' / '<name> stopped — budget exhausted; check budget caps' / '<name> stopped — codex adapter error <ts>; ▶ Retry heartbeat'. More precise; more text to maintain." },
+            { id: "c", label: "Single copy + 'Why?' link expanding to cause", description: "Surfaces the reason on-demand without cluttering the default. Three internal strings; one default render." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-08", title: "Ref-chip peek card — trigger",
+          context: "Today src/ui/primitives/ref-chip.tsx is an anchor that navigates to /<companyPrefix>/issues/<identifier>. Plan 05-05 wants a peek (title + status + owner) BEFORE forcing navigation — the core 'zero rabbit-holes' mechanic.",
+          options: [
+            { id: "a", label: "Hover-only peek; click still navigates (Recommended)", description: "Peek appears on hover; click goes to issue page. Two-input model: 'glance vs commit'. Recommended — preserves existing nav, adds zero-friction preview. Mobile fallback: long-press." },
+            { id: "b", label: "Click peek; second click (or Open button) navigates", description: "Single primary input; explicit commit to navigate. Avoids hover-only problems on touch. Trade-off: extra click to navigate." },
+            { id: "c", label: "Hover peek + Cmd/Ctrl-click navigates; bare click peeks", description: "Common-pattern but breaks the existing 'chip = anchor' contract; users expect bare-click navigation." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-09", title: "Ref-chip peek card — content fields",
+          context: "ref-chip currently renders `<id> · <status>` from resolve-refs handler. Worker handler can extend its payload cheaply. The peek must be useful enough to avoid the navigation.",
+          options: [
+            { id: "a", label: "Title + status + owner (Recommended)", description: "Three fields = minimum useful card. Matches Plan 05-05 stub spec. Recommended default." },
+            { id: "b", label: "Title + status + owner + last activity + assignee health", description: "Five fields = richer card; more bytes per resolve-refs response; more screen real estate." },
+            { id: "c", label: "Title + status + owner + first line of description", description: "Adds context about what the issue IS; description can be long — truncate to 120 chars." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-10", title: "GAP-PICKER-ROW-DISPATCH fix shape",
+          context: "Plan 04.2-07 rc.7 drill: ambiguous-picker row click lands at chat-surface empty state. Root cause: buildTopicDeepLink emits topic-only URL_HASH; chat-surface dispatch (Plan 04.2-04) requires link.employee to populate setEmployee(matched). Structurally same family as closed GAP-RCB-03-DISPATCH.",
+          options: [
+            { id: "a", label: "Extend buildTopicDeepLink to carry employee (Recommended)", description: "Add optional employeeUserId param; picker passes it; chat-surface dispatch unchanged. Single caller change. Audit all buildTopicDeepLink callers (per Plan 05-05 stub: 5-line audit). Recommended — matches D-07 contract spirit (server-resolved identity)." },
+            { id: "b", label: "Make chat-surface dispatch lenient (look up assignee from topic id)", description: "Chat surface queries topic→assignee on dispatch when link.employee missing. Defers cost to consumer; more graceful for partial deep-links. Adds one round-trip on dispatch." },
+            { id: "c", label: "Both: extend builder + lenient dispatch as fallback", description: "Belt and suspenders. More code, fewer future regressions. Slightly larger plan." }
+          ], answer: null, chat_more: "", status: "unanswered" }
+      ]
+    },
+    {
+      id: "plan-05-06-phase-4-1-polish",
+      title: "Plan 05-06 — Phase 4.1 surface polish bundle",
+      questions: [
+        { id: "Q-11", title: "Pin/Unpin toggle — confirmation pattern",
+          context: "Today chat message pin is one-way (Plan 04-05). Plan 04.1-05's chat.topic.archive is a TOGGLE with no confirmation prompt — silent flip + toast. Pin/Unpin should mirror that shape.",
+          options: [
+            { id: "a", label: "Silent toggle + clarity-pack toast (Recommended)", description: "'Message pinned' / 'Message unpinned' toast. No modal. Matches archive UX. Reversible action = no confirmation. Recommended." },
+            { id: "b", label: "Silent toggle, no toast", description: "Pin icon state-flip is the only feedback. Minimal noise; some users miss the action." },
+            { id: "c", label: "Confirmation modal on unpin only", description: "Pin = silent; unpin = 'Remove pin? [Cancel] [Remove]'. Treats unpin as destructive; over-engineered for a reversible op." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-12", title: "Pinned-chip flash-highlight duration",
+          context: "Plan 04.2-04 uses a deep-link scroll-and-flash pattern. Plan 05-06 stub says 'mirror Plan 04.2-04 deep-link scroll-and-flash with 1-2s .flash-highlight'.",
+          options: [
+            { id: "a", label: "1.5s (Recommended — matches Plan 04.2-04)", description: "Same duration as deep-link flash. Consistent pattern across surfaces. Recommended." },
+            { id: "b", label: "1s — snappier", description: "Eric is fast; long flashes feel laggy on a familiar action." },
+            { id: "c", label: "2s — more discoverable", description: "Easier to catch the eye if Eric is scrolling fast or has multiple chats open." }
+          ], answer: null, chat_more: "", status: "unanswered" }
+      ]
+    },
+    {
+      id: "plan-05-07-phase-4-2-polish",
+      title: "Plan 05-07 — Phase 4.2 polish bundle (incl. D8 Back-after-deep-link)",
+      questions: [
+        { id: "Q-13", title: "D8 — Browser-Back behavior after deep-link consume",
+          context: "Plan 04.2-06 explicitly flagged: 'D8 needs design call before planning'. Today: deep-link URL_HASH consume calls nav.replace which mutates URL state; Browser-Back drops chat-state. Three patterns; choose ONE.",
+          options: [
+            { id: "a", label: "Preserve hash on consume; chat-state survives Back (Recommended)", description: "Don't replace URL on consume; let the hash sit. Back navigates to previous Paperclip page; Forward returns to chat with hash intact. Cleanest; URL is honest about app state. Recommended." },
+            { id: "b", label: "Detect Back; re-fire deep-link consume", description: "popstate listener on chat surface re-applies the hash-bearing state. More logic; tighter loop. Risk: re-fire loops if not idempotent." },
+            { id: "c", label: "Clear hash on consume; Back returns to plain chat surface", description: "Today's behavior, but documented as intentional. Simplest; loses 'where I came from' context. Operator must manually re-navigate." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-14", title: "D4/D5 React key warnings — fix scope",
+          context: "Plan 04.2-05's 'Defensive-only' disposition was wrong per roadmap; warnings still firing in rc.3 console across ContextRail / PersistedMessage / TrueTaskDialog / AnchoredToCards / ChatPageBody. Five components.",
+          options: [
+            { id: "a", label: "Fix all 5 in this plan as one sweep (Recommended)", description: "One pass through the 5 component files; one commit per component. Closes the noise in v1.0. Recommended." },
+            { id: "b", label: "Fix the load-bearing ones (rendered-every-paint); defer others", description: "Pareto fix: ContextRail + PersistedMessage are hot paths; ChatPageBody re-renders on every nav. Defer TrueTaskDialog + AnchoredToCards if scope tight." },
+            { id: "c", label: "Defer all to a separate addendum after v1.0", description: "Console noise only; no user-visible bug. Get v1.0 out faster; address in v1.0.1." }
+          ], answer: null, chat_more: "", status: "unanswered" }
+      ]
+    },
+    {
+      id: "plan-05-08-power-features",
+      title: "Plan 05-08 — Phase 4.1 power features",
+      questions: [
+        { id: "Q-15", title: "Archive full-view — surface",
+          context: "Today chat archive dropdown's 'View all archived →' leads nowhere. Two patterns: modal (stays in current chat context) vs route (new URL, full screen real estate).",
+          options: [
+            { id: "a", label: "Route /<companyPrefix>/clarity-pack/archive (Recommended)", description: "Full-screen list; bulk-select checkboxes; search + filter by employee. Bookmarkable. Matches existing clarity-pack routes pattern (/COU/bulletin, /COU/situation-room). Recommended." },
+            { id: "b", label: "Modal anchored to chat surface", description: "Stays in chat context; modal closes back to current topic. Less screen real estate; can't bookmark. Smaller scope." },
+            { id: "c", label: "Side panel that pushes chat thread left", description: "Three-pane layout; archive list on right. Adds layout complexity to ChatPageBody; doesn't fit existing rail patterns." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-16", title: "Bulk-unarchive — confirmation",
+          context: "Archive is plugin-side only (CTT-07 invariant — host issue untouched), so unarchive is fully reversible. But bulk operations have higher visible blast radius.",
+          options: [
+            { id: "a", label: "Silent bulk-unarchive + count toast (Recommended)", description: "'N topics unarchived' toast. Matches single-row unarchive UX. Reversible = no confirmation. Recommended." },
+            { id: "b", label: "Confirmation when N > 5", description: "Threshold-based confirmation: 'Unarchive 12 topics?' for batches. Catches misclicks." },
+            { id: "c", label: "Always confirm bulk operations", description: "Modal on every bulk action regardless of N. Safest; slowest." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-17", title: "Cold-task-from-global — button location",
+          context: "Plan 04.1-02 shipped in-chat '+ Create task'. Plan 05-08 generalizes it to a button reachable from anywhere (header, FAB, dedicated route).",
+          options: [
+            { id: "a", label: "Top-right of clarity-pack surfaces' header bar (Recommended)", description: "Visible on Reader / Situation Room / Bulletin / Chat. Standardized affordance across all four surfaces. Recommended — fits 'global capture'." },
+            { id: "b", label: "Floating action button (bottom-right, fixed position)", description: "Always-visible regardless of scroll. More visually heavy; standard mobile pattern; less common on desktop tools like Paperclip." },
+            { id: "c", label: "Cmd/Ctrl-N keyboard shortcut only (no visible button)", description: "Keyboard-first; discoverable via composer shortcuts overlay (Q-19). Power-user only; new operators won't find it." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-18", title: "Diagnostics toggle — memory scope",
+          context: "Today diagnostics toggle re-defaults OFF on every page load. 'Session memory' is the asked-for fix; the scope question is which axis.",
+          options: [
+            { id: "a", label: "Per topic (Recommended)", description: "Topic A: ON, Topic B: OFF. Persists across page loads but topic-local. Use case: investigating one buggy topic while staying clean elsewhere. Recommended." },
+            { id: "b", label: "Per session (sessionStorage)", description: "ON for this browser session; resets on browser close. Less granular but matches 'I'm debugging today' workflow." },
+            { id: "c", label: "Per user (localStorage)", description: "Sticky preference. Set it once, it stays. Risks: forgets it's on, performance overhead lingers." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-19", title: "Composer shortcuts overlay — trigger + surface",
+          context: "Hints exist inline today (e.g., ⌘T for true task). The overlay is the discoverable surface. Two axes: trigger key and overlay shape.",
+          options: [
+            { id: "a", label: "`?` key globally on clarity-pack surfaces → modal cheatsheet (Recommended)", description: "Global '?' (when not in input) opens a modal listing all shortcuts. Standard pattern in Linear, GitHub, Slack. Recommended." },
+            { id: "b", label: "`?` key in composer only → inline popover", description: "Scoped to composer; popover anchors to composer. Less discoverable; tighter context." },
+            { id: "c", label: "Visible '?' icon in chat header → modal", description: "Mouse-discoverable; modal as above. Adds visible chrome to the chat header." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-20", title: "Storage-pin live wiring — semantics",
+          context: "Today right-rail 'Storage Pin' card is static copy. Plan 05-08 asks to wire to 'pin a topic so messages survive archive'. The question is what 'pin' precisely does.",
+          options: [
+            { id: "a", label: "Pin = topic exempt from archive (Recommended)", description: "Pinned topics never get archived (manual or auto). When operator archives, pinned topics skip. Recommended — matches user mental model." },
+            { id: "b", label: "Pin = topic always appears at top of strip", description: "Sort affordance only. Doesn't affect archive; renames the feature ('pin to top')." },
+            { id: "c", label: "Pin = both: stays at top + exempt from archive", description: "Combined behavior. More semantic load on one affordance; harder to explain." }
+          ], answer: null, chat_more: "", status: "unanswered" }
+      ]
+    },
+    {
+      id: "plan-05-09-tooling-infra",
+      title: "Plan 05-09 — Tooling + infra cleanup",
+      questions: [
+        { id: "Q-21", title: "VPS clarity-pack/scripts/ sync mechanism",
+          context: "Recurring runbook item since Plan 04.2-01 drill 2026-05-22 — partial repo copy on Countermoves predates Plan 01-05's pg-dump-locator.mjs. Memory `countermoves-safety-cli-invocation` documents the partial state.",
+          options: [
+            { id: "a", label: "Documented `git pull` step in operator-gotchas runbook (Recommended)", description: "Operator runs `cd ~/clarity-pack && git pull` before each drill. Documented; zero new tooling. Recommended — matches existing 'operator-discipline' patterns in runbook." },
+            { id: "b", label: "Auto-sync via post-snapshot hook in install-helper.sh", description: "Snapshot taken → script auto-pulls latest scripts/safety/. Adds drift between repo and VPS automatically. Risk: silently changes VPS state." },
+            { id: "c", label: "Shrink scope: only sync scripts/safety/ as a separate package", description: "Publish scripts/safety/ as its own tiny npm package; VPS pulls a tagged version. Heavyweight." }
+          ], answer: null, chat_more: "", status: "unanswered" },
+        { id: "Q-22", title: "Windows max-path worktree fix",
+          context: "Plan 04.2-07 worktree spawn blew up inside scripts/safety/test/fixtures/fake-paperclip-clone/node_modules/.pnpm/@embedded-postgres+... — Windows 260-char path limit. Filed second incident.",
+          options: [
+            { id: "a", label: "Move fake-paperclip-clone fixture out of the worktreed tree (Recommended)", description: "Relocate to test/fixtures/external/ excluded from .gitattributes worktree; build a symlink for test runs. Fixes root cause. Recommended." },
+            { id: "b", label: "Add to .gitattributes export-ignore + worktree-exclude pattern", description: "Git-native exclusion. Doesn't help worktree spawn — worktree copies tracked files. Won't fix the issue." },
+            { id: "c", label: "Document the fallback to sequential mode on Windows", description: "Plan 04.2-07 already did this as a stop-gap. Doesn't fix it; just routes around. Cheapest." }
+          ], answer: null, chat_more: "", status: "unanswered" }
+      ]
+    },
+    {
+      id: "plan-05-10-v1-final-closure",
+      title: "Plan 05-10 — v1.0.0 final closure",
+      questions: [
+        { id: "Q-23", title: "Rollback rehearsal scope",
+          context: "Per Plan 05-10 stub: 'rollback rehearsal 1.0.0 → 1.0.0-rc.7 → 1.0.0'. Establishes that v1.0.0 is reversible. The question is how deep to test.",
+          options: [
+            { id: "a", label: "Full round-trip: install 1.0.0 → uninstall → install rc.7 → uninstall → re-install 1.0.0 + COEXIST #6 row-count check at each step (Recommended)", description: "Proves bidirectional safety. Adds ~10 min to drill. Recommended — matches Phase 1 'Bookended-by-snapshots' principle." },
+            { id: "b", label: "One-way only: install 1.0.0 then rollback to rc.7; stop there", description: "Proves forward-then-backward; doesn't prove re-install of the new version after rollback. Faster; weaker." },
+            { id: "c", label: "Skip rollback rehearsal; rely on Phase 1 bookend snapshot as recovery path", description: "Trust the snapshot/restore loop. No rollback-specific test. Fastest; weakest." }
+          ], answer: null, chat_more: "", status: "unanswered" }
+      ]
+    }
+  ]
+};
+
+function recalcStats() {
+  let total = 0, answered = 0, chatMore = 0;
+  for (const sec of STATE.sections) {
+    for (const q of sec.questions) {
+      total++;
+      const hasAnswer = q.answer != null && q.answer !== "";
+      const hasChat = (q.chat_more || "").trim().length > 0;
+      if (hasAnswer) answered++;
+      if (hasChat) chatMore++;
+      q.status = hasAnswer ? "answered" : (hasChat ? "chat-more" : "unanswered");
+    }
+  }
+  STATE.stats.total = total;
+  STATE.stats.answered = answered;
+  STATE.stats.chat_more = chatMore;
+  STATE.stats.remaining = total - answered;
+}
+
+function renderStats() {
+  document.getElementById("m-total").textContent = STATE.stats.total;
+  document.getElementById("m-answered").textContent = STATE.stats.answered;
+  document.getElementById("m-chatmore").textContent = STATE.stats.chat_more;
+  document.getElementById("m-remaining").textContent = STATE.stats.remaining;
+  const pct = STATE.stats.total === 0 ? 0 : Math.round(100 * STATE.stats.answered / STATE.stats.total);
+  document.getElementById("m-progress").style.width = pct + "%";
+  document.getElementById("bottom-status").innerHTML = `<strong>${STATE.stats.answered}</strong> of <strong>${STATE.stats.total}</strong> answered · <strong>${STATE.stats.chat_more}</strong> with chat-more · <strong>${STATE.stats.remaining}</strong> remaining`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+function renderSections() {
+  const root = document.getElementById("sections");
+  root.innerHTML = STATE.sections.map(section => {
+    const answeredInSection = section.questions.filter(q => q.answer != null && q.answer !== "").length;
+    const cards = section.questions.map(q => {
+      const cls = (q.answer != null && q.answer !== "") ? "card answered"
+                : (q.chat_more && q.chat_more.trim()) ? "card chat-only"
+                : "card";
+      const opts = q.options.map(opt => `
+        <label class="opt">
+          <input type="radio" name="${q.id}" value="${opt.id}" ${q.answer === opt.id ? "checked" : ""} data-qid="${q.id}" />
+          <span class="label-block">
+            <span class="label">${escapeHtml(opt.label)}</span>
+            <span class="desc">${escapeHtml(opt.description)}</span>
+          </span>
+        </label>
+      `).join("");
+      const hasChat = (q.chat_more || "").trim().length > 0;
+      return `
+        <article class="${cls}" id="card-${q.id}">
+          <span class="qid">${q.id}</span>
+          <h3>${escapeHtml(q.title)}</h3>
+          <div class="ctx">${escapeHtml(q.context)}</div>
+          <div class="options">${opts}</div>
+          <div class="chat-more">
+            <label for="chat-${q.id}">Chat more (context, nuance, override)</label>
+            <textarea id="chat-${q.id}" data-qid="${q.id}" class="${hasChat ? "has-content" : ""}" placeholder="Add context, nuance, or override the recommended option…">${escapeHtml(q.chat_more || "")}</textarea>
+          </div>
+        </article>
+      `;
+    }).join("");
+    return `
+      <section class="area" id="sec-${section.id}">
+        <header data-toggle="${section.id}">
+          <h2>${escapeHtml(section.title)}</h2>
+          <span class="area-count"><span>${answeredInSection}/${section.questions.length} answered</span> &nbsp; <span class="toggle">[−]</span></span>
+        </header>
+        <div class="grid">${cards}</div>
+      </section>
+    `;
+  }).join("");
+  attachListeners();
+}
+
+function attachListeners() {
+  document.querySelectorAll('input[type="radio"]').forEach(r => {
+    r.addEventListener("change", (e) => {
+      const qid = e.target.dataset.qid;
+      const value = e.target.value;
+      for (const sec of STATE.sections) {
+        for (const q of sec.questions) {
+          if (q.id === qid) {
+            q.answer = value;
+          }
+        }
+      }
+      recalcStats();
+      renderStats();
+      const card = document.getElementById("card-" + qid);
+      if (card) {
+        card.classList.remove("chat-only");
+        card.classList.add("answered");
+      }
+      const section = e.target.closest("section.area");
+      if (section) {
+        const id = section.id.replace(/^sec-/, "");
+        const sec = STATE.sections.find(s => s.id === id);
+        if (sec) {
+          const ans = sec.questions.filter(q => q.answer != null && q.answer !== "").length;
+          section.querySelector(".area-count span").textContent = `${ans}/${sec.questions.length} answered`;
+        }
+      }
+    });
+  });
+  document.querySelectorAll("textarea").forEach(t => {
+    t.addEventListener("input", (e) => {
+      const qid = e.target.dataset.qid;
+      const value = e.target.value;
+      for (const sec of STATE.sections) {
+        for (const q of sec.questions) {
+          if (q.id === qid) {
+            q.chat_more = value;
+          }
+        }
+      }
+      const hasContent = value.trim().length > 0;
+      e.target.classList.toggle("has-content", hasContent);
+      recalcStats();
+      renderStats();
+      const card = document.getElementById("card-" + qid);
+      if (card && !card.classList.contains("answered")) {
+        card.classList.toggle("chat-only", hasContent);
+      }
+    });
+  });
+  document.querySelectorAll("section.area > header").forEach(h => {
+    h.addEventListener("click", () => {
+      const sec = h.parentElement;
+      sec.classList.toggle("collapsed");
+      const t = h.querySelector(".toggle");
+      if (t) t.textContent = sec.classList.contains("collapsed") ? "[+]" : "[−]";
+    });
+  });
+}
+
+async function saveAnswers() {
+  recalcStats();
+  renderStats();
+  const payload = JSON.stringify(STATE, null, 2);
+  // Prefer File System Access API
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: "05-QUESTIONS.json",
+        types: [{ description: "JSON", accept: { "application/json": [".json"] } }]
+      });
+      const stream = await handle.createWritable();
+      await stream.write(payload);
+      await stream.close();
+      flashSaved();
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      console.warn("FS Access API failed, falling back to download", err);
+    }
+  }
+  const blob = new Blob([payload], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "05-QUESTIONS.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  flashSaved();
+}
+
+function flashSaved() {
+  const el = document.getElementById("saved-flash");
+  el.classList.add("visible");
+  setTimeout(() => el.classList.remove("visible"), 6000);
+}
+
+document.getElementById("save-top").addEventListener("click", saveAnswers);
+document.getElementById("save-bottom").addEventListener("click", saveAnswers);
+
+// Initial render
+recalcStats();
+renderStats();
+renderSections();
+</script>
+</body>
+</html>

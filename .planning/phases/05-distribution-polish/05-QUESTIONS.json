@@ -1,0 +1,78 @@
+{
+  "phase": "05-distribution-polish",
+  "generated_at": "2026-05-25T16:30:00.000Z",
+  "finalized_at": "2026-05-25T17:00:00.000Z",
+  "stats": {
+    "total": 23,
+    "answered": 23,
+    "chat_more": 0,
+    "remaining": 0
+  },
+  "sections": [
+    {
+      "id": "plan-05-04-previewers",
+      "title": "Plan 05-04 — Full-fidelity previewers + Visual-regression baseline (DIST-04)",
+      "questions": [
+        { "id": "Q-01", "title": "xlsx → grid renderer", "answer": "c", "chat_more": "", "status": "answered" },
+        { "id": "Q-02", "title": "pdf → embed renderer", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-03", "title": "md → rendered renderer", "answer": "b", "chat_more": "", "status": "answered" },
+        { "id": "Q-04", "title": "Visual-regression infrastructure", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-05", "title": "Visual-regression CI cadence", "answer": "a", "chat_more": "", "status": "answered" }
+      ]
+    },
+    {
+      "id": "plan-05-05-zero-rabbit-holes",
+      "title": "Plan 05-05 — Zero-rabbit-holes finishers",
+      "questions": [
+        { "id": "Q-06", "title": "Paused-agent banner — surface placement", "answer": "c", "chat_more": "", "status": "answered" },
+        { "id": "Q-07", "title": "Paused-agent banner — copy variants per pause cause", "answer": "b", "chat_more": "", "status": "answered", "deviation_from_recommended": true },
+        { "id": "Q-08", "title": "Ref-chip peek card — trigger", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-09", "title": "Ref-chip peek card — content fields", "answer": "c", "chat_more": "", "status": "answered", "deviation_from_recommended": true },
+        { "id": "Q-10", "title": "GAP-PICKER-ROW-DISPATCH fix shape", "answer": "a", "chat_more": "", "status": "answered" }
+      ]
+    },
+    {
+      "id": "plan-05-06-phase-4-1-polish",
+      "title": "Plan 05-06 — Phase 4.1 surface polish bundle",
+      "questions": [
+        { "id": "Q-11", "title": "Pin/Unpin toggle — confirmation pattern", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-12", "title": "Pinned-chip flash-highlight duration", "answer": "a", "chat_more": "", "status": "answered" }
+      ]
+    },
+    {
+      "id": "plan-05-07-phase-4-2-polish",
+      "title": "Plan 05-07 — Phase 4.2 polish bundle",
+      "questions": [
+        { "id": "Q-13", "title": "D8 — Browser-Back behavior after deep-link consume", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-14", "title": "D4/D5 React key warnings — fix scope", "answer": "a", "chat_more": "", "status": "answered" }
+      ]
+    },
+    {
+      "id": "plan-05-08-power-features",
+      "title": "Plan 05-08 — Phase 4.1 power features",
+      "questions": [
+        { "id": "Q-15", "title": "Archive full-view — surface", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-16", "title": "Bulk-unarchive — confirmation", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-17", "title": "Cold-task-from-global — button location", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-18", "title": "Diagnostics toggle — memory scope", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-19", "title": "Composer shortcuts overlay — trigger + surface", "answer": "b", "chat_more": "", "status": "answered", "deviation_from_recommended": true },
+        { "id": "Q-20", "title": "Storage-pin live wiring — semantics", "answer": "a", "chat_more": "", "status": "answered" }
+      ]
+    },
+    {
+      "id": "plan-05-09-tooling-infra",
+      "title": "Plan 05-09 — Tooling + infra cleanup",
+      "questions": [
+        { "id": "Q-21", "title": "VPS clarity-pack/scripts/ sync mechanism", "answer": "a", "chat_more": "", "status": "answered" },
+        { "id": "Q-22", "title": "Windows max-path worktree fix", "answer": "a", "chat_more": "", "status": "answered" }
+      ]
+    },
+    {
+      "id": "plan-05-10-v1-final-closure",
+      "title": "Plan 05-10 — v1.0.0 final closure",
+      "questions": [
+        { "id": "Q-23", "title": "Rollback rehearsal scope", "answer": "c", "chat_more": "", "status": "answered", "deviation_from_recommended": true, "deviation_note": "STRONG DEVIATION — operator skipping rehearsal entirely. Phase 1 bookend snapshot/restore is now the SOLE recovery path for v1.0.0 ship." }
+      ]
+    }
+  ]
+}
