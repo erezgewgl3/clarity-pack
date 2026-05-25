@@ -1,0 +1,5 @@
+# Plan 05-04 Task 4 (DIST-04) — binary attributes for the visual-regression
+# baseline PNGs (per D-25 sketch lockdown). Diffs/ stays a build artifact
+# (linguist-generated so it doesn't pollute language stats).
+test/visual/baselines/*.png binary
+test/visual/diffs/* linguist-generated=true

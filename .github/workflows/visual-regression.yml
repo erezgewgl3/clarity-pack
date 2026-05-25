@@ -1,0 +1,62 @@
+name: visual-regression
+
+# Plan 05-04 Task 4 (DIST-04) — Playwright-driven static-sketch
+# visual regression. Diffs each tracked sketches/*.html against
+# test/visual/baselines/<sketch>.png with VISUAL_DIFF_THRESHOLD =
+# 0.02 (2% of pixels may differ). Mirrors the a11y-check.yml shape
+# (D-05 — every PR / push to main, hard failure, diff PNG uploaded
+# as an artifact on failure).
+#
+# workflow_dispatch with regen_baselines='1' regenerates baselines
+# on a Linux runner (per D-04 cross-OS antialiasing fallback). The
+# regenerated PNGs are uploaded as an artifact for the operator to
+# commit; the diff branch never runs in regen mode.
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      regen_baselines:
+        description: 'Set to "1" to regenerate baselines instead of diffing'
+        required: false
+        default: '0'
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium with deps
+        run: npx playwright install --with-deps chromium
+      - name: Visual-regression
+        run: |
+          if [ "${{ github.event.inputs.regen_baselines }}" = "1" ]; then
+            pnpm visual:update
+          else
+            pnpm visual:check
+          fi
+      - name: Upload diffs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-diffs
+          path: test/visual/diffs/
+      - name: Upload regenerated baselines (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.regen_baselines == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-baselines-linux
+          path: test/visual/baselines/
