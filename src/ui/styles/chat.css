@@ -438,7 +438,15 @@
 [data-clarity-surface="chat"] .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 22px 16px;
+  /* Plan 05-06 Task 3 (item e) — padding-top: 0 (was 24px) so the
+   * .auto-refresh LIVE indicator (first child, position: sticky; top: 0)
+   * sits at the .messages content edge without needing a negative top
+   * margin. The negative top margin used to be `-24px` on .auto-refresh
+   * and was the audited sticky-drift breaker — see the comment block at
+   * chat.css ~487 above. The horizontal -22px margin on .auto-refresh
+   * keeps the full-bleed visual; this rule's 22px horizontal padding is
+   * preserved for the message-bubble content below. */
+  padding: 0 22px 16px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -488,9 +496,35 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  /* Full-bleed strip — cancel the .messages 22px side padding so scrolling
-   * message content is fully covered, not peeking past the indicator. */
-  margin: -24px -22px 6px;
+  /* Plan 05-06 Task 3 (item e) — LIVE indicator sticky restore.
+   *
+   * AUDITED BREAKER (named by selector + property + value at chat.css:493
+   * in the rc.7 working tree, now removed):
+   *   selector:  [data-clarity-surface="chat"] .auto-refresh
+   *   property:  margin
+   *   value:     -24px -22px 6px
+   *   effect:    The -24px top margin pulled the element's static-flow
+   *              position 24px ABOVE the .messages padding-box top edge.
+   *              When `top: 0` resolved, the browser kept the sticky
+   *              element at its static-flow position (-24px) on scroll —
+   *              so as the operator scrolled DOWN the indicator stayed
+   *              24px below the .messages top, reading as "floating
+   *              mid-thread" rather than pinned to the top.
+   *   evidence:  test/ui/chat-live-sticky.test.mjs (Playwright headless)
+   *              measured elTop=25, containerTop=1, drift=24 after a
+   *              200px scroll — exactly the -24px margin offset.
+   *
+   * FIX: drop the negative TOP margin (was an over-aggressive full-bleed
+   * trick from the GAP-8 rework). Keep the -22px horizontal margins (those
+   * are the canonical full-bleed cancel for the .messages 22px side
+   * padding and DO NOT interact with vertical sticky behavior). Replace
+   * the top-margin's full-bleed intent with a `.messages` padding-top: 0
+   * adjustment below, so the indicator naturally sits AT the .messages
+   * content edge — no negative top margin, no sticky drift, same visual.
+   *
+   * The convergence gate test/ui/chat-live-sticky.test.mjs MUST pass after
+   * this fix. */
+  margin: 0 -22px 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2132,8 +2166,16 @@
 [data-clarity-surface="chat"] .clarity-toast {
   background: var(--bg-3);
   border: 1px solid var(--line-bright);
+  /* Plan 05-06 Task 3 (item f) — 3px solid var(--you) left-edge stripe so
+   * clarity-pack toasts are visually unambiguous against Paperclip host
+   * toasts (which sit bottom-LEFT). Left padding bumped by 9px (12px → 21px)
+   * to compensate for the stripe so the text indent visually matches the
+   * original. No new color token — reuses the host-defined --you gold
+   * accent (defined at the surface root + already powering the .you-soft
+   * highlight family + Plan 04.2-04's scroll-and-flash keyframe at chat.css:2367). */
+  border-left: 3px solid var(--you);
   color: var(--ink);
-  padding: 12px 16px;
+  padding: 12px 16px 12px 21px;
   font-family: "Geist Mono", monospace;
   font-size: 12px;
   letter-spacing: 0.04em;
@@ -2142,6 +2184,18 @@
   pointer-events: auto;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   animation: clarity-toast-in 0.2s ease;
+}
+/* Plan 05-06 Task 3 (item f) — leading ↗ glyph rendered as the toast body's
+ * ::before pseudo-element. Pairs with the left-edge stripe above so even a
+ * grayscale rendering (or a user with a custom --you theme) still has the
+ * disambiguation signal. The glyph is a CSS-emitted content node — decorative
+ * by definition; the toast's role="status" text in toast.tsx stays the
+ * canonical accessibility surface (assistive tech reads the message
+ * via aria-live without needing the glyph). No dangerouslySetInnerHTML
+ * required (check-a11y R3 invariant holds). */
+[data-clarity-surface="chat"] .clarity-toast::before {
+  content: "↗ ";
+  color: var(--you);
 }
 @keyframes clarity-toast-in {
   from {
