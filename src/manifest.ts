@@ -536,6 +536,19 @@ const manifest: PaperclipPluginManifestV1 = {
         description:
           'BULL-01: timezone for the 06:30 daily compile. Locked to ET for v1.',
       },
+      // Phase 6.1 ROOM-10 (D-05) — Situation Room per-agent artifact chip row
+      // window. Mirrors the Phase 2 D-03 situationRefreshIntervalMs shape. The
+      // situation.artifacts data handler reads this at dispatch time; unknown
+      // / out-of-enum values coerce to '24h' at handler entry (T-06.1-10
+      // mitigation -- never trust the raw config string in SQL). 24h matches
+      // the Surface 2 mockup's verbatim "Artifacts shipped today" copy.
+      situationArtifactsWindow: {
+        type: 'string',
+        enum: ['24h', '7d', '30d'],
+        default: '24h',
+        description:
+          'Window for the Situation Room per-agent artifact chip row (ROOM-10). Default 24h matches the Surface 2 verbatim copy.',
+      },
     },
   },
   // Plan 02-04 Task 2 — recompute-situation 60s cron job. The handler in
