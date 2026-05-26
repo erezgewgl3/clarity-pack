@@ -205,7 +205,19 @@ test('Plan 05-11 round-trip: upload sample.md -> list returns 1 -> issue_documen
   assert.equal(uploadResult.mimeType, 'text/markdown');
   assert.ok(uploadResult.byteSize > 1900 && uploadResult.byteSize < 3000);
   const documentKey = uploadResult.documentKey;
-  assert.match(documentKey, /^chat-attach-msg-uuid-1-sample\.md$/);
+  // Hotfix 2026-05-26: document_key is UUID-only (no filename component).
+  // The original filename `sample.md` is preserved on documents.title (host)
+  // and chat_message_attachments.original_filename (plugin namespace).
+  assert.match(
+    documentKey,
+    /^chat-attach-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    'documentKey is `chat-attach-<uuid>` (host-validator-safe)',
+  );
+  assert.equal(
+    documentKey,
+    `chat-attach-${uploadResult.attachmentId}`,
+    'documentKey embeds attachmentId',
+  );
 
   // 2. chat.attachment.list returns 1 attachment with matching documentKey.
   const listResult = await listHandler({
@@ -229,6 +241,14 @@ test('Plan 05-11 round-trip: upload sample.md -> list returns 1 -> issue_documen
   );
   assert.equal(documentList.length, 1, 'one document on the issue');
   assert.equal(documentList[0].key, documentKey);
+  // Hotfix 2026-05-26: original filename lives on documents.title (host).
+  // The plugin namespace also keeps it on chat_message_attachments.
+  // .original_filename (asserted on listResult above) -- belt-and-braces.
+  assert.equal(
+    documentList[0].title,
+    'sample.md',
+    'original filename preserved on documents.title (host side)',
+  );
 
   // 4. CTT-07: ctx.issues.update callCount === 0 across the entire test.
   assert.equal(

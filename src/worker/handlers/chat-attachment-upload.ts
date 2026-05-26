@@ -18,17 +18,25 @@
 //      the same chat_message_id.
 //   6. Mime-sniff guard -- the declared extension must match the sniffed
 //      kind.
-//   7. ctx.issues.documents.upsert with a canonical document key.
-//   8. insertChatMessageAttachment (FK-safe under upload-on-send semantics).
-//   9. Return { ok, attachmentId, documentKey, mimeType, byteSize }.
+//   7. Generate attachmentId (UUID v4) + compose UUID-only document key.
+//   8. ctx.issues.documents.upsert with the UUID-only key + original filename
+//      preserved in the `title` field (host stores it in documents.title).
+//   9. insertChatMessageAttachment (FK-safe under upload-on-send semantics).
+//  10. Return { ok, attachmentId, documentKey, mimeType, byteSize }.
 //
 // Threat-model anchors:
 //   T-05-11-01 (Tampering): step 6 enforces declared-vs-actual mime via
 //     magic-number sniff before any host write.
 //   T-05-11-02 (DoS):       steps 4 + 5 enforce 10 MB / file + 50 MB / message
 //     before any host write.
-//   T-05-11-07 (Tampering): safeFilename strips path separators + control
-//     chars + truncates to 64 chars before composing the document_key.
+//   T-05-11-07 (Tampering): UUID-only document_key composition (Hotfix
+//     2026-05-26) keeps user-supplied filename out of the host's document
+//     key entirely; the original filename is preserved in documents.title
+//     (host) + chat_message_attachments.original_filename (plugin namespace).
+//     The safeFilename helper is retained for future use but no longer
+//     participates in document-key composition. Hotfix root cause: Paperclip's
+//     host validator rejects keys containing dots, underscores, or uppercase
+//     (live drill 2026-05-26 surfaced 6+ "Invalid document key" failures).
 //
 // CTT-07 invariant by construction: this handler reads + writes the plugin-
 // namespace chat_message_attachments table and writes to
@@ -102,9 +110,15 @@ function lowerExt(name: string): string {
 
 /**
  * Strip path separators + control characters from `name` and truncate to
- * SAFE_FILENAME_MAX characters. Used to compose the canonical document_key
- * so a hostile filename cannot escape the plugin's namespace or include
- * shell-meaningful tokens (T-05-11-07 path-traversal mitigation).
+ * SAFE_FILENAME_MAX characters.
+ *
+ * NOTE (Hotfix 2026-05-26): This helper used to compose the document_key
+ * (`chat-attach-<msgId>-<safeFilename>`). The host validator rejects keys
+ * with dots/underscores/uppercase, so document_key composition switched to
+ * UUID-only. The helper is retained for future use (e.g. sanitizing
+ * filenames for non-key contexts, or if the host loosens key validation).
+ * It is NOT currently called by registerChatAttachmentUpload but its tests
+ * still pin the contract for future re-use.
  */
 function safeFilename(name: string): string {
   // Replace anything outside [A-Za-z0-9._-] with '_'. This intentionally
@@ -215,12 +229,26 @@ export function registerChatAttachmentUpload(ctx: ChatAttachmentUploadCtx): void
       };
     }
 
-    // 7. Compose canonical document key + invoke ctx.issues.documents.upsert.
-    //    The key namespace `chat-attach-<message_uuid>-<safefilename>` keeps
-    //    chat-uploaded docs distinguishable from plan-authored documents in
-    //    the same store; the Plan 05-04 DIST-04 dispatcher routes them all
-    //    correctly via extension.
-    const documentKey = `chat-attach-${chatMessageId}-${safeFilename(originalFilename)}`;
+    // 7. Generate attachmentId (UUID v4) FIRST. The document key is composed
+    //    from this UUID only -- NO filename component. Hotfix 2026-05-26:
+    //    Paperclip's host validator rejects keys containing dots,
+    //    underscores, or uppercase (live drill surfaced 6+ "Invalid document
+    //    key" failures against the previous `chat-attach-<msgId>-<filename>`
+    //    composition). UUIDs are lowercase hex + hyphens only, matching the
+    //    host's accepted pattern (`compile-result` style).
+    //
+    //    The original filename is preserved in two places: (a) host:
+    //    documents.title (set below via the upsert call); (b) plugin
+    //    namespace: chat_message_attachments.original_filename. The UI
+    //    renders filenames from those sources -- never by parsing the key.
+    const attachmentId = randomUUID();
+    const documentKey = `chat-attach-${attachmentId}`;
+
+    // 8. Invoke ctx.issues.documents.upsert with the UUID-only key and the
+    //    original filename in the `title` field. The Plan 05-04 DIST-04
+    //    dispatcher reads file content via ctx.issues.documents.get(key)
+    //    and routes by extension stored alongside; it does not parse the
+    //    document key itself.
     const docFormat = FORMAT_BY_EXT[ext];
     try {
       await ctx.issues.documents.upsert({
@@ -241,11 +269,11 @@ export function registerChatAttachmentUpload(ctx: ChatAttachmentUploadCtx): void
       return { error: 'UPLOAD_FAILED' as const };
     }
 
-    // 8. Insert chat_message_attachments row. FK to chat_messages is
+    // 9. Insert chat_message_attachments row. FK to chat_messages is
     //    structurally safe under Option B upload-on-send semantics
     //    (chat.send has already committed the row by the time this handler
-    //    runs).
-    const attachmentId = randomUUID();
+    //    runs). attachmentId from step 7 is the PK + the connection to
+    //    the document just upserted.
     try {
       await insertChatMessageAttachment(ctx, {
         id: attachmentId,

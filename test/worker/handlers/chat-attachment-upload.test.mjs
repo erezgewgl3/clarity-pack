@@ -127,7 +127,9 @@ function makeCtx({
         if (/COALESCE\s*\(\s*SUM\s*\(\s*byte_size\s*\)/i.test(sql)) {
           return [{ sum_bytes: existingByteSum }];
         }
-        // Readback after insertChatMessageAttachment.
+        // Readback after insertChatMessageAttachment. Hotfix 2026-05-26:
+        // document_key is UUID-only (chat-attach-<uuid>); the inserted id
+        // (params[0]) IS the UUID, so we echo it into document_key.
         if (
           /FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_message_attachments[\s\S]*WHERE\s+id\s*=\s*\$1/i.test(
             sql,
@@ -140,7 +142,7 @@ function makeCtx({
               topic_issue_id: 'issue-topic-1',
               chat_message_id: 'msg-uuid-1',
               comment_id: null,
-              document_key: 'chat-attach-msg-uuid-1-sample',
+              document_key: `chat-attach-${params[0]}`,
               mime_type: 'application/pdf',
               original_filename: 'sample.pdf',
               byte_size: 1024,
@@ -276,8 +278,38 @@ test('chat.attachment.upload: happy path -- pdf passes sniff + upserts + inserts
   assert.equal(result.ok, true);
   assert.equal(result.mimeType, 'application/pdf');
   assert.equal(result.byteSize, 1024);
-  assert.match(result.documentKey, /^chat-attach-msg-uuid-1-sample\.pdf$/);
+  // Hotfix 2026-05-26: document_key is UUID-only (no filename component).
+  // Format: `chat-attach-<uuid v4>` -- lowercase hex + hyphens only.
+  assert.match(
+    result.documentKey,
+    /^chat-attach-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    'documentKey is `chat-attach-<uuid>` (UUID-only, host-validator-safe)',
+  );
+  // attachmentId is the SAME UUID that the key embeds.
+  assert.equal(
+    result.documentKey,
+    `chat-attach-${result.attachmentId}`,
+    'documentKey embeds attachmentId verbatim',
+  );
+  // Host validator regression guard: the generated key MUST contain only
+  // lowercase letters + digits + hyphens (no dots, underscores, uppercase).
+  // This matches Paperclip's accepted pattern (`compile-result` style); the
+  // previous filename-bearing key tripped "Invalid document key" 6+ times on
+  // the Countermoves drill 2026-05-26.
+  assert.match(
+    result.documentKey,
+    /^[a-z0-9-]+$/,
+    'host-validator-safe charset: lowercase + digits + hyphens only',
+  );
   assert.equal(ctx._documentUpsertCalls.length, 1);
+  // Confirm the upsert call also carries the original filename in `title`
+  // (the host stores it on documents.title -- this is how the filename
+  // survives despite being absent from the key).
+  assert.equal(
+    ctx._documentUpsertCalls[0].title,
+    'sample.pdf',
+    'original filename preserved in documents.title',
+  );
   const inserts = ctx._calls.filter(
     (c) =>
       c.kind === 'execute' &&
