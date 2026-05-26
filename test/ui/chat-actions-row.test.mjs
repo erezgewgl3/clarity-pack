@@ -65,16 +65,24 @@ test('actions-row.tsx: + New topic button click invokes onNewTopic', () => {
   );
 });
 
-test('actions-row.tsx: mounts the DiagnosticsToggle (moved from .head-actions)', () => {
+test('actions-row.tsx (rc.8 final 2026-05-26): DiagnosticsToggle REMOVED per operator simplification', () => {
   const c = code(SRC);
-  assert.match(c, /import\s*\{?\s*DiagnosticsToggle/, 'must import DiagnosticsToggle');
-  assert.match(c, /<DiagnosticsToggle\s+/, 'must render <DiagnosticsToggle>');
+  // Visible JSX element is gone — the props are kept on the type signature
+  // so callers don't need to change, but the chip no longer renders.
+  assert.doesNotMatch(
+    c,
+    /<DiagnosticsToggle\s+/,
+    'DiagnosticsToggle JSX must NOT be rendered (rc.8 simplification — kept the worker-side `includeDiagnostics` param available, removed the in-UI toggle)',
+  );
 });
 
-test('actions-row.tsx: Diagnostics passes armed + onToggle from props', () => {
+test('actions-row.tsx: Diagnostics props still on type signature so callers do not break', () => {
   const c = code(SRC);
-  assert.match(c, /armed=\{diagnosticsOn\}/);
-  assert.match(c, /onToggle=\{onDiagnosticsToggle\}/);
+  // The component type retains the diagnostics props (caller chain is
+  // ChatPage → Composer → ChatActionsRow); we preserve the signature so
+  // a future v1.1 can re-enable the toggle without a caller migration.
+  assert.match(c, /diagnosticsOn:\s*boolean/);
+  assert.match(c, /onDiagnosticsToggle:/);
 });
 
 // --- Plan 04.1-09: single-key `T` shortcut (replaces ⌘+T / Ctrl+T) ----------

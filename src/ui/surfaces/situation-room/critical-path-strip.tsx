@@ -29,6 +29,25 @@ function defaultNarration(terminal: Terminal): string {
   }
 }
 
+/**
+ * rc.8 final 2026-05-26 — idle-state filter. Live drill found every idle
+ * agent generates a `HUMAN_ACTION_ON: "<Agent> has no owner assigned"`
+ * chain — accurate per Paperclip's data model (the agent literally has
+ * no operator assignment) but useless as actionable critical path. Three
+ * "no owner assigned" rows in a row read as accusatory noise, not
+ * "single human action ending a transitively-resolved blocker chain"
+ * (PROJECT.md Surface 2 spec). Plan 06-01 will replace this with
+ * properly-wired "Take ownership" affordances + real blocker-chain
+ * resolution. For rc.8 final we suppress the no-owner-assigned chains
+ * so the strip only renders when there's an actual critical path.
+ */
+const NO_OWNER_ASSIGNED_RE = /\bhas no owner assigned\b/i;
+
+function isActionableChain(chain: BlockerChainResult): boolean {
+  const label = chain.terminal?.label ?? '';
+  return !NO_OWNER_ASSIGNED_RE.test(label);
+}
+
 export function CriticalPathStrip({
   chains,
   narrative,
@@ -37,12 +56,18 @@ export function CriticalPathStrip({
   narrative?: string | null;
 }): React.ReactElement | null {
   if (!chains || chains.length === 0) return null;
+  const actionable = chains.filter(isActionableChain);
+  if (actionable.length === 0) return null;
   return (
     <section className="clarity-critical-path" data-clarity-region="critical-path">
       <h2 className="clarity-critical-path-heading">Critical Path</h2>
       <ol className="clarity-critical-path-list">
-        {chains.slice(0, 3).map((chain, i) => (
-          <li key={i} className="clarity-critical-path-item" data-terminal-kind={chain.terminal.kind}>
+        {actionable.slice(0, 3).map((chain, i) => (
+          <li
+            key={`${chain.terminal.kind}-${i}-${chain.terminal.label}`}
+            className="clarity-critical-path-item"
+            data-terminal-kind={chain.terminal.kind}
+          >
             <span className="clarity-critical-path-index">{i + 1}.</span>
             <span className="clarity-critical-path-text">{defaultNarration(chain.terminal)}</span>
           </li>

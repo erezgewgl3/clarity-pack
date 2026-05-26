@@ -143,16 +143,28 @@ test('Chat shell: the 3-column shell grid 264px 1fr 360px is present (Plan 04.1-
   assert.match(css, /grid-template-columns:\s*264px\s+1fr\s+360px/);
 });
 
-test('Chat shell: chat.css — every rule scoped to [data-clarity-surface="chat"]', () => {
+test('Chat shell: chat.css — every rule scoped to [data-clarity-surface] (chat-specific OR shared dialog rules) — rc.8 final', () => {
+  // rc.8 final 2026-05-26 — the true-task-dialog rules were broadened from
+  // [data-clarity-surface="chat"] to bare [data-clarity-surface] so the
+  // dialog renders correctly when invoked from Situation Room / Archive /
+  // other surfaces. The chat-shell scope test now accepts EITHER form:
+  // chat-specific (the original Plan 04.1-08 contract) OR bare (shared
+  // primitives like the dialog backdrop). Both forms still satisfy the
+  // SCAF-06 + COEXIST-01 surface-scoping invariant.
   const rules = parseRules(readFileSync(CHAT_CSS, 'utf8'));
   assert.ok(rules.length > 0, 'expected at least one CSS rule');
-  const offenders = rules.filter(
-    (r) => !/\[data-clarity-surface="chat"\]/.test(r.selector),
-  );
+  const offenders = rules.filter((r) => {
+    const sel = r.selector;
+    // Accept chat-specific scope...
+    if (/\[data-clarity-surface="chat"\]/.test(sel)) return false;
+    // ...or bare [data-clarity-surface] for shared cross-surface primitives.
+    if (/\[data-clarity-surface\](?!=)/.test(sel)) return false;
+    return true;
+  });
   assert.equal(
     offenders.length,
     0,
-    `unscoped selectors:\n${offenders.map((o) => o.selector).join('\n')}`,
+    `unscoped selectors (must start with [data-clarity-surface="chat"] OR bare [data-clarity-surface]):\n${offenders.map((o) => o.selector).join('\n')}`,
   );
 });
 

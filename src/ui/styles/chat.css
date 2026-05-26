@@ -1340,7 +1340,7 @@
  * closes (via onClick in true-task-dialog.tsx); click inside the body
  * stops propagation. The Plan 04.1-08 `::backdrop` pseudo-element rule is
  * dead — the new backdrop is a real DOM element. */
-[data-clarity-surface="chat"] .true-task-dialog-backdrop {
+[data-clarity-surface] .true-task-dialog-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(8, 7, 5, 0.75);
@@ -1351,7 +1351,7 @@
   padding: 40px;
   z-index: 200;
 }
-[data-clarity-surface="chat"] .true-task-dialog {
+[data-clarity-surface] .true-task-dialog {
   background: var(--bg-2);
   color: var(--ink);
   border: 1px solid var(--line-bright);
@@ -1370,7 +1370,7 @@
   margin: 0;
   font-family: "Geist", "Helvetica Neue", sans-serif;
 }
-[data-clarity-surface="chat"] .true-task-dialog-eyebrow {
+[data-clarity-surface] .true-task-dialog-eyebrow {
   font-family: "Geist Mono", monospace;
   font-size: 10px;
   letter-spacing: 0.16em;
@@ -1379,7 +1379,7 @@
   font-weight: 500;
   margin-bottom: 12px;
 }
-[data-clarity-surface="chat"] .true-task-dialog-heading {
+[data-clarity-surface] .true-task-dialog-heading {
   font-family: "Geist", "Helvetica Neue", sans-serif;
   font-size: 18px;
   font-weight: 400;
@@ -1387,13 +1387,13 @@
   margin: 0 0 16px;
   line-height: 1.2;
 }
-[data-clarity-surface="chat"] .true-task-dialog-field {
+[data-clarity-surface] .true-task-dialog-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-bottom: 16px;
 }
-[data-clarity-surface="chat"] .true-task-dialog-field > label {
+[data-clarity-surface] .true-task-dialog-field > label {
   font-family: "Geist Mono", monospace;
   font-size: 10px;
   letter-spacing: 0.16em;
@@ -1401,8 +1401,8 @@
   color: var(--ink-3);
   font-weight: 500;
 }
-[data-clarity-surface="chat"] .true-task-dialog-field input,
-[data-clarity-surface="chat"] .true-task-dialog-field select {
+[data-clarity-surface] .true-task-dialog-field input,
+[data-clarity-surface] .true-task-dialog-field select {
   background: var(--bg);
   color: var(--ink);
   border: 1px solid var(--line);
@@ -1411,13 +1411,13 @@
   font-size: 14.5px;
   width: 100%;
 }
-[data-clarity-surface="chat"] .true-task-dialog-field input:focus,
-[data-clarity-surface="chat"] .true-task-dialog-field select:focus {
+[data-clarity-surface] .true-task-dialog-field input:focus,
+[data-clarity-surface] .true-task-dialog-field select:focus {
   outline: 1px solid var(--ink-2);
   outline-offset: 1px;
   border-color: var(--ink-3);
 }
-[data-clarity-surface="chat"] .true-task-dialog-helper {
+[data-clarity-surface] .true-task-dialog-helper {
   font-family: "Geist Mono", monospace;
   font-size: 10px;
   letter-spacing: 0.04em;
@@ -1425,7 +1425,7 @@
   margin: 0;
   text-transform: none;
 }
-[data-clarity-surface="chat"] .true-task-dialog-source {
+[data-clarity-surface] .true-task-dialog-source {
   border-left: 2px solid var(--line);
   background: var(--bg);
   color: var(--ink-2);
@@ -1437,7 +1437,7 @@
   max-height: 160px;
   overflow-y: auto;
 }
-[data-clarity-surface="chat"] .true-task-dialog-actions {
+[data-clarity-surface] .true-task-dialog-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -2098,7 +2098,7 @@
  *   - Cancel + Create task button row
  * The dialog component (true-task-dialog.tsx) renders / omits the FROM-MESSAGE
  * block based on the mode prop. */
-[data-clarity-surface="chat"] .true-task-dialog-from-msg {
+[data-clarity-surface] .true-task-dialog-from-msg {
   border-left: 3px solid var(--you);
   background: var(--bg-3);
   padding: 10px 14px;
@@ -2110,7 +2110,7 @@
   max-height: 160px;
   overflow-y: auto;
 }
-[data-clarity-surface="chat"] .true-task-dialog-from-msg-label {
+[data-clarity-surface] .true-task-dialog-from-msg-label {
   font-family: "Geist Mono", monospace;
   font-size: 9.5px;
   letter-spacing: 0.22em;
@@ -2121,14 +2121,14 @@
   font-weight: 600;
   display: block;
 }
-[data-clarity-surface="chat"] .true-task-dialog-foot-hint {
+[data-clarity-surface] .true-task-dialog-foot-hint {
   margin-right: auto;
   font-family: "Geist Mono", monospace;
   font-size: 10px;
   color: var(--ink-3);
   letter-spacing: 0.04em;
 }
-[data-clarity-surface="chat"] .true-task-dialog-foot-hint kbd {
+[data-clarity-surface] .true-task-dialog-foot-hint kbd {
   display: inline-block;
   padding: 1px 5px;
   border: 1px solid var(--line-bright);
@@ -2260,7 +2260,7 @@
  *
  * Other dialog field styling (input/select) is unchanged — see the
  * .true-task-dialog-field input, select rule above (chat.css:1325). */
-[data-clarity-surface="chat"] .true-task-dialog textarea {
+[data-clarity-surface] .true-task-dialog textarea {
   background: var(--bg);
   color: var(--ink);
   border: 1px solid var(--line);
@@ -2274,7 +2274,7 @@
   resize: vertical;
   line-height: 1.5;
 }
-[data-clarity-surface="chat"] .true-task-dialog textarea:focus {
+[data-clarity-surface] .true-task-dialog textarea:focus {
   outline: 1px solid var(--ink-2);
   outline-offset: 1px;
   border-color: var(--ink-3);

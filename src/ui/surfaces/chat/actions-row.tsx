@@ -25,7 +25,12 @@
 
 import * as React from 'react';
 
-import { DiagnosticsToggle } from './diagnostics-toggle.tsx';
+// rc.8 final 2026-05-26 — DiagnosticsToggle removed from the visible
+// actions row per operator simplification call. The toggle's underlying
+// localStorage state + the worker-side `includeDiagnostics:true` param
+// still work; only the visible affordance is gone. v1.1+ may re-introduce
+// behind a slash-command, settings panel, or URL param.
+// import { DiagnosticsToggle } from './diagnostics-toggle.tsx';
 
 export function ChatActionsRow({
   onCreateTask,
@@ -100,11 +105,9 @@ export function ChatActionsRow({
       >
         + New topic
       </button>
-      <DiagnosticsToggle
-        armed={diagnosticsOn}
-        onToggle={onDiagnosticsToggle}
-        topicId={diagnosticsTopicId}
-      />
+      {/* DiagnosticsToggle removed in rc.8 final per simplification — see
+          import-site comment. Props remain wired through the type so callers
+          don't change; the underlying state machine is unused at this surface. */}
       <span className="spacer" aria-hidden="true" />
     </div>
   );

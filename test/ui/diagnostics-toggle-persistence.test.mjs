@@ -97,11 +97,19 @@ test('DP-data-attr: button renders data-clarity-diagnostics-topic for testing', 
 
 // ---- DP-actions-row: ChatActionsRow threads topicId + value-aware onToggle
 
-test('DP-actions-row: ChatActionsRow threads diagnosticsTopicId + value-aware onToggle', () => {
+test('DP-actions-row (rc.8 final 2026-05-26): ChatActionsRow keeps diagnosticsTopicId on the type signature; DiagnosticsToggle JSX removed per simplification', () => {
   const AR = readFileSync(
     path.resolve(HERE, '..', '..', 'src', 'ui', 'surfaces', 'chat', 'actions-row.tsx'),
     'utf8',
   );
+  // Type signature retained so callers don't need to change. v1.1+ may
+  // restore the visible toggle (slash-command / settings page / URL param).
   assert.match(AR, /diagnosticsTopicId/);
-  assert.match(AR, /topicId=\{diagnosticsTopicId\}/);
+  // But the JSX is gone — the previous `topicId={diagnosticsTopicId}` prop
+  // pass-through lived inside <DiagnosticsToggle>, which was removed.
+  assert.doesNotMatch(
+    AR,
+    /topicId=\{diagnosticsTopicId\}/,
+    'DiagnosticsToggle JSX (and its topicId prop pass-through) must be removed in rc.8 final',
+  );
 });
