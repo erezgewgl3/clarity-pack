@@ -158,6 +158,15 @@ import {
   registerDeliverablePreview,
   type DeliverablePreviewCtx,
 } from './worker/handlers/deliverable-preview.ts';
+// Plan 05-11 (CHAT-07 gap closure) — chat.attachment.list (data) +
+// chat.attachment.upload (action). Composer attachments via the plugin-
+// owned ctx.issues.documents.upsert store; chat_message_attachments side
+// table links attachments to chat_messages rows. CTT-07 invariant by
+// construction (no ctx.issues.update).
+import {
+  registerChatAttachmentList,
+  type ChatAttachmentListCtx,
+} from './worker/handlers/chat-attachment-list.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -277,6 +286,11 @@ const plugin = definePlugin({
     // primitive resolves an issue's deterministic chat route through this
     // handler (RCB-02). Non-exempt, opt-in-guard wrapped. Read-only.
     registerChatOpenForIssue(ctx as unknown as ChatOpenForIssueCtx);
+    // Plan 05-11 (CHAT-07) — chat.attachment.list data handler (right-rail
+    // Recent Attachments panel + Reader empty-state cross-check). Read-only
+    // over plugin_clarity_pack_cdd6bda4bd.chat_message_attachments. The
+    // upload action handler is registered in Task 3.
+    registerChatAttachmentList(ctx as unknown as ChatAttachmentListCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
