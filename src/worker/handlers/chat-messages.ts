@@ -322,7 +322,24 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
       .filter((c) => typeof c?.id === 'string' && c.id)
       // Plan 04.1-04 — D-14/D-15 runtime-noise filter. The diagnostics opt-in
       // bypasses the filter so D-16 can render the unfiltered list.
-      .filter((c) => includeDiagnostics || classifyComment(c) === 'conversation')
+      //
+      // rc.8 Phase B 2026-05-26 — operator-message visibility fix. The
+      // Paperclip host stamps every plugin-worker ctx.issues.createComment
+      // call with authorType:'system' (Plan 04.1-11 captured this for the
+      // Task-created marker; production drill 2026-05-26 confirms it applies
+      // to operator chat.send too). classifyComment correctly returns
+      // 'runtime-noise' for authorType:'system' — but operator-initiated
+      // chat sends are NOT runtime noise; they're the very messages the
+      // operator just typed. The chat_messages side table is the
+      // authoritative record: rows with sender_kind:'user' link an operator
+      // send to its comment_id. Allowlist those comments so they pass the
+      // filter regardless of how the host stamped them.
+      .filter((c) => {
+        if (includeDiagnostics) return true;
+        const meta = metaByCommentId.get(c.id as string);
+        if (meta?.sender_kind === 'user') return true;
+        return classifyComment(c) === 'conversation';
+      })
       .slice()
       .sort((a, b) => createdAtMs(a.createdAt) - createdAtMs(b.createdAt))
       .map((c) => {

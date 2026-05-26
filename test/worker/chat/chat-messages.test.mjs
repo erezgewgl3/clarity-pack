@@ -807,3 +807,89 @@ test('U17 ATTACHMENTS-LOOKUP-FAILURE-DEGRADES: a thrown attachments SELECT retur
   assert.equal(result.messages.length, 1);
   assert.deepEqual(result.messages[0].attachments, []);
 });
+
+// ---------------------------------------------------------------------------
+// rc.8 Phase B follow-up (2026-05-26) — operator-sent user messages MUST
+// render in the thread even though the Paperclip host stamps every
+// plugin-worker `ctx.issues.createComment` call with `authorType: 'system'`.
+//
+// Live evidence (Playwright probe 2026-05-26T18:23):
+//   chat.send POST → host returns { ok:true, commentId:"1896d334-..." }
+//   /api/issues/<id>/comments REST → comment exists with body="PHASE-B-VERIFY-..."
+//     and authorType:"system", authorUserId:null
+//   But chat.messages response → comment is MISSING (classifier filtered it)
+//
+// The bug: the Plan 04.1-04 D-14 classifier treats authorType:'system' as
+// runtime-noise. The Plan 04.1-11 marker allowlist exists only for
+// `Task created — ...` strings, not for general operator chat sends. So
+// EVERY operator chat message gets filtered out of its own thread.
+//
+// The fix: in the chat-messages filter, allowlist any comment whose
+// chat_messages side-table row carries `sender_kind:'user'`. The side
+// table is the authoritative record of operator-initiated sends, and the
+// host-stamped authorType is irrelevant to that fact.
+// ---------------------------------------------------------------------------
+
+test('chat.messages: operator-sent comment with authorType:system + chat_messages.sender_kind:user RENDERS (rc.8 phase-B classifier bypass)', async () => {
+  const ctx = makeCtx({
+    comments: [
+      // The exact production shape from Playwright probe 2026-05-26: a
+      // user-typed message that the host bridge stamped as authorType:'system'.
+      {
+        id: 'c-operator',
+        body: 'PHASE-B-VERIFY operator message',
+        createdAt: new Date('2026-05-26T18:23:13.864Z'),
+        authorType: 'system',
+        authorUserId: null,
+        authorAgentId: null,
+      },
+    ],
+    chatMessages: [
+      // chat_messages side-table row that PROVES this comment is operator-
+      // initiated. The plugin wrote this when chat.send fired.
+      {
+        message_uuid: 'm-operator',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        comment_id: 'c-operator',
+        sender_kind: 'user',
+        supersedes_uuid: null,
+        pinned: false,
+        sent_at: '2026-05-26T18:23:13.864Z',
+      },
+    ],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  assert.equal(result.kind, 'messages');
+  assert.equal(
+    result.messages.length,
+    1,
+    'operator-sent comment with chat_messages sender_kind:user MUST pass the filter',
+  );
+  assert.equal(result.messages[0].commentId, 'c-operator');
+  assert.equal(result.messages[0].senderKind, 'user');
+});
+
+test('chat.messages: agent-stamped runtime notice WITHOUT a chat_messages side-table row is still filtered (anti-regression)', async () => {
+  // Defense in depth — the bypass MUST apply only to comments with a
+  // chat_messages row. A bare authorType:'system' notice from the host's
+  // recovery service (no chat_messages link) must STILL be filtered out.
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-recovery',
+        body: 'finish_successful_run_handoff: paused awaiting disposition',
+        createdAt: new Date('2026-05-26T18:00:00Z'),
+        authorType: 'system',
+        authorUserId: null,
+        authorAgentId: null,
+      },
+    ],
+    // No chat_messages side-table rows — the bypass cannot fire.
+    chatMessages: [],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  assert.equal(result.messages.length, 0, 'recovery notice still filtered');
+});
