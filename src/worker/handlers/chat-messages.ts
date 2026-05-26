@@ -55,9 +55,28 @@
 
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 import type { PluginIssuesClient, PluginLogger } from '@paperclipai/plugin-sdk';
-import type { ChatTopicsRepoCtx, ChatMessageRow } from '../db/chat-topics-repo.ts';
+import type {
+  ChatTopicsRepoCtx,
+  ChatMessageRow,
+  ChatMessageAttachmentRow,
+} from '../db/chat-topics-repo.ts';
+import { listChatMessageAttachmentsForTopic } from '../db/chat-topics-repo.ts';
 import { classifyComment } from '../chat/comment-classify.ts';
 import { ensureTopicWakeable, isTopicStuck } from '../chat/topic-watchdog.ts';
+
+/**
+ * Plan 05-11 (CHAT-07) -- one attachment as the chat thread UI consumes it.
+ * camelCase; one row in the chat_message_attachments side table maps to
+ * one entry.
+ */
+export type ChatAttachmentEntry = {
+  id: string;
+  documentKey: string;
+  mimeType: string;
+  originalFilename: string;
+  byteSize: number;
+  createdAt: string;
+};
 
 export type ChatMessagesCtx = OptInGuardDataCtx &
   ChatTopicsRepoCtx & {
@@ -91,6 +110,11 @@ type ThreadMessage = {
       rows: Array<Record<string, unknown>>;
     }>;
   } | null;
+  // Plan 05-11 (CHAT-07) -- chat-uploaded attachments inline per message.
+  // Always present (default []) so the UI can branch on length without a
+  // second host round-trip. Populated by a SINGLE bulk lookup per thread
+  // read (PRIM-01 spirit -- never an N+1 per-message query).
+  attachments: ChatAttachmentEntry[];
 };
 
 /**
@@ -248,6 +272,52 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
       if (row.supersedes_uuid) supersededUuids.add(row.supersedes_uuid);
     }
 
+    // Plan 05-11 (CHAT-07) -- bulk attachment lookup. ONE round-trip across
+    // the whole topic; we map by chat_message_id and resolve the comment_id
+    // per-message via metaByCommentId. PRIM-01 spirit -- never an N+1 query.
+    // Limit 1000 is defense-in-depth: single-operator scale + a single topic
+    // is realistically <100 attachments; 1000 keeps the SELECT bounded.
+    let attachmentRows: ChatMessageAttachmentRow[] = [];
+    try {
+      attachmentRows = await listChatMessageAttachmentsForTopic(
+        ctx,
+        companyId,
+        topicIssueId,
+        1000,
+      );
+    } catch (e) {
+      ctx.logger?.warn?.('chat.messages: chat_message_attachments lookup failed', {
+        topicIssueId,
+        err: (e as Error).message,
+      });
+      attachmentRows = [];
+    }
+    // Index attachments by chat_message_id (the FK target). For each message
+    // we then resolve via metaByCommentId.get(commentId)?.message_uuid -- the
+    // operator's optimistic-send dedup row carries the (message_uuid,
+    // comment_id) bridge. Within a single chat_message_id we sort by
+    // created_at ASC so the UI renders attachments in upload order.
+    const attachmentsByMessageUuid = new Map<string, ChatAttachmentEntry[]>();
+    const sortedAttachmentRows = attachmentRows
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+    for (const row of sortedAttachmentRows) {
+      const entry: ChatAttachmentEntry = {
+        id: row.id,
+        documentKey: row.document_key,
+        mimeType: row.mime_type,
+        originalFilename: row.original_filename,
+        byteSize: Number(row.byte_size),
+        createdAt: row.created_at,
+      };
+      const list = attachmentsByMessageUuid.get(row.chat_message_id) ?? [];
+      list.push(entry);
+      attachmentsByMessageUuid.set(row.chat_message_id, list);
+    }
+
     const messages: ThreadMessage[] = (comments ?? [])
       .filter((c) => typeof c?.id === 'string' && c.id)
       // Plan 04.1-04 — D-14/D-15 runtime-noise filter. The diagnostics opt-in
@@ -285,6 +355,14 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
                 })),
               }
             : null;
+        // Plan 05-11 (CHAT-07) -- resolve attachments by message_uuid
+        // (the FK target). meta?.message_uuid is the bridge: the operator-
+        // composer side-table dedup row links comment_id -> message_uuid.
+        // For agent comments (no row) attachments is []. Always present.
+        const attachments: ChatAttachmentEntry[] =
+          meta?.message_uuid
+            ? (attachmentsByMessageUuid.get(meta.message_uuid) ?? [])
+            : [];
         return {
           commentId: c.id as string,
           body: c.body ?? '',
@@ -298,6 +376,7 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
           authorType: c.authorType ?? null,
           presentation,
           metadata,
+          attachments,
         };
       });
 

@@ -39,6 +39,9 @@ function makeCtx({
   optedIn = true,
   comments = [],
   chatMessages = [],
+  // Plan 05-11 (CHAT-07) -- chat_message_attachments rows the handler enriches
+  // per-message via a single bulk lookup.
+  attachmentRows = [],
   listCommentsThrows = false,
   // Plan 04.1-04 — watchdog + topic-stuck simulation.
   // `topicIssue` is the object ctx.issues.get returns; defaults to an in_progress
@@ -87,6 +90,23 @@ function makeCtx({
       async query(sql, params) {
         if (/clarity_user_prefs/i.test(sql)) {
           return optedIn ? [{ opted_in_at: '2026-01-01T00:00:00.000Z' }] : [];
+        }
+        // Plan 05-11 (CHAT-07) -- match the more specific table name BEFORE
+        // the generic /chat_messages/ regex (which would otherwise match the
+        // chat_message_attachments path too).
+        if (/chat_message_attachments/i.test(sql)) {
+          // listChatMessageAttachmentsForTopic: WHERE company_id = $1 AND
+          // topic_issue_id = $2 ORDER BY created_at DESC LIMIT $3.
+          const [companyId, topicIssueId, limit] = params ?? [];
+          const matched = attachmentRows.filter(
+            (r) => r.company_id === companyId && r.topic_issue_id === topicIssueId,
+          );
+          // Match the SQL ORDER BY created_at DESC.
+          matched.sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+          );
+          return matched.slice(0, typeof limit === 'number' ? limit : matched.length);
         }
         if (/chat_messages/i.test(sql)) {
           // listChatMessagesForTopic: WHERE topic_issue_id = $1 AND company_id = $2
@@ -577,4 +597,211 @@ test('U13 STUCK-READ-FAILURE-DEGRADES-GRACEFULLY: a thrown ctx.issues.get does N
   // Stuck fields fall back to safe defaults.
   assert.equal(result.topicStuck, false);
   assert.equal(result.recoveryOwner, null);
+});
+
+// ---------------------------------------------------------------------------
+// Plan 05-11 (CHAT-07) -- chat-uploaded attachments are inlined per message
+// via a SINGLE bulk topic-wide query (PRIM-01 spirit -- never N+1).
+// ---------------------------------------------------------------------------
+
+test('U14 ATTACHMENTS-DEFAULT-EMPTY: a message with no attachments returns attachments: []', async () => {
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-1',
+        body: 'hello',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        authorType: 'user',
+        authorUserId: 'user-eric',
+      },
+    ],
+    chatMessages: [
+      {
+        message_uuid: 'uuid-1',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        comment_id: 'c-1',
+        sender_kind: 'user',
+        supersedes_uuid: null,
+        pinned: false,
+        sent_at: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+    attachmentRows: [],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  assert.equal(result.messages.length, 1);
+  assert.deepEqual(result.messages[0].attachments, []);
+});
+
+test('U15 ATTACHMENTS-INLINED: a message with 2 attachments returns them in upload order (ASC)', async () => {
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-1',
+        body: 'with attachments',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        authorType: 'user',
+        authorUserId: 'user-eric',
+      },
+    ],
+    chatMessages: [
+      {
+        message_uuid: 'uuid-1',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        comment_id: 'c-1',
+        sender_kind: 'user',
+        supersedes_uuid: null,
+        pinned: false,
+        sent_at: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+    attachmentRows: [
+      {
+        id: 'att-2',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        chat_message_id: 'uuid-1',
+        comment_id: 'c-1',
+        document_key: 'chat-attach-uuid-1-b',
+        mime_type: 'application/pdf',
+        original_filename: 'second.pdf',
+        byte_size: 2048,
+        created_at: '2026-01-01T00:05:00.000Z',
+      },
+      {
+        id: 'att-1',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        chat_message_id: 'uuid-1',
+        comment_id: 'c-1',
+        document_key: 'chat-attach-uuid-1-a',
+        mime_type: 'image/png',
+        original_filename: 'first.png',
+        byte_size: 512,
+        created_at: '2026-01-01T00:01:00.000Z',
+      },
+    ],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  assert.equal(result.messages.length, 1);
+  // The two attachments render in upload order (ASC by created_at).
+  assert.equal(result.messages[0].attachments.length, 2);
+  assert.equal(result.messages[0].attachments[0].id, 'att-1');
+  assert.equal(result.messages[0].attachments[1].id, 'att-2');
+  // camelCase fields are present.
+  const a = result.messages[0].attachments[0];
+  assert.equal(a.documentKey, 'chat-attach-uuid-1-a');
+  assert.equal(a.mimeType, 'image/png');
+  assert.equal(a.originalFilename, 'first.png');
+  assert.equal(a.byteSize, 512);
+  assert.equal(a.createdAt, '2026-01-01T00:01:00.000Z');
+});
+
+test('U16 ATTACHMENTS-ALWAYS-PRESENT: every message in the response carries an attachments field', async () => {
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-1',
+        body: 'first',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        authorType: 'user',
+        authorUserId: 'user-eric',
+      },
+      {
+        id: 'c-2',
+        body: 'second (agent)',
+        createdAt: new Date('2026-01-02T00:00:00Z'),
+        authorType: 'agent',
+        authorAgentId: 'agent-cfo',
+      },
+    ],
+    chatMessages: [
+      {
+        message_uuid: 'uuid-1',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        comment_id: 'c-1',
+        sender_kind: 'user',
+        supersedes_uuid: null,
+        pinned: false,
+        sent_at: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+    attachmentRows: [
+      {
+        id: 'att-1',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        chat_message_id: 'uuid-1',
+        comment_id: 'c-1',
+        document_key: 'chat-attach-uuid-1-x',
+        mime_type: 'application/pdf',
+        original_filename: 'x.pdf',
+        byte_size: 1024,
+        created_at: '2026-01-01T00:01:00.000Z',
+      },
+    ],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  // Both messages render; both carry an attachments field (agent message: []).
+  assert.equal(result.messages.length, 2);
+  for (const m of result.messages) {
+    assert.ok(
+      Array.isArray(m.attachments),
+      `attachments must be present on every message (got ${typeof m.attachments})`,
+    );
+  }
+  // Operator message has 1 attachment; agent message has 0.
+  const operator = result.messages.find((m) => m.commentId === 'c-1');
+  const agent = result.messages.find((m) => m.commentId === 'c-2');
+  assert.equal(operator.attachments.length, 1);
+  assert.equal(agent.attachments.length, 0);
+});
+
+test('U17 ATTACHMENTS-LOOKUP-FAILURE-DEGRADES: a thrown attachments SELECT returns empty arrays, not an error', async () => {
+  // The attachments lookup is best-effort -- a failed read degrades to
+  // empty attachments on every message instead of failing the whole
+  // chat.messages response.
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-1',
+        body: 'hello',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        authorType: 'user',
+        authorUserId: 'user-eric',
+      },
+    ],
+    chatMessages: [
+      {
+        message_uuid: 'uuid-1',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        comment_id: 'c-1',
+        sender_kind: 'user',
+        supersedes_uuid: null,
+        pinned: false,
+        sent_at: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+  });
+  // Override db.query to throw on the attachments table specifically.
+  const originalQuery = ctx.db.query.bind(ctx.db);
+  ctx.db.query = async (sql, params) => {
+    if (/chat_message_attachments/i.test(sql)) {
+      throw new Error('host db.query 503');
+    }
+    return originalQuery(sql, params);
+  };
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  // Messages still surface; attachments degrade to [].
+  assert.equal(result.kind, 'messages');
+  assert.equal(result.messages.length, 1);
+  assert.deepEqual(result.messages[0].attachments, []);
 });
