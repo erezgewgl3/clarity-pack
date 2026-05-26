@@ -36,10 +36,13 @@ export const AUDITED_CLASSNAMES = Object.freeze([
   'clarity-room-loading', 'clarity-room-error', 'clarity-room-header',
   'clarity-agent-grid',
   // Agent card (DEV-06 cluster C)
+  // Plan 06.1-03 (UI-SPEC §Visual Hierarchy Lock #5) — `.clarity-agent-artifact`
+  // latest-artifact placeholder is DEPRECATED + removed from agent-card.tsx;
+  // the new inline `.clarity-artifact-chip-row` supersedes it as the per-agent
+  // "what shipped" signal. Classname removed from audit set in the same plan.
   'clarity-agent-card', 'clarity-agent-card-header', 'clarity-agent-role',
   'clarity-now-doing', 'clarity-agent-terminal',
   'clarity-agent-terminal-kind', 'clarity-agent-terminal-label',
-  'clarity-agent-artifact',
   // Critical Path strip (DEV-06 cluster D)
   'clarity-critical-path', 'clarity-critical-path-heading',
   'clarity-critical-path-list', 'clarity-critical-path-item',
@@ -48,11 +51,12 @@ export const AUDITED_CLASSNAMES = Object.freeze([
   // Awaiting-You pill (DEV-06 cluster E)
   'clarity-awaiting-you-pill', 'clarity-awaiting-you-label',
   'clarity-awaiting-you-count', 'clarity-awaiting-you-age',
-  // Artifacts shelf (DEV-06 cluster F)
-  'clarity-artifacts-shelf', 'clarity-artifacts-heading',
-  'clarity-artifacts-list', 'clarity-artifact-item',
-  'clarity-artifact-title', 'clarity-artifact-author',
-  'clarity-artifact-preview',
+  // Plan 06.1-03 (D-02) — the Phase 2 "Artifacts shipped today" bottom shelf
+  // (cluster F: clarity-artifacts-shelf / clarity-artifacts-heading /
+  // clarity-artifacts-list / clarity-artifact-item / clarity-artifact-title /
+  // clarity-artifact-author / clarity-artifact-preview) is DELETED. The
+  // per-agent inline `.clarity-artifact-chip-row` (added by Plan 06.1-03)
+  // replaces it. Classnames removed from audit set in the same plan.
   // Sparkline
   'clarity-sparkline',
 ]);

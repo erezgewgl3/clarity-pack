@@ -3,15 +3,27 @@
 // Plan 02-04 Task 2 — Situation Room page (ROOM-01..08).
 //
 // Renders the agent grid (one card per Paperclip employee), Critical Path
-// strip, Awaiting-You inbox pill, and Artifacts Shipped Today shelf — all
-// served from the 60s materialized snapshot. Polling is leader-elected via
-// BroadcastChannel (ROOM-07): only one tab in the browser fetches; followers
-// receive the leader's payload via postMessage. Visibility-paused (ROOM-06).
+// strip, and Awaiting-You inbox pill — all served from the 60s materialized
+// snapshot. Polling is leader-elected via BroadcastChannel (ROOM-07): only
+// one tab in the browser fetches; followers receive the leader's payload
+// via postMessage. Visibility-paused (ROOM-06).
 //
 // Cadence is configurable via instanceConfigSchema.situationRefreshIntervalMs
 // (D-03), read by the useInstanceConfig FALLBACK wrapper (per 02-01 Check F).
 //
 // Opt-in gated (OPTIN-02) — opted-out users see <EnableClarityCta />.
+//
+// Plan 06.1-03 (ROOM-10) — the per-agent inline ArtifactChipRow REPLACES the
+// Phase 2 bottom <ArtifactsShippedShelf /> (D-02). artifacts-shipped-shelf.tsx
+// is deleted; the import + mount on this surface are removed. The per-agent
+// artifact union is fetched once at the surface root via
+// `usePluginData('situation.artifacts')` (Plan 06.1-02 worker handler) and
+// threaded into each AgentCard.
+//
+// Plan 06.1-03 (ROOM-09 / ROOM-11) — `viewerUserId` resolved via
+// useResolvedUserId (Plan 02-09) is threaded into CriticalPathStrip so the
+// per-row Take-Ownership button can disable + dispatch the
+// `agent.takeOwnership` action server-side.
 //
 // Visual fidelity target: sketches/paperclip-fix-situation-room.html.
 
@@ -30,11 +42,12 @@ import { useInstanceConfig } from '../../primitives/use-instance-config.ts';
 import { usePollWithLeader } from '../../primitives/use-poll-with-leader.ts';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
+import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { PauseBanner } from '../reader/pause-banner.tsx';
 import { CriticalPathStrip } from './critical-path-strip.tsx';
 import { AgentCard, type AgentEmployee } from './agent-card.tsx';
 import { AwaitingYouPill } from './awaiting-you-pill.tsx';
-import { ArtifactsShippedShelf } from './artifacts-shipped-shelf.tsx';
+import type { Artifact } from './artifact-chip-row.tsx';
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
 
@@ -47,6 +60,20 @@ type SituationData = {
   narrative?: string | null;
   taken_at?: string;
 };
+
+/**
+ * Plan 06.1-03 — payload shape from Plan 06.1-02 `situation.artifacts`
+ * handler. Empty per-agent buckets are OMITTED from the map (key-presence
+ * ⇒ non-empty array contract documented in 06.1-02-SUMMARY).
+ */
+type SituationArtifactsData =
+  | {
+      kind: 'situation-artifacts';
+      windowDuration: '24h' | '7d' | '30d';
+      artifacts: Record<string, Artifact[]>;
+    }
+  | { error: 'OPT_IN_REQUIRED' | string }
+  | null;
 
 function generateTabId(): string {
   try {
@@ -153,6 +180,23 @@ function SituationRoomBody({
   userId: string;
   intervalMs: number;
 }): React.ReactElement {
+  // Plan 06.1-03 — refreshKey is bumped by CriticalPathStrip's Take-Ownership
+  // success path. Bumping it forces both usePluginData('situation.snapshot')
+  // and usePluginData('situation.artifacts') to refetch (the SDK keys on
+  // params identity; injecting `_refreshKey` invalidates the cache the same
+  // way Chat's index.tsx does for chat.topics — Plan 05-08 D-20 pattern).
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const forceRefetch = React.useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
+
+  // Plan 06.1-03 — viewerUserId for Take-Ownership. The detail-tab-slot
+  // host-bridge gap (Plan 02-09) means useHostContext().userId may be null
+  // at first paint; useResolvedUserId falls back to a same-origin
+  // /api/auth/get-session fetch. Disabled-button gating in CriticalPathStrip.
+  const resolved = useResolvedUserId();
+  const viewerUserId: string | null = resolved.userId;
+
   // The actual snapshot fetch is via usePluginData (SDK-blessed bridge call).
   // usePluginData re-fetches when params change; we let it own the network
   // round-trip + cache key. The leader-election guard lives in
@@ -167,7 +211,14 @@ function SituationRoomBody({
   // to a single-source via usePoll once the SDK exposes a non-hook fetcher.
   const { data: snapshotData } = usePluginData<SituationData | { error: 'OPT_IN_REQUIRED' } | null>(
     'situation.snapshot',
-    { userId, companyId },
+    { userId, companyId, _refreshKey: refreshKey },
+  );
+
+  // Plan 06.1-03 (ROOM-10) — per-agent artifact union. Empty per-agent
+  // buckets are omitted from the map; consumers use `artifacts[agentId] ?? []`.
+  const { data: artifactsData } = usePluginData<SituationArtifactsData>(
+    'situation.artifacts',
+    { userId, companyId, _refreshKey: refreshKey },
   );
 
   // usePollWithLeader is referenced primarily for its leader-election +
@@ -201,6 +252,18 @@ function SituationRoomBody({
   if (!payload) {
     return <p className="clarity-room-loading">Recomputing…</p>;
   }
+
+  // Plan 06.1-03 — extract the per-agent artifact map. Error-shape payloads
+  // (OPT_IN_REQUIRED) degrade silently to an empty map; the agent grid still
+  // renders with no per-card chip rows.
+  const artifactsByAgent: Record<string, Artifact[]> =
+    artifactsData &&
+    typeof artifactsData === 'object' &&
+    'kind' in artifactsData &&
+    artifactsData.kind === 'situation-artifacts'
+      ? artifactsData.artifacts
+      : {};
+
   return (
     <>
       <header className="clarity-room-header">
@@ -212,13 +275,21 @@ function SituationRoomBody({
       <CriticalPathStrip
         chains={payload.critical_path ?? []}
         narrative={payload.narrative ?? null}
+        viewerUserId={viewerUserId}
+        companyId={companyId}
+        onTakeOwnershipSuccess={forceRefetch}
       />
       <div className="clarity-agent-grid">
         {(payload.employees ?? []).map((emp) => (
-          <AgentCard key={emp.userId} employee={emp} />
+          <AgentCard
+            key={emp.userId}
+            employee={emp}
+            artifacts={artifactsByAgent[emp.userId] ?? []}
+            companyId={companyId}
+            userId={userId}
+          />
         ))}
       </div>
-      <ArtifactsShippedShelf items={payload.artifacts_shipped_today ?? []} />
     </>
   );
 }

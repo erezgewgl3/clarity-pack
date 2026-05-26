@@ -49,7 +49,10 @@ const FILES = [
   'src/ui/components/enable-clarity-cta.tsx',
   'src/ui/surfaces/situation-room/index.tsx',
   'src/ui/surfaces/situation-room/critical-path-strip.tsx',
-  'src/ui/surfaces/situation-room/artifacts-shipped-shelf.tsx',
+  // Plan 06.1-03 (D-02) — `artifacts-shipped-shelf.tsx` is DELETED.
+  // The per-agent inline `artifact-chip-row.tsx` replaces it; that file's
+  // own React-key audit lives in `test/ui/artifact-chip-row.test.mjs`.
+  'src/ui/surfaces/situation-room/artifact-chip-row.tsx',
   // GAP 7 (Plan 04-05 round 3) — the live re-drill console flooded with
   // "Each child in a list should have a unique key" warnings attributed to
   // ChatPageBody / RosterRail / Composer / ContextRail / PersistedMessage.

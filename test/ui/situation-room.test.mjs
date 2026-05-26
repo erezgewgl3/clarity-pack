@@ -3,15 +3,17 @@
 // Plan 02-04 Task 2 RED — Situation Room source contract. SOURCE-GREP test
 // (Node 24 doesn't load .tsx through the test runtime). Verifies:
 //   - file structure: situation-room/index.tsx + agent-card.tsx +
-//     critical-path-strip.tsx + artifacts-shipped-shelf.tsx +
-//     awaiting-you-pill.tsx + sparkline.tsx
+//     critical-path-strip.tsx + artifact-chip-row.tsx (Plan 06.1-03;
+//     REPLACED artifacts-shipped-shelf.tsx per D-02) + awaiting-you-pill.tsx
+//     + sparkline.tsx
 //   - index.tsx wraps in <ClaritySurfaceRoot name="situation-room"> (SCAF-06)
 //   - calls usePollWithLeader for 'situation.snapshot' (ROOM-07)
 //   - reads situationRefreshIntervalMs via useInstanceConfig (D-03 config)
 //   - mounts <PauseBanner /> (D-07 reused from 02-03)
 //   - gates on useOptIn — opted-out renders <EnableClarityCta />
-//   - renders <CriticalPathStrip>, <AgentCard>, <AwaitingYouPill>,
-//     <ArtifactsShippedShelf>
+//   - renders <CriticalPathStrip>, <AgentCard>, <AwaitingYouPill>
+//     (Plan 06.1-03: <ArtifactsShippedShelf> is DELETED per D-02; the
+//     per-agent inline ArtifactChipRow inside AgentCard supersedes it.)
 
 import { strict as assert } from 'node:assert';
 import { existsSync, readFileSync } from 'node:fs';
@@ -30,7 +32,9 @@ const REQUIRED_FILES = [
   'index.tsx',
   'agent-card.tsx',
   'critical-path-strip.tsx',
-  'artifacts-shipped-shelf.tsx',
+  // Plan 06.1-03 (D-02) — artifacts-shipped-shelf.tsx is DELETED.
+  // The per-agent inline ArtifactChipRow replaces it.
+  'artifact-chip-row.tsx',
   'awaiting-you-pill.tsx',
   'sparkline.tsx',
 ];
@@ -73,11 +77,23 @@ test('Situation Room: index.tsx renders <EnableClarityCta /> when opted-out (OPT
   assert.match(src, /EnableClarityCta\b/);
 });
 
-test('Situation Room: index.tsx renders <CriticalPathStrip>, <AgentCard>, <AwaitingYouPill>, <ArtifactsShippedShelf>', () => {
-  const src = readSrc('index.tsx');
-  for (const name of ['CriticalPathStrip', 'AgentCard', 'AwaitingYouPill', 'ArtifactsShippedShelf']) {
-    assert.match(src, new RegExp(`<${name}\\b`), `renders <${name} />`);
+test('Situation Room: index.tsx renders <CriticalPathStrip>, <AgentCard>, <AwaitingYouPill> (Plan 06.1-03: <ArtifactsShippedShelf> DELETED per D-02)', () => {
+  const rawSrc = readSrc('index.tsx');
+  for (const name of ['CriticalPathStrip', 'AgentCard', 'AwaitingYouPill']) {
+    assert.match(rawSrc, new RegExp(`<${name}\\b`), `renders <${name} />`);
   }
+  // Negative assertion — the deleted shelf mount must NOT be re-introduced.
+  // Strip block + line comments first so the doc-comment that documents the
+  // deletion (mentions the literal `<ArtifactsShippedShelf />`) does not
+  // false-trip the assertion.
+  const codeOnly = rawSrc
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(
+    codeOnly,
+    /<ArtifactsShippedShelf\b/,
+    'index.tsx must not mount <ArtifactsShippedShelf /> — file was deleted in Plan 06.1-03 per D-02',
+  );
 });
 
 test('Situation Room: index.tsx queries situation.snapshot via usePollWithLeader', () => {

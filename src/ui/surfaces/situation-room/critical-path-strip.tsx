@@ -51,9 +51,19 @@ function isActionableChain(chain: BlockerChainResult): boolean {
 export function CriticalPathStrip({
   chains,
   narrative,
+  // Plan 06.1-03 — props accepted ahead of Task 2's full Take-Ownership /
+  // Convert-to-task button cluster. Wired through the surface root so this
+  // file can land in two commits (Task 1 wiring; Task 2 buttons + tests).
+  // Optional so older call sites + tests stay green.
+  viewerUserId: _viewerUserId,
+  companyId: _companyId,
+  onTakeOwnershipSuccess: _onTakeOwnershipSuccess,
 }: {
   chains: BlockerChainResult[];
   narrative?: string | null;
+  viewerUserId?: string | null;
+  companyId?: string;
+  onTakeOwnershipSuccess?: () => void;
 }): React.ReactElement | null {
   if (!chains || chains.length === 0) return null;
   const actionable = chains.filter(isActionableChain);
