@@ -90,6 +90,12 @@ Live ops cockpit at a dedicated route.
 - [ ] **ROOM-07**: Multiple open Situation Room tabs in one browser elect one leader via `BroadcastChannel`; followers consume the leader's last result rather than fanning out N parallel polls.
 - [ ] **ROOM-08**: "Awaiting You" inbox pill shows the count + the age of the oldest item — the pill itself is a deep-link to the relevant task.
 
+#### Phase 6.1 additions (spec-complete extensions; close the rc.8 "no owner assigned" gap)
+
+- [ ] **ROOM-09**: A new plugin-namespace table `clarity_agent_owners(agent_id, owner_user_id, set_at)` (migration 0013, additive plugin-namespace only) holds operator-claimed agent ownership. A new worker handler `agent.takeOwnership` writes the row server-side after re-verifying viewer authority. The `recompute-situation` job's owner-resolution path consults this side table FIRST and falls back to `public.agents.owner_user_id` only when no clarity-pack row exists. The Situation Room UI surfaces a "Take ownership" affordance on every Critical Path row whose chain terminal resolves to the `__unowned__` sentinel; click dispatches `agent.takeOwnership` and force-revalidates the snapshot via `usePluginData`. CTT-07 invariant preserved by construction (zero `ctx.issues.update` calls).
+- [ ] **ROOM-10**: A new worker data handler `situation.artifacts` returns, per agent, the union of (a) `ctx.issues.documents.list` deliverables and (b) `plugin_clarity_pack_*.chat_message_attachments` rows joined to `chat_messages`, both filtered to the last 24h (configurable via `instanceConfigSchema`, default 24h), sorted newest-first. The Situation Room UI renders the result as an inline horizontal chip row under each agent row in the existing grid (NOT a separate shelf section). Empty windows render nothing (no placeholder copy). Each chip click opens the canonical `DeliverablePreview` popover (shared with Reader + chat — single source of truth).
+- [ ] **ROOM-11**: The existing `blocker-chain.ts` transitive walk (priority `EXTERNAL` > `HUMAN_ACTION_ON(owner+awaiting)` > `SELF_RESOLVING(eta+no-owner)` > `HUMAN_ACTION_ON(__unowned__)`; cycle detection via path-stack guard) ships byte-identical — this requirement adds NO new chain logic. The Situation Room UI renders one row per Critical Path chain (max 3 per ROOM-02 carrier), each carrying (a) plain-English narration, (b) terminal-classification badge, (c) inline "Take ownership" affordance when the terminal is `HUMAN_ACTION_ON` with an `__unowned__` userId (ROOM-09 trigger), (d) `+ Create task` affordance when configured (entry-point shape locked via `/gsd:discuss-phase 6.1`). CYCLE-terminal UI renders the cycle label as-is in v1.0; auto-suggest cycle-break deferred to v1.1+ (recommended discuss-phase default).
+
 ### Surface 3 — Daily Bulletin (BULL)
 
 Auto-compiled morning editorial digest.
@@ -252,6 +258,9 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | ROOM-06 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | ROOM-07 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | ROOM-08 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
+| ROOM-09 | Phase 6.1 | Pending (locked 2026-05-26 after rc.8 Phase B Playwright drill: `clarity_agent_owners` side table + `agent.takeOwnership` handler; chain walk byte-identical, only owner-resolution lookup changes) |
+| ROOM-10 | Phase 6.1 | Pending (locked 2026-05-26: `situation.artifacts` handler unioning `ctx.issues.documents.list` ∪ `chat_message_attachments`, 24h sliding default, per-agent inline chips) |
+| ROOM-11 | Phase 6.1 | Pending (locked 2026-05-26: Situation Room Critical Path UI renders Take-Ownership + Create-Task affordances over the existing correct chain walk; CYCLE-terminal renders as-is in v1.0) |
 | BULL-01 | Phase 3 | In Progress — DST kernel (computeNextDueAt + 4 DST CI fixtures) delivered by Plan 03-01 2026-05-15; end-to-end DST CI matrix completes in Plan 03-04 |
 | BULL-02 | Phase 3 | In Progress — idempotency foundation (UNIQUE(next_due_at,content_hash), no-op compile gate, self-loop bulletin-tag filter) delivered by Plan 03-01 2026-05-15; publish atomicity completes in Plan 03-02 |
 | BULL-03 | Phase 3 | Pending |
@@ -300,8 +309,8 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | DIST-05 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 94 total (79 original + CTT-01..08 added Phase 4.1 + RCB-01..07 added Phase 4.2)
-- Mapped to phases: 94
+- v1 requirements: 97 total (79 original + CTT-01..08 added Phase 4.1 + RCB-01..07 added Phase 4.2 + ROOM-09..11 added Phase 6.1)
+- Mapped to phases: 97
 - Unmapped: 0
 
 **Per-phase loadings:**
@@ -312,7 +321,8 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 - Phase 4.1 (Chat → True Task): 8 requirements (CTT-01..08)
 - Phase 4.2 (Reader↔Chat Bridge): 7 requirements (RCB-01..07)
 - Phase 5 (Distribution & Polish): 6 requirements (DIST-01..05, COEXIST-05)
+- Phase 6.1 (Situation Room spec-complete): 3 requirements (ROOM-09..11)
 
 ---
 *Requirements defined: 2026-05-07*
-*Last updated: 2026-05-24 — **Phase 4.2 (Reader↔Chat Bridge) CLOSED 2026-05-24.** RCB-01..RCB-07 all flipped to Implemented. Operator-drill PASS on live Countermoves with clarity-pack-1.0.0-rc.2.tgz (which bundles the Plan 04.2-04 dispatch fix originally shipped as 0.9.3 plus the Phase 5 polish layer at 1.0.0-rc.2): full 5-path Reader↔Chat Bridge drill (assigned task COU-2215 → existing-topic + flash; chat-spawned COU-2361 → existing-topic via chat-task lineage; cold COU-2396 → new-topic-needed seed dialog; chat-topic CHT-1117/COU-1115 → button HIDDEN; no-assignee COU-2399 → button DISABLED with tooltip) + RCB-07 pre-0009-topic spot-check all green. Seven polish defects (D1-D7) filed in MemPalace for a future Plan 04.2-05 polish pass — none load-bearing for closure. Earlier: 2026-05-22 — Phase 4.2 planning: registered RCB-01..RCB-07 from the locked design in project memory `phase-4.2-deferred-from-4.1`.*
+*Last updated: 2026-05-26 — **Phase 6.1 (Situation Room spec-complete) REGISTERED.** Added ROOM-09 (plugin-namespace `clarity_agent_owners` side table + `agent.takeOwnership` handler), ROOM-10 (`situation.artifacts` per-agent inline chips unioning deliverables + chat attachments, 24h sliding), ROOM-11 (Situation Room Critical Path UI surfaces Take-Ownership + Create-Task affordances over the existing correct chain walk; CYCLE-terminal renders as-is in v1.0). All 3 carry the rc.8 Playwright-drill finding: the chain walk + 4-terminal classification are already correct as of Phase 2's ship — the fix is owner resolution at the leaf hop only. v1 requirement total bumped 94 → 97. Earlier: 2026-05-24 — **Phase 4.2 (Reader↔Chat Bridge) CLOSED 2026-05-24.** RCB-01..RCB-07 all flipped to Implemented. Operator-drill PASS on live Countermoves with clarity-pack-1.0.0-rc.2.tgz (which bundles the Plan 04.2-04 dispatch fix originally shipped as 0.9.3 plus the Phase 5 polish layer at 1.0.0-rc.2): full 5-path Reader↔Chat Bridge drill (assigned task COU-2215 → existing-topic + flash; chat-spawned COU-2361 → existing-topic via chat-task lineage; cold COU-2396 → new-topic-needed seed dialog; chat-topic CHT-1117/COU-1115 → button HIDDEN; no-assignee COU-2399 → button DISABLED with tooltip) + RCB-07 pre-0009-topic spot-check all green. Seven polish defects (D1-D7) filed in MemPalace for a future Plan 04.2-05 polish pass — none load-bearing for closure. Earlier: 2026-05-22 — Phase 4.2 planning: registered RCB-01..RCB-07 from the locked design in project memory `phase-4.2-deferred-from-4.1`.*
