@@ -107,8 +107,37 @@ export function DeliverablePreview({
   companyId,
   userId,
   issueId,
-}: DeliverableProps): React.ReactElement | null {
-  if (!deliverable) return null;
+}: DeliverableProps): React.ReactElement {
+  // GAP-DIST-04-NOT-RENDERING (2026-05-26) -- previously this returned null when
+  // `deliverable` was missing, which removed the entire "The deliverable"
+  // section from the DOM with zero visible signal. On the live system,
+  // issue.reader's data.deliverable is null whenever the issue has only
+  // host-uploaded attachments (the host's "Attachments" widget writes to
+  // assets/issue_attachments, while ctx.issues.documents.list reads the
+  // separate plugin issue_documents table -- two distinct persistence layers
+  // in Paperclip per SPEC-implementation §7.14 vs §7.15). The plugin SDK
+  // exposes no client for the host attachments table. Until a Plan 05-11
+  // gap-closure adds a worker fetch of /api/issues/<id>/attachments (verified
+  // 200 in the Phase 4-01 spike but response shape unprobed), the operator
+  // sees an explicit empty-state message instead of a silently-vanishing
+  // section. This makes the failure visible and gives the operator a correct
+  // mental model: the surface IS reachable; the absence of files is the
+  // message, not the bug.
+  if (!deliverable) {
+    return (
+      <section className="clarity-deliverable" data-clarity-region="deliverable">
+        <h3>The deliverable</h3>
+        <div
+          className="clarity-deliverable-fallback"
+          data-clarity-deliverable-state="empty"
+        >
+          No plugin-tracked deliverable on this issue. Host-uploaded
+          attachments appear in Paperclip&rsquo;s Attachments panel above;
+          inline preview of host attachments is a Phase 5.x follow-up.
+        </div>
+      </section>
+    );
+  }
 
   // Skip-fetch when any context piece is missing -- the placeholder still
   // renders the filename + last-write line so the operator sees something
