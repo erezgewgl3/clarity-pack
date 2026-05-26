@@ -171,6 +171,15 @@ import {
   registerChatAttachmentUpload,
   type ChatAttachmentUploadCtx,
 } from './worker/handlers/chat-attachment-upload.ts';
+// Phase 6.1 ROOM-09 -- agent.takeOwnership: operator claims ownership of
+// an agent's blocker-chain leaf. Writes plugin_clarity_pack_cdd6bda4bd.
+// clarity_agent_owners (migration 0013); the snapshot recompute job
+// consults the side table FIRST. CTT-07 invariant by construction --
+// no ctx.issues.update call site (pinned by runtime spy + source-grep).
+import {
+  registerAgentTakeOwnership,
+  type AgentTakeOwnershipCtx,
+} from './worker/handlers/agent-take-ownership.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -302,6 +311,15 @@ const plugin = definePlugin({
     // invariant by construction (no ctx.issues.update -- pinned by both
     // runtime spy and source-grep test).
     registerChatAttachmentUpload(ctx as unknown as ChatAttachmentUploadCtx);
+
+    // ---- Phase 6.1 ROOM-09 -- agent.takeOwnership action handler -----------
+    // Operator claims ownership of an agent's blocker-chain leaf so the
+    // Situation Room Critical Path renders HUMAN_ACTION_ON(<real_user_id>)
+    // instead of HUMAN_ACTION_ON(__unowned__). Writes the plugin-namespace
+    // clarity_agent_owners side table (migration 0013). T-04-16 viewer-
+    // authority re-check: ctx.agents.get gates by company. CTT-07
+    // invariant by construction -- pinned by runtime spy + source-grep.
+    registerAgentTakeOwnership(ctx as unknown as AgentTakeOwnershipCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
