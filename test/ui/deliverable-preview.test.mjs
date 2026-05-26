@@ -112,7 +112,12 @@ test('U9: no-deliverable path MUST NOT silently return null', () => {
   // The literal `if (!deliverable) return null` is the silent-failure
   // anti-pattern this fix removes. A regression that re-adds it would
   // re-introduce GAP-DIST-04-NOT-RENDERING.
-  const src = read();
+  //
+  // Strip comments before scanning so a docstring mentioning the legacy
+  // anti-pattern (Plan 05-11 explanatory text) does not trip the gate.
+  const src = read()
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(
     src,
     /if\s*\(\s*!\s*deliverable\s*\)\s*return\s+null/,
@@ -120,13 +125,62 @@ test('U9: no-deliverable path MUST NOT silently return null', () => {
   );
 });
 
-test('U10: no-deliverable path renders the explicit empty-state message', () => {
-  // The literal string the operator must see when no plugin-tracked
-  // deliverable exists. Pins the message so a future refactor cannot
-  // shorten or remove it.
+// Plan 05-11 (CHAT-07 gap closure 2026-05-26) -- U10 literal-lock UPDATED in
+// the same commit that adds the 3-branch logic. The 38e6ffa U10 copy is
+// REPLACED: when there is no plugin-tracked deliverable AND no chat
+// attachments, the operator now sees a copy that POINTS them at the chat
+// composer (the live upload path Plan 05-11 wires up). U9 anti-pattern
+// guard is PRESERVED unchanged.
+
+test('U10 (Plan 05-11 supersede): empty-state copy points at the chat composer', () => {
+  // The new locked literal. The 38e6ffa copy ("No plugin-tracked
+  // deliverable on this issue. Host-uploaded attachments appear in
+  // Paperclip's Attachments panel above ...") is REPLACED because chat-
+  // uploaded attachments now ARE plugin-tracked and the operator should be
+  // routed to the chat composer as the canonical upload path.
   assert.match(
     read(),
-    /No plugin-tracked deliverable on this issue\./,
-    'DeliverablePreview must render the "No plugin-tracked deliverable" empty-state message when deliverable is missing.',
+    /No deliverables on this issue yet\./,
+    'updated empty-state copy must mention "No deliverables on this issue yet."',
+  );
+  assert.match(
+    read(),
+    /Upload via the chat composer/,
+    'updated empty-state must point at the chat composer (Clarity Chat tab) as the canonical upload path',
+  );
+});
+
+test('U11 (Plan 05-11): 3-branch logic -- when chat attachments exist, the empty-state is BYPASSED', () => {
+  // The code path branches on `!deliverable && !newestChatAttach`. We pin
+  // the source-grep contract: the chat-attachment fetch runs in parallel
+  // (chat.attachment.list with topicIssueId=issueId, limit=1), and the
+  // empty-state branch fires ONLY when both are null.
+  const src = read();
+  assert.match(
+    src,
+    /usePluginData[\s\S]*?['"]chat\.attachment\.list['"]/,
+    'must dispatch a parallel chat.attachment.list lookup for the 3-branch logic',
+  );
+  assert.match(
+    src,
+    /if\s*\(\s*!deliverable\s*&&\s*!newestChatAttach\s*\)/,
+    'empty-state must guard on BOTH deliverable AND newestChatAttach being null (3-branch contract)',
+  );
+});
+
+test('U12 (Plan 05-11): newestChatAttach becomes the de-facto deliverable when no Reader-tracked deliverable exists', () => {
+  // Branch (b): effectiveDeliverable is constructed from the newest chat
+  // attachment when `deliverable` is null. The dispatcher fires through
+  // the SAME Plan 05-04 worker handler.
+  const src = read();
+  assert.match(
+    src,
+    /effectiveDeliverable[\s\S]*?newestChatAttach!\.originalFilename/,
+    'effectiveDeliverable.filename falls back to newestChatAttach.originalFilename',
+  );
+  assert.match(
+    src,
+    /effectiveDocumentKey[\s\S]*?effectiveDeliverable\.documentKey/,
+    'effectiveDocumentKey overrides filename when documentKey is present (chat-attachment path)',
   );
 });

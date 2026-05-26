@@ -67,6 +67,9 @@ import { HostStuckBanner } from './host-stuck-banner.tsx';
 // Plan 04.1-08 — sticky read-only banner shown when the active topic is
 // archived (the operator opened it from the archive panel).
 import { ArchivedBanner } from './archived-banner.tsx';
+// Plan 05-11 (CHAT-07 gap closure) — per-bubble attachment chips that
+// open the Plan 05-04 DIST-04 DeliverablePreview in a popover on click.
+import { AttachmentChipWithPreview } from './attachment-chip-with-preview.tsx';
 
 /**
  * Plan 04.1-08 — when the operator clicks "→ Promote to task" on an agent
@@ -112,6 +115,18 @@ export type ChatMessage = {
       rows?: Array<Record<string, unknown>>;
     }>;
   } | null;
+  // Plan 05-11 (CHAT-07 gap closure) — chat-uploaded attachments enriched
+  // by the chat.messages handler per-message bulk lookup. Optional for
+  // back-compat (pre-0011 payloads / pre-Plan-05-11 caches). Default `[]`
+  // when absent.
+  attachments?: Array<{
+    id: string;
+    documentKey: string;
+    mimeType: string;
+    originalFilename: string;
+    byteSize: number;
+    createdAt: string;
+  }>;
 };
 
 type MessagesResult =
@@ -691,6 +706,25 @@ function PersistedMessage({
           <ProseWithRefChips body={visible} />
         </div>
         {reasoning ? <ReasoningPanel reasoning={reasoning} /> : null}
+        {/* Plan 05-11 (CHAT-07 gap closure) — per-bubble attachment chips.
+            Each chip click opens the Plan 05-04 DIST-04 DeliverablePreview
+            in a popover anchored to the chip. */}
+        {msg.attachments && msg.attachments.length > 0 ? (
+          <div
+            className="message-attachments"
+            data-clarity-region="message-attachments"
+          >
+            {msg.attachments.map((a) => (
+              <AttachmentChipWithPreview
+                key={a.id}
+                attachment={a}
+                companyId={companyId}
+                userId={userId}
+                topicIssueId={topicIssueId}
+              />
+            ))}
+          </div>
+        ) : null}
         {msg.pinned ? <span className="resolved">⚑ Pinned</span> : null}
       </div>
       {isMine ? <div className="av">E</div> : null}
