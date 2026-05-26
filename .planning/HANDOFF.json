@@ -1,41 +1,52 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-25T14:00:00.000Z",
-  "source": "plan-phase-orchestrator",
+  "timestamp": "2026-05-26T19:26:30.000Z",
+  "source": "pause-work",
   "partial": false,
-  "phase": "04.2",
-  "phase_name": "reader-chat-bridge",
-  "phase_dir": ".planning/phases/04.2-reader-chat-bridge",
-  "plan": "04.2-07",
+  "phase": "05",
+  "phase_name": "distribution-polish",
+  "phase_dir": ".planning/phases/05-distribution-polish",
+  "plan": 11,
   "task": null,
-  "total_tasks": 8,
-  "status": "planned-ready-to-execute",
-  "completed_tasks": [],
+  "total_tasks": null,
+  "status": "phase-5-closure-gated-on-plan-06-01",
+  "milestone": "v1.0.0-rc.8",
+  "last_master_commit": "1b11649",
+  "last_live_tarball_sha256": "7ffb3b55291a4209339b15deda3567222fc8cc5b91ac51d17769c9279540e001",
+  "completed_tasks": [
+    {"id": "phase-B-1", "name": "REF_PATTERN generalized (BEAAA-only -> /[A-Z][A-Z0-9]{1,7}-\\d+/)", "status": "done", "commit": "514bce4"},
+    {"id": "phase-B-2", "name": "topic-watchdog CTT-07 invariant restored (remove ctx.issues.update)", "status": "done", "commit": "514bce4"},
+    {"id": "phase-B-3", "name": "Worker classifier allowlist via chat_messages.sender_kind='user'", "status": "done", "commit": "75b464a"},
+    {"id": "phase-B-4", "name": "UI mirror allowlist (message-thread.tsx) via senderKind='user'", "status": "done", "commit": "68a77a1"},
+    {"id": "rc.8-final", "name": "Diagnostics chip removed + Situation Room idle suppression + dialog CSS portability ([data-clarity-surface] bare)", "status": "done", "commit": "1b11649"}
+  ],
   "remaining_tasks": [
-    "Task 1 — tdd: chat-topics-repo.ts listTopicsForIssueAndAssignee helper",
-    "Task 2 — tdd: chat-open-for-issue.ts step-2 reverse-lookup + existing-topics-ambiguous route + D-04 auto-unarchive",
-    "Task 3 — execute: continue-in-chat-button.tsx dispatch arm + tooltip differentiation",
-    "Task 4 — execute: reverse-topics-link.tsx entryPoint/filterToAssignee/autoOpen props",
-    "Task 5 — execute: reader/index.tsx parent-owned popover state",
-    "Task 6 — execute: runbook/operator-gotchas.md D-09 fold-in",
-    "Task 7 — execute: README.md D-10 AC marker grammar section",
-    "Task 8 — checkpoint:human-verify: version bump (rc.6 → rc.7) + npm pack + snapshot-bookended Countermoves drill (5 existing fixtures + 6th archived-fixture + scenario 7 ambiguous-popover + rc.7→rc.6→rc.7 rollback rehearsal)"
+    {"id": "plan-06-01", "name": "Situation Room spec-complete (agent.takeOwnership + situation.artifacts + situation.criticalPath + Take-Ownership UI + artifact shelf + transitive blocker chain)", "status": "not_started", "ship_gate": "v1.0.0"},
+    {"id": "phase-F", "name": "Bump rc.8 -> 1.0.0 + npm publish + Hostinger Countermoves wipe-and-rebuild + BEAAA install", "status": "not_started"}
   ],
-  "blockers": [],
-  "human_actions_pending": [],
+  "blockers": [
+    {"description": "v1.0.0 ship cannot proceed until Plan 06-01 (Situation Room) is spec-complete per operator decision (Option 3 chosen 2026-05-26 ~21:00 UTC)", "type": "scope", "workaround": "none - operator-locked"},
+    {"description": "rc.8 final polish commit 1b11649 NOT YET packed; live tarball on Countermoves is the prior Phase B Fix 4 binary sha256 7ffb3b5...", "type": "build", "workaround": "next session will rebuild + pack as part of Plan 06-01 / Phase F flow"}
+  ],
+  "human_actions_pending": [
+    {"action": "Rotate password for ericg@gl3group.com", "context": "string 'Ketodiet0624!' was pasted in transcript mid-session for throwaway-box Playwright auth; treat as burned", "blocking": true, "severity": "security"},
+    {"action": "Provide BEAAA Tier 1 info", "context": "hosting provider + IP/DNS + SSH user + key path + OS + Postgres mode - needed for Phase F prep", "blocking": false}
+  ],
   "decisions": [
-    "D-01 step-2 reverse-lookup on chat_topics.origin_issue_id between chat-task lineage and cold-task fallback",
-    "D-02 reuse RCB-06 popover as picker — zero new picker component",
-    "D-03 cross-employee fall-through returns new-topic-needed (today's seeded dialog)",
-    "D-04 silent auto-unarchive on N=1 archived match via setChatTopicArchived (CTT-07 plugin-side, host issue untouched)",
-    "D-05 last_activity_at DESC tiebreaker = MAX(chat_topics.last_activity_at, max(chat_messages.sent_at))",
-    "D-06 button label unchanged; tooltip differentiates destination",
-    "D-07 deep-link contract unchanged — picker resolves to existing existing-topic URL_HASH shape; parseChatDeepLink NOT extended",
-    "D-08 server-side display-name hygiene (Plan 04.2-06 pattern) — NEVER leak UUID in visible payload",
-    "D-09 D-5 fold-in — operator runbook gotcha for next drill Step 9",
-    "D-10 D-6 fold-in — canonical AC marker grammar in README"
+    {"decision": "v1.0.0 ship gated on Plan 06-01 (Situation Room spec-complete), NOT shipped from rc.8", "rationale": "Live Playwright drill discovered Situation Room renders 'no owner assigned' Critical Path rows with no action affordances + Create-Task dialog unstyled (CSS scope mismatch). Operator chose Option 3 - pause, plan properly, then ship.", "phase": "05"},
+    {"decision": "Authoritative source for 'is this operator-initiated' is chat_messages.sender_kind='user', NOT the host-side authorType", "rationale": "Host stamps ALL plugin-worker createComment calls as authorType:'system' regardless of who initiated. Verified across Plan 04.1-11 Task-created marker AND rc.8 Phase B operator chat sends.", "phase": "05"},
+    {"decision": "Defense-in-depth filters need a shared source-of-truth predicate", "rationale": "Phase B Fix 3 (worker classifier allowlist) was incomplete without Fix 4 (UI mirror allowlist). Both layers needed the same exemption.", "phase": "05"},
+    {"decision": "Diagnostics chip removed in rc.8 final (kept type signature for callers)", "rationale": "Operator decided the in-UI toggle adds noise without measurable benefit; the includeDiagnostics worker param stays available for future restoration via slash-command/settings/URL param.", "phase": "05"},
+    {"decision": "true-task-dialog CSS broadened from [data-clarity-surface=chat] to bare [data-clarity-surface]", "rationale": "Dialog primitives need to apply on Situation Room / Reader / Archive surfaces too. Surface-qualified scope was over-narrow.", "phase": "05"}
   ],
-  "uncommitted_files": [],
-  "next_action": "Run /gsd:execute-phase 4.2 --gaps (forward-defects addendum execution; no /gsd:execute-plan skill exists; no --addendum flag exists). Plan 04.2-07 is the only outstanding plan in Phase 4.2.",
-  "context_notes": "Phase 4.2 closed-phase addendum pattern: phase_status stays 'Executed', RCB-01..RCB-07 stay Implemented, VERIFICATION.md untouched. Plan adds work without reopening the phase. Plan-checker PASS on first iteration confirms the empty-requirements + <addresses>-block convention is sound. See MemPalace drawer clarity_pack/decisions/ac1e392e6cf1d93e40b1d92e for the reusable recipe."
+  "uncommitted_files": [
+    ".planning/HANDOFF.json (pending - this commit)",
+    ".planning/phases/05-distribution-polish/.continue-here.md (pending - this commit)",
+    ".planning/ROADMAP.md (Plan 6.1 entry - pending commit)",
+    ".planning/STATE.md (Phase B Closure Record - pending commit)",
+    ".planning/config.json (touched)",
+    "untracked: .codex/, .playwright-mcp/, 04.1-01-probe-output.txt, AGENTS.md, sketches/paperclip-fix-chat-true-task.html, several rc.8-*.png evidence files, ui-chat-messages-*.json fixtures"
+  ],
+  "next_action": "/gsd:resume-work -> /gsd:plan-phase 6.1 (Situation Room spec-complete) -> /gsd:execute-phase 6.1 -> Playwright re-verify -> Phase F (bump rc.8 -> 1.0.0 + npm publish + Hostinger wipe-and-rebuild + BEAAA install)",
+  "context_notes": "Phase B (4 fixes) + rc.8 final polish complete on source. Live tarball on Countermoves is sha256 7ffb3b5... (Phase B Fix 4 binary). The rc.8 final polish commit 1b11649 is unpacked - next session rebuilds + packs as part of Plan 06-01 / Phase F. Suite 1822 total / 1820 pass / 0 fail / 2 skip. v1.0.0 ship-gate per operator: Situation Room spec-complete per PROJECT.md Surface 2 (take-ownership action, artifact shelf, transitively-resolved blocker chains ending in a single human action). Estimated 1 full session ~6-8 hours. Before any credential-bearing session against Countermoves: confirm operator has rotated ericg@gl3group.com password."
 }

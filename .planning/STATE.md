@@ -1,14 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0.0-rc.7
+milestone: v1.0.0-rc.8
 milestone_name: phase-5-expanded-for-v1-final
-status: executing
-stopped_at: "Plan 05-11 HOTFIX-2 (comment_id backfill + chip-click overflow-clip) SHIPPED 2026-05-26. 4 atomic commits on master (cda1dd2 fix comment_id, 4069491 fix chip-click, af25f81 repack, this STATE-update commit) on top of the Plan 05-11 + HOTFIX-1 chain. Fix A: chat.attachment.upload now SELECTs comment_id from chat_messages before INSERT into chat_message_attachments (was hardcoded null). Graceful degrade on empty/throwing lookup. Fix B: AttachmentChip click popover swapped from position:absolute (clipped by .ctx{overflow-y:auto}) to fixed-inset backdrop + centered body modal (matches true-task-dialog pattern; Plan 04.1-09). Three dismissal affordances (Escape / backdrop click / close button). Migration 0012 SKIPPED — host validator only accepts CREATE/ALTER/COMMENT statements (UPDATE rejected at install). Backfill of 2 historical orphan rows ships as a one-shot SQL block in the HOTFIX note for the operator to run via safety-CLI psql. CTT-07 invariant preserved by construction; no new runtime deps. New tarball clarity-pack-1.0.0.tgz: sha256=6e0ce1e9ce20b8600ca4b790fd56279ee1450a19b5bce45a02087de28e6dac9d 633787 bytes (-3910 vs SUPERSEDED 8b1eba1f... / 637697). Version literal unchanged at 1.0.0 (Plan 05-10 + HOTFIX-1 precedent). Suite 1813 total / 1811 pass / 0 fail / 2 skip (+11 new tests: 3 comment_id backfill + 8 backdrop/CSS regression guards). All Phase 5 gates GREEN. HOTFIX note: .planning/phases/05-distribution-polish/05-11-HOTFIX-COMMENT-ID-AND-CHIP-CLICK.md. milestone field stays at v1.0.0-rc.7 until operator drill PASS against the new tarball sha256 6e0ce1e9..."
-last_updated: "2026-05-26T19:30:00Z — appended Plan 05-11 HOTFIX-2 (comment_id backfill + chip-click overflow-clip) closure; new tarball sha256 6e0ce1e9ce20b8600ca4b790fd56279ee1450a19b5bce45a02087de28e6dac9d"
+status: paused-for-plan-06-01
+stopped_at: "Phase B + rc.8 final polish COMPLETE 2026-05-26 ~21:00 UTC. v1.0.0 ship GATED on Plan 06-01 (Situation Room spec-complete) per operator decision after live Playwright drill discovered the Surface 2 (Situation Room) renders impotent 'no owner assigned' Critical Path rows + an unstyled Create-Task dialog (CSS scope mismatch). Operator chose Option 3 — pause v1.0.0 ship, plan Phase 06-01 properly, ship Situation Room to spec, THEN flip rc.8 → 1.0.0 + npm publish + Hostinger wipe-and-rebuild + BEAAA install (Phase F). Last commit on master: 1b11649 (rc.8 final polish: Diagnostics chip removed + Situation Room idle-state suppression + true-task-dialog CSS scope broadened to bare [data-clarity-surface]). Suite 1822 total / 1820 pass / 0 fail / 2 skip. Resume via /gsd:resume-work then /gsd:plan-phase 6.1. SEE: 'Phase B Closure Record (rc.8)' section below for the full Phase B 1-4 + rc.8-final commit trail.
+
+Plan 05-11 HOTFIX-2 (comment_id backfill + chip-click overflow-clip) SHIPPED 2026-05-26. 4 atomic commits on master (cda1dd2 fix comment_id, 4069491 fix chip-click, af25f81 repack, this STATE-update commit) on top of the Plan 05-11 + HOTFIX-1 chain. Fix A: chat.attachment.upload now SELECTs comment_id from chat_messages before INSERT into chat_message_attachments (was hardcoded null). Graceful degrade on empty/throwing lookup. Fix B: AttachmentChip click popover swapped from position:absolute (clipped by .ctx{overflow-y:auto}) to fixed-inset backdrop + centered body modal (matches true-task-dialog pattern; Plan 04.1-09). Three dismissal affordances (Escape / backdrop click / close button). Migration 0012 SKIPPED — host validator only accepts CREATE/ALTER/COMMENT statements (UPDATE rejected at install). Backfill of 2 historical orphan rows ships as a one-shot SQL block in the HOTFIX note for the operator to run via safety-CLI psql. CTT-07 invariant preserved by construction; no new runtime deps. New tarball clarity-pack-1.0.0.tgz: sha256=6e0ce1e9ce20b8600ca4b790fd56279ee1450a19b5bce45a02087de28e6dac9d 633787 bytes (-3910 vs SUPERSEDED 8b1eba1f... / 637697). Version literal unchanged at 1.0.0 (Plan 05-10 + HOTFIX-1 precedent). Suite 1813 total / 1811 pass / 0 fail / 2 skip (+11 new tests: 3 comment_id backfill + 8 backdrop/CSS regression guards). All Phase 5 gates GREEN. HOTFIX note: .planning/phases/05-distribution-polish/05-11-HOTFIX-COMMENT-ID-AND-CHIP-CLICK.md. milestone field stays at v1.0.0-rc.7 until operator drill PASS against the new tarball sha256 6e0ce1e9..."
+last_updated: "2026-05-26T21:00:00Z — Phase B (4 fixes) + rc.8 final polish committed to source. v1.0.0 ship gated on Plan 06-01 (Situation Room spec-complete) per operator decision. Resume next session with /gsd:resume-work."
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 4
-  total_plans: 51
+  total_plans: 52
   completed_plans: 44
   percent: 69
 ---
@@ -16,6 +18,62 @@ progress:
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
+
+## Phase B Closure Record (rc.8 final — 2026-05-26)
+
+**Critical bug-fix session driven by Playwright verification against the live Countermoves install** (operator-authenticated via session credentials in Eric's controlled test environment). Four production-blocking defects shipped fixes for; one fifth defect (Situation Room) consciously deferred to Plan 06-01.
+
+### Commits landed in this Phase B session (on master)
+
+| Commit | Scope | Verified |
+|--------|-------|----------|
+| `514bce4` | Phase B Fix 1 (REF_PATTERN generalized) + Fix 2 (topic-watchdog CTT-07 invariant restored) | Playwright DOM: 54 RefChips on chat surface; worker log: 236 historical "issues.update failed" → 0 new + 35 new info-log entries |
+| `75b464a` | Phase B Fix 3 (worker classifier allowlist for operator chat sends) — chat-messages handler exempts comments with chat_messages.sender_kind='user' from runtime-noise filter | Playwright: chat.messages handler returns 40 messages including operator's typed text (was 33, all yesterday-only) |
+| `68a77a1` | Phase B Fix 4 (UI mirror allowlist) — message-thread.tsx belt-and-suspenders filter also exempts senderKind='user' so the worker fix actually reaches the DOM | Playwright: 8 articles labeled "Eric · You" render; attachment chips appear on the right message bubble; messages persist through page refresh |
+| `1b11649` | rc.8 final polish — DiagnosticsToggle JSX removed; Situation Room Critical Path idle-state suppression; true-task-dialog CSS broadened from [data-clarity-surface="chat"] to bare [data-clarity-surface] | tsc clean; suite 1820 pass / 0 fail / 2 skip (1822 total) |
+
+### Tarball trail (last known good)
+
+- Phase B Fix 3 binary: `clarity-pack-1.0.0-rc.8.tgz` sha256 `fc9a187a6e399b0ceac7e34a04563949fed302f7049b4acbbb67406ace04d6b3` — 639,509 bytes
+- Phase B Fix 4 binary (LIVE on Countermoves): sha256 `7ffb3b55291a4209339b15deda3567222fc8cc5b91ac51d17769c9279540e001` — 639,519 bytes; installed at 2026-05-26T18:49:12Z
+- rc.8 final commit (`1b11649`) NOT YET packed — next session will rebuild + pack as part of Plan 06-01 / Phase F flow
+
+### Deferred to Plan 06-01 (Situation Room spec-complete)
+
+Per PROJECT.md Surface 2: *"Live cockpit showing every agent's current state, plain-English blockers, transitively-resolved blocker chains ending in a **single human action**, artifact shelf."*
+
+Current implementation ships agent grid + idle-state suppression. Missing:
+- "Take ownership" / "Assign me" action affordances per blocker
+- Artifact shelf (recent documents per agent)
+- Transitively-resolved blocker chain logic (walk dependency graph, collapse to leaf human action)
+- Worker handlers: `agent.takeOwnership`, `situation.artifacts`, `situation.criticalPath`
+
+Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + /gsd:execute-phase 6.1.
+
+### Deferred to v1.1+ (filed as separate findings; not blocking v1.0.0)
+
+- **React-key warnings** (14 in console: ToastProvider / ChatPageOptedIn / ClaritySurfaceHeader / ChatPageBody ×2 / RosterRail ×2 / TopicStrip / ContextRail / AttachmentChip / PersistedMessage / DeliverablePreview). Plan 05-07's test gate was source-grep only; real-DOM warnings still fire. Needs jsdom + new devDep for proper test infra.
+- **501 stream error** at `/api/plugins/.../bridge/stream/chat:...` — host doesn't implement plugin streams. Plugin handles as DORMANT best-effort per message-thread.tsx documentation; browser logs the failed network call regardless.
+- **listComments SDK-vs-REST gap** — SDK's `ctx.issues.listComments()` returns ~33 comments while host's REST `/api/issues/<id>/comments` returns the full 68. Worker handler currently uses the SDK; for very-active topics (>200 comments) the SDK's bounded window can clip newest messages. Lower priority than the classifier-bypass fix already shipped; pathological-topic-only.
+
+### Session lessons (filed to MemPalace clarity_pack/runbook + diary)
+
+- **Real-DOM testing matters.** Source-grep tests passed while production rendered warnings + dropped operator messages. Plan 06-01 + v1.1 should land jsdom-based real-DOM render tests.
+- **The host stamps plugin-worker createComment as authorType:'system'.** Plan 04.1-11 captured this for the Task-created marker. rc.8 Phase B 2026-05-26 captured it for operator chat sends too. **Authoritative source of "is this operator-initiated" is chat_messages.sender_kind, NOT the host-side authorType.**
+- **Defense-in-depth filters need to know about each other.** Phase B Fix 3 (worker classifier bypass) was incomplete without Fix 4 (UI mirror filter bypass). Both layers needed the same allowlist. Cross-layer filters should share a single source-of-truth predicate.
+- **Don't trust executor summaries — verify against running code.** Earlier in the session multiple "fix" commits landed that didn't actually work in production. Playwright-driven live verification (after the operator authorized a session-credential bypass with a throwaway Countermoves install) caught what static analysis missed.
+- **NEVER paste production credentials in transcript.** Even with a throwaway box, password text persists in conversation logs and possibly Anthropic-side telemetry. Operator MUST rotate before next session.
+
+### Pending operator items
+
+1. **Rotate `ericg@gl3group.com` password.** The string `Ketodiet0624!` was pasted in this transcript ~mid-session for throwaway-box Playwright auth. Treat as burned. Rotate before next session opens.
+2. **BEAAA Tier 1 info needed for Phase F prep:** hosting provider + IP/DNS + SSH user + key path + OS + Postgres mode. Drop any time today/tomorrow.
+3. **Next session sequence:** `/gsd:resume-work` (restores from HANDOFF.json) → `/gsd:plan-phase 6.1` (Situation Room spec-complete) → `/gsd:execute-phase 6.1` → re-verify via Playwright → Phase F (bump rc.8 → 1.0.0 + npm publish + Hostinger wipe-and-rebuild + BEAAA install).
+
+---
+
+## Plan 05-11 HOTFIX-2 record (preceded Phase B)
+
 **Last updated:** 2026-05-26 — Plan 05-11 HOTFIX-2 (comment_id backfill + chip-click overflow-clip) SHIPPED. Second-round live drill on Countermoves (16:23 — 18:30) surfaced two latent defects in the Plan 05-11 ship + HOTFIX-1: (A) `chat_message_attachments` rows landed with `comment_id=<empty>` even when the parent `chat_messages` row had its host comment_id populated — the upload handler hardcoded `null`; (B) attachment chips in the right-rail Recent Attachments panel were unclickable — the popover mounted but was **clipped behind `.ctx { overflow-y: auto }`** (`position: absolute` was the wrong shell choice for an overflow-bounded container). Four atomic commits on master: `cda1dd2 fix(05-11-hotfix-2): backfill comment_id from chat_messages in chat.attachment.upload`, `4069491 fix(05-11-hotfix-2): wire AttachmentChip click -> DeliverablePreview popover (overflow-clip)`, `af25f81 chore(05-11-hotfix-2): repack`, and this STATE-update commit. Fix A: handler SELECTs `comment_id FROM chat_messages WHERE message_uuid = $1 AND company_id = $2` between the per-message size check (step 5) and the INSERT (step 9); graceful degrade to `null` on empty / throwing lookup. Fix B: popover shell swapped to fixed-inset backdrop + centered body matching the canonical `true-task-dialog` pattern (Plan 04.1-09); three dismissal affordances (Escape / backdrop click / close button). **Migration 0012 SKIPPED** — host validator (`ddl-prefix-validator.test.mjs`) only accepts `CREATE`/`ALTER`/`COMMENT` statement prefixes (`UPDATE` would be rejected at install with "Plugin migrations may contain DDL statements only"). Manual backfill ships as a one-shot SQL block in the HOTFIX note; rowCount expected = 2 (per 2026-05-26 database snapshot). **New tarball** `clarity-pack-1.0.0.tgz` sha256 `6e0ce1e9ce20b8600ca4b790fd56279ee1450a19b5bce45a02087de28e6dac9d`, 633,787 bytes (-3,910 vs the superseded `8b1eba1f...` / 637,697). **Version literal unchanged** at 1.0.0 (HOTFIX-1 precedent). HOTFIX note: `.planning/phases/05-distribution-polish/05-11-HOTFIX-COMMENT-ID-AND-CHIP-CLICK.md`. All Phase 5 quality gates GREEN; full suite 1813 total / 1811 pass / 0 fail / 2 skip (+11 net tests: 3 comment_id backfill + 8 backdrop/CSS regression guards). CTT-07 invariant preserved by construction (the new chat_messages lookup is a plugin-namespace SELECT only — no `ctx.issues.update` introduced). Status remains `closure-pending-operator-drill` against the **new** tarball sha256 `6e0ce1e9ce20b...`.
 
 **Previous update (2026-05-26):** Plan 05-11 HOTFIX-1 (document-key) SHIPPED. Live drill on Countermoves surfaced 6+ "Invalid document key" failures from `chat.attachment.upload`: Paperclip's host validator rejects keys with dots/underscores/uppercase, and Plan 05-11's `chat-attach-<chatMessageId>-<safeFilename>` composition slipped all three through. Fix: UUID-only key (`chat-attach-<uuid v4>`); original filename preserved on `documents.title` (host) + `chat_message_attachments.original_filename` (plugin namespace). Three atomic commits on master: `3ab6151 fix(05-11-hotfix): use UUID-only document key`, `6fd9887 chore(05-11-hotfix): repack`, STATE-update commit. **Tarball SUPERSEDED** by HOTFIX-2 above. HOTFIX note: `.planning/phases/05-distribution-polish/05-11-HOTFIX-DOCUMENT-KEY.md`. Bug 2 from the same drill log (topic-watchdog potential CTT-07 violation) is a SEPARATE finding deferred to a follow-up audit.
