@@ -229,12 +229,18 @@ export function DeliverablePreview({
   // is `Record<string, unknown> | undefined`; `undefined` is the documented
   // skip-fetch sentinel.
   const ready = Boolean(companyId && userId && issueId);
+  // Hotfix 2026-05-26 (rc.8): pass `filenameHint` so the worker dispatcher
+  // can derive the file extension when documentKey is UUID-only (chat-attach
+  // case). The Reader caller's documentKey already contains the filename in
+  // its fallback path (`documentKey ?? filename`) so the hint is a no-op
+  // there — only the chat-attach popover relies on it.
   const params: Record<string, unknown> | undefined = ready
     ? {
         companyId,
         userId,
         issueId,
         documentKey: effectiveDocumentKey,
+        filenameHint: effectiveDeliverable.filename,
       }
     : undefined;
   const { data, loading } = usePluginData<DeliverablePreviewResult>(

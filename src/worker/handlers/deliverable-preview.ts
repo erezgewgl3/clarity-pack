@@ -138,13 +138,25 @@ export function registerDeliverablePreview(ctx: DeliverablePreviewCtx): void {
       typeof params?.documentKey === 'string' && params.documentKey
         ? params.documentKey
         : null;
+    // Hotfix 2026-05-26 (rc.8): chat-attach document keys are UUID-only
+    // (`chat-attach-<uuid>`). The Hotfix-1 key composition stripped the
+    // filename to satisfy the host's "Invalid document key" validator —
+    // but the dispatcher below routes by extension parsed from the key.
+    // Accept an optional `filenameHint` param so the chip-click site can
+    // pass `attachment.originalFilename` and the dispatcher derives the
+    // correct ext. Reader-side callers don't pass it; the documentKey's
+    // own extension (when present) wins.
+    const filenameHint =
+      typeof params?.filenameHint === 'string' && params.filenameHint
+        ? params.filenameHint
+        : null;
 
     if (!companyId) return { error: 'COMPANY_ID_REQUIRED' as const };
     if (!userId) return { error: 'USER_ID_REQUIRED' as const };
     if (!issueId) return { error: 'ISSUE_ID_REQUIRED' as const };
     if (!documentKey) return { error: 'DOCUMENT_KEY_REQUIRED' as const };
 
-    const ext = lowerExt(documentKey);
+    const ext = lowerExt(documentKey) || (filenameHint ? lowerExt(filenameHint) : '');
 
     // ---- T-05-04-02: macro rejection BEFORE any host read. ----------------
     if (ext === '.xlsm') {

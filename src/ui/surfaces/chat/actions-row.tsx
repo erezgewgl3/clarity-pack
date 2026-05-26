@@ -106,9 +106,6 @@ export function ChatActionsRow({
         topicId={diagnosticsTopicId}
       />
       <span className="spacer" aria-hidden="true" />
-      <span className="kbd-hint" aria-hidden="true">
-        <kbd>T</kbd> new task
-      </span>
     </div>
   );
 }
