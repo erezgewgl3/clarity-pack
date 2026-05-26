@@ -60,6 +60,32 @@ import type { ChatTopic } from './topic-strip.tsx';
 import { ActiveTasksOwned, type ChatActiveTask } from './active-tasks-owned.tsx';
 import { ArchiveTopicButton } from './archive-topic-button.tsx';
 import type { ChatMessage } from './message-thread.tsx';
+// Plan 05-11 (CHAT-07 gap closure) — live Recent Attachments panel
+// driven by chat.attachment.list; shared chip-with-preview wrapper
+// matches the message-thread per-bubble rendering.
+import { AttachmentChipWithPreview } from './attachment-chip-with-preview.tsx';
+
+// Plan 05-11 (CHAT-07) — shape of one chat-attachment entry returned by
+// chat.attachment.list (camelCase).
+type ChatAttachmentEntry = {
+  id: string;
+  chatMessageId: string;
+  commentId: string | null;
+  documentKey: string;
+  mimeType: string;
+  originalFilename: string;
+  byteSize: number;
+  createdAt: string;
+};
+
+type ChatAttachmentListResult =
+  | {
+      kind: 'attachments';
+      topicIssueId: string;
+      attachments: ChatAttachmentEntry[];
+    }
+  | { error: string }
+  | null;
 
 // Plan 05-06 Task 1 (D-12) — parallel chat.messages fetch shape. The host
 // bridge's usePluginData deduplicates identical (action, params) pairs, so
@@ -216,6 +242,28 @@ export function ContextRail({
       .map((m) => ({ commentId: m.commentId, body: m.body ?? '' }));
   }, [messagesData]);
 
+  // Plan 05-11 (CHAT-07 gap closure) -- live Recent Attachments fetch.
+  // limit:5 matches the panel size; the empty-params skip-fetch idiom
+  // when no topic is selected mirrors the chat.messages fetch above so
+  // the opt-in-guard short-circuits without a spurious worker call.
+  const { data: attachmentData } = usePluginData<ChatAttachmentListResult>(
+    'chat.attachment.list',
+    topic
+      ? { topicIssueId: topic.issueId, companyId, userId, limit: 5 }
+      : {},
+  );
+  const recentAttachments: ChatAttachmentEntry[] = React.useMemo(() => {
+    if (
+      !attachmentData ||
+      typeof attachmentData !== 'object' ||
+      !('kind' in attachmentData) ||
+      attachmentData.kind !== 'attachments'
+    ) {
+      return [];
+    }
+    return attachmentData.attachments;
+  }, [attachmentData]);
+
   // Plan 05-06 Task 1 (D-12) — scroll-and-flash handler. The target id
   // `msg-<commentId>` is the stable scroll target set by message-thread.tsx
   // line 635 (Plan 04.2-01 RCB-03). NO new keyframe — chat.css lines 2261-2281
@@ -276,10 +324,37 @@ export function ContextRail({
           : 'Select a topic to see what you owe.'}
       </p>
 
+      {/* Plan 05-11 (CHAT-07 gap closure) -- Recent Attachments is LIVE.
+          chat.attachment.list returns the newest 5 attachments for the
+          active topic; each chip opens the Plan 05-04 DIST-04
+          DeliverablePreview popover on click. The Storage Pin block
+          below is UNCHANGED -- Plan 05-08 D-20 semantics stand
+          (topic-exempt-from-archive; NOT per-attachment pinning).
+          The two surfaces serve different invariants: Recent Attachments
+          = attachment listing; Storage Pin = archive-exempt flag. */}
       <h3>Recent attachments</h3>
-      <div className="pin-row attach-unavailable">
-        Attachments are temporarily unavailable
-      </div>
+      {topic ? (
+        recentAttachments.length > 0 ? (
+          <div
+            className="rail-attachments"
+            data-clarity-region="rail-attachments"
+          >
+            {recentAttachments.map((a) => (
+              <AttachmentChipWithPreview
+                key={a.id}
+                attachment={a}
+                companyId={companyId}
+                userId={userId}
+                topicIssueId={topic.issueId}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="ctx-empty">No attachments on this topic yet.</p>
+        )
+      ) : (
+        <p className="ctx-empty">Select a topic to see attachments.</p>
+      )}
 
       <h3>Quick actions</h3>
       <div className="quick">
@@ -356,6 +431,10 @@ export function ContextRail({
         </>
       ) : null}
 
+      {/* Plan 05-08 D-20 Storage Pin -- UNCHANGED. Plan 05-11 Recent
+          Attachments lives above; the two surfaces serve different
+          invariants (D-20 = archive-exempt; Plan 05-11 = attachment
+          listing). */}
       {topic ? (
         <>
           <h3>Storage pin</h3>
