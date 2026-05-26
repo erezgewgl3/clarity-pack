@@ -744,9 +744,13 @@
 
 [data-clarity-surface='situation-room'] .clarity-critical-path-item {
   display: grid;
-  grid-template-columns: 32px 1fr;
+  /* Plan 06.1-03 Task 2 — second column now wraps narration + button
+   * cluster + (when open) blocker-context aside. `auto` on the narration
+   * column + `1fr` on the actions column lets the buttons sit inline on
+   * a wide row and wrap to the next line when narration is long. */
+  grid-template-columns: 32px 1fr auto;
   align-items: start;
-  gap: 16px;
+  gap: 12px 16px;
   padding: 12px 0;
   border-bottom: 1px dashed var(--clarity-line);
 }
@@ -779,6 +783,99 @@
   line-height: 1.5;
   margin: 0;
   border-top: 1px solid var(--clarity-line);
+}
+
+/* ---------- Plan 06.1-03 Task 2 (ROOM-11) — per-row button cluster ----------
+ * Take-Ownership (gold accent) + Convert-to-task (neutral chrome). Color
+ * reservation per UI-SPEC §Color §Accent reservation list: gold
+ * (var(--clarity-you)) applies ONLY to .clarity-take-ownership-btn — the
+ * Convert-to-task button must NOT use gold. The cluster sits in the row's
+ * third column (auto-width) so narration text wraps independently of the
+ * actions.
+ * ----------------------------------------------------------------------- */
+
+[data-clarity-surface='situation-room'] .clarity-row-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+[data-clarity-surface='situation-room'] .clarity-take-ownership-btn {
+  border: 1px solid var(--clarity-you);
+  color: var(--clarity-you);
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-clarity-surface='situation-room'] .clarity-take-ownership-btn:hover {
+  background: var(--clarity-you-soft);
+}
+
+[data-clarity-surface='situation-room'] .clarity-take-ownership-btn:disabled,
+[data-clarity-surface='situation-room'] .clarity-take-ownership-btn[aria-busy='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+[data-clarity-surface='situation-room'] .clarity-convert-to-task-btn {
+  border: 1px solid var(--clarity-line);
+  color: var(--clarity-fg);
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-clarity-surface='situation-room'] .clarity-convert-to-task-btn:hover {
+  background: var(--clarity-bg-3);
+  border-color: var(--clarity-line-bright);
+}
+
+/* Blocker context aside — D-12 + UI-SPEC §Copywriting Contract: the
+ * blocker context renders BESIDE the dialog as a static block (not inside
+ * the editable dialog fields). Visually styled like .clarity-ref-card but
+ * scoped to the situation-room row. Spans the full row width when present. */
+[data-clarity-surface='situation-room'] .clarity-critical-path-blocker-context {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  margin: 6px 0 2px;
+  border: 1px solid var(--clarity-line);
+  background: var(--clarity-bg-2);
+  border-radius: 6px;
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-blocker-context-kind {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--clarity-ink-3);
+  font-weight: 500;
+  align-self: center;
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-blocker-context-label {
+  font-size: 0.92rem;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface='situation-room'] .clarity-critical-path-blocker-context-narration {
+  grid-column: 1 / -1;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-size: 0.92rem;
+  color: var(--clarity-ink-2);
+  line-height: 1.5;
 }
 
 /* ---------- Awaiting You pill ---------- */
