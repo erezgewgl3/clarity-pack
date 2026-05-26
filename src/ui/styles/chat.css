@@ -2676,15 +2676,56 @@
   background: var(--danger);
   color: var(--bg);
 }
+/* Hotfix 2026-05-26 (chip-click-overflow-clip): the Plan 05-11 popover
+ * shipped as `position: absolute` anchored to a wrapper <span>. In the
+ * right-rail use-case the .ctx container has `overflow-y: auto`, so the
+ * absolutely-positioned popover was clipped behind the rail's overflow
+ * context -- chip clicks toggled state but the popover was invisible /
+ * unreachable. The hotfix replaces that shell with a fixed-inset
+ * backdrop + centered body pair, matching the true-task-dialog pattern
+ * (line 1343 ff., Plan 04.1-09). The backdrop escapes every parent
+ * overflow context, so the preview is reachable from any caller.
+ *
+ * Backdrop closes on click; clicks inside the popover body stop
+ * propagation so the operator can scroll + interact with the preview.
+ * Escape closes via the keydown listener in attachment-chip-with-preview.tsx.
+ */
+[data-clarity-surface="chat"] .attachment-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 7, 5, 0.75);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
 [data-clarity-surface="chat"] .attachment-popover {
-  position: absolute;
-  z-index: 50;
+  position: relative;
   background: var(--bg-1);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-bright, var(--line));
   border-radius: 8px;
-  padding: 8px;
+  padding: 16px 18px 18px;
   max-width: 720px;
-  max-height: 60vh;
+  width: min(720px, 92vw);
+  max-height: 80vh;
   overflow: auto;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+[data-clarity-surface="chat"] .attachment-popover-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--ink-2);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+[data-clarity-surface="chat"] .attachment-popover-close:hover {
+  background: var(--bg-3);
+  color: var(--ink);
 }
