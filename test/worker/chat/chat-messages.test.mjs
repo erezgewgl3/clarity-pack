@@ -428,9 +428,12 @@ test('U6 WATCHDOG-HOOK-FIRED: every chat.messages call invokes ctx.issues.get fo
   );
 });
 
-test('U6b WATCHDOG-FLIPS-OFF-DONE: when the topic is parked at done, the watchdog flips it to in_progress', async () => {
-  // Steady-state recovery path per OQ3 attempt-2: the host disposition-
-  // recovery service flipped the topic to done; the next poll catches it.
+test('U6b WATCHDOG-LOGS-OFF-DONE: when the topic is parked at done, the watchdog logs info-hint and does NOT call issues.update (rc.8 CTT-07)', async () => {
+  // rc.8 hotfix 2026-05-26: the watchdog NO LONGER mutates host issue
+  // status. Per CTT-07 the manifest doesn't declare issues.update;
+  // calling it always failed on the live host (~4 log lines/minute of
+  // "missing capability" spam). The host's disposition-recovery is the
+  // rightful owner of restoration; the plugin only logs a hint.
   const ctx = makeCtx({
     comments: mixedThread(),
     topicIssue: { status: 'done' },
@@ -442,8 +445,7 @@ test('U6b WATCHDOG-FLIPS-OFF-DONE: when the topic is parked at done, the watchdo
   await new Promise((r) => setImmediate(r));
   await new Promise((r) => setImmediate(r));
 
-  assert.equal(ctx._updateCalls.length, 1, 'watchdog issued one flip-off-done update');
-  assert.equal(ctx._updateCalls[0].patch.status, 'in_progress');
+  assert.equal(ctx._updateCalls.length, 0, 'CTT-07: zero issues.update calls');
 });
 
 test('U7 WATCHDOG-FIRE-AND-FORGET: a slow watchdog does NOT delay the chat.messages response', async () => {

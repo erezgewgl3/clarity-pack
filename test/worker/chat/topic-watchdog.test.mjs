@@ -45,13 +45,16 @@ function makeCtx({
   const updateCalls = [];
   const wakeupCalls = [];
   const warnLogs = [];
+  const infoLogs = [];
 
   const ctx = {
     logger: {
       warn(msg, meta) {
         warnLogs.push({ msg, meta });
       },
-      info() {},
+      info(msg, meta) {
+        infoLogs.push({ msg, meta });
+      },
     },
     issues: {
       async get(issueId, companyId) {
@@ -78,6 +81,7 @@ function makeCtx({
     _updateCalls: updateCalls,
     _wakeupCalls: wakeupCalls,
     _warnLogs: warnLogs,
+    _infoLogs: infoLogs,
   };
   return ctx;
 }
@@ -125,27 +129,33 @@ test('ensureTopicWakeable: status in_review → does NOT flip (non-terminal, age
 // FLIP PATHS — terminal/blocked statuses, flip to in_progress.
 // ---------------------------------------------------------------------------
 
-test('ensureTopicWakeable: status done → flips to in_progress (D-11 defensive sweep)', async () => {
+// rc.8 hotfix 2026-05-26 (CTT-07 restoration): the watchdog NO LONGER calls
+// ctx.issues.update on terminal status. The host's disposition-recovery is
+// the rightful owner of status restoration; the manifest does not declare
+// issues.update (per CTT-07 — plugin actions NEVER mutate
+// public.issues.updated_at). Tests below assert ZERO update calls on every
+// status path AND that an info-level hint is logged on terminal status.
+
+test('ensureTopicWakeable: status done → logs info-hint, does NOT call ctx.issues.update (CTT-07)', async () => {
   const ctx = makeCtx({ issueStatus: 'done' });
   await ensureTopicWakeable(ctx, 'topic-1', 'co-1');
-  assert.equal(ctx._updateCalls.length, 1);
-  assert.equal(ctx._updateCalls[0].issueId, 'topic-1');
-  assert.equal(ctx._updateCalls[0].patch.status, 'in_progress');
-  assert.equal(ctx._updateCalls[0].companyId, 'co-1');
+  assert.equal(ctx._updateCalls.length, 0, 'CTT-07: zero issues.update calls');
+  assert.ok(
+    ctx._infoLogs?.some((l) => /terminal status/i.test(l.msg)),
+    'info-log records the terminal-status observation for operator visibility',
+  );
 });
 
-test('ensureTopicWakeable: status cancelled → flips to in_progress', async () => {
+test('ensureTopicWakeable: status cancelled → logs info-hint, does NOT call ctx.issues.update (CTT-07)', async () => {
   const ctx = makeCtx({ issueStatus: 'cancelled' });
   await ensureTopicWakeable(ctx, 'topic-1', 'co-1');
-  assert.equal(ctx._updateCalls.length, 1);
-  assert.equal(ctx._updateCalls[0].patch.status, 'in_progress');
+  assert.equal(ctx._updateCalls.length, 0);
 });
 
-test('ensureTopicWakeable: status blocked → flips to in_progress (Pitfall 1 recovery escalation target)', async () => {
+test('ensureTopicWakeable: status blocked → logs info-hint, does NOT call ctx.issues.update (CTT-07)', async () => {
   const ctx = makeCtx({ issueStatus: 'blocked' });
   await ensureTopicWakeable(ctx, 'topic-1', 'co-1');
-  assert.equal(ctx._updateCalls.length, 1);
-  assert.equal(ctx._updateCalls[0].patch.status, 'in_progress');
+  assert.equal(ctx._updateCalls.length, 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -168,14 +178,14 @@ test('ensureTopicWakeable: issues.get throws → warn-logs + returns; no throw t
   );
 });
 
-test('ensureTopicWakeable: issues.update throws → warn-logs + returns; no throw to caller', async () => {
+test('ensureTopicWakeable: terminal status with hostile mock → still NO update call (CTT-07 unconditional)', async () => {
+  // Even if the host were to mis-implement update such that it succeeded
+  // accidentally, the plugin must NOT invoke it. rc.8 hotfix removed the
+  // call entirely; this test pins that no future regression re-introduces
+  // it on a flaky-host code path.
   const ctx = makeCtx({ issueStatus: 'done', updateThrows: true });
   await assert.doesNotReject(() => ensureTopicWakeable(ctx, 'topic-1', 'co-1'));
-  assert.equal(ctx._updateCalls.length, 1, 'the update was attempted');
-  assert.ok(
-    ctx._warnLogs.some((l) => /update/i.test(l.msg)),
-    'warn-log records the issues.update failure',
-  );
+  assert.equal(ctx._updateCalls.length, 0, 'CTT-07: zero update calls regardless of host behavior');
 });
 
 // ---------------------------------------------------------------------------

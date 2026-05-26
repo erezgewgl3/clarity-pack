@@ -77,21 +77,30 @@ export async function ensureTopicWakeable(
   if (!issue) return;
 
   // D-11 — only flip OFF terminal/blocked. A non-terminal status (in_progress,
-  // todo, backlog, in_review) is left alone: the agent may legitimately
-  // transition between those, and the topic remains wakeable.
+  // todo, backlog, in_review) is left alone.
+  //
+  // rc.8 hotfix 2026-05-26 (CTT-07 invariant restoration):
+  //
+  // The original Plan 04.1-03 implementation called `ctx.issues.update` here
+  // to flip the topic back to in_progress. The clarity-pack manifest does
+  // NOT declare the `issues.update` capability (per CTT-07 — plugin actions
+  // NEVER mutate `public.issues.updated_at`). So the update call ALWAYS
+  // failed on the live host with "missing required capability" — every
+  // chat.messages poll generated a warn-log entry (~4 lines/minute on every
+  // active chat surface). Live 2026-05-26 drill caught this as production
+  // log spam.
+  //
+  // The host's disposition-recovery / handoff machinery is the rightful
+  // owner of restoring terminal topics to in_progress (the recovery loop
+  // we observed on Countermoves is exactly this mechanism working as
+  // designed). The plugin only logs an info-level hint so an operator
+  // tailing logs can see WHY the host's recovery loop is firing on this
+  // topic, without triggering a host-side error.
   if (typeof issue.status === 'string' && TERMINAL_OR_BLOCKED_STATUSES.has(issue.status)) {
-    try {
-      await ctx.issues.update(
-        topicIssueId,
-        { status: NON_TERMINAL_CONVERSATION_STATUS } as Parameters<PluginIssuesClient['update']>[1],
-        companyId,
-      );
-    } catch (e) {
-      ctx.logger?.warn?.('topic-watchdog: issues.update failed', {
-        topicIssueId,
-        err: (e as Error).message,
-      });
-    }
+    ctx.logger?.info?.(
+      'topic-watchdog: topic in terminal status; relying on host disposition-recovery',
+      { topicIssueId, status: issue.status },
+    );
   }
 }
 

@@ -8,14 +8,31 @@
 // <React.Fragment> so siblings are all keyed elements.
 //
 // Plan 02-03 Task 2 (original) — READER-03: parses an issue body and inlines a
-// <RefChip refId={id} /> for every BEAAA-NNN reference. Splits on the
-// /\bBEAAA-\d+\b/g pattern and interleaves text segments with chip elements.
+// <RefChip refId={id} /> for every issue reference. Splits on the company-
+// prefix-agnostic pattern below and interleaves text segments with chip
+// elements.
+//
+// rc.8 hotfix 2026-05-26 — REF_PATTERN generalized from /\bBEAAA-\d+\b/g to
+// match ANY uppercase company prefix (2-8 chars, starting with a letter).
+// The original BEAAA-only pattern meant references on Countermoves (COU-NNN)
+// and every other company stayed as plain text, directly breaking the
+// project's "zero rabbit-holes" core value (PROJECT.md). The RefChip
+// component itself is already company-agnostic — it sends the matched id
+// string to the `resolve-refs` worker handler which queries the host's
+// issue table by identifier. The only blocker was the regex; this fix
+// unblocks every non-BEAAA install.
 
 import * as React from 'react';
 
 import { RefChip } from '../../primitives/ref-chip.tsx';
 
-const REF_PATTERN = /\bBEAAA-\d+\b/g;
+// Match a 2-8 char uppercase prefix (first char A-Z, rest A-Z|0-9), a
+// hyphen, and one or more digits. Word boundaries on both sides so we
+// don't match inside identifiers or lowercase tokens. Examples that match:
+// BEAAA-141 / COU-2486 / ACME-9 / OPS2-3. Examples that DO NOT match:
+// foo-bar (lowercase), A-1 (single-char prefix), 123-456 (no leading
+// letter).
+const REF_PATTERN = /\b[A-Z][A-Z0-9]{1,7}-\d+\b/g;
 
 export function ProseWithRefChips({ body }: { body: string | null | undefined }): React.ReactElement | null {
   if (!body) return null;

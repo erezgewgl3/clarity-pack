@@ -179,7 +179,10 @@ test('chat.send: resend with stored message_uuid is idempotent — no second cre
   assert.equal(result.commentId, 'comment-existing');
 });
 
-test('chat.send: sending to a done topic auto-reopens it to in_progress (D-11 via ensureTopicWakeable)', async () => {
+test('chat.send: sending to a done topic logs hint and does NOT call issues.update (rc.8 CTT-07)', async () => {
+  // rc.8 hotfix 2026-05-26: the watchdog NO LONGER calls ctx.issues.update.
+  // CTT-07 invariant — plugin actions NEVER mutate public.issues.updated_at.
+  // The host's disposition-recovery is the rightful owner of restoration.
   const ctx = makeCtx({ issueStatus: 'done' });
   registerChatSend(ctx);
   await ctx._handlers.get('chat.send')(sendParams());
@@ -187,9 +190,7 @@ test('chat.send: sending to a done topic auto-reopens it to in_progress (D-11 vi
   // The watchdog is fire-and-forget — wait a tick for it to run.
   await new Promise((r) => setImmediate(r));
 
-  assert.equal(ctx._updateCalls.length, 1);
-  assert.equal(ctx._updateCalls[0].issueId, 'issue-topic-1');
-  assert.equal(ctx._updateCalls[0].patch.status, 'in_progress');
+  assert.equal(ctx._updateCalls.length, 0, 'CTT-07: zero issues.update calls');
 });
 
 test('chat.send: PROBE-OQ3 PASS-NATIVE — requestWakeup is NEVER called (REST returns 404; native wake suffices)', async () => {
