@@ -6,7 +6,9 @@
 // coexistence.yml workflow invokes this script on every PR.
 // Plan 03-04 added COEXIST-07 (bulletin-disable); Plan 04-06 added COEXIST-08
 // (chat-disable / CHAT-11); Plan 04.1-07 added COEXIST-09 (true-task / Phase
-// 4.1 surface preservation, CTT-07/CTT-08, D-10 invariant).
+// 4.1 surface preservation, CTT-07/CTT-08, D-10 invariant); Plan 05-02 added
+// COEXIST-10 (uninstall runbook); Plan 06.1-04 added COEXIST-11 (take-ownership
+// / Phase 6.1 surface preservation, ROOM-09/10/11, CTT-07 third layer).
 
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -25,6 +27,7 @@ const CHECKS = [
   { id: 'COEXIST-08', script: '08-chat-disable.mjs' },
   { id: 'COEXIST-09', script: '09-true-task.mjs' },
   { id: 'COEXIST-10', script: '10-uninstall-runbook.mjs' },
+  { id: 'COEXIST-11', script: '11-take-ownership.mjs' },
 ];
 
 const results = [];
