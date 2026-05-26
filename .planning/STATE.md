@@ -2,17 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0.0-rc.8
 milestone_name: phase-5-expanded-for-v1-final
-status: paused-for-plan-06-01
-stopped_at: "Phase B + rc.8 final polish COMPLETE 2026-05-26 ~21:00 UTC. v1.0.0 ship GATED on Plan 06-01 (Situation Room spec-complete) per operator decision after live Playwright drill discovered the Surface 2 (Situation Room) renders impotent 'no owner assigned' Critical Path rows + an unstyled Create-Task dialog (CSS scope mismatch). Operator chose Option 3 — pause v1.0.0 ship, plan Phase 06-01 properly, ship Situation Room to spec, THEN flip rc.8 → 1.0.0 + npm publish + Hostinger wipe-and-rebuild + BEAAA install (Phase F). Last commit on master: 1b11649 (rc.8 final polish: Diagnostics chip removed + Situation Room idle-state suppression + true-task-dialog CSS scope broadened to bare [data-clarity-surface]). Suite 1822 total / 1820 pass / 0 fail / 2 skip. Resume via /gsd:resume-work then /gsd:plan-phase 6.1. SEE: 'Phase B Closure Record (rc.8)' section below for the full Phase B 1-4 + rc.8-final commit trail.
-
-Plan 05-11 HOTFIX-2 (comment_id backfill + chip-click overflow-clip) SHIPPED 2026-05-26. 4 atomic commits on master (cda1dd2 fix comment_id, 4069491 fix chip-click, af25f81 repack, this STATE-update commit) on top of the Plan 05-11 + HOTFIX-1 chain. Fix A: chat.attachment.upload now SELECTs comment_id from chat_messages before INSERT into chat_message_attachments (was hardcoded null). Graceful degrade on empty/throwing lookup. Fix B: AttachmentChip click popover swapped from position:absolute (clipped by .ctx{overflow-y:auto}) to fixed-inset backdrop + centered body modal (matches true-task-dialog pattern; Plan 04.1-09). Three dismissal affordances (Escape / backdrop click / close button). Migration 0012 SKIPPED — host validator only accepts CREATE/ALTER/COMMENT statements (UPDATE rejected at install). Backfill of 2 historical orphan rows ships as a one-shot SQL block in the HOTFIX note for the operator to run via safety-CLI psql. CTT-07 invariant preserved by construction; no new runtime deps. New tarball clarity-pack-1.0.0.tgz: sha256=6e0ce1e9ce20b8600ca4b790fd56279ee1450a19b5bce45a02087de28e6dac9d 633787 bytes (-3910 vs SUPERSEDED 8b1eba1f... / 637697). Version literal unchanged at 1.0.0 (Plan 05-10 + HOTFIX-1 precedent). Suite 1813 total / 1811 pass / 0 fail / 2 skip (+11 new tests: 3 comment_id backfill + 8 backdrop/CSS regression guards). All Phase 5 gates GREEN. HOTFIX note: .planning/phases/05-distribution-polish/05-11-HOTFIX-COMMENT-ID-AND-CHIP-CLICK.md. milestone field stays at v1.0.0-rc.7 until operator drill PASS against the new tarball sha256 6e0ce1e9..."
-last_updated: "2026-05-26T21:00:00Z — Phase B (4 fixes) + rc.8 final polish committed to source. v1.0.0 ship gated on Plan 06-01 (Situation Room spec-complete) per operator decision. Resume next session with /gsd:resume-work."
+status: executing
+stopped_at: Phase 6.1 context gathered
+last_updated: "2026-05-26T19:56:54.054Z"
 progress:
   total_phases: 7
-  completed_phases: 4
-  total_plans: 52
-  completed_plans: 44
-  percent: 69
+  completed_phases: 5
+  total_plans: 51
+  completed_plans: 45
+  percent: 71
 ---
 
 # State: Clarity Pack
@@ -43,6 +41,7 @@ progress:
 Per PROJECT.md Surface 2: *"Live cockpit showing every agent's current state, plain-English blockers, transitively-resolved blocker chains ending in a **single human action**, artifact shelf."*
 
 Current implementation ships agent grid + idle-state suppression. Missing:
+
 - "Take ownership" / "Assign me" action affordances per blocker
 - Artifact shelf (recent documents per agent)
 - Transitively-resolved blocker chain logic (walk dependency graph, collapse to leaf human action)
@@ -118,6 +117,7 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 **New tarball:** `clarity-pack-1.0.0.tgz` sha256 `6e0ce1e9ce20b8600ca4b790fd56279ee1450a19b5bce45a02087de28e6dac9d`, 633,787 bytes (-3,910 vs the superseded `8b1eba1f...` / 637,697). **Version literal unchanged at 1.0.0** in BOTH `package.json` AND `src/manifest.ts:337` (Plan 05-10 + HOTFIX-1 precedent). **All Phase 5 quality gates GREEN:** tsc --noEmit clean; `dist/worker.js` LOADS OK smoke; check-css-scope 121 selectors all scoped under `[data-clarity-surface]`; check-ui-bundle-size 658.3 kB / 675 kB ceiling (zero SheetJS sentinels — UI tier still xlsx-free); full test suite **1813 total / 1811 pass / 0 fail / 2 skip** (+11 net tests: 3 comment_id backfill + 8 backdrop/CSS regression guards).
 
 **Next action:** Eric re-runs the Countermoves operator drill against the **new** tarball (sha256 `6e0ce1e9ce20b8600ca4b790fd56279ee1450a19b5bce45a02087de28e6dac9d`). Drill steps:
+
 1. Snapshot (bookended-by-snapshots rule).
 2. Uninstall current clarity-pack; install new tarball; verify sha256.
 3. Run the manual backfill SQL block from the HOTFIX note (psql session via safety-CLI).
@@ -906,9 +906,9 @@ Phase: 05 (distribution-polish) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-05-25T19:59:49.228Z
+**Last session:** 2026-05-26T19:56:54.017Z
 
-**Stopped at:** Phase 5 context gathered (power mode — 23 design Qs answered, 4 operator deviations from recommended; ready for /gsd:plan-phase 5 --chunked)
+**Stopped at:** Phase 6.1 context gathered
 
 **Last session (prior):** 2026-05-19T21:35:31.176Z
 
