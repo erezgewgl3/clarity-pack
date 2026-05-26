@@ -269,18 +269,53 @@ export function registerChatAttachmentUpload(ctx: ChatAttachmentUploadCtx): void
       return { error: 'UPLOAD_FAILED' as const };
     }
 
+    // 8.5 Hotfix 2026-05-26 (comment_id backfill) -- look up the parent
+    //     chat_messages row to retrieve its already-persisted comment_id.
+    //     Under Option B (upload-on-send), chat.send fires BEFORE
+    //     chat.attachment.upload and commits the chat_messages row with
+    //     its host comment_id populated. By the time this handler runs
+    //     the comment_id is available; the upload handler used to
+    //     hardcode `comment_id: null` here, which left attachment rows
+    //     floating (orphaned from the comment the bubble renders against),
+    //     so the chat.messages handler could not project them onto the
+    //     correct bubble. The fallback path (null on lookup failure or
+    //     missing row) preserves orphan-safe behaviour: the attachment
+    //     still appears in the right-rail Recent Attachments listing
+    //     (which keys on topic_issue_id, not comment_id), so the file is
+    //     not lost -- only the per-bubble chip rendering degrades.
+    let resolvedCommentId: string | null = null;
+    try {
+      const chatMsgRows = await ctx.db.query<{ comment_id: string | null }>(
+        `SELECT comment_id
+         FROM plugin_clarity_pack_cdd6bda4bd.chat_messages
+         WHERE message_uuid = $1 AND company_id = $2
+         LIMIT 1`,
+        [chatMessageId, companyId],
+      );
+      resolvedCommentId = chatMsgRows[0]?.comment_id ?? null;
+    } catch (e) {
+      ctx.logger?.warn?.('chat.attachment.upload: comment_id lookup failed', {
+        chatMessageId,
+        err: (e as Error).message,
+      });
+      // Proceed with null -- the attachment is still addressable in the
+      // right-rail; the per-bubble chip rendering degrades gracefully.
+    }
+
     // 9. Insert chat_message_attachments row. FK to chat_messages is
     //    structurally safe under Option B upload-on-send semantics
     //    (chat.send has already committed the row by the time this handler
     //    runs). attachmentId from step 7 is the PK + the connection to
-    //    the document just upserted.
+    //    the document just upserted. comment_id is the value resolved in
+    //    step 8.5 -- this is the load-bearing wire that the chat.messages
+    //    handler's per-bubble projection joins on.
     try {
       await insertChatMessageAttachment(ctx, {
         id: attachmentId,
         company_id: companyId,
         topic_issue_id: topicIssueId,
         chat_message_id: chatMessageId,
-        comment_id: null,
+        comment_id: resolvedCommentId,
         document_key: documentKey,
         mime_type: MIME_BY_EXT[ext], // canonicalize -- never trust client mimeType after sniff
         original_filename: originalFilename,

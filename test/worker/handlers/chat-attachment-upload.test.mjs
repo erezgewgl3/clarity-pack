@@ -69,6 +69,16 @@ function makeCtx({
   existingByteSum = 0,
   upsertThrows = false,
   insertThrows = false,
+  // Hotfix 2026-05-26 (comment_id backfill) — fixture controls for the new
+  // chat_messages.comment_id lookup the upload handler does just before the
+  // chat_message_attachments INSERT.
+  //   - chatMessageCommentId : what the lookup SELECT returns (null = orphan).
+  //   - chatMessageLookupReturnsNoRow : when true the SELECT returns []
+  //     (no chat_messages row at all). Exercises the graceful-degrade path.
+  //   - chatMessageLookupThrows : when true the SELECT throws.
+  chatMessageCommentId = 'cb07af10-comment-id-fixture',
+  chatMessageLookupReturnsNoRow = false,
+  chatMessageLookupThrows = false,
 } = {}) {
   const handlers = new Map();
   const calls = [];
@@ -77,6 +87,10 @@ function makeCtx({
   const issueUpdateCalls = [];
   const documentUpsertCalls = [];
   const documentDeleteCalls = [];
+  // Hotfix 2026-05-26 (comment_id backfill) — captured from the
+  // chat_message_attachments INSERT execute so the SELECT readback can
+  // echo what the handler actually persisted (see execute() below).
+  let lastInsertCommentId = null;
 
   const ctx = {
     logger: {
@@ -127,9 +141,32 @@ function makeCtx({
         if (/COALESCE\s*\(\s*SUM\s*\(\s*byte_size\s*\)/i.test(sql)) {
           return [{ sum_bytes: existingByteSum }];
         }
+        // Hotfix 2026-05-26 (comment_id backfill) — the new chat_messages
+        // lookup the upload handler does between the per-message size check
+        // and the chat_message_attachments INSERT. Match the SELECT shape:
+        // SELECT comment_id FROM ... chat_messages WHERE message_uuid = $1
+        // AND company_id = $2.
+        if (
+          /FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_messages[\s\S]*WHERE\s+message_uuid\s*=\s*\$1/i.test(
+            sql,
+          )
+        ) {
+          if (chatMessageLookupThrows) {
+            throw new Error('host db.query 503 (chat_messages lookup)');
+          }
+          if (chatMessageLookupReturnsNoRow) return [];
+          return [{ comment_id: chatMessageCommentId }];
+        }
         // Readback after insertChatMessageAttachment. Hotfix 2026-05-26:
         // document_key is UUID-only (chat-attach-<uuid>); the inserted id
         // (params[0]) IS the UUID, so we echo it into document_key.
+        //
+        // Hotfix 2026-05-26 (comment_id backfill, second pass): the readback
+        // echoes the comment_id from the INSERT params (params[4] is the
+        // comment_id passed into ctx.db.execute by insertChatMessageAttachment
+        // -- see chat-topics-repo.ts $5 in the INSERT param list). This
+        // lets the happy-path test assert the resolved comment_id flowed
+        // through into the persisted row.
         if (
           /FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_message_attachments[\s\S]*WHERE\s+id\s*=\s*\$1/i.test(
             sql,
@@ -141,7 +178,7 @@ function makeCtx({
               company_id: 'co-1',
               topic_issue_id: 'issue-topic-1',
               chat_message_id: 'msg-uuid-1',
-              comment_id: null,
+              comment_id: lastInsertCommentId,
               document_key: `chat-attach-${params[0]}`,
               mime_type: 'application/pdf',
               original_filename: 'sample.pdf',
@@ -155,6 +192,11 @@ function makeCtx({
       async execute(sql, params) {
         calls.push({ kind: 'execute', sql, params });
         if (/INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_message_attachments/i.test(sql)) {
+          // Hotfix 2026-05-26 (comment_id backfill) — capture the comment_id
+          // ($5 in the INSERT param list, see chat-topics-repo.ts:
+          // insertChatMessageAttachment) so the SELECT readback above can
+          // echo what was actually persisted.
+          lastInsertCommentId = params?.[4] ?? null;
           if (insertThrows) throw new Error('host db.execute 503');
         }
         return { rowCount: 1 };
@@ -489,4 +531,107 @@ test('chat.attachment.upload: CTT-07 invariant -- zero ctx.issues.update across 
   const handler4 = overSum._handlers.get('chat.attachment.upload');
   await handler4(uploadParams());
   assert.equal(overSum._issueUpdateCalls.length, 0, 'message-too-large path -- zero updates');
+});
+
+// ---- Test 11 -- Hotfix 2026-05-26 -- comment_id backfill --------------
+//
+// Live evidence from the Countermoves 2026-05-26 16:23 drill:
+//   chat_message_attachments: chat_message_id=c08b8337-... comment_id=<empty>
+//   chat_messages:           message_uuid=c08b8337-... comment_id=cb07af10-...
+// The parent comment_id existed; the upload handler hardcoded null. Under
+// Option B upload-on-send semantics the chat.send round-trip persists the
+// chat_messages row WITH its host comment_id before chat.attachment.upload
+// runs, so the lookup always finds a populated value when the topic is
+// live. These tests pin (a) the populated-lookup happy path, (b) the
+// no-row degraded path, and (c) the lookup-throws degraded path.
+
+test('chat.attachment.upload: comment_id is backfilled from chat_messages when the parent message has one', async () => {
+  const ctx = makeCtx({ chatMessageCommentId: 'cb07af10-real-comment-id' });
+  registerChatAttachmentUpload(ctx);
+  const handler = ctx._handlers.get('chat.attachment.upload');
+  const result = await handler(uploadParams());
+  assert.equal(result.ok, true, 'happy path');
+
+  // The INSERT into chat_message_attachments must have $5 (comment_id)
+  // bound to the value the chat_messages lookup returned (NOT null).
+  const inserts = ctx._calls.filter(
+    (c) =>
+      c.kind === 'execute' &&
+      /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_message_attachments/i.test(c.sql),
+  );
+  assert.equal(inserts.length, 1, 'one INSERT into chat_message_attachments');
+  // chat-topics-repo.ts insertChatMessageAttachment param order:
+  // ($1 id, $2 company_id, $3 topic_issue_id, $4 chat_message_id,
+  //  $5 comment_id, $6 document_key, ...) -- $5 is at index 4 zero-based.
+  assert.equal(
+    inserts[0].params[4],
+    'cb07af10-real-comment-id',
+    'comment_id is bound to the value resolved from chat_messages, not null',
+  );
+
+  // The lookup SELECT must have fired BEFORE the INSERT.
+  const lookupIdx = ctx._calls.findIndex(
+    (c) =>
+      c.kind === 'query' &&
+      /FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_messages[\s\S]*WHERE\s+message_uuid/i.test(c.sql),
+  );
+  const insertIdx = ctx._calls.findIndex(
+    (c) =>
+      c.kind === 'execute' &&
+      /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_message_attachments/i.test(c.sql),
+  );
+  assert.ok(lookupIdx >= 0, 'chat_messages lookup fired');
+  assert.ok(insertIdx >= 0, 'chat_message_attachments INSERT fired');
+  assert.ok(lookupIdx < insertIdx, 'lookup must precede insert');
+});
+
+test('chat.attachment.upload: comment_id stays null when chat_messages lookup returns no row (orphan-safe degrade)', async () => {
+  // The chat_messages SELECT returns [] (no matching row). The upload still
+  // succeeds; the attachment is addressable in the right-rail Recent
+  // Attachments listing (which keys on topic_issue_id, NOT comment_id).
+  const ctx = makeCtx({ chatMessageLookupReturnsNoRow: true });
+  registerChatAttachmentUpload(ctx);
+  const handler = ctx._handlers.get('chat.attachment.upload');
+  const result = await handler(uploadParams());
+  assert.equal(result.ok, true, 'upload succeeds even with empty lookup');
+
+  const inserts = ctx._calls.filter(
+    (c) =>
+      c.kind === 'execute' &&
+      /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_message_attachments/i.test(c.sql),
+  );
+  assert.equal(inserts.length, 1);
+  assert.equal(
+    inserts[0].params[4],
+    null,
+    'comment_id falls back to null when the lookup row is missing',
+  );
+});
+
+test('chat.attachment.upload: comment_id stays null when chat_messages lookup throws (graceful degrade)', async () => {
+  // The SELECT throws (transient DB blip). The handler logs a warn and
+  // proceeds with comment_id=null -- the attachment still uploads.
+  const ctx = makeCtx({ chatMessageLookupThrows: true });
+  registerChatAttachmentUpload(ctx);
+  const handler = ctx._handlers.get('chat.attachment.upload');
+  const result = await handler(uploadParams());
+  assert.equal(result.ok, true, 'upload succeeds even when lookup throws');
+
+  const inserts = ctx._calls.filter(
+    (c) =>
+      c.kind === 'execute' &&
+      /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_message_attachments/i.test(c.sql),
+  );
+  assert.equal(inserts.length, 1);
+  assert.equal(
+    inserts[0].params[4],
+    null,
+    'comment_id falls back to null when the lookup throws',
+  );
+
+  // The warn log captured the failure for operator audit.
+  const warns = ctx._warnLogs.filter((w) =>
+    /comment_id lookup failed/.test(w.msg),
+  );
+  assert.equal(warns.length, 1, 'warn log fired on lookup failure');
 });
