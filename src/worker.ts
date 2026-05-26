@@ -180,6 +180,18 @@ import {
   registerAgentTakeOwnership,
   type AgentTakeOwnershipCtx,
 } from './worker/handlers/agent-take-ownership.ts';
+// Phase 6.1 ROOM-10 -- situation.artifacts: per-agent union of deliverables
+// (host ctx.issues.documents.list per agent) + chat-attachments (ONE bulk
+// SQL JOIN of plugin_clarity_pack_cdd6bda4bd.chat_message_attachments to
+// chat_topics; PRIM-01 by construction). 24h-sliding window by default,
+// configurable via instanceConfigSchema.situationArtifactsWindow (allowed:
+// 24h / 7d / 30d). Powers the new per-agent inline <ArtifactChipRow> in
+// the Situation Room. CTT-07 invariant by construction -- pinned by
+// runtime spy (Test 11) AND source-grep companion test.
+import {
+  registerSituationArtifacts,
+  type SituationArtifactsCtx,
+} from './worker/handlers/situation-artifacts.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -320,6 +332,17 @@ const plugin = definePlugin({
     // authority re-check: ctx.agents.get gates by company. CTT-07
     // invariant by construction -- pinned by runtime spy + source-grep.
     registerAgentTakeOwnership(ctx as unknown as AgentTakeOwnershipCtx);
+
+    // ---- Phase 6.1 ROOM-10 -- situation.artifacts data handler -------------
+    // Per-agent union of deliverables (ctx.issues.documents.list per agent;
+    // bounded by N agents per company) + chat-attachments (ONE bulk JOIN
+    // of chat_message_attachments to chat_topics; PRIM-01 by construction).
+    // 24h-sliding window default; configurable via the new
+    // instanceConfigSchema.situationArtifactsWindow key (24h / 7d / 30d).
+    // Powers the inline <ArtifactChipRow> on each AgentCard (replaces the
+    // bottom artifact shelf per D-02). CTT-07 invariant by construction --
+    // pinned by runtime spy (Test 11) and source-grep companion test.
+    registerSituationArtifacts(ctx as unknown as SituationArtifactsCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     // Reconcile at boot for every company currently visible to the plugin.
