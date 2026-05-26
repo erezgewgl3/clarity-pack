@@ -74,11 +74,24 @@ export type DeliverablePreviewCtx = OptInGuardDataCtx & {
 
 export type DeliverablePreviewResult =
   | { kind: 'xlsx-grid'; sheets: Array<{ name: string; rows: string[][] }> }
-  | { kind: 'pdf-embed'; url: string }
+  // Hotfix 2026-05-26 (rc.8): pdf + img return base64 body + mimeType so the
+  // UI creates a Blob URL locally. The original Plan 05-04 design returned
+  // `{ url }` pointing at `/api/issues/<id>/documents/<key>`, but the host
+  // serves JSON (with body base64-encoded) at that URL — `<embed>` saw JSON
+  // and rendered as text. Self-contained body bytes avoid host-API surprises.
+  | { kind: 'pdf-embed'; body: string; mimeType: 'application/pdf' }
   | { kind: 'md'; body: string }
-  | { kind: 'img'; url: string }
+  | { kind: 'img'; body: string; mimeType: string }
   | { kind: 'placeholder'; reason: string }
   | { error: string; sizeBytes?: number };
+
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+};
 
 function lowerExt(name: string): string {
   const i = name.lastIndexOf('.');
@@ -202,15 +215,20 @@ export function registerDeliverablePreview(ctx: DeliverablePreviewCtx): void {
     }
 
     // ---- pdf branch -------------------------------------------------------
+    // Return body (base64 from documents.get) + mimeType. UI decodes locally
+    // into a Blob URL. See header note on the URL-vs-body fix.
     if (ext === '.pdf') {
-      const url = `/api/issues/${issueId}/documents/${encodeURIComponent(documentKey)}`;
-      return { kind: 'pdf-embed' as const, url };
+      return {
+        kind: 'pdf-embed' as const,
+        body,
+        mimeType: 'application/pdf' as const,
+      };
     }
 
     // ---- img branch -------------------------------------------------------
     if ((IMAGE_EXTENSIONS as readonly string[]).includes(ext)) {
-      const url = `/api/issues/${issueId}/documents/${encodeURIComponent(documentKey)}`;
-      return { kind: 'img' as const, url };
+      const mimeType = IMAGE_MIME_BY_EXT[ext] ?? 'image/png';
+      return { kind: 'img' as const, body, mimeType };
     }
 
     // ---- xlsx branch ------------------------------------------------------

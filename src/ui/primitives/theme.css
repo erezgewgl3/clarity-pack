@@ -1038,3 +1038,73 @@
 [data-clarity-surface='archive'] .clarity-cold-task-btn:hover {
   background: var(--clarity-bg-3, var(--clarity-you-soft, transparent));
 }
+
+/* -------------------------------------------------------------------------
+ * Plan 05-04 deliverable preview — Hotfix 2026-05-26 (rc.8).
+ * XlsxGrid renders sheets as <table><tr><td>. Plan 05-04 shipped without
+ * CSS for these classes, so the drill saw plain text. Adding minimal grid
+ * styling so the data reads as a table.
+ * -------------------------------------------------------------------------
+ */
+[data-clarity-surface] .clarity-deliverable-xlsx {
+  display: block;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-sheet {
+  margin-block: 12px;
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-sheet h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--clarity-fg-muted, #999);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  border: 1px solid var(--clarity-line, var(--clarity-border, #2a2a2a));
+  border-radius: 6px;
+  max-height: 50vh;
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-scroll table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: auto;
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-scroll table tr:first-child td {
+  background: var(--clarity-bg-2, var(--clarity-bg, #1a1a1a));
+  font-weight: 600;
+  color: var(--clarity-fg, inherit);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-scroll table tr:nth-child(even):not(:first-child) td {
+  background: var(--clarity-bg-1, rgba(255, 255, 255, 0.02));
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-scroll table td {
+  padding: 6px 10px;
+  border-right: 1px solid var(--clarity-line, var(--clarity-border, #2a2a2a));
+  border-bottom: 1px solid var(--clarity-line, var(--clarity-border, #2a2a2a));
+  vertical-align: top;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-scroll table td:last-child {
+  border-right: none;
+}
+
+[data-clarity-surface] .clarity-deliverable-xlsx-scroll table tr:last-child td {
+  border-bottom: none;
+}

@@ -84,11 +84,47 @@ type ChatAttachmentListResult =
 // worker module from the UI bundle.
 type DeliverablePreviewResult =
   | { kind: 'xlsx-grid'; sheets: Array<{ name: string; rows: string[][] }> }
-  | { kind: 'pdf-embed'; url: string }
+  // Hotfix 2026-05-26 (rc.8): pdf + img carry base64 body + mimeType so the
+  // UI creates a Blob URL locally. See deliverable-preview.ts header.
+  | { kind: 'pdf-embed'; body: string; mimeType: string }
   | { kind: 'md'; body: string }
-  | { kind: 'img'; url: string }
+  | { kind: 'img'; body: string; mimeType: string }
   | { kind: 'placeholder'; reason: string }
   | { error: string; sizeBytes?: number };
+
+/**
+ * Hotfix 2026-05-26 (rc.8): decode base64 body to a Blob URL so `<embed>`
+ * and `<img>` can render binary content without depending on a host
+ * binary-serving URL. The hook also revokes the URL on unmount / dep
+ * change so the browser frees the buffer.
+ */
+function useBlobUrlFromBase64(
+  body: string | null,
+  mimeType: string | null,
+): string | null {
+  const [url, setUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!body || !mimeType) {
+      setUrl(null);
+      return;
+    }
+    let created: string | null = null;
+    try {
+      const binary = atob(body);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mimeType });
+      created = URL.createObjectURL(blob);
+      setUrl(created);
+    } catch {
+      setUrl(null);
+    }
+    return () => {
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [body, mimeType]);
+  return url;
+}
 
 function ago(iso: string | null): string {
   if (!iso) return 'time unknown';
@@ -248,6 +284,20 @@ export function DeliverablePreview({
     params,
   );
 
+  // Hotfix 2026-05-26 (rc.8): decode body to a Blob URL for pdf + img.
+  // Hooks must run unconditionally; extract body/mime IFF the response is
+  // a binary-kind discriminator. Otherwise pass nulls and the hook returns
+  // null (no Blob created). useBlobUrlFromBase64 also revokes on cleanup.
+  const binaryBody =
+    data && !('error' in data) && (data.kind === 'pdf-embed' || data.kind === 'img')
+      ? data.body
+      : null;
+  const binaryMime =
+    data && !('error' in data) && (data.kind === 'pdf-embed' || data.kind === 'img')
+      ? data.mimeType
+      : null;
+  const blobUrl = useBlobUrlFromBase64(binaryBody, binaryMime);
+
   let body: React.ReactNode;
   if (!ready) {
     body = (
@@ -271,13 +321,15 @@ export function DeliverablePreview({
         body = <XlsxGrid sheets={data.sheets} />;
         break;
       case 'pdf-embed':
-        body = (
+        body = blobUrl ? (
           <embed
             type="application/pdf"
-            src={data.url}
+            src={blobUrl}
             title={effectiveDeliverable.filename}
             style={{ width: '100%', height: '60vh' }}
           />
+        ) : (
+          <div className="clarity-deliverable-loading">Decoding preview…</div>
         );
         break;
       case 'md':
@@ -287,13 +339,15 @@ export function DeliverablePreview({
         body = <ReactMarkdown>{data.body}</ReactMarkdown>;
         break;
       case 'img':
-        body = (
+        body = blobUrl ? (
           <img
-            src={data.url}
+            src={blobUrl}
             alt={effectiveDeliverable.filename}
             loading="lazy"
             style={{ maxWidth: '100%' }}
           />
+        ) : (
+          <div className="clarity-deliverable-loading">Decoding preview…</div>
         );
         break;
       case 'placeholder':

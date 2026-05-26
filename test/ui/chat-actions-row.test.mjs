@@ -140,18 +140,21 @@ test('actions-row.tsx (Plan 04.1-09): the OLD Ctrl+T / ⌘+T shortcut binding is
   );
 });
 
-test('actions-row.tsx (Plan 04.1-09): tooltip + kbd-hint copy is the single-key T form', () => {
-  // The tooltip now reads `Create a task (T)`.
+test('actions-row.tsx (rc.8 2026-05-26): T-shortcut tooltip kept; kbd-hint chip REMOVED per operator UX call', () => {
+  // The tooltip still reads `Create a task (T)` — the keyboard shortcut
+  // itself still works for keyboard-power users.
   assert.match(SRC, /Create a task \(T\)/, 'tooltip must read "Create a task (T)"');
-  // The kbd hint surface keeps a single <kbd>T</kbd> chip — no ⌘ glyph.
-  assert.match(SRC, /<kbd>T<\/kbd>/, 'kbd tag for T must render');
+  // The visible kbd-hint chip ("<kbd>T</kbd> new task") was removed in
+  // rc.8 per operator decision — it was noise on the screen and didn't
+  // add discoverability the operator valued. The handler itself stays
+  // wired so the shortcut works on key-press.
+  assert.doesNotMatch(SRC, /<kbd>T<\/kbd>/, 'visible kbd chip removed (rc.8 UX cleanup)');
+  assert.doesNotMatch(SRC, /kbd-hint/, '.kbd-hint span removed (rc.8 UX cleanup)');
   assert.doesNotMatch(
     SRC,
     /<kbd>⌘<\/kbd>/,
-    'the ⌘ kbd tag must be gone (single-key shortcut)',
+    'the ⌘ kbd tag must remain gone (single-key shortcut)',
   );
-  // A .kbd-hint span is still rendered for shortcut surface.
-  assert.match(SRC, /kbd-hint/, 'a .kbd-hint span is rendered for the shortcut surface');
 });
 
 test('actions-row.tsx: spacer pushes diagnostics + kbd-hint to the right', () => {

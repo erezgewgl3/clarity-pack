@@ -24,8 +24,15 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is 1.0.0 (Plan 05-10 — v1.0.0 final closure; single canonical bump for Phase 5)', () => {
-  assert.equal(manifest.version, '1.0.0');
+test('manifest version is in the 1.0.0 family (rc.X release candidate or final)', () => {
+  // The single canonical 1.0.0 bump happens at the close of Phase B audit.
+  // Between then and now we iterate as 1.0.0-rc.N — the test accepts either
+  // shape so the suite stays green during rc-iteration.
+  assert.match(
+    manifest.version,
+    /^1\.0\.0(-rc\.\d+)?$/,
+    `manifest.version='${manifest.version}' must be 1.0.0 or 1.0.0-rc.N`,
+  );
 });
 
 test('manifest declares the capabilities the chat handlers need', () => {

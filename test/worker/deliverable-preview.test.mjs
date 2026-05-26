@@ -239,33 +239,48 @@ test('deliverable.preview: .markdown -> { kind: md, body }', async () => {
 
 // ---- Test 6 — pdf / img HAPPY PATH ---------------------------------------
 
-test('deliverable.preview: .pdf -> { kind: pdf-embed, url }', async () => {
+test('deliverable.preview: .pdf -> { kind: pdf-embed, body, mimeType }', async () => {
+  // Hotfix 2026-05-26 (rc.8): the Plan 05-04 design returned `{ url }` and
+  // assumed the host's `/api/issues/<id>/documents/<key>` served binary
+  // bytes. The live host actually returns JSON with body base64-encoded,
+  // so `<embed type="application/pdf" src={url}>` showed JSON-as-text.
+  // Fix: worker returns body bytes directly; UI creates a Blob URL.
   const ctx = makeCtx({
-    documents: { 'issue-1|report.pdf': { body: 'fake-pdf-bytes' } },
+    documents: { 'issue-1|report.pdf': { body: 'fake-pdf-bytes-base64' } },
   });
   registerDeliverablePreview(ctx);
   const result = await ctx._handlers.get('deliverable.preview')(
     previewParams({ documentKey: 'report.pdf' }),
   );
   assert.equal(result.kind, 'pdf-embed');
-  assert.equal(typeof result.url, 'string');
-  assert.ok(result.url.length > 0, 'url is non-empty');
+  assert.equal(typeof result.body, 'string', 'body string present (base64)');
+  assert.ok(result.body.length > 0, 'body non-empty');
+  assert.equal(result.mimeType, 'application/pdf');
+  assert.equal(result.url, undefined, 'no url field — UI blob-ifies locally');
 });
 
-test('deliverable.preview: .png -> { kind: img, url }', async () => {
+test('deliverable.preview: .png -> { kind: img, body, mimeType }', async () => {
   const ctx = makeCtx({
-    documents: { 'issue-1|chart.png': { body: 'fake-png-bytes' } },
+    documents: { 'issue-1|chart.png': { body: 'fake-png-bytes-base64' } },
   });
   registerDeliverablePreview(ctx);
   const result = await ctx._handlers.get('deliverable.preview')(
     previewParams({ documentKey: 'chart.png' }),
   );
   assert.equal(result.kind, 'img');
-  assert.equal(typeof result.url, 'string');
+  assert.equal(typeof result.body, 'string');
+  assert.equal(result.mimeType, 'image/png');
+  assert.equal(result.url, undefined);
 });
 
-test('deliverable.preview: .jpg/.jpeg/.gif/.webp -> { kind: img }', async () => {
-  for (const ext of ['.jpg', '.jpeg', '.gif', '.webp']) {
+test('deliverable.preview: .jpg/.jpeg/.gif/.webp -> { kind: img } with mimeType', async () => {
+  const mimes = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+  };
+  for (const ext of Object.keys(mimes)) {
     const key = `pic${ext}`;
     const ctx = makeCtx({
       documents: { [`issue-1|${key}`]: { body: 'bytes' } },
@@ -275,7 +290,47 @@ test('deliverable.preview: .jpg/.jpeg/.gif/.webp -> { kind: img }', async () => 
       previewParams({ documentKey: key }),
     );
     assert.equal(result.kind, 'img', `${ext} routes to img`);
+    assert.equal(result.mimeType, mimes[ext], `${ext} mimeType`);
+    assert.equal(typeof result.body, 'string');
   }
+});
+
+test('deliverable.preview: filenameHint resolves ext when documentKey has none (chat-attach UUID key case)', async () => {
+  // Hotfix 2026-05-26 (rc.8): chat-attach document keys are UUID-only
+  // (chat-attach-<uuid>). Without filenameHint the dispatcher cannot
+  // route. With filenameHint='Report.pdf' the dispatcher MUST treat the
+  // doc as PDF and return { kind: 'pdf-embed', body, mimeType }.
+  const ctx = makeCtx({
+    documents: {
+      'issue-1|chat-attach-fakeuuid-deadbeef': { body: 'fake-pdf-base64' },
+    },
+  });
+  registerDeliverablePreview(ctx);
+  const result = await ctx._handlers.get('deliverable.preview')(
+    previewParams({
+      documentKey: 'chat-attach-fakeuuid-deadbeef',
+      filenameHint: 'Document_Archive_Index.PDF',
+    }),
+  );
+  assert.equal(result.kind, 'pdf-embed', 'filenameHint resolves .pdf');
+  assert.equal(result.mimeType, 'application/pdf');
+});
+
+test('deliverable.preview: filenameHint also routes png correctly for UUID keys', async () => {
+  const ctx = makeCtx({
+    documents: {
+      'issue-1|chat-attach-otheruuid': { body: 'fake-png-base64' },
+    },
+  });
+  registerDeliverablePreview(ctx);
+  const result = await ctx._handlers.get('deliverable.preview')(
+    previewParams({
+      documentKey: 'chat-attach-otheruuid',
+      filenameHint: 'screenshot.png',
+    }),
+  );
+  assert.equal(result.kind, 'img');
+  assert.equal(result.mimeType, 'image/png');
 });
 
 // ---- Test 7 — size-cap CHOKEPOINT (T-05-04-03) ---------------------------
