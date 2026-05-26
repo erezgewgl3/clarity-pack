@@ -29,6 +29,12 @@ import {
 } from '../../shared/blocker-chain.ts';
 import type { BlockerChainResult } from '../../shared/types.ts';
 import { humanizeChain, buildIdLookup, type IdLookup } from './humanize-snapshot.ts';
+// Phase 6.1 ROOM-09 -- consult the plugin-namespace clarity_agent_owners
+// side table (migration 0013) BEFORE the blocker-chain walk. Side-table-
+// wins resolution per D-01: operator-claimed owners override host
+// public.agents.owner_user_id. The fix is at the chain leaf, NOT in the
+// chain walk (src/shared/blocker-chain.ts ships byte-identical).
+import { listClarityAgentOwnersForCompany } from '../db/clarity-agent-owners-repo.ts';
 
 const MAX_CHAIN_DEPTH = 6;
 const CRITICAL_PATH_MAX = 3;
@@ -102,6 +108,16 @@ async function buildEmployeeRow(
   companyId: string,
   viewerUserId: string,
   lookup: IdLookup,
+  // Phase 6.1 ROOM-09 -- side-table-wins owner resolution. ownerMap is
+  // pre-built per-company by registerSituationSnapshotJob from
+  // (host employees ∪ clarity_agent_owners) with side-table entries
+  // OVERRIDING host fallback (D-01). The reconciliation pass below
+  // backfills any null nodeMeta[id].ownerUserId from ownerMap BEFORE
+  // flattenBlockerChain runs, so the chain leaf inherits a resolved
+  // ownerUserId and the walk emits HUMAN_ACTION_ON(<real_user_id>)
+  // instead of HUMAN_ACTION_ON(__unowned__). src/shared/blocker-chain.ts
+  // ships byte-identical.
+  ownerMap: Map<string, string>,
 ): Promise<EmployeeSnapshot> {
   const anyEmp = emp as unknown as {
     id?: string;
@@ -165,6 +181,24 @@ async function buildEmployeeRow(
       }
     } catch (e) {
       ctx.logger?.warn?.('situation-snapshot: relations walk failed', { userId, err: (e as Error).message });
+    }
+  }
+
+  // Phase 6.1 ROOM-09 -- side-table-wins reconciliation. Backfill any
+  // null nodeMeta[id].ownerUserId from ownerMap BEFORE flattenBlockerChain
+  // runs. The walk reads meta.ownerUserId at HUMAN_ACTION_ON leaves and
+  // emits the __unowned__ sentinel when null (src/shared/blocker-chain.ts
+  // :178 -- LOCKED INVARIANT, not modified). Pre-populating from
+  // clarity_agent_owners (side-table wins) means the walk sees the
+  // resolved owner and never emits __unowned__ for claimed agents.
+  // humanize-snapshot.ts's __unowned__ rewrite pass then becomes a no-op
+  // for those rows -- no change to that file needed either.
+  for (const [nodeId, meta] of Object.entries(nodeMeta)) {
+    if (meta.ownerUserId == null) {
+      const resolved = ownerMap.get(nodeId);
+      if (resolved) {
+        meta.ownerUserId = resolved;
+      }
     }
   }
 
@@ -259,10 +293,48 @@ export function registerSituationSnapshotJob(ctx: SituationSnapshotCtx): void {
         users: [],
       });
 
+      // Phase 6.1 ROOM-09 -- fetch plugin-namespace owner claims for this
+      // company. Graceful degrade on error: empty array means host-only
+      // resolution applies (same behavior as before this phase shipped).
+      let sideTableOwners: Array<{ agent_id: string; owner_user_id: string }> = [];
+      try {
+        sideTableOwners = await listClarityAgentOwnersForCompany(ctx, companyId);
+      } catch (e) {
+        ctx.logger?.warn?.(
+          'situation-snapshot: clarity_agent_owners SELECT failed',
+          { companyId, err: (e as Error).message },
+        );
+      }
+
+      // Phase 6.1 ROOM-09 -- build the per-company ownerMap with side-table-
+      // wins semantics. Seed from the host employees array (each Agent
+      // structurally carries owner_user_id; fall back to null when absent),
+      // then OVERWRITE with side-table entries so an operator-claimed
+      // owner_user_id beats the host's pre-claim value. The map is keyed by
+      // either e.id or e.user_id (whichever the snake_case Agent cast
+      // exposes -- matches buildEmployeeRow's userId resolution at L117).
+      const ownerMap = new Map<string, string>();
+      for (const emp of employees) {
+        const anyEmp = emp as unknown as {
+          id?: string;
+          user_id?: string;
+          owner_user_id?: string | null;
+        };
+        const key = anyEmp.id ?? anyEmp.user_id ?? '';
+        if (key && typeof anyEmp.owner_user_id === 'string' && anyEmp.owner_user_id) {
+          ownerMap.set(key, anyEmp.owner_user_id);
+        }
+      }
+      for (const row of sideTableOwners) {
+        ownerMap.set(row.agent_id, row.owner_user_id);
+      }
+
       const employeeRows: EmployeeSnapshot[] = [];
       for (const emp of employees) {
         try {
-          employeeRows.push(await buildEmployeeRow(ctx, emp, companyId, viewerUserId, lookup));
+          employeeRows.push(
+            await buildEmployeeRow(ctx, emp, companyId, viewerUserId, lookup, ownerMap),
+          );
         } catch (e) {
           ctx.logger?.warn?.('situation-snapshot: employee row build failed', {
             err: (e as Error).message,
