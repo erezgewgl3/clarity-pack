@@ -16,6 +16,33 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+// rc.8 Phase B 2026-05-26 — anti-regression for the operator-message-
+// vanishing bug. The UI's belt-and-suspenders runtime-noise filter
+// MUST allowlist comments whose chat_messages.sender_kind is 'user',
+// matching the worker classifier (chat-messages.ts handler). The
+// previous shape (authorType-only) caused every operator-sent message
+// to render briefly via the optimistic overlay, then disappear when
+// the next poll's reconciliation logic dropped the optimistic AND the
+// UI's own filter then dropped the server message.
+const REPO_ROOT_FOR_SENDER_KIND_GUARD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+test('message-thread.tsx: runtime-noise filter MUST exempt senderKind:user (rc.8 Phase B anti-regression)', () => {
+  const src = readFileSync(
+    path.join(REPO_ROOT_FOR_SENDER_KIND_GUARD, 'src/ui/surfaces/chat/message-thread.tsx'),
+    'utf8',
+  );
+  // Either the literal "senderKind !== 'user'" OR the conjunctive guard
+  // (msg.senderKind !== 'user' && ...). Match either single-quote or
+  // double-quote string form.
+  const hasAllowlist =
+    /senderKind\s*!==?\s*['"]user['"]/.test(src) ||
+    /senderKind\s*===?\s*['"]user['"]/.test(src);
+  assert.ok(
+    hasAllowlist,
+    'message-thread.tsx must allowlist senderKind:user in its runtime-noise filter — else operator chat messages vanish',
+  );
+});
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
 const FILES = [

@@ -560,9 +560,23 @@ export function MessageThread({
         // `.runtime-noise-comment` blocks (NOT bubbles). The handler only
         // returns them when diagnostics:true; this filter guards belt-and-
         // suspenders for an old cache.
+        //
+        // rc.8 Phase B 2026-05-26 — match the worker's classifier allowlist.
+        // The Paperclip host stamps every plugin-worker createComment with
+        // authorType:'system', so operator-sent chat messages come back from
+        // listComments with authorType:'system'. The worker-side classifier
+        // was patched to allowlist comments whose chat_messages.sender_kind
+        // is 'user' (commit 75b464a); the UI's belt-and-suspenders below
+        // was still using the original authorType-only test and was dropping
+        // operator messages BACK into the noise bucket — making the
+        // operator's typed text vanish 1-2s after send (live drill
+        // 2026-05-26T18:42). Same allowlist applied here: senderKind:'user'
+        // means the chat_messages side table proves this is an operator
+        // send; treat as conversation regardless of authorType.
         const isRuntimeNoise =
-          msg.authorType === 'system' ||
-          msg.presentation?.kind === 'system_notice';
+          msg.senderKind !== 'user' &&
+          (msg.authorType === 'system' ||
+            msg.presentation?.kind === 'system_notice');
         if (isRuntimeNoise) {
           if (!diagnostics) return null;
           return (
