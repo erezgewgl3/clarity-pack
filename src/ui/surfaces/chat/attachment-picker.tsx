@@ -49,6 +49,13 @@ export type StagedAttachment = {
   attachmentId?: string;
   /** Populated when state === 'failed'; bound by uploadAll. */
   error?: string;
+  /** Plan 05-11 (CHAT-07) -- the chatMessageId (chat_messages.message_uuid)
+   *  this attachment was attempted against. Stored on the entry so the
+   *  picker hook can re-bind Retry to the SAME chat_messages row (the FK
+   *  target must not change across retries). Populated by uploadAll
+   *  before runOne fires; surfaces a stable retry target for failed
+   *  entries. */
+  lastChatMessageId?: string;
 };
 
 export type UseAttachmentPickerArgs = {
@@ -174,9 +181,17 @@ export function useAttachmentPicker({
     async (tempId: string, chatMessageId: string): Promise<void> => {
       const entry = stagedRef.current.find((s) => s.tempId === tempId);
       if (!entry) return;
+      // Record the chatMessageId so a Retry button can use the SAME FK
+      // target without the consumer threading it back through React state.
       setStaged((prev) =>
         prev.map((s) =>
-          s.tempId === tempId ? { ...s, state: 'uploading' as const } : s,
+          s.tempId === tempId
+            ? {
+                ...s,
+                state: 'uploading' as const,
+                lastChatMessageId: chatMessageId,
+              }
+            : s,
         ),
       );
       let body: string;

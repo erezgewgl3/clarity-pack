@@ -329,21 +329,39 @@ test('Chat thread: message-thread.tsx orders by server created_at, not client ti
   assert.match(src, /\.sort\(\([^)]*\)\s*=>[\s\S]*createdAt/);
 });
 
-test('Chat thread: composer.tsx contains the explicit attachment-degrade message', () => {
+// Plan 05-11 (CHAT-07 gap closure 2026-05-26) -- the OQ-1 NO-PATH verdict
+// was reframed by the 2026-05-26 debugger investigation: ctx.issues.
+// documents.upsert IS the plugin-accessible work-product store. Plan 05-11
+// flips the composer attach button to LIVE: 📎 Attach onClick=openPicker
+// (from useAttachmentPicker); the placeholder span + ATTACHMENTS_AVAILABLE
+// const are REMOVED. The two former assertions are inverted; the load-
+// bearing live-wire-up assertions live in
+// test/ui/chat-composer-attach-wireup.test.mjs.
+
+test('Chat thread (Plan 05-11 supersede): composer.tsx no longer carries the degraded-state copy', () => {
   const src = readChat('composer.tsx');
-  assert.match(src, /Attachments are temporarily unavailable/);
+  // Strip comments so a Plan 05-11 docstring mentioning the legacy literal
+  // does not trip the gate.
+  const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.equal(
+    (codeOnly.match(/Attachments are temporarily unavailable/g) ?? []).length,
+    0,
+    'Plan 05-11 removes the degraded-state span from the live composer',
+  );
 });
 
-test('Chat thread: composer.tsx disables the attach button (OQ-1 NO-PATH)', () => {
+test('Chat thread (Plan 05-11 supersede): composer.tsx 📎 Attach button is LIVE', () => {
   const src = readChat('composer.tsx');
-  assert.match(src, /ATTACHMENTS_AVAILABLE\s*=\s*false/);
-  // Plan 04.1-08 — the disabled prop is now compound (also disabled when the
-  // active topic is archived): `disabled={!ATTACHMENTS_AVAILABLE || disabled}`.
-  assert.match(
-    src,
-    /disabled=\{!ATTACHMENTS_AVAILABLE(\s*\|\|[^}]+)?\}/,
-    'attach button must be disabled when ATTACHMENTS_AVAILABLE=false',
+  const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.equal(
+    (codeOnly.match(/ATTACHMENTS_AVAILABLE/g) ?? []).length,
+    0,
+    'ATTACHMENTS_AVAILABLE const removed by Plan 05-11',
   );
+  // The 📎 Attach button now wires onClick to openPicker (from
+  // useAttachmentPicker) instead of being disabled with a title-attribute
+  // placeholder.
+  assert.match(codeOnly, /onClick=\{openPicker\}/);
 });
 
 test('Chat thread: composer.tsx generates a message_uuid via crypto.randomUUID', () => {

@@ -26,14 +26,34 @@
 // border + dim text), and the placeholder flips to "Unarchive to send
 // messages." No chat.send call can fire from a disabled composer.
 //
-// Attachment graceful-degrade (CHAT-07): the 04-01 spike OQ-1 verdict is
-// NO-PATH — there is no plugin-accessible upload route on the live host. The
-// 📎 Attach button is therefore rendered DISABLED with the explicit inline
-// message "Attachments are temporarily unavailable".
+// Plan 05-11 (CHAT-07 gap closure) — attachments LIVE.
+// The Plan 04-01 OQ-1 NO-PATH verdict (no plugin-accessible attachments
+// route) was reframed by the 2026-05-26 debugger investigation: while the
+// host's "Attachments" widget writes to public.assets / public.issue_
+// attachments (no SDK client), the plugin-owned ctx.issues.documents store
+// IS reachable and is what the Plan 05-04 DIST-04 dispatcher already reads.
+// Plan 05-11 uploads chat-attached files into THAT store and writes a
+// plugin-namespace chat_message_attachments row linking each upload to its
+// chat_messages row.
 //
-// SECURITY: no raw fetch — chat.send goes through usePluginAction. The
-// composed text is plain user input; it is rendered downstream as untrusted
-// text by MessageThread.
+// Upload-on-send semantics (Option B locked 2026-05-26):
+//   1. operator picks file(s) -> useAttachmentPicker stages them in
+//      browser memory; the chip mounts with state 'staged'. NO host call.
+//   2. operator clicks Send -> handleSend calls doSend(messageUuid, body)
+//      which dispatches chat.send. chat.send commits the chat_messages
+//      row with that messageUuid as the PK, returns { ok, commentId }.
+//   3. After chat.send returns, handleSend calls uploadAll(messageUuid)
+//      from the picker hook -- the FK target on chat_message_attachments
+//      is chat_messages.message_uuid, which the composer already knows
+//      because the composer generated it client-side. The chain runs
+//      per-file: chip flips staged -> uploading -> ready (or failed +
+//      Retry). The chat message is ALREADY persisted before any upload
+//      fires; partial-attachment-failure is recoverable without re-typing
+//      the message body.
+//
+// SECURITY: no raw fetch — chat.send + chat.attachment.upload both go
+// through usePluginAction. Body text + attachment bytes are untrusted
+// input; the worker mime-sniffs + size-caps every upload.
 
 import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
@@ -46,11 +66,9 @@ import {
 import type { ChatActiveTask } from './active-tasks-owned.tsx';
 // Plan 05-08 (D-19) — composer shortcuts popover with TWO parallel `?` triggers.
 import { ComposerShortcutsPopover } from './shortcuts-popover.tsx';
-
-// 04-01 spike OQ-1 verdict: NO-PATH. No plugin-accessible attachment-upload
-// route exists on the live host. CHAT-07 ships degraded. A future PATH-FOUND
-// build flips this to true and wires the upload with a ~10MB cap.
-const ATTACHMENTS_AVAILABLE = false;
+// Plan 05-11 (CHAT-07 gap closure) — composer attachments wire-up.
+import { useAttachmentPicker } from './attachment-picker.tsx';
+import { AttachmentChip } from './attachment-chip.tsx';
 
 /** Generate a message_uuid — crypto.randomUUID with a safe fallback. */
 function newMessageUuid(): string {
@@ -133,6 +151,21 @@ export function Composer({
   // The optimistic overlay — messages sent this session, keyed by uuid.
   const [optimistic, setOptimistic] = React.useState<OptimisticMessage[]>([]);
 
+  // Plan 05-11 (CHAT-07) — attachment picker hook. Files are STAGED on
+  // pick (browser memory only -- no upload); uploadAll(messageUuid) fires
+  // after chat.send returns with the same messageUuid the composer
+  // generated client-side.
+  const attachmentPicker = useAttachmentPicker({
+    companyId,
+    userId,
+    topicIssueId,
+  });
+  const { openPicker, staged, removeStaged, uploadAll, clear, PickerInput } =
+    attachmentPicker;
+  void clear; // keep available for a future v1.1 auto-clear; current v1 keeps
+  // chips visible after Send so the operator can Retry / Remove failures.
+  const anyUploading = staged.some((s) => s.state === 'uploading');
+
   // Plan 05-08 (D-19) — composer shortcuts popover state.
   const [shortcutsPopoverOpen, setShortcutsPopoverOpen] = React.useState(false);
   const composerWrapperRef = React.useRef<HTMLDivElement | null>(null);
@@ -146,8 +179,11 @@ export function Composer({
 
   // doSend is shared by the initial send and Retry. Retry passes the SAME
   // uuid + body so chat.send's message_uuid dedup makes it idempotent.
+  // Plan 05-11 (CHAT-07) -- doSend returns true on a successful chat.send;
+  // handleSend chains uploadAll(messageUuid) on success so the attachment
+  // chain fires AFTER the chat_messages row is committed.
   const doSend = React.useCallback(
-    async (messageUuid: string, body: string) => {
+    async (messageUuid: string, body: string): Promise<boolean> => {
       setBusy(true);
       setOptimistic((prev) => {
         const existing = prev.find((o) => o.messageUuid === messageUuid);
@@ -162,6 +198,7 @@ export function Composer({
           ? prev.map((o) => (o.messageUuid === messageUuid ? entry : o))
           : [...prev, entry];
       });
+      let ok = false;
       try {
         const result = await send({
           topicIssueId,
@@ -178,15 +215,18 @@ export function Composer({
             o.messageUuid === messageUuid ? { ...o, status: 'sent' } : o,
           ),
         );
+        ok = true;
       } catch {
         setOptimistic((prev) =>
           prev.map((o) =>
             o.messageUuid === messageUuid ? { ...o, status: 'failed' } : o,
           ),
         );
+        ok = false;
       } finally {
         setBusy(false);
       }
+      return ok;
     },
     [send, topicIssueId, companyId, userId],
   );
@@ -196,10 +236,49 @@ export function Composer({
     if (disabled) return;
     const body = draft.trim();
     if (!body || busy) return;
+    // Plan 05-11 (CHAT-07) — guard against double-send while uploads are
+    // mid-flight. staged + ready chips are fine; an in-flight 'uploading'
+    // means the previous Send chain is still running.
+    if (anyUploading) return;
     const messageUuid = newMessageUuid();
     setDraft('');
-    void doSend(messageUuid, body);
-  }, [draft, busy, doSend, disabled]);
+    void (async () => {
+      const ok = await doSend(messageUuid, body);
+      if (!ok) {
+        // chat.send failed -- staged attachments remain in the composer
+        // for the operator to retry the whole send.
+        return;
+      }
+      // Plan 05-11 (CHAT-07) -- fire the upload chain AFTER chat.send has
+      // persisted the chat_messages row. uploadAll iterates staged entries
+      // sequentially; success flips chip to 'ready', failure to 'failed'
+      // with a bound retry callback. We clear staged once the chain
+      // finishes -- the ready chips are reflected on the persisted message
+      // by the next chat.messages poll; failed chips are surfaced via the
+      // attachment-picker hook's staged state for individual Retry.
+      if (staged.length > 0) {
+        await uploadAll(messageUuid);
+        // After uploadAll, the picker hook's staged list still contains
+        // failed entries (they keep their `state: 'failed'` + onRetry).
+        // Successful entries are flipped to 'ready' in the hook's local
+        // state and will be re-rendered by the thread poll. We DO NOT
+        // clear() on a mixed-failure outcome -- the operator needs the
+        // failed chips for Retry.
+        // Detect "all succeeded" by checking the hook's CURRENT staged
+        // (note: closure capture is stale; we rely on the hook's internal
+        // ref to expose latest entries via staged on next render). The
+        // simpler invariant for v1: clear() when staged is empty at this
+        // point -- the hook drops successful entries to no-op, so a
+        // mid-render staged list still indicates failures to keep.
+        // For v1 we leave staged in the picker; the operator can Retry or
+        // Remove failed chips. Successful chips remain visible until they
+        // are reflected on the next poll, at which point the operator can
+        // also choose to clear via Remove (no host call needed).
+      } else {
+        // No attachments -- nothing more to do.
+      }
+    })();
+  }, [draft, busy, doSend, disabled, anyUploading, staged, uploadAll]);
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -299,25 +378,49 @@ export function Composer({
             // the cursor in the textarea.
             autoFocus={!disabled}
           />
+          {/* Plan 05-11 (CHAT-07) — staged attachment chips render between
+              the textarea and the send-row. Each chip carries a Remove
+              affordance pre-send; failed chips (post-send) get Retry
+              bound from the picker hook. */}
+          {staged.length > 0 ? (
+            <div className="composer-attachments" data-clarity-region="composer-attachments">
+              {staged.map((a) => (
+                <AttachmentChip
+                  key={a.tempId}
+                  filename={a.filename}
+                  mimeType={a.mimeType}
+                  byteSize={a.byteSize}
+                  state={a.state}
+                  onRemove={() => removeStaged(a.tempId)}
+                  onRetry={
+                    a.state === 'failed' && a.lastChatMessageId
+                      ? attachmentPicker.retryFor(
+                          a.tempId,
+                          a.lastChatMessageId,
+                        )
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
           <div className="composer-foot">
             <div className="composer-tools">
               <button
                 type="button"
                 className="tool-btn"
-                disabled={!ATTACHMENTS_AVAILABLE || disabled}
-                title={
-                  ATTACHMENTS_AVAILABLE
-                    ? 'Attach a file'
-                    : 'Attachments are temporarily unavailable'
-                }
+                disabled={disabled}
+                title="Attach a file"
+                onClick={openPicker}
+                data-clarity-action="open-attachment-picker"
               >
                 📎 Attach
               </button>
-              {!ATTACHMENTS_AVAILABLE ? (
-                <span className="attach-unavailable">
-                  Attachments are temporarily unavailable
-                </span>
-              ) : null}
+              {/* Plan 05-11 (CHAT-07) — hidden file input mounted here so the
+                  programmatic click() from openPicker triggers the native
+                  file dialog. accept=".xlsx,.pdf,.md,.png" filters the
+                  picker; the worker re-validates every upload. */}
+              <PickerInput />
             </div>
             <div className="send-row">
               <span className="composer-hint">
@@ -327,7 +430,12 @@ export function Composer({
                 type="button"
                 className="btn"
                 onClick={handleSend}
-                disabled={busy || disabled || draft.trim().length === 0}
+                disabled={
+                  busy ||
+                  disabled ||
+                  draft.trim().length === 0 ||
+                  anyUploading
+                }
               >
                 SEND
               </button>
