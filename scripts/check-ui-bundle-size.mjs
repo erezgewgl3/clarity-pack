@@ -43,7 +43,19 @@ const REPO_ROOT = path.resolve(HERE, '..');
 const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 
 // Hard ceiling. Edit this single line to retune; tests/CI follow.
-const UI_BUNDLE_BYTES_CEILING = 650 * 1024; // 650 kB = 665,600 bytes
+//
+// Plan 05-11 recalibration (CHAT-07 gap closure 2026-05-26):
+//   Plan 05-11 added ~22 kB of UI delta -- new attachment chip + picker
+//   hook + chip-with-preview wrapper + composer wire-up + context-rail
+//   live block + Reader 3-branch refactor. The Plan-text estimated
+//   "near-zero" delta; reality is ~22 kB (Rule 1 deviation). The
+//   665,600-byte ceiling was the Plan 05-04 empirical calibration; Plan
+//   05-11 bumps it by ~25 kB to 675 * 1024 = 691,200 bytes -- absorbs
+//   the legitimate delta with ~20 kB headroom for minor downstream
+//   drift. The Plan 05-04 calibration documented this as the correct
+//   response to a real feature shipping (Rule 1 deviation matches that
+//   precedent).
+const UI_BUNDLE_BYTES_CEILING = 675 * 1024; // 675 kB = 691,200 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

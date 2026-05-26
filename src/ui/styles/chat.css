@@ -2581,9 +2581,9 @@
  * AttachmentChip is the shared pill used by composer (staged + uploading +
  * failed states) AND message-thread (ready + failed) AND context-rail
  * Recent Attachments (ready). NO new color tokens; all colors via the
- * existing --bg-*, --line, --ink-*, --danger variables. Plain CSS;
- * keyframes inherited from .flash-highlight pattern when a Retry needs
- * the same visual nudge (Plan 04.2-04 already owns that keyframe). */
+ * existing --bg-*, --line, --ink-*, --danger variables. Plain CSS; no new
+ * keyframes -- Plan 04.2-04 owns the scroll-and-flash animation pattern
+ * reused by Retry visuals. */
 [data-clarity-surface="chat"] .composer-attachments {
   display: flex;
   flex-wrap: wrap;

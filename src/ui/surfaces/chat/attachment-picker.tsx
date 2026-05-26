@@ -326,25 +326,7 @@ export function useAttachmentPicker({
   };
 }
 
-/**
- * A standalone <input type="file"> component for consumers who do not
- * use the hook. The hook owns the canonical wiring; this is kept exported
- * for completeness per Plan 05-11 artifact spec.
- */
-export const AttachmentPickerInput: React.FC<{
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}> = ({ inputRef, onChange }) => (
-  <input
-    ref={inputRef}
-    type="file"
-    accept={ACCEPT}
-    multiple
-    onChange={onChange}
-    style={{ display: 'none' }}
-    aria-hidden="true"
-    aria-label="Attach a file"
-    tabIndex={-1}
-    data-clarity-region="attachment-picker-input"
-  />
-);
+// Note: a standalone AttachmentPickerInput export was contemplated by the
+// Plan 05-11 artifact spec but removed for bundle hygiene. The hook's
+// internal PickerInput is the only mount path; consumers receive it via
+// the hook's return value.

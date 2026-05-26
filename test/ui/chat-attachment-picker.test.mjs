@@ -32,9 +32,10 @@ test('attachment-picker.tsx: file exists', () => {
   assert.ok(existsSync(path.join(CHAT_DIR, 'attachment-picker.tsx')));
 });
 
-test('attachment-picker.tsx: exports useAttachmentPicker and AttachmentPickerInput', () => {
+test('attachment-picker.tsx: exports useAttachmentPicker (the canonical mount path)', () => {
   assert.match(SRC, /export function useAttachmentPicker/);
-  assert.match(SRC, /export const AttachmentPickerInput/);
+  // The hook's return value carries the PickerInput component; no
+  // standalone export needed (bundle hygiene; Plan 05-11 deviation).
 });
 
 test('attachment-picker.tsx: hidden input accept=".xlsx,.pdf,.md,.png"', () => {

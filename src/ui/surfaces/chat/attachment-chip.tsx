@@ -65,116 +65,30 @@ function truncateFilename(name: string): string {
 }
 
 /**
+ * Map mime type to a single (label, fill) tuple. Bundle-cheap version:
+ * one tiny SVG element with two children, regardless of the format.
+ */
+function mimeMeta(mimeType: string): { label: string; fill: string } {
+  const m = (mimeType || '').toLowerCase();
+  if (m === 'application/pdf') return { label: 'PDF', fill: '#c34d3a' };
+  if (m === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return { label: 'XLS', fill: '#3a7d44' };
+  if (m === 'text/markdown' || m === 'text/plain')
+    return { label: 'MD', fill: '#5a5a5a' };
+  if (m === 'image/png' || m.startsWith('image/'))
+    return { label: 'IMG', fill: '#3a5d9d' };
+  return { label: '', fill: '#7e7869' };
+}
+
+/**
  * Return a pure-SVG inline mime glyph for the given mime type. NO external
- * font / icon dep; each glyph is ~120 bytes of inline SVG. We branch on
- * canonical mime strings the chat.attachment.upload allowlist emits, plus
- * a defensive default for any unknown.
+ * font / icon dep; the glyph is a single SVG with a colored rect + an
+ * optional label centered on it. Bundle-conscious version (single component
+ * + a meta lookup) -- mirrors the 4-format coverage of the chat.attachment.
+ * upload allowlist.
  */
 export function mimeIconFor(mimeType: string): React.ReactElement {
-  const lower = (mimeType || '').toLowerCase();
-  if (lower === 'application/pdf') {
-    return (
-      <svg
-        className="attachment-chip-icon"
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <rect x="2" y="1" width="10" height="12" rx="1" fill="#c34d3a" />
-        <text
-          x="7"
-          y="9"
-          textAnchor="middle"
-          fontSize="4.5"
-          fontFamily="monospace"
-          fill="#fff"
-          fontWeight="600"
-        >
-          PDF
-        </text>
-      </svg>
-    );
-  }
-  if (
-    lower ===
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  ) {
-    return (
-      <svg
-        className="attachment-chip-icon"
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <rect x="2" y="1" width="10" height="12" rx="1" fill="#3a7d44" />
-        <text
-          x="7"
-          y="9"
-          textAnchor="middle"
-          fontSize="4.5"
-          fontFamily="monospace"
-          fill="#fff"
-          fontWeight="600"
-        >
-          XLS
-        </text>
-      </svg>
-    );
-  }
-  if (lower === 'text/markdown' || lower === 'text/plain') {
-    return (
-      <svg
-        className="attachment-chip-icon"
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <rect x="2" y="1" width="10" height="12" rx="1" fill="#5a5a5a" />
-        <text
-          x="7"
-          y="9"
-          textAnchor="middle"
-          fontSize="5"
-          fontFamily="monospace"
-          fill="#fff"
-          fontWeight="600"
-        >
-          MD
-        </text>
-      </svg>
-    );
-  }
-  if (lower === 'image/png' || lower.startsWith('image/')) {
-    return (
-      <svg
-        className="attachment-chip-icon"
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <rect x="2" y="1" width="10" height="12" rx="1" fill="#3a5d9d" />
-        <text
-          x="7"
-          y="9"
-          textAnchor="middle"
-          fontSize="4.5"
-          fontFamily="monospace"
-          fill="#fff"
-          fontWeight="600"
-        >
-          IMG
-        </text>
-      </svg>
-    );
-  }
+  const { label, fill } = mimeMeta(mimeType);
   return (
     <svg
       className="attachment-chip-icon"
@@ -184,7 +98,20 @@ export function mimeIconFor(mimeType: string): React.ReactElement {
       aria-hidden="true"
       focusable="false"
     >
-      <rect x="2" y="1" width="10" height="12" rx="1" fill="#7e7869" />
+      <rect x="2" y="1" width="10" height="12" rx="1" fill={fill} />
+      {label ? (
+        <text
+          x="7"
+          y="9"
+          textAnchor="middle"
+          fontSize="4.5"
+          fontFamily="monospace"
+          fill="#fff"
+          fontWeight="600"
+        >
+          {label}
+        </text>
+      ) : null}
     </svg>
   );
 }
