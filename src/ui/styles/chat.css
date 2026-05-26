@@ -2576,3 +2576,115 @@
   font-size: 11px;
   color: var(--ink-3);
 }
+
+/* ---- Plan 05-11 (CHAT-07 gap closure) — composer + thread attachment chips ----
+ * AttachmentChip is the shared pill used by composer (staged + uploading +
+ * failed states) AND message-thread (ready + failed) AND context-rail
+ * Recent Attachments (ready). NO new color tokens; all colors via the
+ * existing --bg-*, --line, --ink-*, --danger variables. Plain CSS;
+ * keyframes inherited from .flash-highlight pattern when a Retry needs
+ * the same visual nudge (Plan 04.2-04 already owns that keyframe). */
+[data-clarity-surface="chat"] .composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0 0 0;
+}
+[data-clarity-surface="chat"] .message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+[data-clarity-surface="chat"] .rail-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-clarity-surface="chat"] .attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  font-family: "Geist Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.2;
+}
+[data-clarity-surface="chat"] .attachment-chip:hover {
+  background: var(--bg-3);
+}
+[data-clarity-surface="chat"] .attachment-chip--staged {
+  cursor: default;
+}
+[data-clarity-surface="chat"] .attachment-chip--uploading {
+  opacity: 0.65;
+  cursor: progress;
+}
+[data-clarity-surface="chat"] .attachment-chip--ready {
+  border-color: var(--line);
+}
+[data-clarity-surface="chat"] .attachment-chip--failed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+[data-clarity-surface="chat"] .attachment-chip-icon {
+  flex-shrink: 0;
+}
+[data-clarity-surface="chat"] .attachment-chip-name {
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-clarity-surface="chat"] .attachment-chip-size {
+  color: var(--ink-3);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  margin-left: 2px;
+}
+[data-clarity-surface="chat"] .attachment-chip-remove {
+  background: transparent;
+  border: 0;
+  color: var(--ink-3);
+  padding: 0 4px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+[data-clarity-surface="chat"] .attachment-chip-remove:hover {
+  color: var(--danger);
+}
+[data-clarity-surface="chat"] .attachment-chip-retry {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 2px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+[data-clarity-surface="chat"] .attachment-chip-retry:hover {
+  background: var(--danger);
+  color: var(--bg);
+}
+[data-clarity-surface="chat"] .attachment-popover {
+  position: absolute;
+  z-index: 50;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  max-width: 720px;
+  max-height: 60vh;
+  overflow: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
