@@ -73,24 +73,38 @@ export function buildIdLookup({
 }
 
 /**
- * Rewrites terminal.label so it contains no raw UUIDs. Three passes:
+ * Rewrites terminal.label so it contains no raw UUIDs. Four passes:
  *
  * (1) HUMAN_ACTION_ON with userId === '__unowned__':
  *     Extract the first UUID from the existing label. If it resolves in
  *     `lookup`, rewrite to "<resolved-label> has no owner assigned".
  *     Otherwise rewrite to "Agent has no owner assigned".
  *
- * (2) Any other terminal kind whose label contains a UUID substring:
+ * (2) Any other terminal kind whose label contains a hex UUID substring:
  *     Replace each UUID with its lookup label, or with the short-form
  *     'agent#<first-8-hex-chars>' when absent from lookup.
  *
- * (3) Belt-and-suspenders: any UUID that somehow survived steps (1)-(2)
+ * (3) Phase 6.1 HOTFIX (Plan 06.1-06): HUMAN_ACTION_ON with userId !==
+ *     '__unowned__' AND userId === viewerUserId: substitute the user-id
+ *     in the label with "You". Paperclip user IDs are base62 32-char
+ *     strings (e.g., "E8TMB44X20gwBYvFz3Qf4jUO7lbc8klB"), DISTINCT from
+ *     hex UUIDs (8-4-4-4-12) -- so Step 2's UUID_RE never catches them.
+ *     Without this pass, operator-claimed chains render the raw user-id
+ *     in the label ("E8TMB44X... to act on CEO" instead of "You to act
+ *     on CEO"), violating the zero-rabbit-holes contract that Phase 6.1
+ *     was meant to satisfy. Plan 06.1-06 closure drill 2026-05-27.
+ *
+ * (4) Belt-and-suspenders: any UUID that somehow survived steps (1)-(3)
  *     gets replaced with short form, so the operator-facing contract
  *     ("never see a UUID") holds even on a buggy lookup.
  *
  * Pure: returns a new BlockerChainResult + new Terminal; never mutates input.
  */
-export function humanizeChain(chain: BlockerChainResult, lookup: IdLookup): BlockerChainResult {
+export function humanizeChain(
+  chain: BlockerChainResult,
+  lookup: IdLookup,
+  viewerUserId?: string,
+): BlockerChainResult {
   const t = chain.terminal;
   let newLabel = t.label;
 
@@ -102,7 +116,7 @@ export function humanizeChain(chain: BlockerChainResult, lookup: IdLookup): Bloc
       ? `${agentLabel} has no owner assigned`
       : 'Agent has no owner assigned';
   } else {
-    // Step 2: substitute every UUID with its lookup label, or short form
+    // Step 2: substitute every hex UUID with its lookup label, or short form
     newLabel = t.label.replace(UUID_RE, (uuid) => {
       const entry = lookup.get(uuid);
       if (entry) return entry.label;
@@ -110,7 +124,22 @@ export function humanizeChain(chain: BlockerChainResult, lookup: IdLookup): Bloc
     });
   }
 
-  // Step 3: belt-and-suspenders
+  // Step 3 (Phase 6.1 HOTFIX Plan 06.1-06): viewer user-id → "You"
+  // substitution. Only fires for HUMAN_ACTION_ON terminals with a non-
+  // __unowned__ userId that matches the viewer (the operator currently
+  // viewing the surface). Multi-operator support is a v1.1+ enhancement;
+  // for v1.0 single-operator (Eric), this covers every case.
+  if (
+    t.kind === 'HUMAN_ACTION_ON' &&
+    t.userId !== '__unowned__' &&
+    viewerUserId &&
+    t.userId === viewerUserId &&
+    newLabel.includes(t.userId)
+  ) {
+    newLabel = newLabel.split(t.userId).join('You');
+  }
+
+  // Step 4: belt-and-suspenders (hex UUID short-form fallback)
   newLabel = newLabel.replace(UUID_RE, (uuid) => `agent#${uuid.slice(0, 8)}`);
 
   // Build a new terminal object preserving the discriminant + extras.

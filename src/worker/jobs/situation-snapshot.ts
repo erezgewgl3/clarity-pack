@@ -240,7 +240,12 @@ async function buildEmployeeRow(
   // Plan 02-08 Task 2 (DEV-11) — humanize before reaching the UI.
   // Every blocker_chain.terminal.label is asserted UUID-free by
   // test/worker/situation-snapshot-narration.test.mjs.
-  const blockerChain = humanizeChain(rawChain, lookup);
+  // Phase 6.1 HOTFIX (Plan 06.1-06) -- pass viewerUserId so humanize
+  // can substitute the viewer's user-id with "You" in the label. The
+  // chain leaf now resolves to the operator's user-id when ROOM-09
+  // claims ownership; without this substitution the raw base62 user-id
+  // leaks into the operator-facing label.
+  const blockerChain = humanizeChain(rawChain, lookup, viewerUserId);
 
   return {
     userId,
@@ -404,6 +409,32 @@ export function registerSituationSnapshotJob(ctx: SituationSnapshotCtx): void {
         );
       } catch (e) {
         ctx.logger?.warn?.('situation-snapshot: INSERT failed', { companyId, err: (e as Error).message });
+      }
+
+      // Phase 6.1 HOTFIX (Plan 06.1-07): bounded retention. Without this
+      // DELETE, the table accumulates one row per state-change minute
+      // per company FOREVER (~1440 rows/day per company at saturation;
+      // ~525k rows/year on a single-operator instance). The UI only ever
+      // reads the LATEST row per company (situation.snapshot data
+      // handler reads ORDER BY taken_at DESC LIMIT 1), so older rows
+      // have zero consumer value -- they're dead storage. Keep 15
+      // minutes of snapshots per company: enough to debug a recent
+      // regression by inspecting the snapshot history without unbounded
+      // growth. v1.1+ may switch to single-row-per-company UPSERT
+      // semantics (drop the composite UNIQUE, add UNIQUE on
+      // computed_for_company_id alone), which would make this retention
+      // pass redundant -- but that needs a migration so it's out of
+      // scope for the v1.0.0 ship gate.
+      try {
+        await ctx.db.execute(
+          "DELETE FROM plugin_clarity_pack_cdd6bda4bd.situation_snapshots WHERE computed_for_company_id = $1 AND taken_at < NOW() - INTERVAL '15 minutes'",
+          [companyId],
+        );
+      } catch (e) {
+        ctx.logger?.warn?.('situation-snapshot: retention DELETE failed', {
+          companyId,
+          err: (e as Error).message,
+        });
       }
     }
   });
