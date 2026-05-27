@@ -13,8 +13,19 @@ import { build } from "esbuild";
 // (which can load built-in modules from ESM context). This is the canonical
 // esbuild + ESM-target + CJS-deps recipe.
 //
-// Worker externals (react, react-dom, @paperclipai/plugin-sdk) remain
-// unchanged; xlsx stays bundled.
+// 2026-05-27 SDK-bundling fix: @paperclipai/plugin-sdk REMOVED from externals.
+// PR #6547 (Paperclip 2026.525.0) added invocation-scope propagation to the
+// worker SDK. When @paperclipai/plugin-sdk was externalized, the host's
+// `paperclipai plugin install` flow on BEAAA resolved the SDK to a 2026.512.0
+// copy at runtime regardless of what our package.json declared — npm hoisting
+// from the host's bundled paperclipai install pulled the older SDK in. The
+// older SDK has zero AsyncLocalStorage plumbing for paperclipInvocationId and
+// every nested worker→host call (agents.list, issues.get, etc.) was rejected
+// with "the worker referenced a missing, expired, or unknown invocation scope"
+// on a 2026.525.0 host. Bundling the SDK into worker.js eliminates that
+// runtime-resolution surface entirely — the worker carries exactly the SDK
+// version we built against. react / react-dom stay externalized (host singleton
+// requirement); xlsx stays bundled.
 await build({
   entryPoints: ["src/worker.ts"],
   outfile: "dist/worker.js",
@@ -23,7 +34,6 @@ await build({
   platform: "node",
   target: "node20",
   external: [
-    "@paperclipai/plugin-sdk",
     "react",
     "react-dom"
   ],
