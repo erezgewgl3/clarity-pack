@@ -73,6 +73,13 @@ import { PauseBanner } from './pause-banner.tsx';
 // the editor-only PauseBanner above stays mounted at the FOOTER and is
 // unchanged (its literal is locked by reader-view.test.mjs).
 import { AgentPauseBanner } from '../../primitives/agent-pause-banner.tsx';
+// Overnight 2026-05-28 — per-section error containment. One bad section
+// degrades to "Section unavailable" instead of throwing into the host's
+// PluginSlotErrorBoundary and wiping the entire Reader tab. BEAAA-828 +
+// repro on BEAAA-142/141/125/138/682/79 showed the host boundary catching
+// a Clarity-side throw and rendering "Clarity Pack: failed to render" with
+// EVERY section blanked. Per-section boundaries close that wide blast radius.
+import { SectionErrorBoundary } from '../../primitives/error-boundary.tsx';
 import type { RefCardData, TLDR } from '../../../shared/types.ts';
 
 export type ReaderViewData = {
@@ -282,94 +289,89 @@ function ReaderViewReady({
       </ClaritySurfaceRoot>
     );
   }
+  // Overnight 2026-05-28 — per-section error containment. EVERY Reader
+  // sub-component is wrapped in a SectionErrorBoundary so a render-time
+  // throw inside one section (e.g. the BEAAA-828 pathology where
+  // ancestry.milestone.title is the entire 1k+ char issue body, or a
+  // RefChip choking on a structurally-degraded resolve-refs payload) is
+  // caught locally and degrades to an inline "Section unavailable"
+  // caption — the other sections continue to render. Before this wrap, a
+  // throw in any section propagated to the HOST's PluginSlotErrorBoundary
+  // and rendered "Clarity Pack: failed to render", blanking the whole
+  // tab. The wide blast radius — repro'd on BEAAA-828/142/141/125/138/682/79
+  // — is closed here. `resetKey={entityId}` so a navigation to another
+  // issue clears any prior error state on the next tick.
   return (
     <ClaritySurfaceRoot name="reader">
-      {/* Plan 05-08 (D-17) — shared `+ Create task` header above the
-          banner / breadcrumb / TLDR. Mounted at the top of every
-          populated render. */}
-      <ClaritySurfaceHeader
-        companyId={companyId}
-        userId={userId}
-        surface="reader"
-      />
-      {/* Plan 05-05 (D-06 + D-07) — top-of-tab generic paused-agent banner.
-          Renders nothing when the Editor-Agent (or future per-employee
-          handler) is healthy. The editor-only PauseBanner at the FOOTER
-          (line ~360) stays UNCHANGED — its literal is locked by
-          reader-view.test.mjs. companyId is the resolved UUID at this
-          render path; userId is sourced from useResolvedUserId() inside
-          the banner. agentId stays null — the worker currently keys on
-          EDITOR_AGENT_KEY; the prop is plumbed for forward-compat. */}
-      <AgentPauseBanner companyId={companyId} agentId={null} />
-      {/* Plan 04.2-01 (RCB-01) — Reader-header action row. The deterministic
-          Continue-in-chat affordance sits above the breadcrumb; its render
-          (enabled / disabled / nothing) is fully driven by chat.openForIssue.
-          Mounted only here in the populated render — companyId + userId are
-          real strings and the issue has loaded, so no undefined-id call and
-          no companyId === null crash (memory feedback_test-usehostcontext-
-          null-companyId). companyPrefix may be '' on an unprefixed URL; the
-          button still mounts and simply builds a relative /chat link. */}
-      <div className="clarity-reader-header-actions" data-clarity-region="reader-header-actions">
-        <ContinueInChatButton
-          issueId={entityId}
+      <SectionErrorBoundary name="surface-header" resetKey={entityId}>
+        <ClaritySurfaceHeader
           companyId={companyId}
           userId={userId}
-          companyPrefix={companyPrefix}
-          // `issue` is a forward-compat slot — chat.openForIssue computes the
-          // real seedTitle/seedBody from ctx.issues.get on the worker side,
-          // so the button does not consume these for the seed payload. The
-          // identifier falls back to the issue id; title is left null (the
-          // Reader's ReaderViewData carries no raw issue title).
-          issue={{ identifier: entityId, title: null }}
-          // Plan 04.2-07 D-02 — lift the picker-open request to this parent.
-          // When chat.openForIssue resolves to 'existing-topics-ambiguous'
-          // the button calls this with the assignee id and we plumb it
-          // into ReverseTopicsLink's autoOpen + filterToAssignee props
-          // below. No React context — explicit prop plumbing per PATTERNS.
-          onRequestPickerOpen={setPickerRequest}
+          surface="reader"
         />
-        {/* Plan 04.2-01 (RCB-06) — the reverse-topics list. Renders nothing
-            when no chat topics were started from this issue (the common case
-            + every pre-0009 issue); otherwise `<N> conversations about this
-            issue ↗` with a popover. Fed from issue.reader's topicsForIssue.
-            Plan 04.2-07 D-02 — entryPoint, filterToAssignee, autoOpen
-            forwarded from pickerRequest so the popover auto-opens
-            pre-filtered to same-assignee candidates when the button
-            resolves to existing-topics-ambiguous. */}
-        <ReverseTopicsLink
-          companyPrefix={companyPrefix}
-          topicsForIssue={data.topicsForIssue ?? []}
-          entryPoint={pickerRequest ? 'continue-in-chat' : 'manual'}
-          filterToAssignee={pickerRequest?.filterToAssignee ?? null}
-          autoOpen={pickerRequest !== null}
-        />
-      </div>
-      <Breadcrumb ancestry={data.ancestry} />
-      <TldrStrip tldr={data.tldr} />
-      <div className="clarity-reader-body">
-        <div className="clarity-reader-main">
-          <ProseWithRefChips body={data.issueBody} />
-          <AnchoredToCards cards={data.refCards} />
-          {/* Plan 05-04 (DIST-04) — DeliverablePreview now dispatches the
-              deliverable.preview worker handler per documentKey extension.
-              companyId / userId / entityId are real strings at this render
-              path (all three resolvers settled upstream), so the handler
-              gets non-empty params and the placeholder fallback is only
-              reached on the worker's structured `{ error }` envelope. */}
-          <DeliverablePreview
-            deliverable={data.deliverable}
+      </SectionErrorBoundary>
+      <SectionErrorBoundary name="agent-pause-banner" resetKey={entityId}>
+        <AgentPauseBanner companyId={companyId} agentId={null} />
+      </SectionErrorBoundary>
+      <div className="clarity-reader-header-actions" data-clarity-region="reader-header-actions">
+        <SectionErrorBoundary name="continue-in-chat" resetKey={entityId}>
+          <ContinueInChatButton
+            issueId={entityId}
             companyId={companyId}
             userId={userId}
-            issueId={entityId}
+            companyPrefix={companyPrefix}
+            issue={{ identifier: entityId, title: null }}
+            onRequestPickerOpen={setPickerRequest}
           />
-          <AcChecklist issueId={entityId} items={data.acItems} userId={userId} autoStatus={acAutoStatus} onMutated={() => { void refresh(); void refreshAcAuto(); }} />
-          <ActivityTimeline events={data.activity} />
+        </SectionErrorBoundary>
+        <SectionErrorBoundary name="reverse-topics" resetKey={entityId}>
+          <ReverseTopicsLink
+            companyPrefix={companyPrefix}
+            topicsForIssue={data.topicsForIssue ?? []}
+            entryPoint={pickerRequest ? 'continue-in-chat' : 'manual'}
+            filterToAssignee={pickerRequest?.filterToAssignee ?? null}
+            autoOpen={pickerRequest !== null}
+          />
+        </SectionErrorBoundary>
+      </div>
+      <SectionErrorBoundary name="breadcrumb" resetKey={entityId}>
+        <Breadcrumb ancestry={data.ancestry} />
+      </SectionErrorBoundary>
+      <SectionErrorBoundary name="tldr" resetKey={entityId}>
+        <TldrStrip tldr={data.tldr} />
+      </SectionErrorBoundary>
+      <div className="clarity-reader-body">
+        <div className="clarity-reader-main">
+          <SectionErrorBoundary name="prose" resetKey={entityId}>
+            <ProseWithRefChips body={data.issueBody} />
+          </SectionErrorBoundary>
+          <SectionErrorBoundary name="anchored-to" resetKey={entityId}>
+            <AnchoredToCards cards={data.refCards} />
+          </SectionErrorBoundary>
+          <SectionErrorBoundary name="deliverable" resetKey={entityId}>
+            <DeliverablePreview
+              deliverable={data.deliverable}
+              companyId={companyId}
+              userId={userId}
+              issueId={entityId}
+            />
+          </SectionErrorBoundary>
+          <SectionErrorBoundary name="ac-checklist" resetKey={entityId}>
+            <AcChecklist issueId={entityId} items={data.acItems} userId={userId} autoStatus={acAutoStatus} onMutated={() => { void refresh(); void refreshAcAuto(); }} />
+          </SectionErrorBoundary>
+          <SectionErrorBoundary name="activity" resetKey={entityId}>
+            <ActivityTimeline events={data.activity} />
+          </SectionErrorBoundary>
         </div>
         <aside className="clarity-reader-rail">
-          <LiveBlockerPanel issueId={entityId} />
+          <SectionErrorBoundary name="live-blocker" resetKey={entityId}>
+            <LiveBlockerPanel issueId={entityId} />
+          </SectionErrorBoundary>
         </aside>
       </div>
-      <PauseBanner />
+      <SectionErrorBoundary name="pause-banner" resetKey={entityId}>
+        <PauseBanner />
+      </SectionErrorBoundary>
     </ClaritySurfaceRoot>
   );
 }

@@ -298,12 +298,66 @@ function readFromHash(hash) {
 }
 
 /** btoa / atob isomorphic shim — same-origin plugin UI runs in the browser
- *  (window.btoa available), but Node's test runner needs Buffer fallback. */
+ *  (window.btoa available), but Node's test runner needs Buffer fallback.
+ *
+ *  Overnight 2026-05-28 — UTF-8-safe. The pre-overnight version called
+ *  raw `btoa(s)` which throws `InvalidCharacterError` on ANY non-Latin1
+ *  character in the input. BEAAA issue titles routinely contain em-dashes
+ *  (`—` —), smart quotes (`“ ” ‘ ’` “..’), and other
+ *  Unicode (smart-quoted titles from copy-paste are the default). When
+ *  ContinueInChatButton ships those into chat.openForIssue's seedTitle /
+ *  seedBody fields and the button renders `buildChatDeepLink(...)`, the
+ *  raw-btoa throw propagates synchronously through React's render phase
+ *  into the HOST's PluginSlotErrorBoundary — which renders the single
+ *  "Clarity Pack: failed to render" pill that blanks the entire Reader
+ *  tab. This is the root cause of the BEAAA-828 (+ widespread) Reader
+ *  crash repro'd 2026-05-27.
+ *
+ *  The fix is the canonical UTF-8-via-binary-string pattern recommended
+ *  by the WHATWG / MDN btoa docs: TextEncoder → bytes → binary string
+ *  → btoa. The encoder side picks ASCII-safe bytes; atob/TextDecoder
+ *  inverts. Round-tripping is bit-exact for any Unicode input.
+ *
+ *  A second-line defense — the function is wrapped in try/catch so a
+ *  future encoding pathology can return '' instead of throwing. The
+ *  upstream callers (buildChatDeepLink) already treat a malformed result
+ *  as "not navigable" → null, which the button renders as a disabled
+ *  affordance (Continue button stays gracefully suppressed) rather than
+ *  exploding the whole tab. */
 function b64encode(s) {
-  if (typeof btoa === 'function') return btoa(s);
-  return Buffer.from(s, 'utf8').toString('base64');
+  try {
+    if (typeof btoa === 'function' && typeof TextEncoder !== 'undefined') {
+      const bytes = new TextEncoder().encode(s);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    }
+    return Buffer.from(s, 'utf8').toString('base64');
+  } catch {
+    // Defensive degrade — see header. The caller treats '' as
+    // "not navigable" upstream (buildChatDeepLink returns null when the
+    // built `to` lacks a fragment, and the button renders nothing).
+    return '';
+  }
 }
 function b64decode(s) {
-  if (typeof atob === 'function') return atob(s);
-  return Buffer.from(s, 'base64').toString('utf8');
+  try {
+    if (typeof atob === 'function' && typeof TextDecoder !== 'undefined') {
+      const binary = atob(s);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return new TextDecoder().decode(bytes);
+    }
+    return Buffer.from(s, 'base64').toString('utf8');
+  } catch {
+    // Defensive degrade — see b64encode header. The caller
+    // (parseChatDeepLink → readFromHash) treats a malformed result as
+    // "no deep link" → returns null, and the chat surface mounts in its
+    // default state.
+    return '';
+  }
 }

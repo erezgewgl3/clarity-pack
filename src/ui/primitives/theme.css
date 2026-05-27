@@ -1207,3 +1207,20 @@
 [data-clarity-surface] .clarity-deliverable-xlsx-scroll table tr:last-child td {
   border-bottom: none;
 }
+
+/* Overnight 2026-05-28 — SectionErrorBoundary fallback. Inline-friendly
+ * caption that does not collapse layout; muted ink so the fallback does
+ * not flag itself as the visual centerpiece. The boundary catches a
+ * single sub-section's render throw; the other sections render normally.
+ */
+[data-clarity-surface] .clarity-error-boundary {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--clarity-ink-3, var(--clarity-muted));
+  background: var(--clarity-bg-2, transparent);
+  border: 1px dashed var(--clarity-line, var(--clarity-border));
+  border-radius: 4px;
+}
