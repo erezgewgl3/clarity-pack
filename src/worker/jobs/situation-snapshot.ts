@@ -51,6 +51,15 @@ export type SituationSnapshotCtx = {
 
 export type EmployeeSnapshot = {
   userId: string;
+  // Phase 6.1 HOTFIX (Plan 06.1-09): canonical agent id for ownership
+  // dispatch. Matches registerSituationSnapshotJob's ownerMap key
+  // derivation (line 323: anyEmp.id ?? anyEmp.user_id) so the UI's
+  // agent.takeOwnership({ agentId }) call lands on the same key the
+  // recompute job consults. Without this, the UI had to guess between
+  // employee.userId (line 133: user_id ?? id — different precedence)
+  // and the actual side-table key, creating a mismatch where the
+  // UI-claimed agent wouldn't resolve in the next snapshot.
+  agentId: string;
   role: string;
   state: string;
   age_ms: number;
@@ -249,6 +258,11 @@ async function buildEmployeeRow(
 
   return {
     userId,
+    // Phase 6.1 HOTFIX (Plan 06.1-09) -- agentId for UI dispatch. Matches
+    // registerSituationSnapshotJob's ownerMap key derivation (the side-
+    // table key the snapshot consults). Falls back to userId so the
+    // payload is never missing this field.
+    agentId: anyEmp.id ?? anyEmp.user_id ?? userId,
     role: anyEmp.role ?? 'agent',
     state,
     age_ms: Math.max(0, Date.now() - lastChange),
