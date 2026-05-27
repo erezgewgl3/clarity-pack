@@ -124,16 +124,24 @@ export function humanizeChain(
     });
   }
 
-  // Step 3 (Phase 6.1 HOTFIX Plan 06.1-06): viewer user-id → "You"
-  // substitution. Only fires for HUMAN_ACTION_ON terminals with a non-
-  // __unowned__ userId that matches the viewer (the operator currently
-  // viewing the surface). Multi-operator support is a v1.1+ enhancement;
-  // for v1.0 single-operator (Eric), this covers every case.
+  // Step 3 (Phase 6.1 HOTFIX Plan 06.1-06 — v2): viewer user-id → "You"
+  // substitution. Fires for ANY HUMAN_ACTION_ON terminal with a non-
+  // __unowned__ userId, regardless of viewerUserId. v1.0 ships single-
+  // operator (Eric on Countermoves/BEAAA); the worker only ever resolves
+  // chains for the active operator, so the chain leaf's userId is BY
+  // CONSTRUCTION the operator who needs to act -- which from their
+  // perspective is "You". The viewerUserId parameter is retained for
+  // future multi-operator differentiation (v1.1+) but the equality
+  // check is dropped: previously, Company.owner_user_id on Countermoves
+  // didn't match Eric's userId (the chain leaf came from
+  // clarity_agent_owners.owner_user_id, set by agent.takeOwnership;
+  // viewerUserId came from Company.owner_user_id, which the host may
+  // populate differently), and the equality check vetoed every
+  // substitution. v1.0 closure-drill 2026-05-27: dropping the equality
+  // check resolves the rc.8 UUID-leak on operator-claimed chain rows.
   if (
     t.kind === 'HUMAN_ACTION_ON' &&
     t.userId !== '__unowned__' &&
-    viewerUserId &&
-    t.userId === viewerUserId &&
     newLabel.includes(t.userId)
   ) {
     newLabel = newLabel.split(t.userId).join('You');
