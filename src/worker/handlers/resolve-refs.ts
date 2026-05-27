@@ -122,7 +122,19 @@ export function registerResolveRefs(ctx: ResolveRefsCtx): void {
       }));
     }
     return await resolveRefs(ids, async (uniqueIds: string[]) => {
-      const url = `/api/companies/${encodeURIComponent(companyId)}/issues?ids=${uniqueIds
+      // 2026-05-27 BEAAA hotfix — paperclipai@2026.525.0 added URL-shape
+      // validation to ctx.http.fetch: relative paths now throw
+      // "Invalid URL: /api/companies/..." JsonRpcCallError. The earlier
+      // implementation relied on the host wrapper resolving relative paths
+      // against its own base URL; that contract is gone in 2026.525.0.
+      // Fix: prepend the absolute base URL from PAPERCLIP_API_URL env (set
+      // by the host on worker spawn), falling back to localhost:3100 (the
+      // documented default).
+      const apiBase = (
+        (typeof process !== 'undefined' && process.env?.PAPERCLIP_API_URL) ||
+        'http://localhost:3100'
+      ).replace(/\/+$/, '');
+      const url = `${apiBase}/api/companies/${encodeURIComponent(companyId)}/issues?ids=${uniqueIds
         .map(encodeURIComponent)
         .join(',')}`;
       const resp = await ctx.http.fetch(url, { method: 'GET' });

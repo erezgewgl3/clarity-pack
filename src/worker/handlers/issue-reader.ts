@@ -164,7 +164,13 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
       );
       if (refs.length > 0) {
         refCards = await resolveRefs(refs, async (uniqueIds) => {
-          const url = `/api/companies/${encodeURIComponent(companyId)}/issues?ids=${uniqueIds.map(encodeURIComponent).join(',')}`;
+          // 2026-05-27 BEAAA hotfix — see resolve-refs.ts. Paperclip
+          // 2026.525.0 ctx.http.fetch requires absolute URLs.
+          const apiBase = (
+            (typeof process !== 'undefined' && process.env?.PAPERCLIP_API_URL) ||
+            'http://localhost:3100'
+          ).replace(/\/+$/, '');
+          const url = `${apiBase}/api/companies/${encodeURIComponent(companyId)}/issues?ids=${uniqueIds.map(encodeURIComponent).join(',')}`;
           const resp = await ctx.http.fetch(url, { method: 'GET' });
           const items = (await resp.json()) as RawHostIssue[];
           return items.map((i) => ({
