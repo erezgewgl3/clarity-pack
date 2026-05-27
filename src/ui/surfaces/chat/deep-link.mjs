@@ -274,11 +274,20 @@ function readFromHash(hash) {
   const r = /** @type {Record<string, unknown>} */ (payload);
   const newTopic = r.newTopic === true;
   const topic = str(r.topic);
-  if (!newTopic && !topic) return null;
+  const employee = str(r.employee);
+  // Phase 6.1 HOTFIX (Plan 06.1-12 v2): also accept employee-only payloads
+  // (just `{ employee: <id> }` -- no newTopic flag, no topic). Pre-fix the
+  // guard rejected these as "not a deep link" and returned null, which made
+  // the Situation Room "Open chat with [Agent]" engagement entry land on
+  // the empty-state chat surface with no employee selected. The chat
+  // surface dispatch at chat/index.tsx now has a branch that handles
+  // employee-only deep-links (setEmployee without opening dialog), but
+  // that branch never fires when the parser short-circuits.
+  if (!newTopic && !topic && !employee) return null;
   return {
     topic,
     comment: str(r.comment),
-    employee: str(r.employee),
+    employee,
     newTopic,
     seedTitle:
       typeof r.seedTitle === 'string' ? r.seedTitle : newTopic ? '' : null,

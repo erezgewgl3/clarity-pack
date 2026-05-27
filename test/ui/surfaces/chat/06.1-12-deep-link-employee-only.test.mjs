@@ -19,7 +19,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { buildChatDeepLink } from '../../../../src/ui/surfaces/chat/deep-link.mjs';
+import {
+  buildChatDeepLink,
+  parseChatDeepLink,
+} from '../../../../src/ui/surfaces/chat/deep-link.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..');
@@ -95,6 +98,36 @@ test('Plan 06.1-12: pre-existing routes still work (regression baseline)', () =>
   const newTopicPayload = decodeHash(newTopic.to);
   assert.equal(newTopicPayload.newTopic, true);
   assert.equal(newTopicPayload.employee, CEO_AGENT_ID);
+});
+
+test('Plan 06.1-12 v2: parseChatDeepLink accepts employee-only payloads (round-trip)', () => {
+  // Pre-v2, the parser short-circuited with `if (!newTopic && !topic) return null;`
+  // which discarded employee-only payloads as "not a deep link". The chat
+  // surface's dispatch effect then returned early (link is null), so the
+  // employee-only navigation produced the empty-state surface. v2 extends
+  // the guard to ALSO accept employee-only payloads.
+  const built = buildChatDeepLink({
+    route: 'employee-only',
+    companyPrefix: COMPANY_PREFIX,
+    assigneeAgentId: CEO_AGENT_ID,
+  });
+  assert.ok(built, 'build returns a navigable link');
+
+  // Extract the hash and feed it back to the parser, simulating what the
+  // chat surface does at mount.
+  const hash = built.to.replace(/^.*#/, '#');
+  const parsed = parseChatDeepLink({ hash });
+  assert.ok(parsed, 'parser returns a ChatDeepLink (not null) for employee-only payloads');
+  assert.equal(parsed.employee, CEO_AGENT_ID);
+  assert.equal(parsed.topic, null);
+  assert.equal(parsed.newTopic, false);
+});
+
+test('Plan 06.1-12 v2: parseChatDeepLink still rejects empty payloads', () => {
+  // Regression baseline: a completely empty payload (no newTopic, no topic,
+  // no employee) should still return null.
+  const hash = '#h=' + encodeURIComponent(btoa('{}'));
+  assert.equal(parseChatDeepLink({ hash }), null);
 });
 
 test('Plan 06.1-12: chat/index.tsx has a dispatch branch for employee-only deep-links', () => {
