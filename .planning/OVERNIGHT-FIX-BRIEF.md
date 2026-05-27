@@ -6,13 +6,22 @@
 
 ---
 
-## The bug (verbatim from session-end)
+## The bug (verbatim from session-end + operator follow-up)
 
-clarity-pack v1.0.0 is live on BEAAA AriClaw. **The Reader tab fails to render on issues whose body is a YAML-shaped artifact spec.** Confirmed repro: `localhost:3100/BEAAA/issues/BEAAA-828` → click Reader tab → host's error boundary catches the React exception and shows:
+clarity-pack v1.0.0 is live on BEAAA AriClaw. **The Reader tab fails to render on most BEAAA issues.** Confirmed repro: `localhost:3100/BEAAA/issues/BEAAA-828` → click Reader tab → host's error boundary catches the React exception and shows:
 
 > `Clarity Pack: failed to render`
 
-The Reader works fine on normal issues (verified: `BEAAA-142` renders all sections cleanly).
+Initial session-end testing on BEAAA-142 showed the Reader surface element present with section headings, which I read as "renders cleanly." Operator follow-up corrected: "Neither does it work for most of the issues. The rendering issue as well." So the **rendering pathology is widespread, not edge-case**. The DOM-presence check I did was misleading — sections may be present in the DOM as placeholders while CONTENT degrades or sub-components crash silently. **Treat this as P0 with wide blast radius, not a narrow YAML-spec edge case.**
+
+### Investigation pivot
+
+The "BEAAA-828 specifically crashes" framing in earlier sections of this brief is now **only one repro**, not the bounding case. The autonomous session should:
+
+- Sample MULTIPLE BEAAA issues (BEAAA-828, BEAAA-142, BEAAA-141, BEAAA-125, BEAAA-138, BEAAA-682, BEAAA-79 — IDs visible in the Properties panel of BEAAA-142's screenshot at session-end).
+- Classify which ones crash with the error boundary vs which ones render-but-degrade.
+- Identify the FAILURE PATTERN common to the crashing ones — is it body length? specific tokens? null/undefined fields in the issue.reader response? A specific data shape combination?
+- Diagnose the underlying UI defect, not just a per-symptom band-aid.
 
 ## What's been confirmed working
 
@@ -157,7 +166,7 @@ If you cannot reproduce or cannot fix within reasonable iterations (~6-10 cycles
 The operator noted two symptoms at session-end:
 
 - **"Compiling TL;DR…" placeholder never resolves** on BEAAA Reader views. Verified on BEAAA-142: the Reader otherwise renders correctly, but the TL;DR box stays in placeholder state indefinitely.
-- **Bulletin route shows no content** even at the expected 06:30 ET cron time. (Time check: if you're running this overnight before 2026-05-28 10:30 UTC, the cron hasn't fired yet and the empty state is expected — that's a no-op, not a bug. If it's past 10:30 UTC on 2026-05-28 and the bulletin route still shows "First Edition — Editorial Desk has not compiled a bulletin yet," that's the real bug.)
+- ~~Bulletin route shows no content~~ — **REMOVED FROM SCOPE 2026-05-27 ~21:55Z** after pm2 log inspection. The `compile-bulletin` job is a cadence gate that runs every minute and correctly defers to `next_due_at = 2026-05-28T10:30:00.000Z` (06:30 ET tomorrow). Every dispatch completes successfully in ~60ms with the bootstrap-next-due-at log line. The bulletin will auto-generate at 10:30 UTC; the empty `/BEAAA/bulletin` route in the meantime is the designed placeholder. **Not a bug.** Do NOT investigate the bulletin cron path in the overnight session.
 
 Both symptoms point at the **Editor-Agent compile pipeline** (compile-tldr heartbeat + compile-bulletin cron). The agent definition is registered (we confirmed at session-end: `Editor-Agent` appears in BEAAA's agent panel sidebar). What's likely failing is the **compile call path**.
 
