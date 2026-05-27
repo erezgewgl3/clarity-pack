@@ -23,15 +23,19 @@ const SRC = readFileSync(
   'utf8',
 );
 
-test('prose-with-ref-chips: REF_PATTERN matches any uppercase company prefix (NOT just BEAAA)', () => {
-  // Extract the const REF_PATTERN regex from the source so we can apply it.
-  const match = SRC.match(/const\s+REF_PATTERN\s*=\s*(\/[^/]+\/[gimsuy]*)/);
-  assert.ok(match, 'REF_PATTERN constant must be defined');
+test('prose-with-ref-chips: BROAD_REF_PATTERN fallback matches any uppercase company prefix (used when URL has no prefix)', () => {
+  // 2026-05-27 BEAAA hotfix: the runtime regex is now company-prefix-scoped
+  // (companyPrefix from extractCompanyPrefixFromPathname → /\b<PREFIX>-\d+\b/g).
+  // The BROAD pattern is the FALLBACK when pathname has no prefix (root URL,
+  // standalone surfaces). This test still validates the broad pattern's
+  // generality — it just no longer covers the in-company-router primary path.
+  const match = SRC.match(/const\s+BROAD_REF_PATTERN\s*=\s*(\/[^/]+\/[gimsuy]*)/);
+  assert.ok(match, 'BROAD_REF_PATTERN constant must be defined as the no-prefix fallback');
   // eslint-disable-next-line no-new-func
   const re = new Function('return ' + match[1])();
-  assert.ok(re instanceof RegExp, 'REF_PATTERN must be a RegExp');
+  assert.ok(re instanceof RegExp, 'BROAD_REF_PATTERN must be a RegExp');
 
-  // Must match a variety of company prefixes.
+  // Must match a variety of company prefixes when the fallback is in effect.
   const cases = [
     { input: 'See BEAAA-141 for details', want: ['BEAAA-141'] },
     { input: 'Recovery issue COU-2486 is resolving the missing disposition.', want: ['COU-2486'] },
@@ -48,12 +52,35 @@ test('prose-with-ref-chips: REF_PATTERN matches any uppercase company prefix (NO
   }
 });
 
-test('prose-with-ref-chips: REF_PATTERN is NOT hardcoded to BEAAA', () => {
-  // The old broken pattern was /\bBEAAA-\d+\b/g — a generalized version
-  // must NOT contain a literal BEAAA-bound.
+test('prose-with-ref-chips: BROAD_REF_PATTERN is NOT hardcoded to BEAAA', () => {
+  // The old broken pattern was /\bBEAAA-\d+\b/g — the fallback broad
+  // pattern must remain BEAAA-agnostic.
   assert.doesNotMatch(
     SRC,
-    /REF_PATTERN\s*=\s*\/\\bBEAAA-/,
-    'REF_PATTERN must not be hardcoded to BEAAA — must generalize across company prefixes',
+    /BROAD_REF_PATTERN\s*=\s*\/\\bBEAAA-/,
+    'BROAD_REF_PATTERN must not be hardcoded to BEAAA — must generalize across company prefixes',
+  );
+});
+
+test('prose-with-ref-chips (2026-05-27 BEAAA hotfix): runtime regex is company-prefix-scoped to prevent over-match on YAML-shaped body content', () => {
+  // BEAAA-828's body contained YAML tokens like DAY-3, GATE-2, PAGE-1, BY-1,
+  // DRAFT-1 — all matched by the broad pattern, all 404'd on fetch, the
+  // Reader threw and rendered "Clarity Pack: failed to render". The fix
+  // narrows the regex to the current company's prefix when the URL exposes
+  // one (always the case inside /:companyPrefix/issues/:id).
+  assert.match(
+    SRC,
+    /useHostLocation/,
+    'must import useHostLocation to learn the current pathname',
+  );
+  assert.match(
+    SRC,
+    /extractCompanyPrefixFromPathname/,
+    'must call extractCompanyPrefixFromPathname to scope the regex',
+  );
+  assert.match(
+    SRC,
+    /companyPrefix\s*\n?\s*\?\s*new RegExp/,
+    'must build a prefix-scoped regex when companyPrefix is known',
   );
 });

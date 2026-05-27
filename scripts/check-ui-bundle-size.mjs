@@ -55,7 +55,12 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 //   drift. The Plan 05-04 calibration documented this as the correct
 //   response to a real feature shipping (Rule 1 deviation matches that
 //   precedent).
-const UI_BUNDLE_BYTES_CEILING = 675 * 1024; // 675 kB = 691,200 bytes
+// Bumped 2026-05-27 from 675 → 680 kB: BEAAA Reader hotfix added the
+// useHostLocation + extractCompanyPrefixFromPathname imports in
+// prose-with-ref-chips.tsx (needed to scope REF_PATTERN to the current
+// company prefix, fixing "Clarity Pack: failed to render" on YAML-shaped
+// issue bodies). Net delta ~470 bytes; ceiling bump gives modest headroom.
+const UI_BUNDLE_BYTES_CEILING = 680 * 1024; // 680 kB = 696,320 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

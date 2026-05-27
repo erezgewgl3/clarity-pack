@@ -60,6 +60,14 @@ export type EmployeeSnapshot = {
   // and the actual side-table key, creating a mismatch where the
   // UI-claimed agent wouldn't resolve in the next snapshot.
   agentId: string;
+  // 2026-05-27 BEAAA hotfix: agent display name (e.g. "Head of Compliance",
+  // "Scanner Engineer #2", "CEO"). The role field is often the generic
+  // "general" string on Paperclip instances that don't explicitly type
+  // every agent, so the Situation Room agent card was rendering
+  // "General / General / General / Ceo / General / ..." for BEAAA's 17
+  // employees. Carrying name distinctly lets the UI prefer name as the
+  // primary label and use role as the subtitle.
+  name: string | null;
   role: string;
   state: string;
   age_ms: number;
@@ -131,6 +139,7 @@ async function buildEmployeeRow(
   const anyEmp = emp as unknown as {
     id?: string;
     user_id?: string;
+    name?: string;
     role?: string;
     state?: string;
     last_state_change_at?: string;
@@ -263,6 +272,7 @@ async function buildEmployeeRow(
     // table key the snapshot consults). Falls back to userId so the
     // payload is never missing this field.
     agentId: anyEmp.id ?? anyEmp.user_id ?? userId,
+    name: anyEmp.name ?? null,
     role: anyEmp.role ?? 'agent',
     state,
     age_ms: Math.max(0, Date.now() - lastChange),

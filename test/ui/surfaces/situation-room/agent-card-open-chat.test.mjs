@@ -72,7 +72,10 @@ test('Plan 06.1-11: renders the Open-chat button ALWAYS (no isUnclaimed conditio
 });
 
 test('Plan 06.1-11: button label uses the locked literal "Open chat with [role]"', () => {
-  assert.match(SOURCE, /Open chat with \$\{roleLabel\}/);
+  // 2026-05-27 BEAAA hotfix: variable renamed roleLabel → displayLabel
+  // (prefers employee.name when present, falls back to roleLabel). The
+  // user-visible string format is unchanged.
+  assert.match(SOURCE, /Open chat with \$\{displayLabel\}/);
 });
 
 test('Plan 06.1-11: in-flight button label is "Opening…" (em-ellipsis, not three dots)', () => {
@@ -137,7 +140,7 @@ test('Plan 06.1-11: navigate() is called with deepLink.to (URL_HASH carrier)', (
 });
 
 test('Plan 06.1-11: deep-link build failure surfaces a contextual toast', () => {
-  assert.match(SOURCE, /Could not open chat with \$\{roleLabel\}/);
+  assert.match(SOURCE, /Could not open chat with \$\{displayLabel\}/);
 });
 
 // ---------------------------------------------------------------------------
@@ -154,7 +157,7 @@ test('Plan 06.1-10: idle (pathIds.length === 1) renders quiet "No blockers" body
 });
 
 test('Plan 06.1-08: blocked-unclaimed renders "Nobody is handling [role]\'s blockers"', () => {
-  assert.match(SOURCE, /Nobody is handling \$\{roleLabel\}'s blockers/);
+  assert.match(SOURCE, /Nobody is handling \$\{displayLabel\}'s blockers/);
 });
 
 // ---------------------------------------------------------------------------

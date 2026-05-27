@@ -85,6 +85,13 @@ export type AgentEmployee = {
   // dispatch. Falls back to userId for backward compat with pre-06.1-09
   // payloads / tests.
   agentId?: string;
+  // 2026-05-27 BEAAA hotfix: agent display name (e.g. "Head of Compliance",
+  // "Scanner Engineer #2"). When present, used as the primary card-header
+  // label and the engagement-button label so we don't render "General /
+  // General / General / Ceo" for org charts where every agent has the same
+  // generic role string. Optional — older snapshot payloads (pre-fix) won't
+  // carry it; we fall back to roleLabel in that case.
+  name?: string | null;
   role: string;
   state: string;
   age_ms: number;
@@ -200,6 +207,12 @@ export function AgentCard({
   const [opening, setOpening] = React.useState(false);
   const agentIdForOwnership = employee.agentId ?? employee.userId;
   const roleLabel = formatRoleForLabel(employee.role);
+  // 2026-05-27 BEAAA hotfix: prefer name over role for the header + button.
+  // Most BEAAA agents have role="general" — a single distinguishing label
+  // ("Head of Compliance", "Scanner Engineer #2") matters more than the
+  // generic role string. Fallback to roleLabel keeps Countermoves +
+  // unit-test fixtures (pre-name payloads) rendering unchanged.
+  const displayLabel = (employee.name && employee.name.trim()) || roleLabel;
 
   const onOpenChat = React.useCallback(async () => {
     if (opening) return;
@@ -246,7 +259,7 @@ export function AgentCard({
     if (deepLink) {
       navigate(deepLink.to);
     } else {
-      showToast({ message: `Could not open chat with ${roleLabel}` });
+      showToast({ message: `Could not open chat with ${displayLabel}` });
       setOpening(false);
     }
     // On successful navigate, the AgentCard unmounts as the route
@@ -286,7 +299,7 @@ export function AgentCard({
     terminalBlock = (
       <p className="clarity-agent-terminal" data-terminal-kind={terminal.kind}>
         <span className="clarity-agent-terminal-kind">{terminal.kind.replace(/_/g, ' ')}</span>
-        <span className="clarity-agent-terminal-label">{`Nobody is handling ${roleLabel}'s blockers`}</span>
+        <span className="clarity-agent-terminal-label">{`Nobody is handling ${displayLabel}'s blockers`}</span>
       </p>
     );
   } else {
@@ -304,7 +317,7 @@ export function AgentCard({
   return (
     <div className="clarity-agent-card" data-clarity-region="agent-card">
       <header className="clarity-agent-card-header">
-        <span className="clarity-agent-role">{employee.role}</span>
+        <span className="clarity-agent-role" title={employee.role}>{displayLabel}</span>
         <StatePill state={state} age={employee.age_ms} />
       </header>
       <p className="clarity-now-doing">{nowDoingText}</p>
@@ -328,7 +341,7 @@ export function AgentCard({
         disabled={opening}
         aria-busy={opening || undefined}
       >
-        {opening ? 'Opening…' : `Open chat with ${roleLabel}`}
+        {opening ? 'Opening…' : `Open chat with ${displayLabel}`}
       </button>
     </div>
   );
