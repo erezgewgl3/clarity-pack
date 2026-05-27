@@ -184,6 +184,32 @@ async function buildEmployeeRow(
     }
   }
 
+  // Phase 6.1 HOTFIX (Plan 06.1-05) -- the reconciliation loop below
+  // iterates `nodeMeta`, which the relations walk above populates ONLY
+  // with blocker issue ids (line 172). For an agent with no blockers
+  // (idle: no current_focus_issue_id, or an active agent currently
+  // unblocked), `nodeMeta` is empty after the walk and the
+  // reconciliation runs over zero entries. flattenBlockerChain then
+  // walks from `(startId || userId)`, finds no edges, terminates at the
+  // start node, looks up `nodeMeta[startNode]` -> undefined, and emits
+  // __unowned__ via the blocker-chain.ts:178 fallback even when
+  // clarity_agent_owners has a row for the agent. Seed the chain's
+  // start node here from ownerMap (keyed by agent.id, see
+  // registerSituationSnapshotJob line 323) so the side-table override
+  // applies to the degenerate idle chain. Without this seed, the
+  // operator's drill on rc.8 Phase 6.1 STILL shows "no owner assigned"
+  // on idle agent cards (Plan 06.1-04 closure drill 2026-05-27).
+  const chainStartId = startId || userId;
+  const agentIdForOwnerLookup = anyEmp.id ?? userId;
+  if (chainStartId && !nodeMeta[chainStartId]) {
+    const claimedOwner = ownerMap.get(agentIdForOwnerLookup);
+    nodeMeta[chainStartId] = {
+      ownerUserId: claimedOwner ?? null,
+      etaIso: null,
+      status: 'awaiting',
+    };
+  }
+
   // Phase 6.1 ROOM-09 -- side-table-wins reconciliation. Backfill any
   // null nodeMeta[id].ownerUserId from ownerMap BEFORE flattenBlockerChain
   // runs. The walk reads meta.ownerUserId at HUMAN_ACTION_ON leaves and
