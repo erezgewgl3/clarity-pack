@@ -3,14 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.8
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: Phase 6.1 UI-SPEC approved
-last_updated: "2026-05-26T20:46:09.485Z"
+stopped_at: Phase 6.1 CLOSED & VERIFIED 2026-05-27 — Plan 05-10 unblocked
+last_updated: "2026-05-27T17:50:00.000Z"
+next_action: "/gsd:execute-phase 5 --plan 05-10 (rc → 1.0.0 + npm publish + ALL-paths Countermoves drill + Hostinger wipe-and-rebuild + BEAAA install). Phase 6.1 closure docs landed (06.1-VERIFICATION.md + REQUIREMENTS.md ROOM-09/10/11 → Implemented + ROADMAP Phase 6.1 [x] CLOSED & VERIFIED + tarball clarity-pack-1.0.0-rc.8.tgz sha256 23181e4a... installed and healthy on Countermoves with Plan 06.1-12 v2 parser fix verified live). User manual docs/user-manual.md + 7 screenshots shipped fb3dc83 + 1fdef4d."
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 55
-  completed_plans: 45
-  percent: 71
+  completed_plans: 49
+  percent: 86
 ---
 
 # State: Clarity Pack
@@ -85,9 +86,26 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 05 — distribution-polish
+**Current Focus:** Phase 5 Plan 05-10 (rc → 1.0.0 + npm publish + ALL-paths drill) — **unblocked 2026-05-27 by Phase 6.1 closure**.
 
 ## Current Position
+
+**Phase 6.1 (Situation Room spec-complete) CLOSED & VERIFIED 2026-05-27.** Operator drill on Countermoves at `clarity-pack-1.0.0-rc.8.tgz` sha256 `23181e4a5dd054226465edb932382c42969b46fd4500f925f380d930f731763a` passed across all six paths: install/upgrade (uninstall + helper-equivalent reinstall; all historical CHT-* topics + TL;DRs survived ⇒ COEXIST #6 observed live), ROOM-09 (Open-chat engagement entry navigates to URL_HASH carrier decoding to `{"employee":"<uuid>"}`, auto-selects agent + populates topic strip, no forced New Topic dialog), ROOM-10 (artifact chips render inline on CEO card within 24h window; empty windows render no placeholder), ROOM-11 (idle agents read `No blockers`; engagement entry on every card; standalone `+ Create task` opens correctly-styled Cold Task dialog), and Plan 06.1-12 v2 parser hotfix (parseChatDeepLink accepts employee-only payloads — round-trip test GREEN + live click verified).
+
+**ROOM-09 + ROOM-10 + ROOM-11 flipped to Implemented in REQUIREMENTS.md.** ROADMAP.md Phase 6.1 row marked `[x] CLOSED & VERIFIED 2026-05-27`. v1 requirement coverage: 97/97 Implemented (all phases except Plan 05-10's rc → 1.0.0 transition + npm publish + BEAAA install). COEXIST #3 + #6 preserved by construction (additive plugin-namespace migration 0013; Phase 4.1 disable/enable rowcount drill 2026-05-22 covers by precedent). VERIFICATION: `phases/06.1-situation-room-spec-complete/06.1-VERIFICATION.md`.
+
+**User manual shipped** (`docs/user-manual.md` + 7 canonical screenshots in `docs/images/`, commits `fb3dc83` + `1fdef4d`). Targeted at existing Paperclip operators; covers all four surfaces (Reader, Situation Room, Daily Bulletin, Employee Chat), the Editor-Agent, the two cross-surface workflows (Open-chat engagement + Cold Task dialog), data persistence in the plugin-namespaced Postgres schema, and a troubleshooting table.
+
+**Lessons filed** (MemPalace `clarity_pack/runbook` + auto-memory):
+- `phase-6.1-closure-coexist11-skip` — when a phase's only schema delta is additive plugin-namespace AND a prior phase already passed the COEXIST drill AND the operator just performed an uninstall/install cycle whose data survival is observable in the UI, the COEXIST drill is preserved-by-construction and the psql/sudo rowcount block is wasteful. Cite "preserved by construction" in VERIFICATION.md.
+- `feedback_coexist-drill-skip-by-construction` — auto-memory rule for future phase closures.
+- Reinforced: `feedback_mempalace-before-vps-commands` — query MemPalace BEFORE recommending VPS commands, every time. Two near-misses caught this session.
+
+**Next:** Plan 05-10 (rc → 1.0.0 + npm publish + ALL-paths drill + Hostinger wipe-and-rebuild + BEAAA install).
+
+---
+
+## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
 **Plan 05-11 HOTFIX-2 (comment_id backfill + chip-click overflow-clip) SHIPPED 2026-05-26 — closure-pending-operator-drill against the new tarball.** Four atomic commits on master: `cda1dd2 fix(05-11-hotfix-2): backfill comment_id from chat_messages in chat.attachment.upload`, `4069491 fix(05-11-hotfix-2): wire AttachmentChip click -> DeliverablePreview popover (overflow-clip)`, `af25f81 chore(05-11-hotfix-2): repack clarity-pack-1.0.0.tgz`, and this STATE-update commit.
 
@@ -335,7 +353,7 @@ Tarball `clarity-pack-1.0.0-rc.5.tgz` (145,380 bytes; sha256 `b91048f84b2ca09691
 ---
 
 **Phase 4.2 — CLOSED & VERIFIED 2026-05-24 at v1.0.0-rc.2; addendum sub-plan 04.2-07 PLANNED 2026-05-25.**
-Plan: 2 of 10
+Plan: 1 of 4
 
 **Plan 04.2-04 (third gap-closure, v0.9.3) — CODE-COMPLETE 2026-05-24, OPERATOR DRILL DEFERRED.** Surgical dispatch fix in `chat/index.tsx`: lift `chat.roster` into `ChatPageBody` (parallel `usePluginData` call — host bridge deduplicates with `RosterRail`'s fetch; `normalizeRoster` + `RosterResult` promoted to `export` on `roster-rail.tsx` for the shared shape); in the deep-link `useEffect`, race-safe defer (`if (link.topic && link.employee && roster === null && rosterLoading) return;` — the deep link arrives at chat mount before chat.roster typically returns; the dep-array on `roster` re-fires the effect when it resolves); in the existing-topic dispatch branch, look up matched RosterEmployee + `setEmployee(matched)` BEFORE `setTopic`; replaced hardcoded `employeeAgentId: ''` with `employeeAgentId: link.employee ?? ''`. Tests pinned: Test 5 (DISPATCH — `setEmployee`, `employeeAgentId: link.employee`, chat.roster fetch in ChatPageBody) + Test 6 (DISPATCH-RACE — dep array carries `roster`). Suite 1327 → 1329 (+2 net). Version 0.9.3 in package.json + src/manifest.ts + chat-capabilities pin updated. Build: `dist/manifest.js` reports `version: '0.9.3'`. Tarball `clarity-pack-0.9.3.tgz` (139,766 bytes; sha256 `2b460abbc6850e50300bddf9eabe4a76d93d6cc31ff05d09fd42797c6ccd46f4`) packed and ready for SCP. Operator drill walkthrough preserved verbatim in 04.2-04-PLAN.md Task 5 for the post-Phase-5 sweep. SUMMARY: `04.2-04-SUMMARY.md`.
 
@@ -788,7 +806,7 @@ Carried-forward (non-blocking) recommendations:
 
 ---
 
-Phase: 05 (distribution-polish) — EXECUTING
+Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 **Plans:**
 
   - 02-01 PARTIAL — smoke spike (Linux Check B deferred — non-blocking, accepted)
@@ -799,7 +817,7 @@ Phase: 05 (distribution-polish) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to execute
+**Status:** Executing Phase 6.1
 **Progress:** [████████░░] 84%
 
 ## Performance Metrics
