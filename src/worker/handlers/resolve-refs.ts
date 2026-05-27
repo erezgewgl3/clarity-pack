@@ -122,14 +122,27 @@ export function registerResolveRefs(ctx: ResolveRefsCtx): void {
       }));
     }
     return await resolveRefs(ids, async (uniqueIds: string[]) => {
-      // 2026-05-27 BEAAA hotfix — paperclipai@2026.525.0 added URL-shape
-      // validation to ctx.http.fetch: relative paths now throw
-      // "Invalid URL: /api/companies/..." JsonRpcCallError. The earlier
-      // implementation relied on the host wrapper resolving relative paths
-      // against its own base URL; that contract is gone in 2026.525.0.
-      // Fix: prepend the absolute base URL from PAPERCLIP_API_URL env (set
-      // by the host on worker spawn), falling back to localhost:3100 (the
-      // documented default).
+      // 2026-05-27 BEAAA hotfix — paperclipai@2026.525.0 added two layers
+      // of restriction on ctx.http.fetch that the Plan 02-02 design didn't
+      // anticipate: (1) URL-shape validation rejects relative paths with
+      // "Invalid URL: /api/companies/..." JsonRpcCallError; (2) an SSRF
+      // mitigation blocks any absolute URL that resolves to a private /
+      // reserved IP range, including localhost / 127.0.0.1 — "All resolved
+      // IPs for localhost are in private/reserved ranges". Together they
+      // make calling our own host's /api/* via ctx.http.fetch impossible
+      // from a 2026.525.0 worker.
+      //
+      // The correct architectural fix is to use the typed SDK method
+      // ctx.issues.get(issueId, companyId) per id, in parallel. That's a
+      // larger refactor (PRIM-01 single-round-trip contract changes; the
+      // SDK exposes no bulk-by-key fetch). Deferred to a follow-up.
+      //
+      // For tonight: defensive degradation. Wrap the fetch + parse in
+      // try/catch. On throw, return an unresolved-but-shaped payload so
+      // the Reader still renders — chips show the raw key without inline
+      // title/status/owner enrichment. The Reader's "zero rabbit-holes"
+      // promise degrades; the alternative was "Clarity Pack: failed to
+      // render" with NO Reader content at all.
       const apiBase = (
         (typeof process !== 'undefined' && process.env?.PAPERCLIP_API_URL) ||
         'http://localhost:3100'
@@ -137,8 +150,26 @@ export function registerResolveRefs(ctx: ResolveRefsCtx): void {
       const url = `${apiBase}/api/companies/${encodeURIComponent(companyId)}/issues?ids=${uniqueIds
         .map(encodeURIComponent)
         .join(',')}`;
-      const resp = await ctx.http.fetch(url, { method: 'GET' });
-      const issues = (await resp.json()) as RawHostIssue[];
+      let issues: RawHostIssue[];
+      try {
+        const resp = await ctx.http.fetch(url, { method: 'GET' });
+        issues = (await resp.json()) as RawHostIssue[];
+      } catch (e) {
+        ctx.logger?.warn?.(
+          'resolve-refs: ctx.http.fetch failed (likely SSRF mitigation on 2026.525.0+); degrading to unresolved refs',
+          { err: (e as Error).message, count: uniqueIds.length },
+        );
+        return uniqueIds.map((id) => ({
+          id,
+          title: id,
+          status: 'unknown' as const,
+          ownerUserId: null,
+          bodyExcerptForViewer: null,
+          url: `/issues/${id}`,
+          descriptionExcerpt: null,
+          ownerName: null,
+        }));
+      }
 
       // Plan 05-05 D-09 — POST-fetch enrichment. PRIM-01 single-round-trip
       // preserved: the ONE ctx.http.fetch call above is the only host
