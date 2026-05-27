@@ -135,6 +135,34 @@ export function buildChatDeepLink(input) {
     return { to: appendHash(base, link), state: undefined };
   }
 
+  // Phase 6.1 HOTFIX (Plan 06.1-12) — Situation Room "Open chat with [Agent]"
+  // engagement entry. The Situation Room agent card needs a deep-link that:
+  //
+  //   - selects the agent on the chat roster (so the topic strip + context
+  //     rail reconcile to the right agent's data)
+  //   - does NOT auto-open the New Topic dialog (the agent likely has
+  //     existing topics the operator wants to continue, not start fresh)
+  //   - does NOT auto-switch to a specific topic (the operator picks from
+  //     the topic strip based on what they want to engage with)
+  //
+  // This route requires only `assigneeAgentId`. The encoded payload carries
+  // `{ employee: <id> }` -- no `newTopic`, no `topic`, no seeds. The
+  // chat-surface dispatch effect at chat/index.tsx detects this shape and
+  // calls setEmployee(matched) only (Plan 06.1-12 dispatch branch).
+  if (input.route === 'employee-only' && str(input.assigneeAgentId)) {
+    /** @type {ChatDeepLink} */
+    const link = {
+      topic: null,
+      comment: null,
+      employee: str(input.assigneeAgentId),
+      newTopic: false,
+      seedTitle: null,
+      seedBody: null,
+      originIssueId: null,
+    };
+    return { to: appendHash(base, link), state: undefined };
+  }
+
   return null;
 }
 

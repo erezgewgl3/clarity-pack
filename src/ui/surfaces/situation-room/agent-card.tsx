@@ -225,8 +225,21 @@ export function AgentCard({
     }
 
     // 2. Build and navigate to the chat deep-link.
+    //
+    // Plan 06.1-12 — `employee-only` route (NOT `new-topic-needed`). The
+    // earlier `new-topic-needed` choice auto-opened the New Topic dialog
+    // on every click, even when the agent already had topics the operator
+    // wanted to continue. Operator critique: "is it functionally correct
+    // that I continue the chat and it always wants to open a new topic?
+    // Shouldn't it bring me to the topic that I'm trying to unblock?"
+    //
+    // `employee-only` selects the agent on the chat roster but lets the
+    // operator pick from the topic strip -- existing thread to continue,
+    // or "+ New topic" header button if they want fresh. Blocker-direct
+    // routing (auto-select the chain-leaf topic) is Phase 6.2 (needs
+    // per-card async chat.openForIssue pre-resolution).
     const deepLink = buildChatDeepLink({
-      route: 'new-topic-needed',
+      route: 'employee-only',
       companyPrefix,
       assigneeAgentId: agentIdForOwnership,
     });

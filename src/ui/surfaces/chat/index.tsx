@@ -457,6 +457,26 @@ function ChatPageBody({
           }
         }, 600);
       }
+    } else if (link.employee && roster) {
+      // Plan 06.1-12 — employee-only deep-link branch. Situation Room "Open
+      // chat with [Agent]" lands here: select the agent on the roster, do
+      // NOT auto-open the New Topic dialog, do NOT auto-switch to a topic.
+      // The operator sees the agent's full topic list and picks what to
+      // engage with -- existing thread to continue, or "+ New topic" if
+      // they want a fresh conversation. Closes the operator critique from
+      // the Plan 06.1-11 closure drill: "is it functionally correct that
+      // I continue the chat and it always wants to open a new topic?
+      // Shouldn't it bring me to the topic that I'm trying to unblock?"
+      //
+      // The blocker-direct routing (auto-select the topic that wraps the
+      // chain leaf issue) requires async pre-resolution via
+      // chat.openForIssue per blocked card -- deferred to Phase 6.2. For
+      // v1.0, landing on the topic list with the agent selected is the
+      // right zero-rabbit-holes default: one click from the dashboard
+      // gets the operator to the right conversation surface; one more
+      // click in the topic strip picks the right thread.
+      const matched = roster.find((e) => e.id === link.employee);
+      if (matched) setEmployee(matched);
     }
 
     // Plan 05-07 Task 2 (D-13) — the URL_HASH fragment is now LEFT IN PLACE

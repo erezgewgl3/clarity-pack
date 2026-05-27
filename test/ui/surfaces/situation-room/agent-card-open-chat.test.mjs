@@ -116,9 +116,20 @@ test('Plan 06.1-11: click guards against the UNOWNED_SENTINEL value before dispa
   assert.match(SOURCE, /agentIdForOwnership\s*!==\s*UNOWNED_SENTINEL/);
 });
 
-test('Plan 06.1-11: click navigates via buildChatDeepLink({route: new-topic-needed, ...})', () => {
-  assert.match(SOURCE, /buildChatDeepLink\(\{[\s\S]*?route:\s*['"`]new-topic-needed['"`]/);
+test('Plan 06.1-12: click navigates via buildChatDeepLink({route: employee-only, ...})', () => {
+  // Plan 06.1-11 originally used `new-topic-needed`; Plan 06.1-12 swapped
+  // to `employee-only` so the chat surface lands with the agent selected
+  // but does NOT force-open the New Topic dialog (operator critique).
+  assert.match(SOURCE, /buildChatDeepLink\(\{[\s\S]*?route:\s*['"`]employee-only['"`]/);
   assert.match(SOURCE, /assigneeAgentId:\s*agentIdForOwnership/);
+  // Confirm the OLD `new-topic-needed` literal isn't passed to
+  // buildChatDeepLink (it may appear in comments referencing the
+  // historical pivot, but not as an active route argument).
+  assert.equal(
+    (SOURCE.match(/route:\s*['"`]new-topic-needed['"`]/g) || []).length,
+    0,
+    'agent-card.tsx must not pass route:new-topic-needed (Plan 06.1-12 swap to employee-only)',
+  );
 });
 
 test('Plan 06.1-11: navigate() is called with deepLink.to (URL_HASH carrier)', () => {

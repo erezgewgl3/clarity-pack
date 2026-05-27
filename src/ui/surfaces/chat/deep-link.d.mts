@@ -44,7 +44,11 @@ export interface ChatDeepLinkNav {
 }
 
 export interface BuildChatDeepLinkInput {
-  route: 'existing-topic' | 'new-topic-needed';
+  /** Plan 06.1-12 — `employee-only` route added for Situation Room
+   *  "Open chat with [Agent]" engagement entry: selects the agent on
+   *  the chat roster WITHOUT auto-opening the New Topic dialog or
+   *  auto-switching to a specific topic. */
+  route: 'existing-topic' | 'new-topic-needed' | 'employee-only';
   companyPrefix: string;
   topicIssueId?: string;
   sourceCommentId?: string;
