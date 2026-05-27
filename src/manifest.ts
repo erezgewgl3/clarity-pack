@@ -386,6 +386,17 @@ const manifest: PaperclipPluginManifestV1 = {
     // Plan 02-04 Task 2 — required for the recompute-situation 60s job
     // declared in jobs[] below (PLUGIN_SPEC §17).
     'jobs.schedule',
+    // 2026-05-27 BEAAA hotfix — paperclipai@2026.525.0 added explicit
+    // capability enforcement for ctx.http.fetch (previously implicit /
+    // ungated). The resolve-refs worker handler (Reader inline reference
+    // resolution) calls ctx.http.fetch to query the host's
+    // /api/issues/<key> endpoint; without this capability the call is
+    // rejected with CAPABILITY_DENIED → 502 → Reader error boundary
+    // surfaces "Clarity Pack: failed to render". This was invisible on
+    // Countermoves (older paperclipai version) and surfaced on AriClaw's
+    // 2026.525.0 install. PR #6547 (invocation-scope hardening) was the
+    // companion change; this is its capability-enforcement sibling.
+    'http.outbound',
     // Plan 03-01 — Daily Bulletin. issues.create lets the compile pipeline
     // (Plan 03-02) persist each bulletin as a canonical Paperclip issue
     // (D-16); issue.comments.create lets Plan 03-04 append errata as a
