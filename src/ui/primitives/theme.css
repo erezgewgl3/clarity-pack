@@ -822,6 +822,37 @@
   cursor: not-allowed;
 }
 
+/* Plan 06.1-11 — agent-card Open-chat button (engagement entry point).
+ * Mirrors the Take-Ownership button's gold styling (primary action),
+ * but anchored to the bottom of the card via margin-top:auto so buttons
+ * align across the grid regardless of card body content height (the
+ * CEO card with artifact chips no longer pushes its button lower than
+ * the CMO/Editor cards without chips). */
+[data-clarity-surface='situation-room'] .clarity-open-chat-btn {
+  margin-top: auto;
+  margin-inline: 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--clarity-you);
+  color: var(--clarity-you);
+  background: transparent;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+
+[data-clarity-surface='situation-room'] .clarity-open-chat-btn:hover {
+  background: var(--clarity-you-soft);
+}
+
+[data-clarity-surface='situation-room'] .clarity-open-chat-btn:disabled,
+[data-clarity-surface='situation-room'] .clarity-open-chat-btn[aria-busy='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 [data-clarity-surface='situation-room'] .clarity-convert-to-task-btn {
   border: 1px solid var(--clarity-line);
   color: var(--clarity-fg);

@@ -30,38 +30,54 @@
 //
 //   B) Blocked + unclaimed (HUMAN_ACTION_ON.__unowned__ with real edges):
 //      Render body as "Nobody is handling [role]'s blockers" — voice-
-//      aligned with the "Take responsibility" affordance (Plan 06.1-08
-//      language polish). The worker's terminal.label is overridden
-//      here because the Critical Path strip's voice ("Awaiting action:
-//      ... has no owner assigned") doesn't compose naturally on the
-//      agent card where the user is being asked to assume responsibility.
+//      aligned with the engagement affordance (Plan 06.1-08 language
+//      polish). The worker's terminal.label is overridden here because
+//      the Critical Path strip's voice ("Awaiting action: ... has no
+//      owner assigned") doesn't compose naturally on the agent card.
 //
-//   C) Take-Responsibility button (Plan 06.1-09 — ROOM-09 UI tier):
-//      Conditional on terminal.kind === 'HUMAN_ACTION_ON' &&
-//      terminal.userId === '__unowned__'. Shown on BOTH idle and
-//      blocked unclaimed states (operator's Plan 06.1-10 decision
-//      "option b" — proactive claim). Dispatches the same
-//      agent.takeOwnership action handler the Critical Path button
-//      uses (Plan 06.1-01 worker tier), keyed on employee.agentId
-//      (Plan 06.1-09 — the canonical id that the snapshot job's
-//      ownerMap consults; see EmployeeSnapshot.agentId docstring in
-//      situation-snapshot.ts:52).
+//   C) Open-chat button (Plan 06.1-11 — engagement entry point):
+//      ALWAYS rendered. The agent card is the dashboard view; chat is
+//      the engagement surface. Clicking writes the side-table
+//      ownership row as a fire-and-forget side effect (engagement =
+//      implicit "I will handle this agent's escalations") AND
+//      navigates to /<companyPrefix>/chat with a new-topic-needed
+//      deep-link payload pre-selecting this agent. Operator pivot
+//      from the Plan 06.1-09 "Take-Responsibility" verb -- the
+//      data-layer claim alone offered no visible engagement, which
+//      violated the zero-rabbit-holes core value (every chain should
+//      end in a clickable action, not a write-and-wait verb).
 //
 // Visual fidelity target: sketches/paperclip-fix-situation-room.html agent cards.
 
 import * as React from 'react';
-import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
+import {
+  usePluginAction,
+  useHostLocation,
+  useHostNavigation,
+} from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { StatePill, type StatePillState } from '../../primitives/state-pill.tsx';
 import { formatAge, humaniseState } from '../../primitives/state-pill-format.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { useToast } from '../../primitives/toast.tsx';
+import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
+import { buildChatDeepLink } from '../chat/deep-link.mjs';
 import type { BlockerChainResult } from '../../../shared/types.ts';
 import { Sparkline } from './sparkline.tsx';
 import { ArtifactChipRow, type Artifact } from './artifact-chip-row.tsx';
 
 /** D-13 — locked sentinel for an unowned HUMAN_ACTION_ON terminal. */
 const UNOWNED_SENTINEL = '__unowned__';
+
+/** Capitalize agent role for the button label (`ceo` -> `CEO`,
+ *  `editor` -> `Editor`). The card header renders the role as-is
+ *  for design fidelity; the button label uses a more polished form
+ *  because it appears inline as a sentence-shaped CTA. */
+function formatRoleForLabel(role: string): string {
+  if (!role) return 'agent';
+  if (role.length <= 3) return role.toUpperCase();
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
 
 export type AgentEmployee = {
   userId: string;
@@ -126,8 +142,10 @@ export function AgentCard({
    *  popover that the chip click opens. Optional for back-compat. */
   companyId?: string;
   userId?: string;
-  /** Plan 06.1-09 — called after a successful Take-Responsibility claim
-   *  so the parent can force-refetch the situation.snapshot query. */
+  /** Plan 06.1-11 — called after the side-table ownership write fires
+   *  (fire-and-forget side effect of the Open-chat click). Allows the
+   *  parent to force-refetch the situation.snapshot query so the chain
+   *  re-resolves immediately on next-snapshot cycle. */
   onTakeOwnershipSuccess?: () => void;
 }): React.ReactElement {
   const state = normaliseState(employee.state);
@@ -142,50 +160,94 @@ export function AgentCard({
   // only the start node, no edges traversed.
   const hasBlockers = pathLength > 1;
 
-  // Plan 06.1-09 — Take-Responsibility button visibility. Renders on
-  // HUMAN_ACTION_ON.__unowned__ terminals regardless of whether there
-  // are active blockers (operator's Plan 06.1-10 option b: pre-designate
-  // responsibility so future escalations route correctly).
-  const isUnclaimed =
-    terminal?.kind === 'HUMAN_ACTION_ON' && terminal.userId === UNOWNED_SENTINEL;
-
-  // Take-Ownership dispatch wiring (mirrors critical-path-strip.tsx).
+  // Phase 6.1 HOTFIX (Plan 06.1-11) — engagement entry point.
+  //
+  // The primary action on an agent card is NOT "claim ownership of this
+  // agent" (the verb the operator pushed back on -- "claim" sounds like
+  // grabbing property, and a side-table write alone offers no visible
+  // engagement). The primary action is "open chat with this agent."
+  //
+  // Chat is the surface where the operator actually engages: reviews
+  // current work, walks through blockers, gives directions. The
+  // Situation Room is the dashboard that ROUTES to engagement.
+  //
+  // Click semantics:
+  //   1. Fire-and-forget write to clarity_agent_owners via
+  //      agent.takeOwnership -- captures the implicit intent ("I am
+  //      engaging with this agent, so route escalations to me").
+  //      Errors are swallowed; the chat navigation is the primary
+  //      action and stays robust even if the side-table write fails.
+  //   2. Navigate to /<companyPrefix>/chat with a new-topic-needed
+  //      deep-link payload (Plan 04.2-03 URL_HASH carrier) that
+  //      pre-selects this agent on the chat surface. Operator types
+  //      their first message; the conversation starts; the ownership
+  //      row is already in place by then.
+  //
+  // For v1.0, every click goes to new-topic-needed regardless of
+  // whether the agent has a current blocker. Operator lands in the
+  // chat with the agent selected; the agent's topic list shows
+  // existing threads (including the blocker thread if any) and the
+  // operator picks which to engage with. Phase 6.2 will add
+  // blocker-direct routing (resolve the chain leaf via chat.openForIssue
+  // and pre-select the blocker thread automatically) -- that needs
+  // eager async pre-resolution per card, out of scope for v1.0 ship.
   const viewerUserId = useResolvedUserId();
   const { showToast } = useToast();
   const takeOwnership = usePluginAction('agent.takeOwnership');
-  const [claiming, setClaiming] = React.useState(false);
-  const takeOwnershipDisabled = !viewerUserId || claiming;
+  const { pathname } = useHostLocation();
+  const { navigate } = useHostNavigation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
+  const [opening, setOpening] = React.useState(false);
   const agentIdForOwnership = employee.agentId ?? employee.userId;
+  const roleLabel = formatRoleForLabel(employee.role);
 
-  const onClaim = React.useCallback(async () => {
-    if (!viewerUserId || claiming) return;
-    if (!agentIdForOwnership || agentIdForOwnership === UNOWNED_SENTINEL) return;
-    setClaiming(true);
-    try {
-      const result = (await takeOwnership({
+  const onOpenChat = React.useCallback(async () => {
+    if (opening) return;
+    setOpening(true);
+
+    // 1. Fire-and-forget side-table write (engagement = implicit
+    //    ownership). Errors are swallowed; the chat navigation is the
+    //    primary action.
+    if (
+      viewerUserId &&
+      agentIdForOwnership &&
+      agentIdForOwnership !== UNOWNED_SENTINEL
+    ) {
+      takeOwnership({
         companyId: companyId ?? '',
         agentId: agentIdForOwnership,
         ownerUserId: viewerUserId,
         userId: viewerUserId,
-      })) as { ok?: boolean; error?: string } | null;
-      if (result && result.ok) {
-        showToast({ message: 'Responsibility taken' });
-        if (onTakeOwnershipSuccess) onTakeOwnershipSuccess();
-      } else {
-        showToast({ message: 'Could not take responsibility — try again' });
-      }
-    } catch {
-      showToast({ message: 'Could not take responsibility — try again' });
-    } finally {
-      setClaiming(false);
+      }).catch(() => {
+        // Silent failure; chat opens regardless.
+      });
+      if (onTakeOwnershipSuccess) onTakeOwnershipSuccess();
     }
+
+    // 2. Build and navigate to the chat deep-link.
+    const deepLink = buildChatDeepLink({
+      route: 'new-topic-needed',
+      companyPrefix,
+      assigneeAgentId: agentIdForOwnership,
+    });
+    if (deepLink) {
+      navigate(deepLink.to);
+    } else {
+      showToast({ message: `Could not open chat with ${roleLabel}` });
+      setOpening(false);
+    }
+    // On successful navigate, the AgentCard unmounts as the route
+    // changes -- no need to setOpening(false) in the success branch.
   }, [
+    opening,
     viewerUserId,
-    claiming,
     agentIdForOwnership,
     takeOwnership,
     companyId,
+    companyPrefix,
+    navigate,
     showToast,
+    roleLabel,
     onTakeOwnershipSuccess,
   ]);
 
@@ -201,14 +263,17 @@ export function AgentCard({
         <span className="clarity-agent-terminal-label">No blockers</span>
       </p>
     );
-  } else if (isUnclaimed) {
+  } else if (
+    terminal.kind === 'HUMAN_ACTION_ON' &&
+    terminal.userId === UNOWNED_SENTINEL
+  ) {
     // Plan 06.1-08 — blocked + unclaimed. Override the worker's
     // "X has no owner assigned" label with the voice-aligned body
-    // that matches the Take-Responsibility button.
+    // that pairs naturally with the Open-chat affordance.
     terminalBlock = (
       <p className="clarity-agent-terminal" data-terminal-kind={terminal.kind}>
         <span className="clarity-agent-terminal-kind">{terminal.kind.replace(/_/g, ' ')}</span>
-        <span className="clarity-agent-terminal-label">{`Nobody is handling ${employee.role}'s blockers`}</span>
+        <span className="clarity-agent-terminal-label">{`Nobody is handling ${roleLabel}'s blockers`}</span>
       </p>
     );
   } else {
@@ -237,19 +302,21 @@ export function AgentCard({
         userId={userId ?? ''}
       />
       {terminalBlock}
-      {isUnclaimed ? (
-        <button
-          type="button"
-          className="clarity-take-ownership-btn"
-          onClick={onClaim}
-          disabled={takeOwnershipDisabled}
-          aria-busy={claiming || undefined}
-          title={viewerUserId ? undefined : 'Sign in to claim ownership'}
-        >
-          {claiming ? 'Taking responsibility…' : 'Take responsibility'}
-        </button>
-      ) : null}
       <Sparkline values={employee.velocity_7d} />
+      {/* Plan 06.1-11 — engagement entry point. Always rendered. Clicking
+       *  writes the side-table ownership row (fire-and-forget side effect)
+       *  AND navigates to the chat surface with this agent pre-selected.
+       *  Anchored to the bottom of the card via .clarity-agent-card's
+       *  flex-column layout + margin-top:auto on the button class. */}
+      <button
+        type="button"
+        className="clarity-open-chat-btn"
+        onClick={onOpenChat}
+        disabled={opening}
+        aria-busy={opening || undefined}
+      >
+        {opening ? 'Opening…' : `Open chat with ${roleLabel}`}
+      </button>
     </div>
   );
 }
