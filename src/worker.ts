@@ -345,26 +345,27 @@ const plugin = definePlugin({
     registerSituationArtifacts(ctx as unknown as SituationArtifactsCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
-    // Reconcile at boot for every company currently visible to the plugin.
-    // Idempotent — re-running on an already-resolved agent returns the same
-    // resolution row with status='resolved'.
-    try {
-      const companies = await ctx.companies.list();
-      for (const c of companies) {
-        try {
-          await reconcileEditorAgent(ctx as unknown as EditorAgentReconcileCtx, c.id);
-        } catch (err) {
-          ctx.logger?.warn?.('Editor-Agent reconcile failed at boot for company', {
-            companyId: c.id,
-            err: (err as Error).message,
-          });
-        }
-      }
-    } catch (err) {
-      ctx.logger?.warn?.('Editor-Agent boot reconcile skipped — companies.list failed', {
-        err: (err as Error).message,
-      });
-    }
+    //
+    // 2026-05-28 — REMOVED the boot-time `ctx.companies.list()` +
+    // reconcile-all-companies loop. Paperclip PR #6547 (shipped in
+    // paperclipai@2026.525.0) requires every worker->host call to carry a
+    // valid invocationId from an active host->worker invocation (parked in
+    // AsyncLocalStorage). A call issued at worker BOOT runs outside any
+    // invocation, so `ctx.companies.list()` was rejected on every startup
+    // with "the worker referenced a missing, expired, or unknown invocation
+    // scope" — caught and warned, but noisy and non-functional (the loop
+    // body never ran).
+    //
+    // The loop was also fully REDUNDANT. The Editor-Agent is reconciled —
+    // inside valid invocation scopes — by all three of:
+    //   - the per-event handler below (issue.created/updated/comment.created),
+    //   - the company.created handler below (new companies), and
+    //   - the compile-bulletin scheduled job, which reconciles per company at
+    //     cycle start (src/worker/jobs/compile-bulletin.ts — ctx.agents.managed
+    //     .reconcile(EDITOR_AGENT_KEY, company.id)).
+    // So no boot-time reconcile is needed; removing it eliminates the
+    // invocation-scope boot warning with zero behavioral change. Verified on
+    // BEAAA (2026-05-28): TL;DR compiles + bulletin cycles succeed without it.
 
     // Reconcile on company creation so new companies get the Editor-Agent
     // without a plugin restart.
