@@ -14,6 +14,7 @@
 - [x] **Phase 4.1: Chat → True Task** *(inserted 2026-05-19 from Phase 4 live drilling)* - Operator-initiated true-task creation from chat (a real, **assigned**, tracked, findable issue — not today's agent-messages-only unassigned `Promote`) + fix the chat-topic/agent-task-lifecycle collision so multi-turn conversation reliably re-wakes the agent and runtime bookkeeping no longer leaks into the thread. Problem statement: `phases/04-employee-chat/04-FOLLOWUP-chat-true-task.md`. Operator-designated immediate priority after Phase 4. **CLOSED & VERIFIED 2026-05-22** — 8/8 CTT requirements Implemented; coexistence closure drill PASS on live Countermoves; final version 0.8.4. 11 plans (UI took 4 gap-closure iterations 06→08→09→10 + cross-phase patch 11).
 - [ ] **Phase 5: Distribution & Polish** — npm publish, README + runbook reference, AC auto-status promotion, full-fidelity previewers, lockfile + a11y + visual-regression in CI. Plan 05-10 (rc → 1.0.0 + npm publish + ALL-paths drill) **unblocked 2026-05-27** by Phase 6.1 closure.
 - [x] **Phase 6.1: Situation Room spec-complete** — **CLOSED & VERIFIED 2026-05-27.** Owner-resolution at the Critical Path leaf via plugin-namespace `clarity_agent_owners` side table + `agent.takeOwnership` write path; per-agent inline artifact chips via `situation.artifacts` (deliverables ∪ chat attachments, 24h sliding); engagement entry on every agent card (`Open chat with [Role]`, renamed from "Take responsibility" per operator critique); standalone `+ Create task` header button (CSS scope broadened to `[data-clarity-surface]` per `1b11649`). Plan 06.1-12 v2 parser hotfix (`parseChatDeepLink` accepts employee-only payloads) verified live. Operator drill on Countermoves with `clarity-pack-1.0.0-rc.8.tgz` sha256 `23181e4a…` — all six paths PASS. ROOM-09/10/11 flipped to Implemented. COEXIST #3 + #6 preserved by construction (additive migration 0013; Phase 4.1 disable/enable drill 2026-05-22 covers by precedent + today's uninstall/install observed all historical CHT-* topics + TL;DRs surviving). VERIFICATION: `phases/06.1-situation-room-spec-complete/06.1-VERIFICATION.md`. **v1.0.0 ship gate cleared.**
+- [ ] **Phase 7: Clarity-surfaces quality + portability** — make the four surfaces instance-agnostic + genuinely insightful. 5 discuss-gated chunks (Eric locked order of pain): (1) ref-resolution fix + (2) de-BEAAA worker ref-extraction + 2 UI labels [PREREQUISITE — planned, `07-01-PLAN.md`]; (3) TL;DR cleanup; (4) Situation Room org-level blocked backlog; (5) bulletin lineage. Items 3-5 each get their own discuss gate before planning. v1.0.0 (no version bump for the prerequisite chunk).
 
 ## Phase Details
 
@@ -325,13 +326,14 @@ Per the research synthesis, three conflicts must be resolved before Phase 2 code
 
 ### Phase 7: Clarity-surfaces quality and portability: instance-agnostic ref-resolution, TL;DR cleanup, Situation Room blocked backlog, and bulletin lineage
 
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 6
-**Plans:** 0 plans
+**Goal:** The four Clarity Pack surfaces are genuinely insightful and fully instance-agnostic (work on ANY Paperclip instance, not just BEAAA). Planned in 5 discuss-gated chunks; the prerequisite chunk (items 1+2) ships first because the SDK ref-resolver it builds also unblocks item 3 TL;DR titles and is the portability fix.
+**Requirements**: READER-03, READER-04 (prerequisite chunk fixes cross-reference resolution + portability across the Reader/Chat surfaces; no new requirement IDs minted). Items 3-5 may coin new IDs at their own discuss gates.
+**Depends on:** Phase 6.1
+**Plans:** 1 plan (prerequisite chunk; items 3-5 planned in later passes)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 7 to break down)
+- [ ] 07-01-PLAN.md — Ref-resolution fix (both worker paths: issue.reader inline fetcher + resolve-refs handler) via SDK ctx.issues.get + list-and-match fallback; de-BEAAA both extraction regexes (issue-reader REF_PATTERN + editor.extractRefsFromBody) via shared prefixFromIdentifier; 2 hardcoded UI labels swapped to the resolved company displayName. Wave 1, autonomous (live BEAAA Playwright drill operator-gated). No version bump, no migration, no new deps. (READER-03, READER-04)
+- [ ] TBD — item 3 (TL;DR cleanup), item 4 (Situation Room blocked backlog), item 5 (bulletin lineage), each after its own /gsd:discuss-phase gate.
 
 ---
 *Roadmap defined: 2026-05-07*
