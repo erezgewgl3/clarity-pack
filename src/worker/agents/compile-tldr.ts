@@ -103,6 +103,15 @@ export type CompileTldrArgs = {
   llm?: LlmAdapter;
 };
 
+/**
+ * Delivery-layer rework (2026-05-28) — exported so the cross-tick TL;DR START
+ * step (editor.ts heartbeat) and the drainer build the same prompt the
+ * synchronous `compileTldr` builds. Reads only surface / scopeId / inputs.
+ */
+export function buildTldrPrompt(args: CompileTldrArgs): string {
+  return buildPrompt(args);
+}
+
 function buildPrompt(args: CompileTldrArgs): string {
   // Minimal v1 prompt. Phase 3 will tune for Bulletin/Situation Room voice
   // ("Editorial Desk" persona). Kept short here so input tokens stay well
@@ -133,7 +142,19 @@ function buildPrompt(args: CompileTldrArgs): string {
  * JSON-stringified blob produce the same hash, regardless of insertion order.
  * (We sort keys at the top level for stability.)
  */
-function contentHashFor(args: CompileTldrArgs): string {
+/**
+ * Build the deterministic content hash for a (surface, scopeId, inputs) triple.
+ *
+ * Delivery-layer rework (2026-05-28) — exported as `tldrContentHash` so the
+ * cross-tick drainer (which re-reads the issue inputs to key the cache) computes
+ * the SAME hash the heartbeat compile used. Reads only surface / scopeId /
+ * inputs, so the full `CompileTldrArgs` structurally satisfies it.
+ */
+export function tldrContentHash(args: {
+  surface: TldrRow['surface'];
+  scopeId: string;
+  inputs: { body: string; comments: string[]; refs: string[] };
+}): string {
   const canonical = JSON.stringify({
     surface: args.surface,
     scopeId: args.scopeId,
@@ -144,23 +165,40 @@ function contentHashFor(args: CompileTldrArgs): string {
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
+function contentHashFor(args: CompileTldrArgs): string {
+  return tldrContentHash(args);
+}
+
 /**
- * Compile a TL;DR for one (surface, scopeId, inputs) triple. Cache hit on
- * identical inputs returns the cached row without invoking the LLM (EDITOR-03).
- * Token-cap breach throws BEFORE the LLM call (EDITOR-05). LLM errors / output
- * schema failures count toward the circuit breaker (D-06).
+ * Delivery-layer rework (2026-05-28) — the "prepare" half of compileTldr,
+ * everything up to (but not including) the LLM call: the EDITOR-03 cache check
+ * and the EDITOR-05 token-cap gate. Shared by the synchronous `compileTldr` AND
+ * the cross-tick heartbeat START step (editor.ts) so neither duplicates the
+ * cache/cap logic.
+ *
+ *   - `cache-hit` — a fresh cached row exists; the caller returns it (no compile).
+ *   - `capped`    — the prompt exceeds MAX_TOKENS; recordFailure has ALREADY
+ *                   fired (EDITOR-05). The caller skips (heartbeat) or throws
+ *                   (compileTldr) — no LLM/agent call.
+ *   - `compile`   — proceed: `prompt` + `contentHash` are returned for the caller
+ *                   to deliver to the agent + key the resulting cache row.
  */
-export async function compileTldr(
+export type PrepareTldrResult =
+  | { kind: 'cache-hit'; tldr: TldrRow }
+  | { kind: 'capped'; inputTokens: number }
+  | { kind: 'compile'; prompt: string; contentHash: string };
+
+export async function prepareTldrCompile(
   ctx: CompileTldrCtx,
   args: CompileTldrArgs,
-): Promise<TldrRow> {
+): Promise<PrepareTldrResult> {
   const contentHash = contentHashFor(args);
 
   // EDITOR-03: check cache by (surface, scope_id). If the most-recent row's
   // hash matches, return it without an LLM call.
   const cached = await getTldrByScope(ctx, args.surface, args.scopeId);
   if (cached && cached.content_hash === contentHash) {
-    return cached;
+    return { kind: 'cache-hit', tldr: cached };
   }
 
   // EDITOR-05: enforce cap BEFORE invoking the LLM, not after.
@@ -173,32 +211,34 @@ export async function compileTldr(
       companyId: args.companyId,
       reason: `input_tokens=${inputTokens} exceeds MAX_TOKENS=${MAX_TOKENS}`,
     });
-    throw new Error(`Editor-Agent input exceeds max_tokens cap (${inputTokens} > ${MAX_TOKENS})`);
+    return { kind: 'capped', inputTokens };
   }
 
-  // Resolve adapter (arg override > ctx.llm). No fallback to a global — we
-  // want the call to fail loudly during wiring if production forgot to plumb it.
-  const llm = args.llm ?? ctx.llm;
-  if (!llm) {
-    throw new Error('Editor-Agent compileTldr called without an LLM adapter wired into ctx.llm');
-  }
+  return { kind: 'compile', prompt, contentHash };
+}
 
-  let body: string;
+/**
+ * Delivery-layer rework (2026-05-28) — the "finalize" half of compileTldr: turn a
+ * RAW agent result body into a validated, cached TldrRow. Shared by the
+ * synchronous `compileTldr`, the cross-tick heartbeat (immediate-ready), and the
+ * drainer (a later tick). Output-schema failures count toward the D-06 breaker
+ * (recordFailure + throw — the caller skips). A clean body resets the breaker
+ * counter and is upserted with the EDITOR-04 self-loop tag.
+ */
+export async function finalizeTldr(
+  ctx: CompileTldrCtx,
+  args: {
+    surface: TldrRow['surface'];
+    scopeId: string;
+    contentHash: string;
+    body: string;
+    agentKey: string;
+    agentId: string;
+    companyId: string;
+  },
+): Promise<TldrRow> {
   try {
-    body = await llm.complete({ maxTokens: MAX_TOKENS, prompt });
-  } catch (err) {
-    await recordFailure(ctx, {
-      agentKey: args.agentKey,
-      agentId: args.agentId,
-      companyId: args.companyId,
-      reason: `llm_error: ${(err as Error).message}`,
-    });
-    throw err;
-  }
-
-  // Output schema validation. Failures count toward circuit breaker.
-  try {
-    validateLlmOutput(body);
+    validateLlmOutput(args.body);
   } catch (err) {
     await recordFailure(ctx, {
       agentKey: args.agentKey,
@@ -214,13 +254,65 @@ export async function compileTldr(
   const tldr: TldrRow = {
     surface: args.surface,
     scope_id: args.scopeId,
-    content_hash: contentHash,
-    body,
+    content_hash: args.contentHash,
+    body: args.body,
     generated_at: new Date().toISOString(),
-    source_revisions: [contentHash],
+    source_revisions: [args.contentHash],
     compiled_by_agent_id: EDITOR_AGENT_ID_TAG,
     tags: [EDITOR_WRITE_TAG], // D-04 self-loop filter tag
   };
   await upsertTldr(ctx, tldr);
   return tldr;
+}
+
+/**
+ * Compile a TL;DR for one (surface, scopeId, inputs) triple. Cache hit on
+ * identical inputs returns the cached row without invoking the LLM (EDITOR-03).
+ * Token-cap breach throws BEFORE the LLM call (EDITOR-05). LLM errors / output
+ * schema failures count toward the circuit breaker (D-06).
+ *
+ * The synchronous form (one invocation holds the whole agent round-trip) is
+ * retained for tests + any caller that wants a single-call compile; the
+ * PRODUCTION heartbeat path (editor.ts) instead uses prepareTldrCompile +
+ * startAgentTask + finalizeTldr across ticks so no invocation outlives its scope.
+ */
+export async function compileTldr(
+  ctx: CompileTldrCtx,
+  args: CompileTldrArgs,
+): Promise<TldrRow> {
+  const prep = await prepareTldrCompile(ctx, args);
+  if (prep.kind === 'cache-hit') return prep.tldr;
+  if (prep.kind === 'capped') {
+    throw new Error(`Editor-Agent input exceeds max_tokens cap (${prep.inputTokens} > ${MAX_TOKENS})`);
+  }
+
+  // Resolve adapter (arg override > ctx.llm). No fallback to a global — we
+  // want the call to fail loudly during wiring if production forgot to plumb it.
+  const llm = args.llm ?? ctx.llm;
+  if (!llm) {
+    throw new Error('Editor-Agent compileTldr called without an LLM adapter wired into ctx.llm');
+  }
+
+  let body: string;
+  try {
+    body = await llm.complete({ maxTokens: MAX_TOKENS, prompt: prep.prompt });
+  } catch (err) {
+    await recordFailure(ctx, {
+      agentKey: args.agentKey,
+      agentId: args.agentId,
+      companyId: args.companyId,
+      reason: `llm_error: ${(err as Error).message}`,
+    });
+    throw err;
+  }
+
+  return finalizeTldr(ctx, {
+    surface: args.surface,
+    scopeId: args.scopeId,
+    contentHash: prep.contentHash,
+    body,
+    agentKey: args.agentKey,
+    agentId: args.agentId,
+    companyId: args.companyId,
+  });
 }

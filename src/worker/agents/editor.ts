@@ -22,16 +22,31 @@
 import type { PluginIssuesClient } from '@paperclipai/plugin-sdk';
 
 import { filterSelfLoopEvents, EDITOR_WRITE_TAG } from './self-loop-filter.ts';
-import { compileTldr, EDITOR_AGENT_ID_TAG } from './compile-tldr.ts';
-// Plan 03-06 — production LLM invocation via the operation-issue handoff (the
-// same delivery layer the bulletin compile uses). Plan 03-05's session-backed
-// adapter is superseded: the host discards the session prompt (PR #3106), so
-// the Reader's stuck "Compiling TL;DR…" was the same broken path. The TL;DR
-// compile prompt is now delivered as an operation issue
-// (originKind plugin:clarity-pack:operation:tldr-compile).
 import {
-  deliveryLlmAdapter,
+  compileTldr,
+  prepareTldrCompile,
+  finalizeTldr,
+  tldrContentHash,
+  EDITOR_AGENT_ID_TAG,
+} from './compile-tldr.ts';
+import { getTldrByScope } from '../db/tldr-cache.ts';
+// Plan 03-06 — production LLM invocation via the operation-issue handoff (the
+// same delivery layer the bulletin compile uses). The TL;DR compile prompt is
+// delivered as an operation issue (originKind
+// plugin:clarity-pack:operation:tldr-compile).
+//
+// Delivery-layer rework (2026-05-28) — the synchronous in-invocation 5-min poll
+// (deliveryLlmAdapter → compileTldr) is replaced by a cross-tick flow: the
+// heartbeat does startAgentTask + ONE immediate pollAgentTaskResult (warm agent
+// → finalize now), and a drainer (run from the compile-bulletin job) consumes a
+// slow agent's result on a LATER tick. No invocation outlives its host-validity
+// window (paperclipai@2026.525.0 expires it mid-poll — PR #6547).
+import {
+  startAgentTask,
+  pollAgentTaskResult,
+  AGENT_TASK_DELIVERY_TIMEOUT,
   OPERATION_ORIGIN_KIND_PREFIX,
+  operationOriginKind,
   type AgentTaskDeliveryCtx,
 } from './agent-task-delivery.ts';
 
@@ -189,30 +204,56 @@ export async function handleEditorHeartbeat(
       }
 
       const comments = await ctx.issues.listComments(issueId, payload.companyId);
-      const refs = extractRefsFromBody(issue.description ?? undefined);
-      // Plan 03-06 — build the operation-issue-backed adapter PER ISSUE: the
-      // operationId must be unique per TL;DR scope so the idempotency search
-      // never collapses two different issues' compiles onto one operation issue.
-      const llm = deliveryLlmAdapter(ctx, {
+      const inputs = {
+        body: issue.description ?? '',
+        comments: comments.map((c) => c.body),
+        refs: extractRefsFromBody(issue.description ?? undefined),
+      };
+
+      // Delivery-layer rework (2026-05-28) — prepare (EDITOR-03 cache check +
+      // EDITOR-05 token cap), then START the operation-issue handoff + ONE
+      // immediate poll. A warm agent's result is finalized now; a slow one is
+      // LEFT for the compile-bulletin job's drainer (drainTldrOperations) to
+      // consume on a later tick. The operationId is unique per TL;DR scope so the
+      // idempotency search never collapses two issues' compiles onto one op issue.
+      const prep = await prepareTldrCompile(ctx, {
+        surface: 'issue',
+        scopeId: issueId,
+        inputs,
+        agentKey: EDITOR_AGENT_KEY,
+        agentId: payload.agentId,
+        companyId: payload.companyId,
+      });
+      // cache-hit (a fresh TL;DR is already cached) or capped (recordFailure has
+      // already fired) → nothing to deliver this heartbeat.
+      if (prep.kind !== 'compile') continue;
+
+      const started = await startAgentTask(ctx, {
         agentId: payload.agentId,
         companyId: payload.companyId,
         operationKind: 'tldr-compile',
         operationId: `tldr-${issueId}`,
         title: `Compile TL;DR — ${issueId}`,
+        prompt: prep.prompt,
       });
-      await compileTldr(ctx, {
-        surface: 'issue',
-        scopeId: issueId,
-        inputs: {
-          body: issue.description ?? '',
-          comments: comments.map((c) => c.body),
-          refs,
-        },
-        agentKey: EDITOR_AGENT_KEY,
-        agentId: payload.agentId,
+      const poll = await pollAgentTaskResult(ctx, {
+        operationIssueId: started.operationIssueId,
         companyId: payload.companyId,
-        llm,
+        operationKind: 'tldr-compile',
+        agentId: payload.agentId,
       });
+      if (poll.status === 'ready') {
+        await finalizeTldr(ctx, {
+          surface: 'issue',
+          scopeId: issueId,
+          contentHash: prep.contentHash,
+          body: poll.body,
+          agentKey: EDITOR_AGENT_KEY,
+          agentId: payload.agentId,
+          companyId: payload.companyId,
+        });
+      }
+      // else: not ready in this invocation — drainTldrOperations consumes it later.
     } catch (err) {
       // Defect C (2026-05-17 v0.6.2 re-drill). This catch is the per-ISSUE
       // skip path of the HEARTBEAT TL;DR dispatcher — NOT the bulletin
@@ -232,6 +273,127 @@ export async function handleEditorHeartbeat(
       ctx.logger?.info?.('Editor-Agent: skipped TL;DR compile for issue', {
         issueId,
         reason: (err as Error).message,
+      });
+    }
+  }
+}
+
+/**
+ * Delivery-layer rework (2026-05-28) — read the TL;DR compile inputs for an
+ * issue. Shared by the heartbeat (implicitly) and the drainer (which re-reads
+ * the inputs to key the cache row by the SAME content hash the heartbeat used).
+ * Tolerant: a missing issue / failing listComments degrade to empty.
+ */
+export async function readTldrInputs(
+  issues: Pick<PluginIssuesClient, 'get' | 'listComments'>,
+  issueId: string,
+  companyId: string,
+): Promise<{ body: string; comments: string[]; refs: string[] }> {
+  const target = await issues.get(issueId, companyId);
+  const body = target?.description ?? '';
+  let comments: string[] = [];
+  try {
+    comments = (await issues.listComments(issueId, companyId)).map((c) => c.body);
+  } catch {
+    comments = [];
+  }
+  return { body, comments, refs: extractRefsFromBody(body) };
+}
+
+/** The drainer's recency window — operations older than this are given up on. */
+const TLDR_DRAIN_RECENCY_MS = 2 * AGENT_TASK_DELIVERY_TIMEOUT;
+
+/** ctx the TL;DR drainer needs: the heartbeat surface plus agent reconcile. */
+export type TldrDrainerCtx = EditorHeartbeatCtx & EditorAgentReconcileCtx;
+
+/**
+ * Delivery-layer rework (2026-05-28) — drain in-flight TL;DR operation issues.
+ *
+ * Driven off the operation ISSUES (raw-text TL;DRs need no ctx.state freezing).
+ * Lists the `tldr-compile` operation issues for a company, and for each one
+ * within the recency window that is NOT already consumed (no cache row at/after
+ * the operation's createdAt), does ONE `pollAgentTaskResult`. On `ready` it
+ * re-reads the target issue's inputs (to key the cache by the same content hash
+ * the heartbeat computed), validates, and writes the tldr-cache. A still-pending
+ * operation is left for the next tick; one older than the recency window is
+ * given up. Called per-company from the every-minute compile-bulletin job.
+ *
+ * Idempotent + safe to re-run: the consumed-check (fresh cache row) prevents a
+ * duplicate write, and finalizeTldr's upsert is itself idempotent.
+ */
+export async function drainTldrOperations(
+  ctx: TldrDrainerCtx,
+  companyId: string,
+  now: Date,
+): Promise<void> {
+  // Resolve the Editor-Agent (idempotent). Without it the TL;DR machinery is
+  // moot; bail rather than record failures against a non-UUID agent id.
+  let editorAgentId: string | null = null;
+  try {
+    editorAgentId = await reconcileEditorAgent(ctx, companyId);
+  } catch (e) {
+    ctx.logger?.info?.('tldr-drainer: reconcile failed', { companyId, reason: (e as Error).message });
+  }
+  if (!editorAgentId) return;
+
+  let ops: Array<{ id: string; originId?: string | null; createdAt?: string | Date }>;
+  try {
+    ops = (await ctx.issues.list({
+      companyId,
+      originKindPrefix: operationOriginKind('tldr-compile'),
+      includePluginOperations: true,
+      limit: 50,
+    })) as Array<{ id: string; originId?: string | null; createdAt?: string | Date }>;
+  } catch (e) {
+    ctx.logger?.info?.('tldr-drainer: list failed', { companyId, reason: (e as Error).message });
+    return;
+  }
+
+  for (const op of ops ?? []) {
+    try {
+      const createdMs = op.createdAt ? new Date(op.createdAt).getTime() : now.getTime();
+      // Aged out of the recency window → give up (the heartbeat re-creates a
+      // fresh operation if the issue still needs a TL;DR).
+      if (now.getTime() - createdMs > TLDR_DRAIN_RECENCY_MS) continue;
+
+      const originId = op.originId ?? '';
+      if (!originId.startsWith('tldr-')) continue;
+      const scopeId = originId.slice('tldr-'.length);
+      if (!scopeId) continue;
+
+      // Already consumed? A cache row at/after this operation's createdAt means
+      // the result was already cached (by the heartbeat or a prior drain tick).
+      const cached = await getTldrByScope(ctx, 'issue', scopeId);
+      if (cached && new Date(cached.generated_at).getTime() >= createdMs) continue;
+
+      const poll = await pollAgentTaskResult(ctx, {
+        operationIssueId: op.id,
+        companyId,
+        operationKind: 'tldr-compile',
+        agentId: editorAgentId,
+      });
+      if (poll.status !== 'ready') continue; // still in flight — re-poll next tick
+
+      const inputs = await readTldrInputs(ctx.issues, scopeId, companyId);
+      const contentHash = tldrContentHash({ surface: 'issue', scopeId, inputs });
+      await finalizeTldr(ctx, {
+        surface: 'issue',
+        scopeId,
+        contentHash,
+        body: poll.body,
+        agentKey: EDITOR_AGENT_KEY,
+        agentId: editorAgentId,
+        companyId,
+      });
+      ctx.logger?.info?.('tldr-drainer: consumed result + cached TL;DR', {
+        companyId,
+        scopeId,
+        operationIssueId: op.id,
+      });
+    } catch (e) {
+      ctx.logger?.info?.('tldr-drainer: skipped operation', {
+        operationIssueId: op.id,
+        reason: (e as Error).message,
       });
     }
   }

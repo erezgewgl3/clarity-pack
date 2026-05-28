@@ -94,7 +94,7 @@ import {
 // editor-agent', the value of the unrelated EDITOR_AGENT_ID_TAG) made every
 // ctx.agents.managed.reconcile() throw "reconcile failed" — the compile-bulletin
 // job silently bailed before compiling. Surfaced by the Plan 03-05 drill.
-import { EDITOR_AGENT_KEY } from '../agents/editor.ts';
+import { EDITOR_AGENT_KEY, drainTldrOperations } from '../agents/editor.ts';
 // Plan 03-06 — production LLM invocation via the operation-issue handoff
 // (Path (d)). The compile prompt is delivered as the body of an operation issue
 // ASSIGNED to the Editor-Agent; the agent reads it and files the BulletinDraft
@@ -1165,6 +1165,20 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
       // false — byte-identical to the prior inline cron body (due-gate enforced).
       const force = await consumeForceRequest(ctx, company.id);
       await compileBulletinForCompany(ctx, company, { now, bulletinTz, force });
+
+      // Delivery-layer rework (2026-05-28) — §9.2 TL;DR cross-tick drainer.
+      // Consume any in-flight tldr-compile operation results the heartbeat's
+      // immediate poll missed (a slow agent). Best-effort: a throw here must not
+      // abort the bulletin loop, so it is isolated. drainTldrOperations has its
+      // own per-operation try/catch, but the reconcile/list at its top could
+      // throw — guard the whole call.
+      try {
+        await drainTldrOperations(ctx, company.id, now);
+      } catch (e) {
+        ctx.logger?.warn?.(`compile-bulletin: tldr-drainer failed: ${errText(e)}`, {
+          companyId: company.id,
+        });
+      }
     }
   });
 }
