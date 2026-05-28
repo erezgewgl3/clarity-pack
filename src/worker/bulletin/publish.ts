@@ -154,7 +154,7 @@ export async function publishBulletin(
          (cycle_number, company_id, next_due_at, compiled_at, compile_status,
           content_hash, lineage_thread_json, draft_json)
        VALUES ($1, $2, $3, $4, 'attempting', $5, $6::jsonb, $7::jsonb)
-       ON CONFLICT (next_due_at, content_hash) DO NOTHING`,
+       ON CONFLICT (company_id, next_due_at, content_hash) DO NOTHING`,
       // W3/W4: draft_json stores the full verified BulletinDraft so Plan
       // 03-03's bulletin-by-cycle handler returns typed props with NO
       // markdown re-parser.
@@ -178,8 +178,8 @@ export async function publishBulletin(
   // Idempotency check: if a concurrent fire already published this exact
   // (next_due_at, content_hash) row, our INSERT was a no-op — report duplicate.
   const owns = await ctx.db.query<{ compile_status: string }>(
-    `SELECT compile_status FROM ${BULLETINS_TABLE} WHERE next_due_at = $1 AND content_hash = $2`,
-    [args.nextDueAtIso, contentHash],
+    `SELECT compile_status FROM ${BULLETINS_TABLE} WHERE company_id = $1 AND next_due_at = $2 AND content_hash = $3`,
+    [args.companyId, args.nextDueAtIso, contentHash],
   );
   if (owns[0]?.compile_status === 'published') {
     return { kind: 'duplicate', cycleNumber: args.cycleNumber };
@@ -214,8 +214,8 @@ export async function publishBulletin(
       `UPDATE ${BULLETINS_TABLE}
          SET published_issue_id = $1, published_at = $2, verified_at = $2,
              compile_status = 'published'
-       WHERE next_due_at = $3 AND content_hash = $4`,
-      [issue.id, publishedAtIso, args.nextDueAtIso, contentHash],
+       WHERE company_id = $3 AND next_due_at = $4 AND content_hash = $5`,
+      [issue.id, publishedAtIso, args.companyId, args.nextDueAtIso, contentHash],
     );
   } catch (e) {
     ctx.logger?.warn?.('publishBulletin: phase 3 UPDATE failed', {

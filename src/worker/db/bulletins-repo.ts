@@ -110,7 +110,7 @@ export async function upsertBulletin(
     `INSERT INTO plugin_clarity_pack_cdd6bda4bd.bulletins
        (${BULLETIN_COLS})
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb)
-     ON CONFLICT (next_due_at, content_hash) DO NOTHING`,
+     ON CONFLICT (company_id, next_due_at, content_hash) DO NOTHING`,
     [
       cycleNumber,
       row.company_id,
@@ -131,9 +131,9 @@ export async function upsertBulletin(
   const existing = await ctx.db.query<BulletinRow>(
     `SELECT ${BULLETIN_COLS}
      FROM plugin_clarity_pack_cdd6bda4bd.bulletins
-     WHERE next_due_at = $1 AND content_hash = $2
+     WHERE company_id = $1 AND next_due_at = $2 AND content_hash = $3
      LIMIT 1`,
-    [row.next_due_at, row.content_hash],
+    [row.company_id, row.next_due_at, row.content_hash],
   );
   return (
     existing[0] ?? {

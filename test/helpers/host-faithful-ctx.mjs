@@ -180,8 +180,12 @@ export function makeHostFaithfulCompileCtx({
       }
       // publish.ts post-INSERT ownership check
       if (/SELECT compile_status/i.test(sql)) {
+        // 2026-05-28 multi-company: WHERE company_id=$1 AND next_due_at=$2 AND content_hash=$3
         const row = bulletins.find(
-          (b) => b.next_due_at === params?.[0] && b.content_hash === params?.[1],
+          (b) =>
+            b.company_id === params?.[0] &&
+            b.next_due_at === params?.[1] &&
+            b.content_hash === params?.[2],
         );
         return row ? [{ compile_status: row.compile_status }] : [];
       }
@@ -229,8 +233,13 @@ export function makeHostFaithfulCompileCtx({
         const nextDueAt = params[2];
         const contentHash = isBootstrap ? params[8] : params[4];
         const compileStatus = isBootstrap ? params[7] : 'attempting';
+        // 2026-05-28 multi-company: ON CONFLICT (company_id, next_due_at, content_hash)
+        const insCompanyId = params[1];
         const dup = bulletins.find(
-          (b) => b.next_due_at === nextDueAt && b.content_hash === contentHash,
+          (b) =>
+            b.company_id === insCompanyId &&
+            b.next_due_at === nextDueAt &&
+            b.content_hash === contentHash,
         );
         if (dup) return { rowCount: 0 }; // ON CONFLICT DO NOTHING
         bulletins.push({
@@ -246,9 +255,13 @@ export function makeHostFaithfulCompileCtx({
       }
       // [\s\S] so the matcher crosses the multi-line SQL publish.ts emits.
       if (/UPDATE[\s\S]*bulletins[\s\S]*published_issue_id/i.test(sql)) {
-        // params: issue_id, published_at, next_due_at, content_hash
+        // 2026-05-28 multi-company params: 0 issue_id, 1 published_at, 2 company_id,
+        // 3 next_due_at, 4 content_hash (WHERE company_id=$3 AND next_due_at=$4 AND content_hash=$5)
         const row = bulletins.find(
-          (b) => b.next_due_at === params[2] && b.content_hash === params[3],
+          (b) =>
+            b.company_id === params[2] &&
+            b.next_due_at === params[3] &&
+            b.content_hash === params[4],
         );
         if (row) {
           row.published_issue_id = params[0];

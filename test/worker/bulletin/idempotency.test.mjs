@@ -39,7 +39,7 @@ function makeCtx() {
           if (/INSERT INTO .*bulletins/i.test(sql)) {
             const nextDueAt = params[2];
             const contentHash = params[4];
-            if (rows.find((r) => r.next_due_at === nextDueAt && r.content_hash === contentHash)) {
+            if (rows.find((r) => r.company_id === params[1] && r.next_due_at === nextDueAt && r.content_hash === contentHash)) {
               return { rowCount: 0 };
             }
             rows.push({
@@ -53,7 +53,7 @@ function makeCtx() {
             return { rowCount: 1 };
           }
           if (/UPDATE[\s\S]*bulletins[\s\S]*published_issue_id/i.test(sql)) {
-            const row = rows.find((r) => r.next_due_at === params[2] && r.content_hash === params[3]);
+            const row = rows.find((r) => r.company_id === params[2] && r.next_due_at === params[3] && r.content_hash === params[4]);
             if (row) {
               row.published_issue_id = params[0];
               row.compile_status = 'published';
@@ -77,7 +77,7 @@ function makeCtx() {
           }
           // Post-INSERT owns check — keyed on (next_due_at, content_hash).
           if (/SELECT compile_status/i.test(sql)) {
-            const row = rows.find((r) => r.next_due_at === params[0] && r.content_hash === params[1]);
+            const row = rows.find((r) => r.company_id === params[0] && r.next_due_at === params[1] && r.content_hash === params[2]);
             return row ? [{ compile_status: row.compile_status }] : [];
           }
           return [];

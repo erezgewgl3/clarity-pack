@@ -111,7 +111,7 @@ function makeFakeCtx({
         }
         // publish.ts post-INSERT ownership check
         if (/SELECT compile_status/i.test(sql)) {
-          const row = bulletins.find((b) => b.next_due_at === params?.[0] && b.content_hash === params?.[1]);
+          const row = bulletins.find((b) => b.company_id === params?.[0] && b.next_due_at === params?.[1] && b.content_hash === params?.[2]);
           return row ? [{ compile_status: row.compile_status }] : [];
         }
         // Plan 03-06 — isCircuitOpenDurable reads the last N
@@ -140,7 +140,7 @@ function makeFakeCtx({
           const nextDueAt = params[2];
           const contentHash = isBootstrap ? params[8] : params[4];
           const compileStatus = isBootstrap ? params[7] : 'attempting';
-          const dup = bulletins.find((b) => b.next_due_at === nextDueAt && b.content_hash === contentHash);
+          const dup = bulletins.find((b) => b.company_id === params[1] && b.next_due_at === nextDueAt && b.content_hash === contentHash);
           if (dup) return { rowCount: 0 }; // ON CONFLICT DO NOTHING
           bulletins.push({
             cycle_number: params[0],
@@ -157,7 +157,7 @@ function makeFakeCtx({
         // publish.ts emits — `.` does not cross newlines.
         if (/UPDATE[\s\S]*bulletins[\s\S]*published_issue_id/i.test(sql)) {
           // params: issue_id, published_at, next_due_at, content_hash
-          const row = bulletins.find((b) => b.next_due_at === params[2] && b.content_hash === params[3]);
+          const row = bulletins.find((b) => b.company_id === params[2] && b.next_due_at === params[3] && b.content_hash === params[4]);
           if (row) {
             row.published_issue_id = params[0];
             row.compile_status = 'published';
