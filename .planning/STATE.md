@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.8
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: Phase 6.1 CLOSED & VERIFIED 2026-05-27 — Plan 05-10 unblocked
-last_updated: "2026-05-28T18:30:00.000Z"
-next_action: "NEXT BUILD = clarity-surfaces quality + portability bundle. Read MemPalace clarity_pack/decisions drawer drawer_clarity_pack_decisions_af74a33adb4d28b47ae8894e (findings/fixes/decisions/sequencing) + drawer_clarity_pack_decisions_8f2f846b8ace835af1cc8c30 (view-driven rework + host job-scope-dead) FIRST. Discuss-first, TDD, v1.0.0, instance-agnostic. Order: (1) fix ref-resolution via SDK ctx.issues.get + de-BEAAA the worker ref-extraction (issue-reader.ts:58 + editor.ts extractRefsFromBody) + 2 hardcoded labels [PREREQ, fixes Reader chips + portability + unblocks TL;DR titles]; (2) TL;DR cleanup (render markdown, real-TL;DR brevity, refs->titles); (3) Situation Room org-level blocked-backlog clickable view in the data handler; (4) bulletin lineage filter+gloss+clickable. View-driven fix is LIVE+verified on BEAAA (Bulletin No.1 + TL;DRs compile on Reader open). Plan 05-10 (npm publish + milestone close) remains operator-gated, separate."
+stopped_at: Phase 7 PLANNED 2026-05-28 — 07-01 (prerequisite chunk) plan-checker PASS; ready to execute
+last_updated: "2026-05-28T22:30:00.000Z"
+next_action: "Phase 7 (clarity-surfaces quality + portability) PLANNED. Plan 07-01-PLAN.md covers the PREREQUISITE chunk only (items 1+2): ref-resolution fix on BOTH worker paths (issue-reader.ts inline fetcher + standalone resolve-refs.ts) via per-ref ctx.issues.get(identifier,companyId) + cached ctx.issues.list-and-match fallback (real fields identifier/title/status/assigneeUserId/description; fetcher returns id=requested identifier); de-BEAAA BOTH extraction regexes (issue-reader.ts:58 REF_PATTERN + editor.ts:126 extractRefsFromBody, incl. the line-195 TL;DR-input call site) via exact-prefix derivation from issue.identifier; 2 hardcoded UI labels (roster-rail.tsx:105 + chat/index.tsx:785) via companies.resolve-prefix displayName. 6 TDD-ordered tasks; no version bump (stay 1.0.0); additive-only; no migration. Recon = workflow wf_ef5f2db9-be6 (07-RESEARCH.md); locked decisions in 07-CONTEXT.md. NEXT = /gsd:execute-phase 7. Autonomous build; the live BEAAA deploy + Playwright drill at the end is operator-gated (bookended-by-snapshots rule; Eric authorized 'deploy now, rely on DO daily backups'); the drill doubles as the runtime probe for the unverified SDK get-by-identifier question + the _viewer_can_read excerpt-gate open item. Items 3-5 (TL;DR cleanup / Situation Room org-level blocked-backlog clickable view / bulletin lineage filter+gloss+clickable) get their own discuss gate + later planning passes. Plan 05-10 (npm publish + milestone close) remains separately operator-gated."
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 55
+  total_plans: 56
   completed_plans: 49
   percent: 86
 ---
