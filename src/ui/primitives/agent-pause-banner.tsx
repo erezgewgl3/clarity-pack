@@ -97,15 +97,20 @@ export function AgentPauseBanner({
   const onResumeClick = React.useCallback(async () => {
     setResumeStatus('pending');
     try {
-      await resumeAction({ companyId });
+      // Quick task 260528-mn0 — pass userId so the opt-in-guard-wrapped
+      // agents.resumeHeartbeat action accepts the call (the guard treats a
+      // userId-less request as opted-out and short-circuits). userId is the
+      // resolver-sourced viewer id; when the banner is visible (paused:true)
+      // it is already resolved (the userIdLoading branch returns null first).
+      await resumeAction({ userId, companyId });
       setResumeStatus('done');
     } catch {
-      // The host action key may not be wired on this Paperclip instance —
-      // graceful degrade with explicit copy. The operator can still finish
-      // the round-trip on the agent page.
+      // The host action handler now exists; this catch fires only on a genuine
+      // resume failure (host rejected the resume). Graceful degrade with
+      // explicit copy — the operator can still finish on the native Agents page.
       setResumeStatus('degraded');
     }
-  }, [resumeAction, companyId]);
+  }, [resumeAction, userId, companyId]);
 
   // Render-nothing branches:
   //   - resolver in flight (we don't race a not-yet-resolved render)

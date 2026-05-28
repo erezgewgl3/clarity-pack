@@ -192,6 +192,15 @@ import {
   registerSituationArtifacts,
   type SituationArtifactsCtx,
 } from './worker/handlers/situation-artifacts.ts';
+// Quick task 260528-mn0 -- agents.resumeHeartbeat action handler. Both the
+// paused-agent banner (Reader + chat header) and the chat Quick Action row
+// call usePluginAction('agents.resumeHeartbeat'); the key was never registered
+// so the host returned 502 on click. Resolves the Editor-Agent UUID (or honors
+// an explicit agentId) + calls ctx.agents.resume. Opt-in-guard wrapped.
+import {
+  registerAgentResumeHeartbeat,
+  type AgentResumeHeartbeatCtx,
+} from './worker/handlers/agent-resume-heartbeat.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -343,6 +352,14 @@ const plugin = definePlugin({
     // bottom artifact shelf per D-02). CTT-07 invariant by construction --
     // pinned by runtime spy (Test 11) and source-grep companion test.
     registerSituationArtifacts(ctx as unknown as SituationArtifactsCtx);
+
+    // ---- Quick task 260528-mn0 -- agents.resumeHeartbeat action handler -----
+    // Resolves the Editor-Agent UUID (pause-banner caller) or honors an
+    // explicit agentId (chat Quick Action's chatted employee) and calls
+    // ctx.agents.resume. Throws on failure so the UI callers degrade
+    // gracefully. Opt-in-guard wrapped. No new capability (agents.resume +
+    // agents.managed already declared) and no version bump.
+    registerAgentResumeHeartbeat(ctx as unknown as AgentResumeHeartbeatCtx);
 
     // ---- Plan 02-03 Editor-Agent reconcile + heartbeat ----------------------
     //
