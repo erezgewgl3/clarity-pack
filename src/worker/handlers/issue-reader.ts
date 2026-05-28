@@ -36,6 +36,9 @@ import type {
 import type { RefCardData, TLDR } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { resolveRefsViaSdk } from './sdk-ref-fetch.ts';
+// 07-02 (D-I3-02) — post-process the compiled TL;DR body so `<PREFIX>-NNN`
+// tokens render as "ID — title" (reuses the 07-01 resolver + prefix helper).
+import { buildTitleMap, inlineRefTitles } from './tldr-ref-titles.ts';
 import { getTldrByScope, type TldrCacheCtx } from '../db/tldr-cache.ts';
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 // View-driven rework (2026-05-28) — the Reader DRIVES the TL;DR compile in its
@@ -214,6 +217,26 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
         tldrStatus = tldr ? 'cached' : 'unavailable';
       } catch {
         /* leave null/unavailable */
+      }
+    }
+
+    // ---- 07-02 (D-I3-02): refs → titles inside the TL;DR body ----------------
+    // Rewrite each resolvable `<PREFIX>-NNN` token in the compiled TL;DR to
+    // `ID — title` (ID kept traceable) using the SAME 07-01 SDK resolver
+    // (resolveRefsViaSdk via buildTitleMap) and the in-scope companyId/identifier.
+    // Post-process the COMPILED body — do NOT trust the agent to avoid raw IDs.
+    // Degrade discipline: any failure leaves the un-rewritten body (never blanks
+    // the TL;DR), mirroring the TL;DR-drive degrade above.
+    if (tldr && typeof tldr.body === 'string' && tldr.body.length > 0) {
+      try {
+        const titleById = await buildTitleMap(ctx.issues, tldr.body, issueIdentifier, companyId);
+        if (titleById.size > 0) {
+          tldr = { ...tldr, body: inlineRefTitles(tldr.body, issueIdentifier, titleById) };
+        }
+      } catch (e) {
+        ctx.logger?.warn?.('issue.reader: TL;DR refs→title rewrite failed; leaving body unchanged', {
+          err: (e as Error).message,
+        });
       }
     }
 

@@ -249,6 +249,46 @@ test('issue.reader handler assembles tldr + refCards + ancestry + acItems + acti
   assert.equal(result.deliverable.filename, 'Q3-underwriting-plan.xlsx');
 });
 
+// --- Plan 07-02 Task 2 (D-I3-02) — refs→title rewrite WIRED into the handler ---
+test('issue.reader rewrites <PREFIX>-NNN tokens in tldr.body to "ID — title" (handler→post-processor wire-in)', async () => {
+  // The FIXTURE TL;DR body contains BEAAA-141 / BEAAA-203 / BEAAA-417, the
+  // FIXTURE issue is BEAAA-555 (prefix derivable), and ctx.issues.get resolves
+  // each ref to a title. This proves the handler calls buildTitleMap +
+  // inlineRefTitles end-to-end — not just that the reader didn't break.
+  const { ctx, registered } = makeFakeCtx();
+  registerIssueReader(ctx);
+  const handler = registered.get('issue.reader');
+  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
+  assert.ok(result.tldr, 'tldr returned');
+  // BEAAA-141 → "Compliance step v2" (the refIssueByIdentifier title for that id).
+  assert.match(
+    result.tldr.body,
+    /BEAAA-141 — Compliance step v2/,
+    'resolved token rewritten inline as "ID — title"',
+  );
+  // The raw ID is kept traceable (not replaced by the title alone).
+  assert.match(result.tldr.body, /BEAAA-141 —/);
+});
+
+test('issue.reader leaves tldr.body unchanged when the refs→title rewrite resolver throws (degrade-safe)', async () => {
+  const { ctx, registered } = makeFakeCtx();
+  // Make ctx.issues.get throw ONLY for ref identifiers (the title-map build),
+  // while the issue-under-test + parent still resolve so the rest of the Reader
+  // works. buildTitleMap swallows the throw → empty map → bare IDs survive.
+  const origGet = ctx.issues.get;
+  ctx.issues.get = async (id, companyId) => {
+    if (refIssueByIdentifier(id)) throw new Error('simulated ref resolution failure');
+    return origGet(id, companyId);
+  };
+  registerIssueReader(ctx);
+  const handler = registered.get('issue.reader');
+  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
+  assert.ok(result.tldr, 'tldr still returned (Reader never blanks on a rewrite failure)');
+  // The bare ID survives (no em-dash title suffix) — degrade-safe.
+  assert.match(result.tldr.body, /BEAAA-141\b/);
+  assert.equal(/BEAAA-141 —/.test(result.tldr.body), false, 'no title suffix when resolution failed');
+});
+
 test('issue.reader invokes the resolveRefs fetcher EXACTLY ONCE per render (PRIM-01 redefined: one fetcher invocation, zero ?ids= http.fetch)', async () => {
   const { ctx, fetchCalls, registered, refGetCalls } = makeFakeCtx();
   registerIssueReader(ctx);
@@ -259,14 +299,31 @@ test('issue.reader invokes the resolveRefs fetcher EXACTLY ONCE per render (PRIM
   // legacy SSRF-blocked `?ids=` http.fetch path must fire ZERO times.
   const issueFetches = fetchCalls.filter((url) => /\/issues\?ids=/.test(url));
   assert.equal(issueFetches.length, 0, `the legacy ?ids= http.fetch path must NOT be used; got ${issueFetches.length}`);
-  // The single fetcher invocation resolves all 3 unique refs via per-ref get
-  // (no duplicate get per render — the resolver dedupes + calls the fetcher once).
-  assert.equal(refGetCalls.length, 3, `expected 3 per-ref ctx.issues.get calls (one fetcher invocation); got ${refGetCalls.length}`);
-  assert.deepEqual(
-    [...refGetCalls].sort(),
-    ['BEAAA-141', 'BEAAA-203', 'BEAAA-417'],
-    'each unique ref identifier was resolved via ctx.issues.get exactly once',
+  // 07-02 (D-I3-02) — the Reader now resolves the SAME 3 unique refs via TWO
+  // independent per-ref-get passes per render: (1) the TL;DR refs→title rewrite
+  // (buildTitleMap) and (2) the refCards resolution. Each pass dedupes within
+  // its single fetcher invocation (no duplicate get per ref per pass), so the
+  // total is 3 unique refs × 2 passes = 6. The legacy `?ids=` http.fetch path
+  // still fires ZERO times; the per-ref-get-with-dedup boundary (PRIM-01) holds
+  // for EACH pass.
+  assert.equal(
+    refGetCalls.length,
+    6,
+    `expected 3 unique refs × 2 per-ref-get passes (TL;DR title-map + refCards); got ${refGetCalls.length}`,
   );
+  // The UNIQUE set resolved is exactly the 3 refs (each pass deduped to these 3).
+  assert.deepEqual(
+    [...new Set(refGetCalls)].sort(),
+    ['BEAAA-141', 'BEAAA-203', 'BEAAA-417'],
+    'each unique ref identifier is resolved via ctx.issues.get (deduped per pass)',
+  );
+  // Each unique ref was asked for exactly twice (once per pass) — no pass
+  // duplicated a get for the same ref.
+  const counts = {};
+  for (const id of refGetCalls) counts[id] = (counts[id] ?? 0) + 1;
+  for (const id of ['BEAAA-141', 'BEAAA-203', 'BEAAA-417']) {
+    assert.equal(counts[id], 2, `${id} resolved exactly twice (TL;DR title-map + refCards); got ${counts[id]}`);
+  }
 });
 
 test('issue.reader activity timeline is derived from listComments and capped at 8 (READER-09)', async () => {
