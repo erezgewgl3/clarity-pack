@@ -220,7 +220,7 @@
   background: color-mix(in oklch, var(--clarity-bg), white 4%);
 }
 
-[data-clarity-surface='reader'] .clarity-tldr-strip--loading {
+[data-clarity-surface='reader'] .clarity-tldr-strip--empty {
   opacity: 0.7;
   font-style: italic;
 }

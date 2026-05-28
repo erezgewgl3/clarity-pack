@@ -2,8 +2,17 @@
 //
 // Plan 02-03 Task 2 — READER-02 TL;DR strip. Renders the TL;DR body + a
 // freshness stamp ("Regenerated when the task body changes • Generated
-// YYYY-MM-DD HH:MM"). When tldr is null (cache miss on first visit), shows
-// "Compiling TL;DR…" so the Reader never crashes pre-compile.
+// YYYY-MM-DD HH:MM").
+//
+// 2026-05-28 UX fix — the empty state previously showed "Compiling TL;DR…"
+// whenever `tldr` was null. That was misleading: TL;DRs compile REACTIVELY
+// (the Editor-Agent compiles one only when an issue is created / updated /
+// commented — see src/worker/agents/editor.ts handleEditorHeartbeat), so a
+// task that simply hasn't been touched since the pipeline came online has no
+// TL;DR and none queued — yet the UI claimed it was actively "Compiling…"
+// forever. Operator-reported confusion (BEAAA, 2026-05-28). The empty state
+// now states the honest truth ("No TL;DR yet") and explains WHEN one appears,
+// rather than asserting a compile that isn't running.
 
 import * as React from 'react';
 
@@ -25,8 +34,11 @@ function formatStamp(iso: string | undefined): string {
 export function TldrStrip({ tldr }: TldrStripProps): React.ReactElement {
   if (!tldr || !tldr.body) {
     return (
-      <section className="clarity-tldr-strip clarity-tldr-strip--loading" data-clarity-region="tldr">
-        Compiling TL;DR…
+      <section className="clarity-tldr-strip clarity-tldr-strip--empty" data-clarity-region="tldr">
+        <p className="clarity-tldr-body">No TL;DR yet</p>
+        <p className="clarity-tldr-stamp">
+          Compiled by the Editorial Desk when this task is created or updated.
+        </p>
       </section>
     );
   }
