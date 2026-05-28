@@ -96,9 +96,15 @@ Other shape clues:
 
 10. **Write `.planning/OVERNIGHT-REPORT.md`** before exiting (see structure below).
 
+## Deploy (when the operator is present to drive it)
+
+The full, detailed, copy-paste deploy procedure is in **`.planning/DEPLOY-RUNBOOK.md`** — read it before attempting ANY deploy. It covers Path A (scp+SSH) and Path B (DO Web Console + GitHub clone), every gotcha, verification, pm2 recovery, and rollback.
+
+**Autonomy rule:** the deploy itself is operator-gated (it needs SSH access OR the operator to flip repo visibility + drive the DO Web Console). If you are running UNATTENDED, do NOT deploy — finish the fix, commit, push, write the report, and put the exact deploy command block (from DEPLOY-RUNBOOK.md, filled in with this fix's specifics) into the report's "Deploy plan for the operator" section so the operator can one-shot it when they wake. If the operator IS present and asks you to deploy, follow DEPLOY-RUNBOOK.md exactly.
+
 ## Boundaries (HARD)
 
-- **NO production deploys.** Do not attempt to scp to AriClaw, ssh into AriClaw, or use the DO Web Console.
+- **NO UNATTENDED production deploys.** If no operator is present, do not scp, ssh, or use the DO Web Console. Stage everything (commit + push + report) for the operator instead. (If the operator is actively present and directs a deploy, DEPLOY-RUNBOOK.md is the procedure.)
 - **NO `STATE.md` / `ROADMAP.md` / `REQUIREMENTS.md` edits.** Those are operator-owned.
 - **NO git operations beyond `add` / `commit` / `push origin master`.** No force-push, no amend, no rebase, no reset, no `--no-verify`.
 - **NO repo visibility changes.** The repo is private. Leave it private.
