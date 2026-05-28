@@ -52,6 +52,14 @@ jobs:
       - name: typecheck
         run: pnpm typecheck
 
+      # test/ui/chat-live-sticky.test.mjs is a Playwright-headless CSS
+      # convergence gate (Plan 05-06 item e). Its header says CI is expected to
+      # run it for real (it only self-skips when SKIP_VISUAL=1, which CI must
+      # NOT set) — but the browser was never installed here, so it failed every
+      # run. Install Chromium + its OS deps so the test runs as designed.
+      - name: Install Playwright Chromium (chat-live-sticky convergence test needs a real browser)
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: unit tests (shared + worker + UI primitives)
         run: node --test "test/shared/*.test.mjs" "test/worker/*.test.mjs" "test/ui/*.test.mjs"
 
