@@ -137,40 +137,16 @@ T-07-02-XSS (load-bearing) is **mitigated**: SafeMarkdown emits React element no
 
 ---
 
-## AUTONOMOUS post-build deploy + live BEAAA Playwright drill (run by the orchestrator — verdicts TBD)
+## AUTONOMOUS post-build deploy + live BEAAA Playwright drill (run by the orchestrator 2026-05-29 — FULL PASS)
 
-> Performed by the orchestrator window AFTER this build/pack — the build executor does NOT deploy
-> (it lacks the localhost:3100 tunnel + BEAAA SSH + Playwright MCP). Deploy is **PRE-AUTHORIZED**
-> (memory `autonomous-deploy-authorization`): the bookended-by-snapshots rule is satisfied by the DO
-> daily backup + the rehearsed Phase 1 restore — NO manual pre-deploy snapshot needed. Deploy via
-> DEPLOY-RUNBOOK.md Path A. Requires the LOCAL environment (authenticated localhost:3100 tunnel +
-> BEAAA SSH `ssh ariclaw`); fail2ban bans rapid SSH (timeouts ≠ down box — space connections, do NOT
-> retry-spam; the 07-01 deploy hit this). Tunnel notes: Radix tabs need a real `browser_click`; read
-> DOM via `browser_evaluate`; the BROWSER can fetch `localhost:3100` REST, the WORKER cannot.
->
-> Install the tarball above (verify sha256 `46897f7a283bc8a5837de6594c5280e013bc6e92c1df500d5c0b6fcbc54c56ac`).
+**Deployed:** `clarity-pack-1.0.0.tgz` sha256 `46897f7a283bc8a5837de6594c5280e013bc6e92c1df500d5c0b6fcbc54c56ac` installed on BEAAA via DEPLOY-RUNBOOK Path A in **2 SSH connections** (upload `rm+cat`-over-stdin one connection; install here-string one connection — `fs.protected_regular` blocks even root from truncating the beai-agent-owned /tmp tarball, so `rm` first is mandatory; the 2-connection shape avoided the fail2ban trip that 07-01's 5-connection burst hit). Plugin `status=ready version=1.0.0 id=a763176a-2f4d-4986-b190-b5151e42cc00`. Live drill via localhost:3100 tunnel + Playwright MCP on **BEAAA-828** (real Radix `browser_click` on the Reader tab; DOM read via `browser_evaluate`).
 
-1. **Anchored-to excerpt renders markdown (verifiable live REGARDLESS of agent state) — VERDICT TBD.**
-   Open the same BEAAA-828 Reader tab from the 07-01 drill; `browser_evaluate` the
-   `clarity-ref-card-quote` DOM — assert the excerpt that previously showed literal `## BLUF …` now
-   renders FORMATTED (a heading/strong/list element exists inside the blockquote, NOT a text node
-   containing `## `). Works even if the Editor-Agent is paused (the excerpt is the upstream issue body
-   resolved by 07-01, not a fresh compile). **This is the primary live markdown-render proof.**
-2. **TL;DR strip renders markdown + refs→titles (verifiable ONLY if the Editor-Agent is RUNNING) —
-   VERDICT TBD.** If a task has a compiled TL;DR (cache hit or a fresh compile from opening the
-   Reader), assert `clarity-tldr-body` renders formatted markdown AND that any `<PREFIX>-NNN` token
-   shows ` — <title>` after it. **FLAG:** if the Editor-Agent is PAUSED, the TL;DR shows
-   "Compiling…"/"paused" and this step is NOT falsifiable — that is the explicit-resume-only lock (NOT
-   an item-3 regression). Record the agent state; if paused, the TL;DR render is verified by the unit
-   tests + deferred to the next running-agent observation, and step 1 (the excerpt) is the live proof.
-3. **XSS sanity (optional, low-risk) — VERDICT TBD.** If a test/dummy issue with a `javascript:` link
-   or a `<script>` tag in its body is reachable, confirm the rendered Reader shows it as inert text —
-   otherwise the Task-1 unit XSS guard is the proof of record.
-4. **Scope-fence sanity — VERDICT TBD.** Confirm the inline prose ref CHIPS still render `ID · status`
-   (READER-03 unchanged) — item 3 must not have altered the chip format.
+1. **Anchored-to excerpt renders markdown — ✅ PASS (primary proof).** `clarity-ref-card-quote` now contains real formatted elements `[h3, p, a, em, strong]` (`hasFormattedElements: true`); **no text node containing `## `** (`quoteHasLiteralHeading: false`, `literalMarkupVisible: false`). The excerpt that rendered literal `## BLUF … [BEAAA-702](/BEAAA/issues/BEAAA-702) *"…"*` in the 07-01 drill now renders the heading as `<h3>BLUF</h3>`, the link as `<a>`, the quote as `<em>`, bold as `<strong>`. Verifiable regardless of agent state (it's the 07-01-resolved upstream body).
+2. **TL;DR strip renders markdown + refs→titles — ✅ PASS (Editor-Agent was RUNNING).** `tldrState: "populated"` (not "Compiling…"/paused); `clarity-tldr-body` contains formatted elements `[p, strong, code]`; `tldrRefWithTitle: true` — the body shows `BEAAA-828 — CEO opens 3 capacity conversations — ARE Pre-Bind Scan bundled beta …` (ID + title together). NOTE: the render + refs→title are applied at READ-time (post-process in issue-reader.ts), so they apply even to a cached TL;DR body; the tightened compile *prompt* (D-I3-03) shapes FUTURE compiles and is verified by the `compile-tldr.test.mjs` unit test (a fresh compile shows the headline+≤3-bullets+cap shape).
+3. **XSS — ✅ proof-of-record (unit).** No live hostile-input fixture was reachable on BEAAA; the Task-1 unit XSS guards (no `javascript:` href emitted; `<script>` rendered inert; no `dangerouslySetInnerHTML`) are the proof of record. No XSS surface observed live.
+4. **Scope-fence — ✅ PASS.** Inline prose ref CHIPS still render `ID · status` (`BEAAA-704 · done`, `BEAAA-713 · done`, `BEAAA-677 · done`) — READER-03 format UNCHANGED; 07-01 resolution untouched. Surface present; no "failed to render".
 
-Record the verdicts here. READER-10 flips to Implemented after the drill confirms step 1 (and step 2
-when an agent is running); READER-02 is reinforced by the markdown-rendered TL;DR strip.
+**Net drill verdict: FULL PASS.** READER-10 → Implemented (step 1 confirmed live; step 2 also confirmed since the agent was running). READER-02 reinforced by the live markdown-rendered, populated TL;DR strip.
 
 ## Self-Check: PASSED
 
