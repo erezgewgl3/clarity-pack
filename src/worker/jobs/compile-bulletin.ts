@@ -54,6 +54,7 @@ import type {
   PluginIssuesClient,
   PluginJobsClient,
   PluginLogger,
+  PluginStateClient,
   Company,
 } from '@paperclipai/plugin-sdk';
 
@@ -69,7 +70,12 @@ import {
 } from '../db/bulletins-repo.ts';
 import { computeStandingNumbers, STANDING_NUMBER_SLOTS } from '../bulletin/standing-numbers.ts';
 import { computeFactsTable } from '../bulletin/facts-table.ts';
-import { compilePass1 } from '../bulletin/compile-pass-1.ts';
+import {
+  buildBulletinPrompt,
+  finalizeBulletinDraft,
+  estimateTokens,
+  MAX_BULLETIN_TOKENS,
+} from '../bulletin/compile-pass-1.ts';
 import { verifyDraft } from '../bulletin/bulletin-verifier.ts';
 import {
   publishBulletin,
@@ -90,16 +96,25 @@ import {
 // job silently bailed before compiling. Surfaced by the Plan 03-05 drill.
 import { EDITOR_AGENT_KEY } from '../agents/editor.ts';
 // Plan 03-06 — production LLM invocation via the operation-issue handoff
-// (Path (d)). Plan 03-05's sessionLlmAdapter is superseded: the host discards
-// the session prompt before it reaches the agent (PR #3106). The compile
-// prompt is now delivered as the body of an operation issue ASSIGNED to the
-// Editor-Agent; the agent's heartbeat reads it and posts the BulletinDraft
-// JSON as a comment. See 03-AGENT-INVOCATION-GAP-RESEARCH.md.
-import { deliveryLlmAdapter } from '../agents/agent-task-delivery.ts';
+// (Path (d)). The compile prompt is delivered as the body of an operation issue
+// ASSIGNED to the Editor-Agent; the agent reads it and files the BulletinDraft
+// JSON as a `compile-result` issue document. See 03-AGENT-INVOCATION-GAP-RESEARCH.md.
+//
+// Delivery-layer rework (2026-05-28) — the synchronous in-invocation 5-min poll
+// (`deliveryLlmAdapter`/`compilePass1`) is replaced by a cross-tick START/RESUME
+// state machine: `startAgentTask` creates the operation issue + wakes the agent
+// in ONE invocation, `pollAgentTaskResult` does ONE sleepless readback round per
+// tick. paperclipai@2026.525.0 expires the invocation scope mid-poll (PR #6547),
+// so no single invocation is ever held across the whole agent round-trip.
+import {
+  startAgentTask,
+  pollAgentTaskResult,
+  AGENT_TASK_DELIVERY_TIMEOUT,
+} from '../agents/agent-task-delivery.ts';
 // Plan 03-03 — cycle-start department reconcile + deterministic lineage build.
 import { reconcileDepartments } from '../bulletin/department-reconcile.ts';
 import { groupLineageThreads, type ActivityEvent } from '../bulletin/lineage-grouper.ts';
-import type { BulletinDraft, StandingNumberRow } from '../../shared/types.ts';
+import type { BulletinDraft, FactsTable, StandingNumberRow } from '../../shared/types.ts';
 
 /** Retry spacing for a failed compile cycle (D-22 — 15 minutes). */
 const RETRY_INTERVAL_MS = 15 * 60 * 1000;
@@ -283,6 +298,13 @@ export type CompileBulletinCtx = BulletinsRepoCtx & {
   // pass it to computeNextDueAt. Optional + defensively read so older test
   // fixtures that omit it still type-check and fall back to BULLETIN_TZ.
   config?: PluginConfigClient;
+  // Delivery-layer rework (2026-05-28) — the host KV store holding the
+  // per-company `pending-compile` record (cross-tick START/RESUME) and the
+  // on-demand `force-requested` marker. OPTIONAL + defensively read: older test
+  // fixtures omit it, in which case the START path still does one immediate
+  // poll (warm-agent path) but cannot persist a pending record across ticks.
+  // Requires `plugin.state.read` (get) + `plugin.state.write` (set/delete).
+  state?: PluginStateClient;
 };
 
 /**
@@ -328,17 +350,303 @@ export type CompileForCompanyResult =
   | { kind: 'duplicate'; cycleNumber: number }
   | { kind: 'no-change'; cycleNumber: number; publishedAt: string | null }
   | { kind: 'skipped'; reason: string }
-  | { kind: 'failed'; reason: string; cycleNumber?: number };
+  | { kind: 'failed'; reason: string; cycleNumber?: number }
+  // Delivery-layer rework (2026-05-28) — cross-tick outcomes:
+  //   'started' — the agent task was created/woken this tick; the result will
+  //               be consumed on a LATER tick (a pending record was persisted).
+  //   'pending' — a prior tick's compile is still in flight; the agent has not
+  //               answered yet and the deadline has not elapsed.
+  | { kind: 'started'; cycleNumber?: number }
+  | { kind: 'pending' };
+
+// ---- Delivery-layer rework (2026-05-28) — cross-tick pending state ----------
+
+/** ctx.state namespace for the per-company bulletin compile state. */
+const BULLETIN_STATE_NAMESPACE = 'bulletin';
+/** stateKey for the per-company in-flight compile record (cross-tick START/RESUME). */
+const PENDING_COMPILE_STATE_KEY = 'pending-compile';
+/** stateKey for the operator's on-demand "compile now" marker (consumed by the job). */
+export const FORCE_REQUESTED_STATE_KEY = 'force-requested';
+
+function pendingCompileScope(companyId: string) {
+  return {
+    scopeKind: 'company' as const,
+    scopeId: companyId,
+    namespace: BULLETIN_STATE_NAMESPACE,
+    stateKey: PENDING_COMPILE_STATE_KEY,
+  };
+}
+
+/** ScopeKey for the on-demand force-request marker. Exported for the action handler + tests. */
+export function forceRequestScope(companyId: string) {
+  return {
+    scopeKind: 'company' as const,
+    scopeId: companyId,
+    namespace: BULLETIN_STATE_NAMESPACE,
+    stateKey: FORCE_REQUESTED_STATE_KEY,
+  };
+}
+
+/**
+ * The per-company in-flight compile record persisted in ctx.state between job
+ * ticks. Plain JSON (no migration — the host KV store). FROZEN inputs
+ * (`standingNumberRows`, `factsTable`, `lineageThreads`) are captured at START
+ * so the resume tick's verifier checks the draft against the EXACT numbers the
+ * agent compiled (v0.6.6 Bug-2 — no live re-query across ticks).
+ */
+type PendingCompileRecord = {
+  operationIssueId: string;
+  operationId: string;
+  cycleNumber: number;
+  nextDueAtIso: string;
+  standingNumberRows: StandingNumberRow[];
+  factsTable: FactsTable;
+  lineageThreads: BulletinDraft['lineageThreads'];
+  companyName?: string;
+  editorAgentId: string;
+  compiledAtIso: string;
+  /** start + AGENT_TASK_DELIVERY_TIMEOUT — the cross-tick give-up instant (epoch ms). */
+  deadlineMs: number;
+  mode: 'cron' | 'force';
+};
+
+/** The subset of frozen inputs `finishCompile` needs (a PendingCompileRecord is a superset). */
+type FrozenCompileInputs = Pick<
+  PendingCompileRecord,
+  | 'cycleNumber'
+  | 'nextDueAtIso'
+  | 'standingNumberRows'
+  | 'factsTable'
+  | 'lineageThreads'
+  | 'companyName'
+  | 'editorAgentId'
+  | 'compiledAtIso'
+>;
+
+/** Read the pending compile record. Defensive: no ctx.state → null (skip cross-tick logic). */
+async function getPendingCompile(
+  ctx: CompileBulletinCtx,
+  companyId: string,
+): Promise<PendingCompileRecord | null> {
+  if (!ctx.state?.get) return null;
+  try {
+    const raw = await ctx.state.get(pendingCompileScope(companyId));
+    if (raw && typeof raw === 'object') return raw as PendingCompileRecord;
+    return null;
+  } catch (e) {
+    ctx.logger?.warn?.(`compile-bulletin: ctx.state.get(pending-compile) failed: ${errText(e)}`, {
+      companyId,
+    });
+    return null;
+  }
+}
+
+/** Persist the pending compile record (best-effort; no ctx.state → no-op). */
+async function setPendingCompile(
+  ctx: CompileBulletinCtx,
+  companyId: string,
+  record: PendingCompileRecord,
+): Promise<void> {
+  if (!ctx.state?.set) return;
+  try {
+    await ctx.state.set(pendingCompileScope(companyId), record);
+  } catch (e) {
+    ctx.logger?.warn?.(`compile-bulletin: ctx.state.set(pending-compile) failed: ${errText(e)}`, {
+      companyId,
+    });
+  }
+}
+
+/** Clear the pending compile record (idempotent; no ctx.state → no-op). */
+async function clearPendingCompile(ctx: CompileBulletinCtx, companyId: string): Promise<void> {
+  if (!ctx.state?.delete) return;
+  try {
+    await ctx.state.delete(pendingCompileScope(companyId));
+  } catch (e) {
+    ctx.logger?.warn?.(`compile-bulletin: ctx.state.delete(pending-compile) failed: ${errText(e)}`, {
+      companyId,
+    });
+  }
+}
+
+/**
+ * Finish a compile from a RAW agent result body, using the FROZEN inputs
+ * captured at START. Shared by the START-immediate-ready branch and the RESUME
+ * branch. Mirrors the prior inline finalize→verify→(force)dedupe→publish→advance
+ * sequence exactly; the only structural change is that the inputs are FROZEN
+ * (passed in) rather than freshly re-queried, and the pending record is cleared
+ * on every terminal outcome.
+ *
+ * Failure accounting: a finalize throw or verifier rejection records the breaker
+ * failure (cron only — `finalizeBulletinDraft` itself does NOT, so this helper
+ * owns it); a publish failure records only the D-22 cycle failure. force never
+ * records (an operator action must not trip the auto-pause breaker) and never
+ * advances the daily schedule.
+ */
+async function finishCompile(
+  ctx: CompileBulletinCtx,
+  company: Company,
+  frozen: FrozenCompileInputs,
+  rawBody: string,
+  opts: { force: boolean; now: Date; bulletinTz?: string },
+): Promise<CompileForCompanyResult> {
+  const { force, now, bulletinTz } = opts;
+  const { cycleNumber, editorAgentId } = frozen;
+
+  let draft: BulletinDraft;
+  try {
+    draft = finalizeBulletinDraft(rawBody, {
+      factsTable: frozen.factsTable,
+      cycleNumber: frozen.cycleNumber,
+      compiledAt: new Date(frozen.compiledAtIso),
+      companyName: frozen.companyName,
+    });
+  } catch (e) {
+    const reason = `finalize failed: ${(e as Error).message}`;
+    ctx.logger?.warn?.(`compile-bulletin: cycle ${cycleNumber} ${reason}`, { companyId: company.id });
+    if (!force) {
+      await recordFailure(ctx, {
+        agentKey: BULLETIN_COMPILE_AGENT_KEY,
+        agentId: editorAgentId,
+        companyId: company.id,
+        reason,
+      });
+      await recordCycleCompileFailure(ctx, { cycleNumber, reason, now });
+    }
+    await clearPendingCompile(ctx, company.id);
+    if (!force) await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
+    return { kind: 'failed', reason, cycleNumber };
+  }
+
+  // Plan 03-03 — override the draft's lineageThreads with the FROZEN
+  // deterministically-grouped threads (BULL-04 / D-21).
+  const draftWithLineage: BulletinDraft = {
+    ...draft,
+    lineageThreads:
+      (frozen.lineageThreads?.length ?? 0) > 0
+        ? frozen.lineageThreads
+        : draft.lineageThreads ?? [],
+  };
+
+  // Pass 2 — deterministic verifier against the FROZEN snapshot (v0.6.6 Bug 2).
+  const verdict = verifyDraft(draftWithLineage, frozen.standingNumberRows);
+  ctx.logger?.info?.('compile-bulletin: verifyDraft verdict', {
+    companyId: company.id,
+    cycleNumber,
+    ok: verdict.ok,
+  });
+  if (!verdict.ok) {
+    const reason =
+      'mismatches' in verdict
+        ? `verifier rejected: ${JSON.stringify(verdict.mismatches)}`
+        : `verifier rejected: ${verdict.kind}:${verdict.slot}`;
+    ctx.logger?.warn?.(`compile-bulletin: cycle ${cycleNumber} ${reason}`, { companyId: company.id });
+    if (!force) {
+      await recordFailure(ctx, {
+        agentKey: BULLETIN_COMPILE_AGENT_KEY,
+        agentId: editorAgentId,
+        companyId: company.id,
+        reason,
+      });
+      await recordCycleCompileFailure(ctx, { cycleNumber, reason, now });
+    }
+    await clearPendingCompile(ctx, company.id);
+    if (!force) await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
+    return { kind: 'failed', reason, cycleNumber };
+  }
+
+  // On-demand dedupe (force only) — substance hash (masthead excluded) vs the
+  // last published bulletin's. Equal → the operator's click produced nothing
+  // new: return no-change, write NO row, NO advance.
+  if (force) {
+    const freshDedupe = bulletinDedupeHash(draftWithLineage);
+    const lastPublished = await getLatestPublishedBulletin(ctx, company.id);
+    if (lastPublished?.draft_json) {
+      let lastDraft: BulletinDraft | null = null;
+      try {
+        lastDraft = (typeof lastPublished.draft_json === 'string'
+          ? JSON.parse(lastPublished.draft_json)
+          : lastPublished.draft_json) as BulletinDraft;
+      } catch {
+        lastDraft = null;
+      }
+      if (lastDraft && bulletinDedupeHash(lastDraft) === freshDedupe) {
+        ctx.logger?.info?.(
+          'compile-bulletin: on-demand dedupe — content unchanged since last published',
+          { companyId: company.id, cycleNumber: lastPublished.cycle_number },
+        );
+        await clearPendingCompile(ctx, company.id);
+        return {
+          kind: 'no-change',
+          cycleNumber: lastPublished.cycle_number,
+          publishedAt: lastPublished.published_at,
+        };
+      }
+    }
+  }
+
+  const priorCycleErratumSnapshot = await buildPriorCycleErratumSnapshot(ctx, company.id, cycleNumber);
+
+  const publishResult = await publishBulletin(ctx, {
+    companyId: company.id,
+    cycleNumber,
+    nextDueAtIso: frozen.nextDueAtIso,
+    editorAgentId,
+    draft: draftWithLineage,
+    compiledAt: new Date(frozen.compiledAtIso),
+    priorCycleErratumSnapshot,
+  });
+  ctx.logger?.info?.('compile-bulletin: publishBulletin result', {
+    companyId: company.id,
+    cycleNumber,
+    kind: publishResult.kind,
+  });
+
+  if (publishResult.kind === 'failed') {
+    ctx.logger?.warn?.(
+      `compile-bulletin: publish failed for cycle ${cycleNumber}: ${publishResult.reason}`,
+      { companyId: company.id },
+    );
+    if (!force) await recordCycleCompileFailure(ctx, { cycleNumber, reason: publishResult.reason, now });
+    await clearPendingCompile(ctx, company.id);
+    if (!force) await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
+    return { kind: 'failed', reason: publishResult.reason, cycleNumber };
+  }
+
+  // A verified publish (or an idempotent duplicate) is a clean cycle — reset the
+  // shared breaker counter, clear pending, and advance the daily schedule (cron).
+  recordSuccess(BULLETIN_COMPILE_AGENT_KEY);
+  await clearPendingCompile(ctx, company.id);
+  if (!force) await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
+
+  if (publishResult.kind === 'duplicate') {
+    return { kind: 'duplicate', cycleNumber };
+  }
+  return {
+    kind: 'published',
+    cycleNumber,
+    publishedIssueId: publishResult.publishedIssueId,
+    publishedAt: publishResult.publishedAt,
+  };
+}
 
 /**
  * Compile (and, unless deduped, publish) a bulletin for ONE company.
  *
- * This is the single shared pipeline. `registerCompileBulletinJob` calls it
- * once per company with `force:false` — that path is byte-for-byte the prior
- * inline loop body (every former `continue` is the same side effects followed
- * by a `return`; the per-company `catch` records + advances identically). The
- * `bulletin.compileNow` action calls it with `force:true`. See
- * CompileForCompanyOptions for the force-mode differences.
+ * Delivery-layer rework (2026-05-28) — a per-company START/RESUME state machine:
+ *   - RESUME (a pending record exists) → one `pollAgentTaskResult` round. ready
+ *     → finishCompile; past deadline → timeout failure + clear pending; else
+ *     leave pending and return { kind:'pending' }.
+ *   - START (no pending) → the existing gate / bootstrap / reconcile / breaker-
+ *     resume / cycle / lineage / standing / facts steps, then build the prompt,
+ *     `startAgentTask`, and ONE immediate `pollAgentTaskResult` (warm-agent +
+ *     keeps the e2e single-fire-publishes contract). ready → finishCompile; else
+ *     persist the pending record and return { kind:'started' } — NO schedule
+ *     advance, NO recordSuccess at START.
+ *
+ * `registerCompileBulletinJob` calls it once per company with `force:false`. The
+ * `bulletin.compileNow` job-side honors the force-request marker and calls it
+ * with `force:true`. See CompileForCompanyOptions for the force-mode differences.
  */
 export async function compileBulletinForCompany(
   ctx: CompileBulletinCtx,
@@ -346,7 +654,9 @@ export async function compileBulletinForCompany(
   opts: CompileForCompanyOptions,
 ): Promise<CompileForCompanyResult> {
   const { now, bulletinTz } = opts;
-  const force = opts.force ?? false;
+  // `force` may be reset to the pending record's mode on the RESUME branch
+  // (a force compile that spilled across ticks must finish in force mode).
+  let force = opts.force ?? false;
 
   // Defect D (2026-05-17 v0.6.2 re-drill). Track `cycleNumber` (set once the
   // cycle is computed) so the catch at the bottom can route an UNEXPECTED throw
@@ -364,7 +674,64 @@ export async function compileBulletinForCompany(
   // The resolved Editor-Agent UUID, captured so the catch-all `recordFailure`
   // can pause the real agent. Null until reconcile succeeds.
   let editorAgentIdForCatch: string | null = null;
+  // Delivery-layer rework — true once a pending record is known to exist for
+  // this company (RESUME branch), so the catch-all clears it and advances even
+  // when an UNEXPECTED throw bypassed the handled paths.
+  let pendingActive = false;
   try {
+    // ---- RESUME branch — a prior tick's compile is in flight ----------------
+    // A pending record means an operation issue was created on an earlier tick
+    // and we are waiting for the agent's result. Poll ONCE (fresh invocation);
+    // never re-start while pending — that is the runaway guard (v0.6.6).
+    const pending = await getPendingCompile(ctx, company.id);
+    if (pending) {
+      pendingActive = true;
+      force = pending.mode === 'force';
+      cycleNumber = pending.cycleNumber;
+      editorAgentIdForCatch = pending.editorAgentId;
+
+      const poll = await pollAgentTaskResult(ctx, {
+        operationIssueId: pending.operationIssueId,
+        companyId: company.id,
+        operationKind: 'bulletin-compile',
+        agentId: pending.editorAgentId,
+      });
+      if (poll.status === 'ready') {
+        ctx.logger?.info?.(
+          `compile-bulletin: resume tick consumed result for cycle ${pending.cycleNumber} ` +
+            `(operation issue ${pending.operationIssueId})`,
+          { companyId: company.id },
+        );
+        return await finishCompile(ctx, company, pending, poll.body, { force, now, bulletinTz });
+      }
+      // Not ready. Past the cross-tick deadline → give up (timeout failure).
+      if (now.getTime() > pending.deadlineMs) {
+        const reason = `delivery timeout (cross-tick): no result for operation issue ${pending.operationIssueId} before deadline`;
+        ctx.logger?.warn?.(`compile-bulletin: cycle ${pending.cycleNumber} ${reason}`, {
+          companyId: company.id,
+        });
+        if (!force) {
+          await recordFailure(ctx, {
+            agentKey: BULLETIN_COMPILE_AGENT_KEY,
+            agentId: pending.editorAgentId,
+            companyId: company.id,
+            reason,
+          });
+          await recordCycleCompileFailure(ctx, { cycleNumber: pending.cycleNumber, reason, now });
+        }
+        await clearPendingCompile(ctx, company.id);
+        if (!force) await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
+        return { kind: 'failed', reason, cycleNumber: pending.cycleNumber };
+      }
+      // Still in flight, before the deadline — leave the record for the next tick.
+      ctx.logger?.info?.(
+        `compile-bulletin: cycle ${pending.cycleNumber} still awaiting agent result; will re-poll next tick`,
+        { companyId: company.id },
+      );
+      return { kind: 'pending' };
+    }
+
+    // ---- START branch — no pending record -----------------------------------
     const nextDueAtFromDb = await getNextDueAtForCompany(ctx, company.id);
     // The next_due_at value the published row will carry. For the cron it is
     // the scheduled pointer; for force-with-no-existing-row we compute a slot
@@ -567,56 +934,25 @@ export async function compileBulletinForCompany(
     }
     const factsTable = computeFactsTable({ rows: standingValues, slotDefs });
 
-    // 4. Pass 1 — LLM produces a structured BulletinDraft via the operation-
-    //    issue-backed delivery adapter (Plan 03-06). A delivery timeout, a
-    //    create failure, or an unparseable result surface as a pass-1 throw.
-    const llm = deliveryLlmAdapter(ctx, {
-      agentId: editorAgentId,
-      companyId: company.id,
-      operationKind: 'bulletin-compile',
-      operationId: `cycle-${cycleNumber}`,
-      title: `Compile Daily Bulletin — cycle ${cycleNumber}`,
-    });
+    // 4. Pass 1 — DELIVERY-LAYER REWORK (2026-05-28). Build the prompt, START
+    //    the agent task, and do ONE immediate poll. A warm agent answers inside
+    //    this invocation and we finish now; otherwise we persist a pending
+    //    record and a LATER tick (a fresh, valid invocation) consumes the result
+    //    via the RESUME branch. No single invocation is held across the whole
+    //    agent round-trip (paperclipai@2026.525.0 expires the scope — PR #6547).
     const companyName = (company as { name?: string }).name;
-    let draft: BulletinDraft;
-    try {
-      draft = await compilePass1(ctx, {
-        companyId: company.id,
-        cycleNumber,
-        factsTable,
-        standingNumbers: standingNumberRows,
-        departments: DEFAULT_DEPARTMENTS,
-        editorAgentId,
-        llm,
-        compiledAt: now,
-        companyName,
-      });
-    } catch (e) {
-      // recordFailure already invoked inside compilePass1.
-      if (!force) {
-        await recordCycleCompileFailure(ctx, {
-          cycleNumber,
-          reason: `pass-1 failed: ${(e as Error).message}`,
-          now,
-        });
-        await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
-      }
-      return { kind: 'failed', reason: `pass-1 failed: ${(e as Error).message}`, cycleNumber };
-    }
-
-    // 5. Pass 2 — deterministic verifier against the FROZEN pass-1 snapshot
-    //    (v0.6.6 Bug 2 — no live SQL re-run; verifyDraft is pure).
-    const verdict = verifyDraft(draft, standingNumberRows);
-    ctx.logger?.info?.('compile-bulletin: verifyDraft verdict', {
-      companyId: company.id,
+    const prompt = buildBulletinPrompt({
       cycleNumber,
-      ok: verdict.ok,
+      departments: DEFAULT_DEPARTMENTS,
+      factsTable,
+      standingNumbers: standingNumberRows,
     });
-    if (!verdict.ok) {
-      const reason =
-        'mismatches' in verdict
-          ? `verifier rejected: ${JSON.stringify(verdict.mismatches)}`
-          : `verifier rejected: ${verdict.kind}:${verdict.slot}`;
+
+    // T-03-11 — input-token cap, enforced BEFORE the agent task is created so an
+    // over-budget prompt costs nothing (the gate compilePass1 used to apply).
+    const inputTokens = estimateTokens(prompt);
+    if (inputTokens > MAX_BULLETIN_TOKENS) {
+      const reason = `input exceeds max_tokens cap (${inputTokens} > ${MAX_BULLETIN_TOKENS})`;
       ctx.logger?.warn?.(`compile-bulletin: cycle ${cycleNumber} ${reason}`, {
         companyId: company.id,
       });
@@ -625,125 +961,88 @@ export async function compileBulletinForCompany(
           agentKey: BULLETIN_COMPILE_AGENT_KEY,
           agentId: editorAgentId,
           companyId: company.id,
-          reason,
+          reason: `input_tokens=${inputTokens} exceeds MAX_BULLETIN_TOKENS=${MAX_BULLETIN_TOKENS}`,
         });
-        await recordCycleCompileFailure(ctx, {
-          cycleNumber,
-          reason,
-          now,
-        });
+        await recordCycleCompileFailure(ctx, { cycleNumber, reason, now });
+        await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
+      }
+      return {
+        kind: 'failed',
+        reason: `Bulletin compile input exceeds max_tokens cap (${inputTokens} > ${MAX_BULLETIN_TOKENS})`,
+        cycleNumber,
+      };
+    }
+
+    // START — idempotency-search + create the operation issue + wake the agent.
+    // One invocation's worth of host calls.
+    const operationId = `cycle-${cycleNumber}`;
+    let startResult: { operationIssueId: string };
+    try {
+      startResult = await startAgentTask(ctx, {
+        agentId: editorAgentId,
+        companyId: company.id,
+        operationKind: 'bulletin-compile',
+        operationId,
+        title: `Compile Daily Bulletin — cycle ${cycleNumber}`,
+        prompt,
+      });
+    } catch (e) {
+      const reason = `start failed: ${(e as Error).message}`;
+      ctx.logger?.warn?.(`compile-bulletin: ${reason}`, { companyId: company.id });
+      if (!force) {
+        await recordCycleCompileFailure(ctx, { cycleNumber, reason, now });
         await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
       }
       return { kind: 'failed', reason, cycleNumber };
     }
 
-    // Plan 03-03 — override the draft's lineageThreads with the
-    // deterministically-grouped threads (BULL-04 / D-21).
-    const draftWithLineage: BulletinDraft = {
-      ...draft,
-      lineageThreads:
-        lineageThreads.length > 0 ? lineageThreads : draft.lineageThreads ?? [],
-    };
-
-    // Quick task 260528-nns — on-demand dedupe (force only). Compare the fresh
-    // draft's SUBSTANCE hash (masthead excluded — see bulletinDedupeHash) to the
-    // last PUBLISHED bulletin's substance hash, recomputed from its stored
-    // draft_json. Equal → the operator's click produced nothing new: return
-    // no-change and write NO row (avoids a stream of identical bulletins on
-    // repeated clicks). NOT the full content_hash, which bakes in the
-    // ever-incrementing cycle number and so could never match. The cron path
-    // never dedupes (its cycle-based idempotency in publishBulletin covers
-    // re-fires).
-    if (force) {
-      const freshDedupe = bulletinDedupeHash(draftWithLineage);
-      const lastPublished = await getLatestPublishedBulletin(ctx, company.id);
-      if (lastPublished?.draft_json) {
-        let lastDraft: BulletinDraft | null = null;
-        try {
-          lastDraft = (typeof lastPublished.draft_json === 'string'
-            ? JSON.parse(lastPublished.draft_json)
-            : lastPublished.draft_json) as BulletinDraft;
-        } catch {
-          lastDraft = null;
-        }
-        if (lastDraft && bulletinDedupeHash(lastDraft) === freshDedupe) {
-          ctx.logger?.info?.(
-            'compile-bulletin: on-demand dedupe — content unchanged since last published',
-            { companyId: company.id, cycleNumber: lastPublished.cycle_number },
-          );
-          return {
-            kind: 'no-change',
-            cycleNumber: lastPublished.cycle_number,
-            publishedAt: lastPublished.published_at,
-          };
-        }
-      }
-    }
-
-    const priorCycleErratumSnapshot = await buildPriorCycleErratumSnapshot(
-      ctx,
-      company.id,
-      cycleNumber,
-    );
-
-    // 6. Publish — two-phase write.
-    const publishResult = await publishBulletin(ctx, {
-      companyId: company.id,
+    // The FROZEN compile inputs — reused at finish (this tick if the agent is
+    // warm, or on a later resume tick) so the verifier checks the draft against
+    // the EXACT numbers the agent compiled (v0.6.6 Bug-2 — no live re-query).
+    const frozen: FrozenCompileInputs = {
       cycleNumber,
       nextDueAtIso,
+      standingNumberRows,
+      factsTable,
+      lineageThreads,
+      companyName,
       editorAgentId,
-      draft: draftWithLineage,
-      compiledAt: now,
-      priorCycleErratumSnapshot,
-    });
-    ctx.logger?.info?.('compile-bulletin: publishBulletin result', {
-      companyId: company.id,
-      cycleNumber,
-      kind: publishResult.kind,
-    });
-
-    if (publishResult.kind === 'failed') {
-      ctx.logger?.warn?.(
-        `compile-bulletin: publish failed for cycle ${cycleNumber}: ${publishResult.reason}`,
-        { companyId: company.id },
-      );
-      if (!force) {
-        await recordCycleCompileFailure(ctx, {
-          cycleNumber,
-          reason: publishResult.reason,
-          now,
-        });
-        await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
-      }
-      return { kind: 'failed', reason: publishResult.reason, cycleNumber };
-    }
-
-    if (publishResult.kind === 'duplicate') {
-      ctx.logger?.info?.('compile-bulletin: duplicate (idempotency); advancing next_due_at', {
-        companyId: company.id,
-        cycleNumber,
-      });
-      // A verified publish (or an idempotent duplicate) is a clean cycle —
-      // reset the shared breaker counter.
-      recordSuccess(BULLETIN_COMPILE_AGENT_KEY);
-      if (!force) await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
-      return { kind: 'duplicate', cycleNumber };
-    }
-
-    // A verified publish — reset the shared circuit-breaker counter so a
-    // transient earlier failure does not carry over.
-    recordSuccess(BULLETIN_COMPILE_AGENT_KEY);
-
-    // 7. Advance next_due_at to the next genuine 06:30 slot (cron only). The
-    //    on-demand path leaves the daily schedule pointer untouched.
-    if (!force) await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
-
-    return {
-      kind: 'published',
-      cycleNumber,
-      publishedIssueId: publishResult.publishedIssueId,
-      publishedAt: publishResult.publishedAt,
+      compiledAtIso: now.toISOString(),
     };
+
+    // One immediate, sleepless poll — catches a warm agent (and keeps the e2e
+    // suite's single-fire-publishes contract).
+    const immediate = await pollAgentTaskResult(ctx, {
+      operationIssueId: startResult.operationIssueId,
+      companyId: company.id,
+      operationKind: 'bulletin-compile',
+      agentId: editorAgentId,
+    });
+    if (immediate.status === 'ready') {
+      return await finishCompile(ctx, company, frozen, immediate.body, { force, now, bulletinTz });
+    }
+
+    // The agent has not answered yet. Persist the pending record so a LATER tick
+    // resumes + consumes the result in a fresh invocation. CRITICAL: NO schedule
+    // advance and NO recordSuccess at START — only a terminal outcome (publish /
+    // no-change / timeout) does that. The pending record IS the runaway guard:
+    // every subsequent due tick takes the RESUME branch (polls, never re-starts),
+    // and the idempotency-list reuse is a second guard — so exactly one operation
+    // issue is in flight per company.
+    const record: PendingCompileRecord = {
+      ...frozen,
+      operationIssueId: startResult.operationIssueId,
+      operationId,
+      deadlineMs: now.getTime() + AGENT_TASK_DELIVERY_TIMEOUT,
+      mode: force ? 'force' : 'cron',
+    };
+    await setPendingCompile(ctx, company.id, record);
+    ctx.logger?.info?.(
+      `compile-bulletin: started cycle ${cycleNumber} (operation issue ` +
+        `${startResult.operationIssueId}); awaiting result on a later tick`,
+      { companyId: company.id },
+    );
+    return { kind: 'started', cycleNumber };
   } catch (e) {
     // Defect D — an UNEXPECTED throw reached the catch-all. Route it through
     // recordFailure (D-06 breaker) + recordCycleCompileFailure (D-22 banner)
@@ -777,10 +1076,17 @@ export async function compileBulletinForCompany(
           { companyId: company.id },
         );
       }
-      if (gatePassed) {
+      // Advance the schedule when this tick consumed a due slot — the START gate
+      // passed OR a pending record was being resumed. Otherwise a thrown resume
+      // would leave a stale past pointer and the next tick would recompile.
+      if (gatePassed || pendingActive) {
         await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
       }
     }
+    // Clear any pending record on an unexpected throw (best-effort, regardless
+    // of mode) so a resume that blew up cannot strand the company in 'pending'
+    // forever — the next tick re-STARTs cleanly.
+    if (pendingActive) await clearPendingCompile(ctx, company.id);
     return {
       kind: 'failed',
       reason: `per-company iteration threw: ${(e as Error).message}`,
