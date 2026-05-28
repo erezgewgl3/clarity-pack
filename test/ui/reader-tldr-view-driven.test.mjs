@@ -36,6 +36,13 @@ test('TldrStrip still shows the honest empty state when no TL;DR + not compiling
   assert.match(read(STRIP), /No TL;DR yet/, 'empty-state copy retained');
 });
 
+test('TldrStrip shows a resume-the-agent note when the Editor-Agent is paused (no auto-resume)', () => {
+  const src = read(STRIP);
+  assert.match(src, /the Editorial Desk is paused/i, 'paused-state copy present');
+  assert.match(src, /Resume the Editorial Desk in the Agents panel/i, 'directs the operator to resume explicitly');
+  assert.match(code(src), /status\s*===\s*['"]paused['"]/, 'renders the paused branch on status');
+});
+
 test('reader/index passes tldrStatus + tldrTruncated to TldrStrip', () => {
   const src = code(read(INDEX));
   assert.match(src, /status=\{data\.tldrStatus\}/, 'status threaded to TldrStrip');

@@ -308,9 +308,12 @@ export type TldrCompileStepResult = {
   /**
    * - `cached`      — a fresh TL;DR is available now (cache hit or just consumed).
    * - `compiling`   — the Editor-Agent is working; poll again shortly.
+   * - `paused`      — the Editor-Agent is paused; it won't compile until resumed
+   *                   (an explicit operator action — we never auto-resume on a
+   *                   passive Reader view). The UI surfaces an honest note.
    * - `unavailable` — no Editor-Agent could be resolved (can't start a compile).
    */
-  status: 'cached' | 'compiling' | 'unavailable';
+  status: 'cached' | 'compiling' | 'paused' | 'unavailable';
   /** True when the cached/consumed TL;DR summarized a TRUNCATED (very long) task. */
   truncated: boolean;
 };
@@ -322,7 +325,10 @@ export type TldrViewDriverCtx = Parameters<typeof prepareTldrCompile>[0] &
       PluginIssuesClient,
       'list' | 'create' | 'requestWakeup' | 'listComments' | 'update'
     > & { documents: PluginIssuesClient['documents'] };
-    agents?: { managed?: { reconcile(agentKey: string, companyId: string): Promise<{ agentId: string | null }> } };
+    agents?: {
+      get?(agentId: string, companyId: string): Promise<{ status?: string; pausedAt?: string | null } | null>;
+      managed?: { reconcile(agentKey: string, companyId: string): Promise<{ agentId: string | null }> };
+    };
   };
 
 /**
@@ -418,6 +424,24 @@ export async function driveTldrCompileStep(
     });
     // Show the stale TL;DR if we have one; otherwise it's genuinely unavailable.
     return { tldr: stale, status: stale ? 'cached' : 'unavailable', truncated: staleTruncated };
+  }
+
+  // A PAUSED agent will never process the compile, and we do NOT auto-resume on
+  // a passive Reader view (resume is an explicit operator action — governance
+  // decision 2026-05-28). Detect it (best-effort, read-only) and report 'paused'
+  // so the Reader shows an honest "resume me" note instead of "Compiling…"
+  // forever. (No status read available → fall through and try to compile.)
+  try {
+    const agent = await ctx.agents?.get?.(editorAgentId, companyId);
+    if (agent && (agent.status === 'paused' || agent.pausedAt != null)) {
+      ctx.logger?.info?.('tldr-view: Editor-Agent is paused — not starting (no auto-resume on view)', {
+        issueId,
+        companyId,
+      });
+      return { tldr: stale, status: 'paused', truncated: staleTruncated };
+    }
+  } catch {
+    /* status unknown — fall through and attempt the compile */
   }
 
   // START (or reuse the in-flight op via idempotency) + one immediate poll.

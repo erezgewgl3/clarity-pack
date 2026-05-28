@@ -80,9 +80,10 @@ export type IssueReaderResult = {
    * "Compiling…" + poll state, or the honest "No TL;DR yet" empty state.
    *   - `cached`      — `tldr` is present + fresh.
    *   - `compiling`   — the Editor-Agent is working; the UI should poll.
+   *   - `paused`      — the Editor-Agent is paused; resume it (Agents panel) to compile.
    *   - `unavailable` — no Editor-Agent could be resolved (no compile started).
    */
-  tldrStatus: 'cached' | 'compiling' | 'unavailable';
+  tldrStatus: 'cached' | 'compiling' | 'paused' | 'unavailable';
   /** True when the TL;DR summarized a TRUNCATED (very long) task — the UI notes it. */
   tldrTruncated: boolean;
   refCards: RefCardData[];

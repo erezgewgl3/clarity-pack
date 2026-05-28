@@ -90,9 +90,9 @@ const TLDR_POLL_WINDOW_MS = 90_000;
 export type ReaderViewData = {
   tldr: TLDR | null;
   /** View-driven rework — 'compiling' tells the Reader to poll for the fresh TL;DR;
-   *  'unavailable' shows the honest empty state. Optional for back-compat with a
-   *  cached pre-rework payload. */
-  tldrStatus?: 'cached' | 'compiling' | 'unavailable';
+   *  'paused' shows a resume-the-agent note; 'unavailable' shows the honest empty
+   *  state. Optional for back-compat with a cached pre-rework payload. */
+  tldrStatus?: 'cached' | 'compiling' | 'paused' | 'unavailable';
   /** True when the TL;DR summarized a truncated (very long) task — surfaced as a note. */
   tldrTruncated?: boolean;
   refCards: RefCardData[];

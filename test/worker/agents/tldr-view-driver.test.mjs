@@ -25,7 +25,7 @@ const ISSUE = 'BEAAA-702';
 // A ctx with: in-memory tldr_cache, an issues surface (list discovers the agent
 // id from a seeded op issue, create/update/requestWakeup/documents/listComments),
 // and a controllable document readback.
-function makeCtx({ seedTldr = [], seedOps = [], ready = false, resultBody = 'crisp tldr' } = {}) {
+function makeCtx({ seedTldr = [], seedOps = [], ready = false, resultBody = 'crisp tldr', agentStatus = 'idle' } = {}) {
   const tldrCache = [...seedTldr];
   const operationIssues = [...seedOps]; // {id, originId, originKind, status, assigneeAgentId}
   const updates = [];
@@ -33,6 +33,7 @@ function makeCtx({ seedTldr = [], seedOps = [], ready = false, resultBody = 'cri
 
   const ctx = {
     logger: { info() {}, warn() {}, error() {} },
+    agents: { async get() { return { status: agentStatus, pausedAt: agentStatus === 'paused' ? new Date().toISOString() : null }; } },
     db: {
       async query(sql, params) {
         if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
@@ -134,6 +135,17 @@ test('driveTldrCompileStep — no resolvable Editor-Agent (no op issues, no agen
   const res = await driveTldrCompileStep(ctx, { issueId: ISSUE, companyId: CID, inputs });
   assert.equal(res.status, 'unavailable', `no agent resolvable → unavailable; got ${res.status}`);
   assert.equal(operationIssues.length, 0, 'no compile started when the agent cannot be resolved');
+});
+
+test('driveTldrCompileStep — a PAUSED Editor-Agent → status paused, no op started, no auto-resume', async () => {
+  resetCircuitBreakerState();
+  const { ctx, operationIssues, updates } = makeCtx({ seedOps: [seededAgentOp], ready: true, agentStatus: 'paused' });
+  const res = await driveTldrCompileStep(ctx, { issueId: ISSUE, companyId: CID, inputs });
+  assert.equal(res.status, 'paused', `paused agent → status paused; got ${res.status}`);
+  // No tldr-compile op started (the agent won't process it), and we never resumed it.
+  const tldrOps = operationIssues.filter((o) => o.originKind.includes('tldr-compile'));
+  assert.equal(tldrOps.length, 0, 'no compile started against a paused agent');
+  assert.equal(updates.filter((u) => u.patch?.status === 'idle').length, 0, 'the driver must NOT auto-resume the agent');
 });
 
 test('driveTldrCompileStep — truncated flag flows through to the result on a big task', async () => {

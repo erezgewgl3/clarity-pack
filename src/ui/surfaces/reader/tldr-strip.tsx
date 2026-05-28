@@ -21,8 +21,9 @@ import type { TLDR } from '../../../shared/types.ts';
 export type TldrStripProps = {
   tldr: TLDR | { body: string; generated_at?: string; generatedAt?: string } | null | undefined;
   /** View-driven rework — 'compiling' shows a live "Compiling…" state (the Reader
-   *  polls for the result); 'unavailable' shows the honest empty state. */
-  status?: 'cached' | 'compiling' | 'unavailable';
+   *  polls for the result); 'paused' shows a resume-the-agent note; 'unavailable'
+   *  shows the honest empty state. */
+  status?: 'cached' | 'compiling' | 'paused' | 'unavailable';
   /** True when the TL;DR summarized a truncated (very long) task — shows a note. */
   truncated?: boolean;
 };
@@ -52,6 +53,20 @@ export function TldrStrip({ tldr, status, truncated }: TldrStripProps): React.Re
           <p className="clarity-tldr-body">Compiling TL;DR…</p>
           <p className="clarity-tldr-stamp">
             The Editorial Desk is summarizing this task — it will appear here in a moment.
+          </p>
+        </section>
+      );
+    }
+    if (status === 'paused') {
+      return (
+        <section
+          className="clarity-tldr-strip clarity-tldr-strip--empty clarity-tldr-strip--paused"
+          data-clarity-region="tldr"
+          data-clarity-tldr-status="paused"
+        >
+          <p className="clarity-tldr-body">No TL;DR yet — the Editorial Desk is paused</p>
+          <p className="clarity-tldr-stamp">
+            Resume the Editorial Desk in the Agents panel and reopen this task to compile a TL;DR.
           </p>
         </section>
       );
