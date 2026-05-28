@@ -354,6 +354,15 @@ const manifest: PaperclipPluginManifestV1 = {
     'database.namespace.migrate',
     'database.namespace.read',
     'database.namespace.write',
+    // Delivery-layer rework (2026-05-28) — ctx.state (host KV store) holds the
+    // per-company "pending compile" record so the agent-backed bulletin compile
+    // can be STARTED in one job tick and its result CONSUMED on a later tick,
+    // each in a fresh/valid host invocation (paperclipai@2026.525.0 expires the
+    // invocation scope mid-poll otherwise — PR #6547). plugin.state.read gates
+    // ctx.state.get; plugin.state.write gates ctx.state.set/delete. Additive
+    // capability strings only — no schema/migration.
+    'plugin.state.read',
+    'plugin.state.write',
     'issues.read',
     'issue.comments.read',
     'issue.documents.read',

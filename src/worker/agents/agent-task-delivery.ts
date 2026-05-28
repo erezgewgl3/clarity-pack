@@ -286,8 +286,59 @@ export async function deliverAgentTask(
   const pollIntervalMs =
     opts.pollIntervalMs ?? opts.fallbackPollIntervalMs ?? RESULT_POLL_INTERVAL_MS;
 
+  // Steps 1-3 (create/reuse + wake) in this invocation.
+  const { operationIssueId } = await startAgentTask(ctx, opts);
+
+  // 4-5. Read the result back via the in-invocation poll loop. This SYNCHRONOUS
+  //      form is retained for tests and any caller that can hold one invocation
+  //      for the round-trip; the PRODUCTION cross-tick path
+  //      (compile-bulletin.ts / editor.ts) instead calls startAgentTask once and
+  //      pollAgentTaskResult on subsequent job ticks, so no single invocation is
+  //      held past its host-validity window (delivery-layer rework 2026-05-28).
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(pollIntervalMs);
+    const poll = await pollAgentTaskResult(ctx, {
+      operationIssueId,
+      companyId: opts.companyId,
+      operationKind: opts.operationKind,
+      agentId: opts.agentId,
+    });
+    if (poll.status === 'ready') return poll.body;
+  }
+
+  // The deadline elapsed with no result on any channel.
+  throw new Error(
+    `agent-task-delivery timeout: no result document at key "${RESULT_DOCUMENT_KEY}" ` +
+      `for operation issue ${operationIssueId} after ${timeoutMs}ms`,
+  );
+}
+
+/** The result of {@link startAgentTask}. */
+export type AgentTaskStartResult = {
+  /** The operation issue the agent will deliver its result onto. */
+  operationIssueId: string;
+  /** True when an in-flight operation issue was reused (no new issue created). */
+  reused: boolean;
+};
+
+/**
+ * Delivery-layer rework (2026-05-28) — STEP 1-3 of {@link deliverAgentTask},
+ * callable on its own: idempotency-search + create the operation issue (with the
+ * prompt + result-delivery instruction as the description) + wake the agent.
+ * Returns the operation issue id so the caller can persist it and poll for the
+ * result on a LATER job tick (a fresh, valid host invocation) via
+ * {@link pollAgentTaskResult}. This is how the compile pipeline avoids holding
+ * one invocation across the whole agent round-trip (paperclipai@2026.525.0
+ * expires the scope mid-poll otherwise — PR #6547).
+ */
+export async function startAgentTask(
+  ctx: AgentTaskDeliveryCtx,
+  opts: Omit<DeliverAgentTaskOpts, 'timeoutMs' | 'pollIntervalMs' | 'fallbackPollIntervalMs'>,
+): Promise<AgentTaskStartResult> {
   // 1. Idempotency search. includePluginOperations:true is MANDATORY (B-1).
   let issue: { id: string } | null = null;
+  let reused = false;
   try {
     const existing = await ctx.issues.list({
       companyId: opts.companyId,
@@ -301,6 +352,7 @@ export async function deliverAgentTask(
     );
     if (reusable) {
       issue = { id: reusable.id };
+      reused = true;
       ctx.logger?.info?.(
         `agent-task-delivery: reusing in-flight operation issue ${reusable.id} ` +
           `for ${opts.operationKind}/${opts.operationId} (idempotency — no duplicate created)`,
@@ -349,90 +401,97 @@ export async function deliverAgentTask(
     );
   }
 
-  // 4. Read the result back. Plan 03-08 — a PRIMARY issue-document poll.
-  const operationIssueId = issue.id;
-  const deadline = Date.now() + timeoutMs;
+  return { operationIssueId: issue.id, reused };
+}
 
-  while (Date.now() < deadline) {
-    await sleep(pollIntervalMs);
+/** Arguments for {@link pollAgentTaskResult}. */
+export type PollAgentTaskResultArgs = {
+  operationIssueId: string;
+  companyId: string;
+  operationKind: OperationKind;
+  /** The Editor-Agent UUID — used to match the comment-fallback author. */
+  agentId: string;
+};
 
-    // (a) PRIMARY — the document keyed exactly `compile-result`.
-    try {
-      const doc = await ctx.issues.documents.get(
-        operationIssueId,
-        RESULT_DOCUMENT_KEY,
-        opts.companyId,
+/** The outcome of a SINGLE {@link pollAgentTaskResult} round. */
+export type AgentTaskPollResult =
+  | { status: 'ready'; body: string }
+  | { status: 'pending' };
+
+/**
+ * Delivery-layer rework (2026-05-28) — STEP 4 of {@link deliverAgentTask} as a
+ * SINGLE, sleepless round, callable on its own from a job tick. Checks, in
+ * priority order: (a) the `compile-result` document, (b) an off-key document
+ * scan, (c) the legacy comment scan. Returns `{status:'ready', body}` on the
+ * first schema-valid hit, else `{status:'pending'}`. Each host call here runs in
+ * the CALLER's (fresh) invocation, so the cross-tick poller never outlives its
+ * scope. A host-call rejection (including an expired-scope error) is caught and
+ * treated as "pending this round" — the next tick retries in a new invocation.
+ */
+export async function pollAgentTaskResult(
+  ctx: AgentTaskDeliveryCtx,
+  args: PollAgentTaskResultArgs,
+): Promise<AgentTaskPollResult> {
+  const { operationIssueId, companyId, operationKind, agentId } = args;
+
+  // (a) PRIMARY — the document keyed exactly `compile-result`.
+  try {
+    const doc = await ctx.issues.documents.get(operationIssueId, RESULT_DOCUMENT_KEY, companyId);
+    if (doc && isResultDocument(doc.body, operationKind)) {
+      ctx.logger?.info?.(
+        `agent-task-delivery: result DOCUMENT received on operation issue ` +
+          `${operationIssueId} (key=${RESULT_DOCUMENT_KEY})`,
       );
-      if (doc && isResultDocument(doc.body, opts.operationKind)) {
-        ctx.logger?.info?.(
-          `agent-task-delivery: result DOCUMENT received on operation issue ` +
-            `${operationIssueId} (key=${RESULT_DOCUMENT_KEY})`,
-        );
-        return doc.body;
-      }
-    } catch (e) {
-      ctx.logger?.warn?.(
-        `agent-task-delivery: documents.get(${RESULT_DOCUMENT_KEY}) failed for ` +
-          `issue ${operationIssueId}: ${(e as Error).message}`,
-      );
+      return { status: 'ready', body: doc.body };
     }
-
-    // (b) FALLBACK SCAN — any OTHER document key (the agent picked a
-    //     different key). First schema-valid hit wins.
-    try {
-      const summaries = await ctx.issues.documents.list(operationIssueId, opts.companyId);
-      for (const summary of summaries) {
-        if (summary.key === RESULT_DOCUMENT_KEY) continue; // already tried in (a)
-        const doc = await ctx.issues.documents.get(
-          operationIssueId,
-          summary.key,
-          opts.companyId,
-        );
-        if (doc && isResultDocument(doc.body, opts.operationKind)) {
-          ctx.logger?.info?.(
-            `agent-task-delivery: result DOCUMENT (off-key fallback) found on ` +
-              `operation issue ${operationIssueId} (key=${summary.key})`,
-          );
-          return doc.body;
-        }
-      }
-    } catch (e) {
-      ctx.logger?.warn?.(
-        `agent-task-delivery: documents.list scan failed for issue ` +
-          `${operationIssueId}: ${(e as Error).message}`,
-      );
-    }
-
-    // (c) COMMENT FALLBACK — the legacy Option-A scan (lowest priority).
-    try {
-      const comments: IssueComment[] = await ctx.issues.listComments(
-        operationIssueId,
-        opts.companyId,
-      );
-      for (const c of comments) {
-        // authorAgentId is a non-optional `string | null`; a direct === is
-        // safe. null is a non-agent author and simply does not match.
-        if (c.authorAgentId === opts.agentId && isResultComment(c.body, opts.operationKind)) {
-          ctx.logger?.info?.(
-            `agent-task-delivery: result COMMENT (fallback) received on ` +
-              `operation issue ${operationIssueId}`,
-          );
-          return c.body;
-        }
-      }
-    } catch (e) {
-      ctx.logger?.warn?.(
-        `agent-task-delivery: fallback listComments failed for issue ` +
-          `${operationIssueId}: ${(e as Error).message}`,
-      );
-    }
+  } catch (e) {
+    ctx.logger?.warn?.(
+      `agent-task-delivery: documents.get(${RESULT_DOCUMENT_KEY}) failed for ` +
+        `issue ${operationIssueId}: ${(e as Error).message}`,
+    );
   }
 
-  // 5. The deadline elapsed with no result on any channel.
-  throw new Error(
-    `agent-task-delivery timeout: no result document at key "${RESULT_DOCUMENT_KEY}" ` +
-      `for operation issue ${operationIssueId} after ${timeoutMs}ms`,
-  );
+  // (b) FALLBACK SCAN — any OTHER document key. First schema-valid hit wins.
+  try {
+    const summaries = await ctx.issues.documents.list(operationIssueId, companyId);
+    for (const summary of summaries) {
+      if (summary.key === RESULT_DOCUMENT_KEY) continue; // already tried in (a)
+      const doc = await ctx.issues.documents.get(operationIssueId, summary.key, companyId);
+      if (doc && isResultDocument(doc.body, operationKind)) {
+        ctx.logger?.info?.(
+          `agent-task-delivery: result DOCUMENT (off-key fallback) found on ` +
+            `operation issue ${operationIssueId} (key=${summary.key})`,
+        );
+        return { status: 'ready', body: doc.body };
+      }
+    }
+  } catch (e) {
+    ctx.logger?.warn?.(
+      `agent-task-delivery: documents.list scan failed for issue ` +
+        `${operationIssueId}: ${(e as Error).message}`,
+    );
+  }
+
+  // (c) COMMENT FALLBACK — the legacy Option-A scan (lowest priority).
+  try {
+    const comments: IssueComment[] = await ctx.issues.listComments(operationIssueId, companyId);
+    for (const c of comments) {
+      if (c.authorAgentId === agentId && isResultComment(c.body, operationKind)) {
+        ctx.logger?.info?.(
+          `agent-task-delivery: result COMMENT (fallback) received on ` +
+            `operation issue ${operationIssueId}`,
+        );
+        return { status: 'ready', body: c.body };
+      }
+    }
+  } catch (e) {
+    ctx.logger?.warn?.(
+      `agent-task-delivery: fallback listComments failed for issue ` +
+        `${operationIssueId}: ${(e as Error).message}`,
+    );
+  }
+
+  return { status: 'pending' };
 }
 
 /** Factory options for `deliveryLlmAdapter` — `prompt` is supplied per call. */
