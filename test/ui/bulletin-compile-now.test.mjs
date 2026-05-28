@@ -1,14 +1,19 @@
 // test/ui/bulletin-compile-now.test.mjs
 //
-// Quick task 260528-nns — the "Generate bulletin now" button on the Bulletin
-// page. Source-grep idiom (Node strip-types loads .ts but not .tsx; runtime
-// behaviour is verified live on the deploy drill).
+// Quick task 260528-nns + delivery-layer rework (2026-05-28) — the "Generate
+// bulletin now" button on the Bulletin page. Source-grep idiom (Node strip-types
+// loads .ts but not .tsx; runtime behaviour is verified live on the deploy drill).
+//
+// The action now ENQUEUES (returns { kind:'queued' }); the button shows
+// "Compiling…", polls bulletin.byCycle for a newer edition for ~90s, then
+// settles to a calm "still compiling" note. It can no longer surface a
+// synchronous "No changes since…" — the worker dedupe is invisible to the poll.
 //
 // Pins:
 //   - the button label "Generate bulletin now",
 //   - usePluginAction('bulletin.compileNow'),
-//   - the three result-state copies (published / no-change / error),
-//   - the byCycle data refresh on success.
+//   - the published-detected + calm-settle copies,
+//   - the Compiling… in-flight state + the byCycle poll (refresh on an interval).
 
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
@@ -42,21 +47,29 @@ test('Bulletin page passes companyId + userId to the compileNow action', () => {
   assert.match(src, /userId/, 'userId in scope');
 });
 
-test('Bulletin page renders the three result states (published / no-change / error)', () => {
+test('Bulletin page renders the queued-compile result states (published-detected / calm settle / error)', () => {
   const src = read();
-  assert.match(src, /Published Bulletin No\./, 'published state copy');
-  assert.match(src, /No changes since Bulletin No\./, 'no-change state copy');
-  assert.match(src, /Editorial Desk unavailable/, 'error state copy (agent unavailable)');
+  assert.match(src, /Published Bulletin No\./, 'published-detected copy (a newer edition appeared)');
+  assert.match(src, /Still compiling/, 'calm settle copy after the poll window (Decision #4)');
+  assert.match(src, /Editorial Desk unavailable/, 'error state copy (action unavailable)');
+});
+
+test('Bulletin page treats compileNow as enqueue (queued) and does NOT key on a synchronous no-change', () => {
+  const src = code(read());
+  // The queued discriminant is handled; the old synchronous no-change copy is gone.
+  assert.match(src, /queued/, 'handles the { kind:queued } enqueue result');
+  assert.doesNotMatch(read(), /No changes since Bulletin No\./, 'no synchronous no-change copy anymore');
 });
 
 test('Bulletin page shows a Compiling… in-flight state', () => {
   assert.match(read(), /Compiling…/, 'in-flight disabled state copy');
 });
 
-test('Bulletin page refreshes bulletin.byCycle data on a successful compile', () => {
+test('Bulletin page polls bulletin.byCycle on an interval while a compile is queued', () => {
   const src = code(read());
-  // usePluginData must expose refresh, and it must be called after compile.
+  // usePluginData must expose refresh, and it must be polled on an interval.
   assert.match(src, /refresh/, 'byCycle refresh is wired');
+  assert.match(src, /setInterval/, 'the queued compile polls for a newer edition');
 });
 
 test('Bulletin compile-now button carries a scoped CSS hook', () => {

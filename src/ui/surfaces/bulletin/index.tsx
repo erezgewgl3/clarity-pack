@@ -134,55 +134,112 @@ function BulletinPageOptedIn(): React.ReactElement {
   );
 }
 
-// Quick task 260528-nns — the on-demand "Generate bulletin now" control.
-// Runs the same compile pipeline as the daily 06:30 cron via the
-// `bulletin.compileNow` action (force + content dedupe; the daily schedule is
-// left untouched). Three result states dispatch on the action's discriminated
-// return; on a fresh publish it refreshes the byCycle data so the new edition
-// renders without a manual reload.
+// Quick task 260528-nns + delivery-layer rework (2026-05-28) — the on-demand
+// "Generate bulletin now" control.
+//
+// The agent compile (~50s) cannot run inside a single host invocation
+// (paperclipai@2026.525.0 expires the scope mid-poll — PR #6547), so the
+// `bulletin.compileNow` action ENQUEUES the request (returns { kind:'queued' })
+// and the every-minute compile-bulletin job runs the force compile across ticks.
+// The button therefore can't read a synchronous published/no-change result;
+// instead it shows "Compiling…", polls `bulletin.byCycle` (via the parent's
+// refresh) for a newer edition for ~90s, then settles to a calm "still
+// compiling" note (Decision #4). The job finishes in the background regardless.
 type CompileNowResult =
-  | { kind: 'published'; cycleNumber: number; publishedAt?: string | null }
-  | { kind: 'no-change'; cycleNumber: number; publishedAt?: string | null }
+  | { kind: 'queued' }
   | { kind: 'error'; reason: string }
   | { error: string };
 
 const COMPILE_UNAVAILABLE = 'Editorial Desk unavailable — resume it in the Agents panel.';
+// Decision #4 — the calm, non-error settle copy after the UI poll window.
+const STILL_COMPILING_NOTE =
+  'Still compiling — the Editorial Desk can take a minute or two; your bulletin will appear here when it’s ready.';
+// Poll the latest edition every 8s, for up to ~90s, while a compile is queued.
+const COMPILE_POLL_INTERVAL_MS = 8_000;
+const COMPILE_POLL_WINDOW_MS = 90_000;
 
 function GenerateBulletinNow({
   companyId,
   userId,
-  onPublished,
+  currentCycleNumber,
+  currentPublishedAt,
+  refresh,
 }: {
   companyId: string;
   userId: string;
-  onPublished: () => void;
+  currentCycleNumber: number | null;
+  currentPublishedAt: string | null;
+  refresh: () => void;
 }): React.ReactElement {
   const compileNow = usePluginAction('bulletin.compileNow');
-  const [compiling, setCompiling] = React.useState(false);
+  const [status, setStatus] = React.useState<'idle' | 'compiling' | 'done'>('idle');
   const [resultMsg, setResultMsg] = React.useState<string | null>(null);
 
+  // Baseline edition captured at click time + the poll deadline + a stable
+  // refresh handle — kept in refs so the polling effect depends only on
+  // `status` and never thrashes the interval when the parent re-renders.
+  const baselineRef = React.useRef<{ cycle: number | null; publishedAt: string | null }>({
+    cycle: null,
+    publishedAt: null,
+  });
+  const deadlineRef = React.useRef<number>(0);
+  const refreshRef = React.useRef(refresh);
+  refreshRef.current = refresh;
+
+  // While compiling: re-fetch byCycle on an interval; settle to the calm note
+  // once the poll window elapses.
+  React.useEffect(() => {
+    if (status !== 'compiling') return undefined;
+    const id = setInterval(() => {
+      if (Date.now() > deadlineRef.current) {
+        setStatus('done');
+        setResultMsg(STILL_COMPILING_NOTE);
+        return;
+      }
+      refreshRef.current();
+    }, COMPILE_POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [status]);
+
+  // While compiling: a newer edition (cycle number bumped, or a new publishedAt)
+  // means the queued compile published — show it and stop.
+  React.useEffect(() => {
+    if (status !== 'compiling') return;
+    const base = baselineRef.current;
+    const newer =
+      (typeof currentCycleNumber === 'number' && currentCycleNumber !== base.cycle) ||
+      (!!currentPublishedAt && currentPublishedAt !== base.publishedAt);
+    if (newer) {
+      setStatus('done');
+      setResultMsg(
+        typeof currentCycleNumber === 'number'
+          ? `Published Bulletin No. ${currentCycleNumber}`
+          : 'Published a new bulletin',
+      );
+    }
+  }, [status, currentCycleNumber, currentPublishedAt]);
+
   const onClick = React.useCallback(async () => {
-    setCompiling(true);
+    baselineRef.current = { cycle: currentCycleNumber, publishedAt: currentPublishedAt };
+    deadlineRef.current = Date.now() + COMPILE_POLL_WINDOW_MS;
     setResultMsg(null);
+    setStatus('compiling');
     try {
       const r = (await compileNow({ companyId, userId })) as CompileNowResult;
-      if (r && 'kind' in r && r.kind === 'published') {
-        setResultMsg(`Published Bulletin No. ${r.cycleNumber}`);
-        onPublished();
-      } else if (r && 'kind' in r && r.kind === 'no-change') {
-        setResultMsg(`No changes since Bulletin No. ${r.cycleNumber}`);
-      } else if (r && 'kind' in r && r.kind === 'error') {
-        setResultMsg(r.reason || COMPILE_UNAVAILABLE);
-      } else {
-        // {error:'OPT_IN_REQUIRED'} or an unexpected shape.
+      if (r && 'error' in r) {
+        // {error:'OPT_IN_REQUIRED'} or similar — stop and show the unavailable copy.
+        setStatus('done');
         setResultMsg(COMPILE_UNAVAILABLE);
+      } else if (r && 'kind' in r && r.kind === 'error') {
+        setStatus('done');
+        setResultMsg(r.reason || COMPILE_UNAVAILABLE);
       }
+      // { kind:'queued' } → stay in 'compiling'; the effects resolve it.
     } catch {
+      setStatus('done');
       setResultMsg(COMPILE_UNAVAILABLE);
-    } finally {
-      setCompiling(false);
     }
-  }, [compileNow, companyId, userId, onPublished]);
+  }, [compileNow, companyId, userId, currentCycleNumber, currentPublishedAt]);
 
   return (
     <div className="clarity-bulletin-compile-now" data-clarity-region="bulletin-compile-now">
@@ -190,10 +247,10 @@ function GenerateBulletinNow({
         type="button"
         className="clarity-bulletin-compile-now-btn"
         onClick={() => void onClick()}
-        disabled={compiling}
+        disabled={status === 'compiling'}
         title="Compile a bulletin from the current state without waiting for the 06:30 cycle"
       >
-        {compiling ? 'Compiling…' : 'Generate bulletin now'}
+        {status === 'compiling' ? 'Compiling…' : 'Generate bulletin now'}
       </button>
       {resultMsg ? (
         <span className="clarity-bulletin-compile-now-result" role="status">
@@ -217,6 +274,13 @@ function BulletinPageBody({
     userId,
   });
 
+  // The latest published edition the page currently shows — the baseline the
+  // "Generate bulletin now" poll compares against to detect a fresh publish.
+  const published =
+    data && typeof data === 'object' && 'kind' in data && data.kind === 'published' ? data : null;
+  const latestCycle = published ? published.cycleNumber : null;
+  const latestPublishedAt = published ? published.publishedAt ?? null : null;
+
   // Plan 05-08 (D-17) — shared `+ Create task` header for cross-surface
   // cold-task creation. Mounted at the top of every BulletinPageBody return.
   // Quick task 260528-nns — the "Generate bulletin now" control rides alongside
@@ -228,7 +292,13 @@ function BulletinPageBody({
         userId={userId}
         surface="bulletin"
       />
-      <GenerateBulletinNow companyId={companyId} userId={userId} onPublished={refresh} />
+      <GenerateBulletinNow
+        companyId={companyId}
+        userId={userId}
+        currentCycleNumber={latestCycle}
+        currentPublishedAt={latestPublishedAt}
+        refresh={refresh}
+      />
     </>
   );
 

@@ -3,36 +3,29 @@
 // Quick task 260528-nns — `bulletin.compileNow` action: the operator's
 // "Generate bulletin now" button on the Bulletin page.
 //
-// Runs the SAME compile pipeline the daily 06:30 cron uses, for the current
-// company, via the shared `compileBulletinForCompany(..., { force: true })`:
-//   - bypasses the `now >= next_due_at` due-gate,
-//   - leaves the daily schedule pointer (next_due_at) UNTOUCHED,
-//   - dedupes on content_hash (no new bulletin when nothing changed since the
-//     last published one),
-//   - skips breaker failure-table recording (an operator action must not trip
-//     the D-06 auto-pause breaker).
+// Delivery-layer rework (2026-05-28). The action can NOT run the ~50s agent
+// compile inside its own invocation: paperclipai@2026.525.0 expires the
+// invocation scope mid-poll (PR #6547), so a synchronous compile dies with
+// "expired invocation scope" and the button never resolves. Instead the action
+// ENQUEUES the request — it writes a per-company `force-requested` marker in
+// ctx.state and returns { kind:'queued' } immediately (fast, well within the
+// action's invocation). The every-minute `compile-bulletin` job honors the
+// marker on its next tick, running the force compile via the cross-tick
+// START/RESUME state machine (force + content dedupe; the daily 06:30 schedule
+// pointer is left untouched), and clears the marker so it does not force every
+// tick. The UI polls `bulletin.byCycle` to surface the published edition.
 //
-// Mirrors bulletin-action-approve.ts: opt-in-guard wrapped (opted-out →
-// { error: 'OPT_IN_REQUIRED' }), THROWS on a missing required param, otherwise
-// returns a discriminated result the UI dispatches its copy on:
-//   { kind: 'published', cycleNumber, publishedAt }
-//   { kind: 'no-change', cycleNumber, publishedAt }
-//   { kind: 'error', reason }   // paused/unavailable agent, compile/publish failure
+// Mirrors the other opt-in-guarded actions: opt-in-guard wrapped (opted-out →
+// { error: 'OPT_IN_REQUIRED' }), THROWS on a missing required param.
 
 import { wrapActionHandler, type OptInGuardActionCtx } from '../opt-in-guard.ts';
-import type { Company } from '@paperclipai/plugin-sdk';
 
-import {
-  compileBulletinForCompany,
-  resolveBulletinTz,
-  type CompileBulletinCtx,
-} from '../jobs/compile-bulletin.ts';
+import { forceRequestScope, type CompileBulletinCtx } from '../jobs/compile-bulletin.ts';
 
 export type BulletinCompileNowCtx = OptInGuardActionCtx & CompileBulletinCtx;
 
 export type BulletinCompileNowResult =
-  | { kind: 'published'; cycleNumber: number; publishedAt: string }
-  | { kind: 'no-change'; cycleNumber: number; publishedAt: string | null }
+  | { kind: 'queued' }
   | { kind: 'error'; reason: string };
 
 export function registerBulletinCompileNow(ctx: BulletinCompileNowCtx): void {
@@ -41,36 +34,25 @@ export function registerBulletinCompileNow(ctx: BulletinCompileNowCtx): void {
       typeof params?.companyId === 'string' && params.companyId ? params.companyId : null;
     if (!companyId) throw new Error('bulletin.compileNow: companyId required');
 
-    // Resolve the company object (for the masthead display name); fall back to
-    // a bare {id} if the list read fails or the id is not found.
-    let company: Company;
+    // The force compile is driven by the compile-bulletin job (cross-tick state
+    // machine). Without ctx.state there is no place to enqueue the request —
+    // surface a clear, non-throwing error the UI can show.
+    if (!ctx.state?.set) {
+      return {
+        kind: 'error',
+        reason: 'On-demand compile is unavailable on this install (plugin state not enabled).',
+      };
+    }
+
     try {
-      const companies = await ctx.companies.list();
-      company = companies.find((c) => c.id === companyId) ?? ({ id: companyId } as Company);
-    } catch {
-      company = { id: companyId } as Company;
+      await ctx.state.set(forceRequestScope(companyId), {
+        requestedAt: new Date().toISOString(),
+        requestedByUserId: typeof params?.userId === 'string' ? params.userId : null,
+      });
+    } catch (e) {
+      return { kind: 'error', reason: `Could not queue the compile: ${(e as Error).message}` };
     }
 
-    const result = await compileBulletinForCompany(ctx, company, {
-      now: new Date(),
-      bulletinTz: await resolveBulletinTz(ctx),
-      force: true,
-    });
-
-    switch (result.kind) {
-      case 'published':
-        return { kind: 'published', cycleNumber: result.cycleNumber, publishedAt: result.publishedAt };
-      case 'no-change':
-        return { kind: 'no-change', cycleNumber: result.cycleNumber, publishedAt: result.publishedAt };
-      case 'duplicate':
-        // An idempotent re-publish of an already-published cycle reads the same
-        // to the operator as "nothing new".
-        return { kind: 'no-change', cycleNumber: result.cycleNumber, publishedAt: null };
-      case 'skipped':
-      case 'failed':
-        return { kind: 'error', reason: result.reason };
-      default:
-        return { kind: 'error', reason: 'Compile produced an unexpected result.' };
-    }
+    return { kind: 'queued' };
   });
 }

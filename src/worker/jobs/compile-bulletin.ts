@@ -470,6 +470,38 @@ async function clearPendingCompile(ctx: CompileBulletinCtx, companyId: string): 
 }
 
 /**
+ * Read + delete the operator's on-demand force-request marker for a company.
+ * Returns `true` exactly once per marker (read-then-delete), so the next job
+ * tick STARTs a force compile and the marker does not re-fire on every tick.
+ * Defensive: no ctx.state → always `false`. A read/delete failure is logged and
+ * treated as "no force this tick" (the daily cron path still runs).
+ */
+async function consumeForceRequest(ctx: CompileBulletinCtx, companyId: string): Promise<boolean> {
+  if (!ctx.state?.get) return false;
+  try {
+    const marker = await ctx.state.get(forceRequestScope(companyId));
+    if (!marker) return false;
+    if (ctx.state.delete) {
+      try {
+        await ctx.state.delete(forceRequestScope(companyId));
+      } catch (e) {
+        ctx.logger?.warn?.(
+          `compile-bulletin: ctx.state.delete(force-requested) failed: ${errText(e)}`,
+          { companyId },
+        );
+      }
+    }
+    ctx.logger?.info?.('compile-bulletin: honoring on-demand force-request marker', { companyId });
+    return true;
+  } catch (e) {
+    ctx.logger?.warn?.(`compile-bulletin: ctx.state.get(force-requested) failed: ${errText(e)}`, {
+      companyId,
+    });
+    return false;
+  }
+}
+
+/**
  * Finish a compile from a RAW agent result body, using the FROZEN inputs
  * captured at START. Shared by the START-immediate-ready branch and the RESUME
  * branch. Mirrors the prior inline finalize→verify→(force)dedupe→publish→advance
@@ -1122,8 +1154,17 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
     for (const company of companies) {
       // Per-company isolation: compileBulletinForCompany never throws (its own
       // catch-all returns a 'failed' result), so one company cannot abort the
-      // loop. force:false → byte-identical to the prior inline cron body.
-      await compileBulletinForCompany(ctx, company, { now, bulletinTz, force: false });
+      // loop.
+      //
+      // Delivery-layer rework (2026-05-28) — honor the operator's on-demand
+      // marker: `bulletin.compileNow` enqueues a `force-requested` marker; this
+      // tick consumes it (read-then-delete) and STARTs a force compile. A force
+      // START persists a pending record with mode:'force', so subsequent resume
+      // ticks finish in force mode (dedupe on, daily schedule untouched) even
+      // though the marker was already consumed. When no marker is set, force is
+      // false — byte-identical to the prior inline cron body (due-gate enforced).
+      const force = await consumeForceRequest(ctx, company.id);
+      await compileBulletinForCompany(ctx, company, { now, bulletinTz, force });
     }
   });
 }
