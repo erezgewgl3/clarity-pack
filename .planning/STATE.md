@@ -4,8 +4,8 @@ milestone: v1.0.0-rc.8
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
 stopped_at: Phase 6.1 CLOSED & VERIFIED 2026-05-27 — Plan 05-10 unblocked
-last_updated: "2026-05-27T17:50:00.000Z"
-next_action: "/gsd:execute-phase 5 --plan 05-10 (rc → 1.0.0 + npm publish + ALL-paths Countermoves drill + Hostinger wipe-and-rebuild + BEAAA install). Phase 6.1 closure docs landed (06.1-VERIFICATION.md + REQUIREMENTS.md ROOM-09/10/11 → Implemented + ROADMAP Phase 6.1 [x] CLOSED & VERIFIED + tarball clarity-pack-1.0.0-rc.8.tgz sha256 23181e4a... installed and healthy on Countermoves with Plan 06.1-12 v2 parser fix verified live). User manual docs/user-manual.md + 7 screenshots shipped fb3dc83 + 1fdef4d."
+last_updated: "2026-05-28T18:30:00.000Z"
+next_action: "NEXT BUILD = clarity-surfaces quality + portability bundle. Read MemPalace clarity_pack/decisions drawer drawer_clarity_pack_decisions_af74a33adb4d28b47ae8894e (findings/fixes/decisions/sequencing) + drawer_clarity_pack_decisions_8f2f846b8ace835af1cc8c30 (view-driven rework + host job-scope-dead) FIRST. Discuss-first, TDD, v1.0.0, instance-agnostic. Order: (1) fix ref-resolution via SDK ctx.issues.get + de-BEAAA the worker ref-extraction (issue-reader.ts:58 + editor.ts extractRefsFromBody) + 2 hardcoded labels [PREREQ, fixes Reader chips + portability + unblocks TL;DR titles]; (2) TL;DR cleanup (render markdown, real-TL;DR brevity, refs->titles); (3) Situation Room org-level blocked-backlog clickable view in the data handler; (4) bulletin lineage filter+gloss+clickable. View-driven fix is LIVE+verified on BEAAA (Bulletin No.1 + TL;DRs compile on Reader open). Plan 05-10 (npm publish + milestone close) remains operator-gated, separate."
 progress:
   total_phases: 7
   completed_phases: 6
