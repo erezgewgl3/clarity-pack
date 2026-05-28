@@ -69,8 +69,8 @@ Additional tab on every issue page; never replaces classic UI.
 
 - [ ] **READER-01**: Reader view contributes to the `detailTab` slot with `entityTypes: ["issue"]` (or `taskDetailView`, depending on which the live-instance spike confirms renders next to classic Paperclip tabs).
 - [ ] **READER-02**: TL;DR strip at the top of the tab with a "regenerated when the task body changes" freshness stamp.
-- [ ] **READER-03**: All `BEAAA-NNN` references in the prose render as inline reference chips showing ID + status badge.
-- [ ] **READER-04**: An "Anchored to (resolved)" section renders one ref-card per upstream reference with title + owner + status pill + a substantive excerpt quote — no clicking through to read the source task.
+- [x] **READER-03**: All `BEAAA-NNN` references in the prose render as inline reference chips showing ID + status badge. **(Implemented — Plan 07-01 SDK ref-resolver; live-verified on BEAAA 2026-05-29: 13/13 chips on BEAAA-828 resolve to `ID · real-status` clickable links, 0 `· unknown`.)**
+- [x] **READER-04**: An "Anchored to (resolved)" section renders one ref-card per upstream reference with title + owner + status pill + a substantive excerpt quote — no clicking through to read the source task. **(Implemented — Plan 07-01; live-verified 2026-05-29: cards render id + title + `clarity-state-pill` + `Owner:` + `clarity-ref-card-quote` excerpt. Markdown-render of the excerpt body is deferred item 3.)**
 - [ ] **READER-05**: A "The deliverable" inline preview block renders the artifact name + last-write timestamp + a v1 placeholder preview (XLSX/PDF full-fidelity preview is deferred to Phase 5).
 - [ ] **READER-06**: Goal ancestry breadcrumb at the top (project → milestone → parent issue → this task).
 - [ ] **READER-07**: Acceptance criteria checklist with manual marking; auto-status from acceptance-criteria text + acceptance-event log is deferred to Phase 5.
@@ -243,8 +243,8 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | EDITOR-06 | Phase 2 | Pending |
 | READER-01 | Phase 2 | Pending |
 | READER-02 | Phase 2 | Pending |
-| READER-03 | Phase 2 | Pending |
-| READER-04 | Phase 2 | Pending |
+| READER-03 | Phase 2 / Plan 07-01 | Implemented |
+| READER-04 | Phase 2 / Plan 07-01 | Implemented |
 | READER-05 | Phase 2 | Pending |
 | READER-06 | Phase 2 | Pending |
 | READER-07 | Phase 2 | Pending |

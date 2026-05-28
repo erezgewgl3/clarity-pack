@@ -155,23 +155,15 @@ No new network endpoints, auth paths, or schema changes. T-07-01 (excerpt viewer
 >
 > Install the tarball above (verify sha256 `baafb66a4117e0e792e8567ba1370ec585edc9d05acfc43960d025dbe3fc9124`).
 
-1. **Chips resolve (the headline fix).** Open a BEAAA task whose body contains a `BEAAA-NNN`
-   reference; click into the Reader tab (`browser_click` the Radix tab); `browser_evaluate` the chip
-   DOM — assert at least one ref chip renders the referenced issue's real title + status, NOT
-   `· unknown`. **Verdict: TBD.**
-2. **Which path fired (the SDK probe).** Tail the worker log during step 1; record whether
-   `ctx.issues.get` resolved the identifier directly OR the `ctx.issues.list`-match fallback fired.
-   This is the runtime answer to "does host `issues.get` accept a human identifier vs only a UUID"
-   (07-RESEARCH §3 open question). **Verdict: TBD.**
-3. **`_viewer_can_read` open item (T-07-01).** From the browser, fetch `localhost:3100` REST for a
-   referenced issue and confirm whether the excerpt rendered in the chip matches the viewer's
-   permitted view — i.e. whether `ctx.issues.get` enforces viewer perms server-side. **Verdict: TBD.**
-   If it does NOT enforce, file a follow-up to gate excerpts (do NOT block this plan).
-4. **Portability sanity.** On the live instance, confirm the prefix-derived extraction matches the
-   instance's own prefix (BEAAA on BEAAA) and that a stray cross-company token in a body is NOT
-   chip-ified. **Verdict: TBD.**
-5. **Labels.** Confirm the chat roster header + global-search placeholder show the resolved company
-   name (or URL prefix), not the literal `BEAAA`. **Verdict: TBD.**
+**DRILL EXECUTED 2026-05-29 (orchestrator window, live BEAAA via localhost:3100 tunnel; installed `clarity-pack-1.0.0.tgz` sha256 `baafb66a4117e0e792e8567ba1370ec585edc9d05acfc43960d025dbe3fc9124`, plugin id `a763176a-…`, status=ready version=1.0.0). Target issue: BEAAA-828 (status=blocked), body references BEAAA-704/713/677/706/702.**
+
+1. **Chips resolve (the headline fix) — ✅ PASS.** Clicked the Reader Radix tab (real Playwright click) on BEAAA-828. All **13** inline `clarity-ref-chip` elements resolved — `BEAAA-704 · done`, `BEAAA-713 · done`, `BEAAA-677 · done`, `BEAAA-706 · done`, `BEAAA-702 · done` — **0 `· unknown`, 0 stuck-loading**. Each chip is a live link `<a href="/BEAAA/issues/BEAAA-704" class="clarity-ref-chip" data-status="done">` (one-click to the real issue = zero rabbit-hole). Statuses match host ground truth (all `done`). Surface present; no "failed to render". **READER-04 also verified live:** the "Anchored to (resolved)" section renders ref-cards with `clarity-ref-card-id` + `clarity-ref-card-title` ("CSO review — Updated strategy from Founders…") + `clarity-state-pill` (`Standby · <1m`) + `clarity-ref-card-owner` (`Owner: unassigned`) + `clarity-ref-card-quote` (substantive `## BLUF …` excerpt). → **READER-03 + READER-04 flipped to Implemented.**
+2. **Which path fired (the SDK probe) — ⚠ INDETERMINATE FROM LOGS.** Worker log shows every `resolve-refs` + `issue.reader` POST returns `200`, but the shared `resolveRefsViaSdk` does not log the internal get-vs-list branch, so which path fired is not directly observable. Resolution succeeded end-to-end via BOTH worker paths; the cached `ctx.issues.list` fallback makes correctness **path-independent** (the whole point of the locked design). The `companies.list` "invocation scope" errors in the log are the pre-existing dead **scheduled-job/bulletin** scope — unrelated to ref-resolution. **Follow-up (non-blocking):** add a one-line debug log to record the branch if a definitive answer is ever wanted. The original "does host `issues.get` accept a human identifier?" question is therefore *moot for correctness* but *unconfirmed for telemetry*.
+3. **`_viewer_can_read` open item (T-07-01) — ⚠ NOT FALSIFIABLE on this single-tenant admin instance.** BEAAA is single-tenant self-hosted and Eric is the sole human operator (reads everything), so there is no permission boundary to exercise. No excerpt leak observed; the code treats a non-null `ctx.issues.get` as readable. Residual documented; revisit only if a multi-viewer instance ever comes into scope.
+4. **Portability sanity — ✅ VERIFIED (by construction; not visually observable on BEAAA).** Extraction derived the `BEAAA` prefix from the issue's own `identifier`; only `BEAAA-NNN` tokens were chipped; no stray cross-company token chip-ified. The hardcoded `/\bBEAAA-\d+\b/g` is gone from BOTH worker regexes (grep = 0), replaced by prefix-derived extraction + broad fallback. The portability *win* is invisible on BEAAA itself (the prefix IS BEAAA) — it is proven by the net-new unit tests (COU-/ACME- match, BEAAA- does NOT match on a COU issue) + the grep that the literal is gone.
+5. **Labels — ✅ VERIFIED (de-hardcoded; renders URL-prefix fallback on BEAAA).** Chat roster header renders `Employees 17 · BEAAA`; the hardcoded `"BEAAA"` literal is gone from roster-rail.tsx + chat/index.tsx (grep = 0). On BEAAA the rendered "BEAAA" is the **derived URL prefix** (the hook short-circuits on host-context companyId before `resolve-prefix` runs — the CONTEXT-acknowledged acceptable path; the company displayName "IFA" is not surfaced on that path). Visually identical on BEAAA; the de-hardcoding only changes the output on a non-BEAAA instance.
+
+**Net drill verdict: PASS.** Headline fix (chips resolve) confirmed live; READER-03 + READER-04 Implemented. Two items (SDK-path telemetry, viewer-gate) are non-falsifiable/non-blocking residuals documented above. The raw-markdown excerpt rendering + refs-as-titles-inline + TL;DR readability the operator expected are **deferred item 3** (separate discuss gate), NOT regressions.
 
 ## Orchestrator deploy status (2026-05-28) — gates re-verified + pushed; deploy BLOCKED on fail2ban (Path B awaits operator)
 
