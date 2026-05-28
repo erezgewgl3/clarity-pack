@@ -77,7 +77,19 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // enqueue/poll state machine. Net delta is small copy/logic, +173 bytes over the
 // prior ceiling (702,637 bytes). Legitimate feature delta, no SheetJS; 688 kB
 // (704,512 bytes) absorbs it with ~1.9 kB headroom.
-const UI_BUNDLE_BYTES_CEILING = 688 * 1024; // 688 kB = 704,512 bytes
+// Bumped 2026-05-29 from 688 → 694 kB (Plan 07-02: SafeMarkdown renderer, +N
+// bytes, no SheetJS): D-I3-01 ships a hand-rolled, plugin-local safe markdown
+// renderer (src/ui/primitives/safe-markdown.ts pure parser + .tsx component) so
+// the TL;DR strip + the Anchored-to excerpt render the Editor-Agent's markdown
+// as formatted React nodes instead of literal "## BLUF" text. SafeMarkdown is
+// the ONLY UI-bundle addition in 07-02 (the refs→title rewrite is worker-side,
+// zero UI cost). It overflowed the ~1,274 B 07-01 headroom: the built bundle
+// went 703,238 → 709,383 bytes (+6,145 B over the 07-01 build; +4,871 B over the
+// prior ceiling). Verified zero SheetJS sentinels (XLSX/SheetJS/!ref all 0), so
+// the delta is the legitimate renderer code — recalibrated per the empirical-
+// recalibration precedent (Plan 05-04 / 05-11). 694 kB (710,656 bytes) absorbs
+// it with ~1.3 kB headroom for minor downstream drift.
+const UI_BUNDLE_BYTES_CEILING = 694 * 1024; // 694 kB = 710,656 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
