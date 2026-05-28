@@ -165,6 +165,13 @@ export function useResolvedUserId(): ResolvedUserId {
 
     setFetchState({ kind: 'pending' });
 
+    // SANCTIONED raw fetch — the one intentional exception to SCAF-05 in
+    // src/ui. The SDK exposes no way to resolve the viewer's userId in
+    // detail-tab slots (see this file's header for the full rationale), so the
+    // resolver calls Better-Auth's /api/auth/get-session directly as
+    // same-origin trusted JS. usePluginData/usePluginAction cannot serve this —
+    // they gate on a userId, the very thing we are resolving here.
+    // eslint-disable-next-line clarity/no-raw-fetch-in-ui
     fetch(SESSION_ENDPOINT, {
       method: 'GET',
       credentials: 'include',

@@ -152,7 +152,6 @@ export function TopicStrip({
       onSelectTopic(visible[0]!);
     }
     // Only react to the topic list changing — onSelectTopic is stable enough.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible.map((t) => t.issueId).join(','), activeTopicIssueId]);
 
   const handleUnarchive = React.useCallback(

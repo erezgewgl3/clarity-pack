@@ -179,7 +179,6 @@ export function TrueTaskDialog({
     }
     // We intentionally don't include initialTitle/initialTopicIssueId — they
     // are derived from props that don't change while the dialog is open.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultAssigneeAgentId, mode]);
 
   // Plan 04.1-09 — Escape closes via a window listener so it fires regardless

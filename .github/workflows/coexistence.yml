@@ -11,10 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node 20
+      # Node 24: the checklist step runs `node --test --experimental-strip-types`,
+      # which Node 20 rejects ("node: bad option: --experimental-strip-types") —
+      # that flag requires Node 22+. Node 24 matches scaffold-check + local dev
+      # and accepts the flag.
+      - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Run six COEXIST-01..06 assertions
         run: node scripts/coexistence-checks/run-all.mjs
       - name: Verify test/ci/coexistence-checklist.test.mjs covers the bad fixtures

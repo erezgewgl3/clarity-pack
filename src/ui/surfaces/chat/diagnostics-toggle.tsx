@@ -71,7 +71,6 @@ export function DiagnosticsToggle({
     // We intentionally do not include `armed` in deps — only re-run when
     // topicId changes. Including `armed` would re-fire after every toggle
     // and re-overwrite from storage in a loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId]);
 
   const handleClick = React.useCallback(() => {

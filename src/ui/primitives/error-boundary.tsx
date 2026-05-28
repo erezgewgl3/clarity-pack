@@ -102,7 +102,6 @@ export class SectionErrorBoundary extends React.Component<
     // queries that already locate the host log will land on this log too.
     const message =
       error instanceof Error ? error.stack ?? error.message : String(error);
-    // eslint-disable-next-line no-console
     console.error(
       `clarity-pack: section "${this.props.name}" threw at render — section degraded to fallback`,
       message,
