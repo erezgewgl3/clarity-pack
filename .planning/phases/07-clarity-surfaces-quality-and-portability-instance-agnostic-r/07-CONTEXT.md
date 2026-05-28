@@ -110,5 +110,57 @@ OUT OF SCOPE (this plan): TL;DR rendering/prompt changes, Situation Room blocked
 
 ---
 
+# ITEM 3 — TL;DR cleanup (markdown render + tighter prompt + refs→titles)
+
+**Discussed:** 2026-05-29 (fast discuss; items 1+2 CLOSED & VERIFIED LIVE on BEAAA first)
+**Status:** Ready for planning (this is the NEXT plan — 07-02)
+
+<domain>
+## Phase Boundary (item 3)
+
+Make the Editor-Agent's TL;DR — and the resolved reference excerpts — actually readable. Three sub-fixes: (a) render the markdown the agent emits instead of showing literal `## BLUF` / `**bold**` / `- bullets` / `[label](url)`; (b) tighten the compile prompt to a hard, founder-readable shape; (c) resolve `BEAAA-NNN` references in the TL;DR to their titles inline using the Phase 7-01 SDK resolver. **OUTPUT QUALITY ONLY** — the compile *trigger* (view-driven compile, paused-agent behaviour) is unchanged.
+
+Builds directly on the 07-01 SDK ref-resolver (`resolveRefsViaSdk` + `prefixFromIdentifier`). Stay 1.0.0; additive-only; NO migration; NO new runtime deps; TDD-first.
+</domain>
+
+<decisions>
+## Implementation Decisions (item 3 — LOCKED via fast discuss 2026-05-29)
+
+### Markdown rendering
+- **D-I3-01:** Render the TL;DR (and the Anchored-to excerpt) markdown with a **hand-rolled minimal safe renderer that emits React nodes — NEVER `dangerouslySetInnerHTML`.** Cover the markdown the Editor-Agent actually emits: headings (`##`/`###`), `**bold**`, `*italic*`, `-`/`*`/numbered bullets, `[label](url)` links, inline `` `code` ``, and paragraph breaks. No new runtime dep (constraint) — the renderer is plugin-local.
+
+### Refs → titles display
+- **D-I3-02:** In the TL;DR, resolve each `BEAAA-NNN` token to its title via the **existing 07-01 SDK resolver** (`resolveRefsViaSdk`; per-ref `ctx.issues.get` + cached `list` fallback) and render it as **ID + title together** — e.g. `BEAAA-704 — CSO review of updated strategy` — keeping the raw ID traceable. **Post-process the compiled body** (do NOT trust the agent to avoid raw IDs). Extraction is **prefix-derived / instance-agnostic** — reuse `prefixFromIdentifier` (no BEAAA hardcoding).
+
+### Compile prompt
+- **D-I3-03:** Tighten the compile prompt to a hard shape: **1–2 sentence headline + ≤3 bullets + a length cap**, voice = "for a busy founder: the decision / current state / next action." (Locked in the MemPalace bundle drawer; confirmed.)
+
+### Scope
+- **D-I3-04:** Item 3 covers BOTH the **TL;DR strip** AND the **"Anchored to (resolved)" ref-card excerpt** (same renderer applied to both — user saw raw `## BLUF …` in the excerpt live). The **inline prose ref chips (READER-03)** stay as-is (`ID · status` clickable link — already verified working in 07-01); item 3 does NOT change the inline-chip format.
+
+### Claude's Discretion
+- Exact renderer feature surface + the length-cap number; whether the markdown renderer lives in a shared util vs per-surface; whether refs→titles also applies inside the rendered excerpt body or only the TL;DR strip (planner's call, guided by D-I3-02).
+</decisions>
+
+<canonical_refs>
+## Canonical References (item 3)
+
+- `.planning/phases/07-clarity-surfaces-quality-and-portability-instance-agnostic-r/07-01-SUMMARY.md` — the shipped SDK resolver + `prefixFromIdentifier` this item reuses.
+- `src/worker/handlers/sdk-ref-fetch.ts` — `resolveRefsViaSdk` (per-ref get + list fallback; echoes id = requested identifier).
+- `src/worker/agents/editor.ts` — `prefixFromIdentifier`, `extractRefsFromBody`, and the TL;DR **compile prompt** (D-I3-03 target).
+- `src/ui/surfaces/reader/` — the TL;DR strip component (`tldr-strip.tsx`) + the Anchored-to ref-card / deliverable components (D-I3-01/04 render targets); `prose-with-ref-chips.tsx` (the portable extraction pattern).
+- MemPalace `clarity_pack/decisions` drawer `drawer_clarity_pack_decisions_af74a33adb4d28b47ae8894e` (the bundle findings) + `drawer_clarity_pack_decisions_394cc7ae3f7501b17fb0a245` (items 1+2 live-drill closure + the operator-perception lesson that motivates item 3).
+</canonical_refs>
+
+<deferred>
+## Deferred Ideas (item 3)
+
+- **Item 4** (Situation Room org-level blocked backlog) + **Item 5** (bulletin lineage filter+gloss+clickable) — each its own discuss gate + plan.
+- **Compile-trigger reliability / auto-resume of a paused Editor-Agent** — explicitly LOCKED OUT (explicit-resume-only by design). If the TL;DR shows "Compiling…" forever, that is a paused agent, not an item-3 concern.
+- **Plan 05-10** (npm publish + milestone close) — separately operator-gated.
+</deferred>
+
+---
+
 *Phase: 07-clarity-surfaces-quality-and-portability*
-*Context gathered: 2026-05-28*
+*Context gathered: 2026-05-28 (items 1+2) + 2026-05-29 (item 3)*
