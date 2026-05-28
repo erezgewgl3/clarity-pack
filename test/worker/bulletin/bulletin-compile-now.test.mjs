@@ -1,29 +1,24 @@
 // test/worker/bulletin/bulletin-compile-now.test.mjs
 //
-// Delivery-layer rework (2026-05-28) — on-demand "Generate bulletin now".
+// View-driven rework (2026-05-28) — on-demand "Generate bulletin now".
 //
-// The action can no longer run the ~50s agent compile inside its own invocation
-// (paperclipai@2026.525.0 expires the scope mid-poll — PR #6547). It now ENQUEUES
-// the request: writes a `force-requested` marker in ctx.state and returns
-// { kind:'queued' } immediately. The every-minute `compile-bulletin` job honors
-// the marker on its next tick — running the force compile via the cross-tick
-// state machine — and clears it (so it does not force every tick).
+// The scheduled compile-bulletin job's invocation scope is DEAD for host calls
+// on paperclipai@2026.525.0 (PR #6547), so the earlier "write a force-marker for
+// the job" approach can never run. The action now does the cross-tick START
+// itself, in its OWN valid request scope: compileBulletinForCompany(force:true)
+// — create/reuse the op issue + one immediate readback (publish if the agent is
+// warm), else persist a pending record for the byCycle data handler to consume.
+// It returns { kind:'queued' } immediately (never blocks across the round-trip).
 //
-// This file pins BOTH halves:
-//   - the ACTION enqueues (marker written, { kind:'queued' }, NO synchronous
-//     compile) + opt-in guard + missing-param throw + state-unavailable error.
-//   - the JOB honors the marker (force compile runs, marker cleared, daily
-//     next_due_at left untouched) and does nothing extra when no marker is set.
-//
-// The synchronous published / no-change / dedupe / paused-agent assertions the
-// prior version made now live in compile-bulletin-cross-tick.test.mjs (force
-// path) and compile-bulletin-end-to-end.test.mjs (the resume/skip paths).
+// This file pins: the action publishes when the agent is warm + returns queued;
+// opt-in guard; missing-param throw; and that the every-minute job still no-ops
+// when not due (its force-marker path is vestigial but harmless).
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
 import { registerBulletinCompileNow } from '../../../src/worker/handlers/bulletin-compile-now.ts';
-import { registerCompileBulletinJob, forceRequestScope } from '../../../src/worker/jobs/compile-bulletin.ts';
+import { registerCompileBulletinJob } from '../../../src/worker/jobs/compile-bulletin.ts';
 import { resetCircuitBreakerState } from '../../../src/worker/agents/circuit-breaker.ts';
 import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
@@ -40,7 +35,7 @@ function cannedDraft({ spend = 2475 } = {}) {
   };
 }
 
-function makeFakeCtx({ sqlMrr = 2475, agentStatus = 'idle', optedIn = true, seedNextDue = FUTURE, withState = true } = {}) {
+function makeFakeCtx({ sqlMrr = 2475, agentStatus = 'idle', optedIn = true, seedNextDue = FUTURE, ready = true } = {}) {
   const bulletins = [];
   const issuesCreated = [];
   const operationIssues = [];
@@ -48,6 +43,7 @@ function makeFakeCtx({ sqlMrr = 2475, agentStatus = 'idle', optedIn = true, seed
   const jobs = new Map();
   const stateStore = new Map();
   const k = (s) => `${s.scopeKind}:${s.scopeId}:${s.namespace ?? 'default'}:${s.stateKey}`;
+  const agent = { ready };
 
   if (seedNextDue) {
     bulletins.push({ cycle_number: 0, company_id: CID, next_due_at: seedNextDue, content_hash: '__bootstrap__', compile_status: 'pending', published_issue_id: null, published_at: null });
@@ -55,13 +51,11 @@ function makeFakeCtx({ sqlMrr = 2475, agentStatus = 'idle', optedIn = true, seed
 
   const ctx = {
     logger: { info() {}, warn() {}, error() {}, debug() {} },
-    state: withState
-      ? {
-          async get(s) { return stateStore.has(k(s)) ? stateStore.get(k(s)) : null; },
-          async set(s, v) { stateStore.set(k(s), JSON.parse(JSON.stringify(v))); },
-          async delete(s) { stateStore.delete(k(s)); },
-        }
-      : undefined,
+    state: {
+      async get(s) { return stateStore.has(k(s)) ? stateStore.get(k(s)) : null; },
+      async set(s, v) { stateStore.set(k(s), JSON.parse(JSON.stringify(v))); },
+      async delete(s) { stateStore.delete(k(s)); },
+    },
     db: {
       namespace: 'plugin_clarity_pack_cdd6bda4bd',
       async query(sql, params) {
@@ -142,10 +136,9 @@ function makeFakeCtx({ sqlMrr = 2475, agentStatus = 'idle', optedIn = true, seed
       },
       async get() { return null; },
       async requestWakeup() { return { queued: true, runId: 'run-op' }; },
-      // Warm agent — the result document is available on the immediate poll.
       documents: {
-        async list(issueId) { return [{ id: 'doc-1', issueId, key: 'compile-result', format: 'markdown', createdAt: new Date(), updatedAt: new Date() }]; },
-        async get(issueId, key) { return key === 'compile-result' ? { id: 'd', issueId, key, format: 'markdown', createdAt: new Date(), updatedAt: new Date(), body: JSON.stringify(cannedDraft()) } : null; },
+        async list(issueId) { return agent.ready ? [{ id: 'd', issueId, key: 'compile-result', format: 'markdown', createdAt: new Date(), updatedAt: new Date() }] : []; },
+        async get(issueId, key) { return agent.ready && key === 'compile-result' ? { id: 'd', issueId, key, format: 'markdown', createdAt: new Date(), updatedAt: new Date(), body: JSON.stringify(cannedDraft()) } : null; },
       },
       async listComments() { return []; },
       async createComment() { return { id: 'comment-x' }; },
@@ -154,7 +147,7 @@ function makeFakeCtx({ sqlMrr = 2475, agentStatus = 'idle', optedIn = true, seed
   ctx.db = wrapHostFaithfulDb(ctx.db);
   registerBulletinCompileNow(ctx);
   registerCompileBulletinJob(ctx);
-  return { ctx, action: actions.get('bulletin.compileNow'), job: jobs.get('compile-bulletin'), bulletins, issuesCreated, operationIssues, stateStore, forceKey: k(forceRequestScope(CID)) };
+  return { ctx, action: actions.get('bulletin.compileNow'), job: jobs.get('compile-bulletin'), bulletins, issuesCreated, operationIssues, stateStore, agent };
 }
 
 const bulletinIssuesOf = (created) => created.filter((i) => /^Bulletin No\. /.test(i.title ?? ''));
@@ -164,20 +157,30 @@ test('bulletin.compileNow — action is registered', () => {
   assert.ok(action, 'bulletin.compileNow registered via wrapActionHandler');
 });
 
-test('bulletin.compileNow — opted-in caller ENQUEUES: writes the force-request marker + returns { kind:queued } + does NOT compile synchronously', async () => {
-  const { action, stateStore, forceKey, operationIssues, issuesCreated } = makeFakeCtx();
+test('bulletin.compileNow — opted-in + warm agent: the action does the START in its own scope and publishes, returning { kind:queued }', { timeout: 8000 }, async () => {
+  resetCircuitBreakerState();
+  const { action, bulletins, issuesCreated } = makeFakeCtx({ ready: true });
   const res = await action({ companyId: CID, userId: 'eric' });
   assert.deepEqual(res, { kind: 'queued' }, `expected queued, got ${JSON.stringify(res)}`);
-  assert.ok(stateStore.has(forceKey), 'a force-requested marker is written to ctx.state');
-  assert.equal(operationIssues.length, 0, 'the action must NOT start a compile in its own invocation');
-  assert.equal(bulletinIssuesOf(issuesCreated).length, 0, 'the action must NOT publish synchronously');
+  // Warm agent → the action's immediate readback publishes the bulletin in-scope.
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 1, 'a bulletin published from the action scope (warm agent)');
+  assert.ok(bulletins.find((b) => b.compile_status === 'published'), 'a published bulletins row exists');
 });
 
-test('bulletin.compileNow — opted-out caller → OPT_IN_REQUIRED, no marker', async () => {
-  const { action, stateStore, forceKey } = makeFakeCtx({ optedIn: false });
+test('bulletin.compileNow — force compile leaves the daily next_due_at pointer UNCHANGED', { timeout: 8000 }, async () => {
+  resetCircuitBreakerState();
+  const { action, bulletins } = makeFakeCtx({ ready: true, seedNextDue: FUTURE });
+  await action({ companyId: CID, userId: 'eric' });
+  for (const b of bulletins) {
+    assert.equal(b.next_due_at, FUTURE, `force compile must not advance next_due_at (row cycle ${b.cycle_number})`);
+  }
+});
+
+test('bulletin.compileNow — opted-out caller → OPT_IN_REQUIRED, no compile', async () => {
+  const { action, issuesCreated } = makeFakeCtx({ optedIn: false });
   const res = await action({ companyId: CID, userId: 'eric' });
   assert.deepEqual(res, { error: 'OPT_IN_REQUIRED' });
-  assert.ok(!stateStore.has(forceKey), 'no marker written when opted out');
+  assert.equal(bulletinIssuesOf(issuesCreated).length, 0);
 });
 
 test('bulletin.compileNow — missing companyId → throws', async () => {
@@ -185,32 +188,7 @@ test('bulletin.compileNow — missing companyId → throws', async () => {
   await assert.rejects(() => action({ userId: 'eric' }), /companyId required/);
 });
 
-test('bulletin.compileNow — state capability unavailable → graceful error, no throw', async () => {
-  const { action } = makeFakeCtx({ withState: false });
-  const res = await action({ companyId: CID, userId: 'eric' });
-  assert.equal(res.kind, 'error', `expected graceful error when ctx.state is absent, got ${JSON.stringify(res)}`);
-  assert.ok(typeof res.reason === 'string' && res.reason.length > 0);
-});
-
-test('compile-bulletin job HONORS a force-request marker: runs a force compile (warm agent publishes) + clears the marker + leaves next_due_at untouched', { timeout: 8000 }, async () => {
-  resetCircuitBreakerState();
-  const { action, job, bulletins, issuesCreated, stateStore, forceKey } = makeFakeCtx({ seedNextDue: FUTURE });
-
-  // Operator enqueues.
-  await action({ companyId: CID, userId: 'eric' });
-  assert.ok(stateStore.has(forceKey), 'marker set by the action');
-
-  // The next job tick honors it.
-  await job({ jobKey: 'compile-bulletin', runId: 'r1', trigger: 'schedule', scheduledAt: new Date().toISOString() });
-
-  assert.equal(bulletinIssuesOf(issuesCreated).length, 1, 'the forced compile published a bulletin on the job tick');
-  assert.ok(!stateStore.has(forceKey), 'the marker is cleared after the job honors it (does not force every tick)');
-  for (const b of bulletins) {
-    assert.equal(b.next_due_at, FUTURE, `a forced compile must NOT advance the daily schedule (row cycle ${b.cycle_number})`);
-  }
-});
-
-test('compile-bulletin job WITHOUT a marker on a not-due company → no compile (the daily gate holds)', { timeout: 8000 }, async () => {
+test('compile-bulletin job WITHOUT a force marker on a not-due company → no compile (the daily gate holds)', { timeout: 8000 }, async () => {
   resetCircuitBreakerState();
   const { job, issuesCreated, operationIssues } = makeFakeCtx({ seedNextDue: FUTURE });
   await job({ jobKey: 'compile-bulletin', runId: 'r1', trigger: 'schedule', scheduledAt: new Date().toISOString() });

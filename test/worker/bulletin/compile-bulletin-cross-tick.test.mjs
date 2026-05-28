@@ -30,7 +30,7 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
-import { compileBulletinForCompany } from '../../../src/worker/jobs/compile-bulletin.ts';
+import { compileBulletinForCompany, resumePendingCompile } from '../../../src/worker/jobs/compile-bulletin.ts';
 import { resetCircuitBreakerState } from '../../../src/worker/agents/circuit-breaker.ts';
 import { AGENT_TASK_DELIVERY_TIMEOUT } from '../../../src/worker/agents/agent-task-delivery.ts';
 import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
@@ -274,6 +274,29 @@ test('cross-tick: force-mode pending past deadline → failure WITHOUT recording
   assert.equal(res.kind, 'failed');
   assert.equal(failures.length, 0, 'a force compile timeout must NOT record a breaker failure');
   assert.ok(!stateStore.has(pendingKey), 'pending is cleared after the force timeout');
+});
+
+test('resumePendingCompile: no pending record → { kind:no-pending } no-op (no START, no publish)', async () => {
+  resetCircuitBreakerState();
+  const { ctx, bulletins, operationIssues } = makeCtx({ ready: true });
+  const res = await resumePendingCompile(ctx, { id: CID, name: 'Countermoves' }, { now: T0, force: false });
+  assert.equal(res.kind, 'no-pending', `no pending → no-pending; got ${JSON.stringify(res)}`);
+  assert.equal(operationIssues.length, 0, 'resume-only never STARTs a compile');
+  assert.equal(bulletins.length, 0, 'resume-only never bootstraps a row');
+});
+
+test('resumePendingCompile: a pending record (from a prior START) is resumed → consumes + publishes', { timeout: 8000 }, async () => {
+  resetCircuitBreakerState();
+  const { ctx, bulletins, agent, stateStore, pendingKey } = makeCtx({ ready: false });
+  // Tick 1 — START via the cron path persists a pending record (agent not ready).
+  await compileBulletinForCompany(ctx, { id: CID, name: 'Countermoves' }, { now: T0, force: false });
+  assert.ok(stateStore.has(pendingKey), 'a pending record was persisted by START');
+  // Agent answers; resumePendingCompile (as byCycle would call it) consumes it.
+  agent.ready = true;
+  const res = await resumePendingCompile(ctx, { id: CID, name: 'Countermoves' }, { now: new Date(T0.getTime() + 60_000), force: false });
+  assert.equal(res.kind, 'published', `resume should publish; got ${JSON.stringify(res)}`);
+  assert.ok(bulletins.find((b) => b.compile_status === 'published'), 'a published bulletins row exists after resume');
+  assert.ok(!stateStore.has(pendingKey), 'pending cleared after the resume publish');
 });
 
 test('cross-tick: force dedupe fires on the resume tick — identical substance since last published → no-change, no new issue', { timeout: 12000 }, async () => {

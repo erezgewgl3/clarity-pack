@@ -1128,6 +1128,27 @@ export async function compileBulletinForCompany(
 }
 
 /**
+ * View-driven rework (2026-05-28) — advance an EXISTING pending compile by one
+ * step (RESUME only; never START). Safe to call from a valid request scope (the
+ * `bulletin.byCycle` data handler, polled by the open Bulletin page) where the
+ * scheduled job's scope is dead (PR #6547). Returns `{kind:'no-pending'}` and
+ * makes NO host calls beyond the state read when nothing is in flight — so it is
+ * a cheap, side-effect-free no-op on the common path and never bootstraps or
+ * starts a compile (that is the compileNow action's job).
+ */
+export async function resumePendingCompile(
+  ctx: CompileBulletinCtx,
+  company: Company,
+  opts: CompileForCompanyOptions,
+): Promise<CompileForCompanyResult | { kind: 'no-pending' }> {
+  const pending = await getPendingCompile(ctx, company.id);
+  if (!pending) return { kind: 'no-pending' };
+  // A pending record exists → compileBulletinForCompany takes the RESUME branch
+  // (poll + finish), honoring the record's own mode (cron/force).
+  return compileBulletinForCompany(ctx, company, opts);
+}
+
+/**
  * Register the compile-bulletin job. On each fire it iterates companies and
  * delegates each to `compileBulletinForCompany(..., { force: false })` — the
  * daily-cron path (due-gate + schedule advance + breaker recording).

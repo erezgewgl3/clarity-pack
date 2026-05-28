@@ -23,9 +23,19 @@ import {
   type BulletinsRepoCtx,
 } from '../db/bulletins-repo.ts';
 import { queryActionInbox, type ActionInboxCtx } from '../bulletin/action-inbox-query.ts';
-import type { PluginIssuesClient } from '@paperclipai/plugin-sdk';
+import type { Company, PluginIssuesClient } from '@paperclipai/plugin-sdk';
 import type { BulletinDraft, ErratumEntry } from '../../shared/types.ts';
 import type { ErratumRow } from '../db/bulletins-repo.ts';
+// View-driven rework (2026-05-28) — the scheduled compile-bulletin job's
+// invocation scope is dead on paperclipai@2026.525.0 (PR #6547), so it can never
+// CONSUME a ready compile result. byCycle runs in a valid HTTP-request scope and
+// is polled by the open Bulletin page, so it advances any pending compile here
+// (RESUME → publish). A force START is kicked off by the compileNow action.
+import {
+  resumePendingCompile,
+  resolveBulletinTz,
+  type CompileBulletinCtx,
+} from '../jobs/compile-bulletin.ts';
 
 export type BulletinByCycleCtx = OptInGuardDataCtx &
   BulletinsRepoCtx &
@@ -62,6 +72,28 @@ export function registerBulletinByCycle(ctx: BulletinByCycleCtx): void {
       // future exemption changes that, fail loud rather than serve an
       // unscoped Action Inbox.
       return { error: 'USER_ID_REQUIRED' };
+    }
+
+    // View-driven compile advance (cycle 'latest' only — the live view).
+    // RESUME-ONLY: if a pending compile exists (started by the compileNow
+    // action), poll + publish in THIS valid request scope; otherwise a
+    // cheap no-op (no START, no bootstrap side effects). Best-effort — never
+    // fail the read on a compile hiccup. (The scheduled job's scope is dead —
+    // PR #6547, so it can't consume the result; the open page does it here.)
+    if (cycle === 'latest') {
+      try {
+        const driveCtx = ctx as unknown as CompileBulletinCtx;
+        await resumePendingCompile(driveCtx, { id: companyId } as Company, {
+          now: new Date(),
+          bulletinTz: await resolveBulletinTz(driveCtx),
+          force: false,
+        });
+      } catch (e) {
+        ctx.logger?.warn?.('bulletin.byCycle: compile-advance step failed', {
+          companyId,
+          err: (e as Error).message,
+        });
+      }
     }
 
     const row = await getBulletinByCycle(ctx, companyId, cycle);
