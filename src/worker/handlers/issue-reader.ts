@@ -37,6 +37,15 @@ import type { RefCardData, TLDR } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { getTldrByScope, type TldrCacheCtx } from '../db/tldr-cache.ts';
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
+// View-driven rework (2026-05-28) — the Reader DRIVES the TL;DR compile in its
+// valid request scope (the scheduled-job/heartbeat scope is dead on
+// paperclipai@2026.525.0 — PR #6547). Opening a task's Reader is the compile
+// trigger; cache hits return instantly (no recompile).
+import {
+  driveTldrCompileStep,
+  extractRefsFromBody,
+  type TldrViewDriverCtx,
+} from '../agents/editor.ts';
 // Plan 04.2-01 (RCB-06) — the reverse backlink: chat topics started FROM this
 // issue. listChatTopicsByOriginIssue reads the migration-0009 origin_issue_id
 // column; ChatTopicByOriginEntry is the camelCase row the Reader consumes.
@@ -66,6 +75,16 @@ export type DeliverableSummary = { filename: string; last_write_at: string | nul
 
 export type IssueReaderResult = {
   tldr: TLDR | null;
+  /**
+   * View-driven rework — tells the Reader UI whether to show the TL;DR, a
+   * "Compiling…" + poll state, or the honest "No TL;DR yet" empty state.
+   *   - `cached`      — `tldr` is present + fresh.
+   *   - `compiling`   — the Editor-Agent is working; the UI should poll.
+   *   - `unavailable` — no Editor-Agent could be resolved (no compile started).
+   */
+  tldrStatus: 'cached' | 'compiling' | 'unavailable';
+  /** True when the TL;DR summarized a TRUNCATED (very long) task — the UI notes it. */
+  tldrTruncated: boolean;
   refCards: RefCardData[];
   ancestry: Ancestry | null;
   acItems: unknown[];
@@ -112,6 +131,8 @@ export type IssueReaderCtx = OptInGuardDataCtx & {
 function emptyResult(): IssueReaderResult {
   return {
     tldr: null,
+    tldrStatus: 'unavailable',
+    tldrTruncated: false,
     refCards: [],
     ancestry: null,
     acItems: [],
@@ -147,13 +168,47 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
     // issueBody comes from Issue.description (not .body).
     const issueBodyValue = (issue as unknown as { description?: string | null }).description ?? null;
 
-    // ---- TL;DR --------------------------------------------------------------
-    let tldr: TLDR | null = null;
+    // Fetch comments ONCE — reused by the TL;DR inputs AND the activity timeline.
+    let commentsRaw: IssueComment[] = [];
     try {
-      const tldrRow = await getTldrByScope(ctx as unknown as TldrCacheCtx, 'issue', issueId);
-      tldr = (tldrRow as unknown as TLDR | null);
+      commentsRaw = await ctx.issues.listComments(issueId, companyId);
     } catch (e) {
-      ctx.logger?.warn?.('issue.reader: tldr lookup failed', { err: (e as Error).message });
+      ctx.logger?.warn?.('issue.reader: listComments failed', { err: (e as Error).message });
+    }
+
+    // ---- TL;DR (VIEW-DRIVEN compile) ----------------------------------------
+    // Opening this Reader IS the compile trigger (the scheduled-job/heartbeat
+    // scope is dead — PR #6547). Cache hit → instant, no recompile. Cache miss →
+    // start the agent compile + consume a ready result, all in this request's
+    // valid scope.
+    let tldr: TLDR | null = null;
+    let tldrStatus: IssueReaderResult['tldrStatus'] = 'unavailable';
+    let tldrTruncated = false;
+    try {
+      const step = await driveTldrCompileStep(ctx as unknown as TldrViewDriverCtx, {
+        issueId,
+        companyId,
+        inputs: {
+          body: issueBodyValue ?? '',
+          comments: commentsRaw.map((c) => (c as unknown as { body?: string }).body ?? ''),
+          refs: extractRefsFromBody(issueBodyValue ?? undefined),
+        },
+      });
+      tldr = step.tldr as unknown as TLDR | null;
+      tldrStatus = step.status;
+      tldrTruncated = step.truncated;
+    } catch (e) {
+      // Degrade to a plain cache read — never fail the whole Reader on the drive.
+      ctx.logger?.warn?.('issue.reader: TL;DR drive failed; falling back to cache read', {
+        err: (e as Error).message,
+      });
+      try {
+        const tldrRow = await getTldrByScope(ctx as unknown as TldrCacheCtx, 'issue', issueId);
+        tldr = tldrRow as unknown as TLDR | null;
+        tldrStatus = tldr ? 'cached' : 'unavailable';
+      } catch {
+        /* leave null/unavailable */
+      }
     }
 
     // ---- refCards (PRIM-01 single round-trip) -------------------------------
@@ -212,16 +267,11 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
     // ctx.activity.log is WRITE-only at this SDK version. listComments is the
     // closest read API. State-change + work-product events are not exposed;
     // ROADMAP gap captured in 02-03b-SUMMARY.
-    let activity: ActivityEvent[] = [];
-    try {
-      const comments: IssueComment[] = await ctx.issues.listComments(issueId, companyId);
-      activity = comments
-        .slice(-ACTIVITY_LIMIT)
-        .map((c) => commentToActivity(c))
-        .reverse(); // newest first
-    } catch (e) {
-      ctx.logger?.warn?.('issue.reader: listComments failed', { err: (e as Error).message });
-    }
+    // Reuse the comments fetched above for the TL;DR inputs (no second round-trip).
+    const activity: ActivityEvent[] = commentsRaw
+      .slice(-ACTIVITY_LIMIT)
+      .map((c) => commentToActivity(c))
+      .reverse(); // newest first
 
     // ---- Deliverable (most-recent IssueDocumentSummary) ---------------------
     let deliverable: DeliverableSummary = null;
@@ -262,6 +312,8 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
 
     return {
       tldr,
+      tldrStatus,
+      tldrTruncated,
       refCards,
       ancestry,
       acItems,

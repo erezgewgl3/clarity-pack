@@ -28,8 +28,9 @@ import {
   finalizeTldr,
   tldrContentHash,
   EDITOR_AGENT_ID_TAG,
+  TLDR_TRUNCATED_TAG,
 } from './compile-tldr.ts';
-import { getTldrByScope } from '../db/tldr-cache.ts';
+import { getTldrByScope, type TldrRow } from '../db/tldr-cache.ts';
 // Plan 03-06 — production LLM invocation via the operation-issue handoff (the
 // same delivery layer the bulletin compile uses). The TL;DR compile prompt is
 // delivered as an operation issue (originKind
@@ -298,6 +299,178 @@ export async function readTldrInputs(
     comments = [];
   }
   return { body, comments, refs: extractRefsFromBody(body) };
+}
+
+/** The outcome of one view-driven TL;DR compile step (see {@link driveTldrCompileStep}). */
+export type TldrCompileStepResult = {
+  /** The cached/freshly-consumed TL;DR row, or null while compiling/unavailable. */
+  tldr: TldrRow | null;
+  /**
+   * - `cached`      — a fresh TL;DR is available now (cache hit or just consumed).
+   * - `compiling`   — the Editor-Agent is working; poll again shortly.
+   * - `unavailable` — no Editor-Agent could be resolved (can't start a compile).
+   */
+  status: 'cached' | 'compiling' | 'unavailable';
+  /** True when the cached/consumed TL;DR summarized a TRUNCATED (very long) task. */
+  truncated: boolean;
+};
+
+/** ctx the view-driven TL;DR driver needs — satisfied by the issue.reader handler ctx. */
+export type TldrViewDriverCtx = Parameters<typeof prepareTldrCompile>[0] &
+  AgentTaskDeliveryCtx & {
+    issues: Pick<
+      PluginIssuesClient,
+      'list' | 'create' | 'requestWakeup' | 'listComments' | 'update'
+    > & { documents: PluginIssuesClient['documents'] };
+    agents?: { managed?: { reconcile(agentKey: string, companyId: string): Promise<{ agentId: string | null }> } };
+  };
+
+/**
+ * Resolve the Editor-Agent UUID for a company WITHOUT a scheduled-job reconcile
+ * (whose invocation scope is dead on paperclipai@2026.525.0 — PR #6547). Every
+ * clarity-pack operation issue is assigned to the Editor-Agent, so the newest
+ * one's `assigneeAgentId` is the id — discovered with the same `ctx.issues.list`
+ * the data handler already uses in its valid request scope. Falls back to
+ * `ctx.agents.managed.reconcile` (best-effort) only when no operation issue
+ * exists yet (a brand-new company).
+ */
+async function resolveEditorAgentId(
+  ctx: TldrViewDriverCtx,
+  companyId: string,
+): Promise<string | null> {
+  try {
+    const ops = await ctx.issues.list({
+      companyId,
+      originKindPrefix: OPERATION_ORIGIN_KIND_PREFIX,
+      includePluginOperations: true,
+      limit: 5,
+    });
+    for (const op of ops ?? []) {
+      const id = (op as { assigneeAgentId?: string | null }).assigneeAgentId;
+      if (id) return id;
+    }
+  } catch (e) {
+    ctx.logger?.warn?.(`tldr-view: op-issue agent discovery failed: ${(e as Error).message}`, {
+      companyId,
+    });
+  }
+  try {
+    const res = await ctx.agents?.managed?.reconcile(EDITOR_AGENT_KEY, companyId);
+    return res?.agentId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * View-driven rework (2026-05-28) — advance the TL;DR compile for ONE issue by
+ * exactly one step, in the CALLER's (valid HTTP-request) invocation scope. This
+ * replaces the dead scheduled-job/heartbeat driver: the `issue.reader` data
+ * handler calls this on every Reader open/poll, so opening a task BECOMES the
+ * compile trigger.
+ *
+ *   - cache hit (fresh TL;DR, task unchanged) → return it instantly, no compile.
+ *   - cache miss → resolve the Editor-Agent, START (or reuse) the operation
+ *     issue + ONE immediate poll. If the agent has already answered → finalize +
+ *     cache now (and mark the op done so a later task EDIT starts a fresh
+ *     compile rather than reusing the stale op). Otherwise → `compiling`.
+ *
+ * Bounded host calls per request (a handful) — well within a request scope.
+ */
+export async function driveTldrCompileStep(
+  ctx: TldrViewDriverCtx,
+  args: { issueId: string; companyId: string; inputs: { body: string; comments: string[]; refs: string[] } },
+): Promise<TldrCompileStepResult> {
+  const { issueId, companyId, inputs } = args;
+
+  const prep = await prepareTldrCompile(ctx, {
+    surface: 'issue',
+    scopeId: issueId,
+    inputs,
+    agentKey: EDITOR_AGENT_KEY,
+    agentId: '', // unused by prepare (cache check + truncate only)
+    companyId,
+  });
+  if (prep.kind === 'cache-hit') {
+    return {
+      tldr: prep.tldr,
+      status: 'cached',
+      truncated: (prep.tldr.tags ?? []).includes(TLDR_TRUNCATED_TAG),
+    };
+  }
+
+  // Cache MISS. Fetch the latest cached row (regardless of hash) as a STALE
+  // fallback so the Reader shows the existing TL;DR while a fresh one compiles,
+  // rather than blanking it.
+  let stale: TldrRow | null = null;
+  try {
+    stale = await getTldrByScope(ctx, 'issue', issueId);
+  } catch {
+    stale = null;
+  }
+  const staleTruncated = !!stale && (stale.tags ?? []).includes(TLDR_TRUNCATED_TAG);
+
+  const editorAgentId = await resolveEditorAgentId(ctx, companyId);
+  if (!editorAgentId) {
+    ctx.logger?.info?.('tldr-view: no Editor-Agent resolvable — cannot start TL;DR compile', {
+      issueId,
+      companyId,
+    });
+    // Show the stale TL;DR if we have one; otherwise it's genuinely unavailable.
+    return { tldr: stale, status: stale ? 'cached' : 'unavailable', truncated: staleTruncated };
+  }
+
+  // START (or reuse the in-flight op via idempotency) + one immediate poll.
+  let operationIssueId: string;
+  try {
+    const started = await startAgentTask(ctx, {
+      agentId: editorAgentId,
+      companyId,
+      operationKind: 'tldr-compile',
+      operationId: `tldr-${issueId}`,
+      title: `Compile TL;DR — ${issueId}`,
+      prompt: prep.prompt,
+    });
+    operationIssueId = started.operationIssueId;
+  } catch (e) {
+    ctx.logger?.warn?.(`tldr-view: startAgentTask failed: ${(e as Error).message}`, { issueId, companyId });
+    return { tldr: stale, status: 'compiling', truncated: staleTruncated };
+  }
+
+  const poll = await pollAgentTaskResult(ctx, {
+    operationIssueId,
+    companyId,
+    operationKind: 'tldr-compile',
+    agentId: editorAgentId,
+  });
+  if (poll.status !== 'ready') {
+    return { tldr: stale, status: 'compiling', truncated: staleTruncated };
+  }
+
+  const tldr = await finalizeTldr(ctx, {
+    surface: 'issue',
+    scopeId: issueId,
+    contentHash: prep.contentHash,
+    body: poll.body,
+    agentKey: EDITOR_AGENT_KEY,
+    agentId: editorAgentId,
+    companyId,
+    truncated: prep.truncated,
+  });
+
+  // Mark the operation issue done so a later task EDIT (which changes the
+  // content hash → cache miss) starts a FRESH compile instead of the
+  // idempotency search reusing this now-consumed op. Best-effort.
+  try {
+    await ctx.issues.update(operationIssueId, { status: 'done' }, companyId);
+  } catch (e) {
+    ctx.logger?.info?.('tldr-view: could not mark op issue done (non-fatal)', {
+      operationIssueId,
+      reason: (e as Error).message,
+    });
+  }
+
+  return { tldr, status: 'cached', truncated: prep.truncated };
 }
 
 /** The drainer's recency window — operations older than this are given up on. */

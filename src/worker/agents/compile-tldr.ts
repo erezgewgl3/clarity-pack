@@ -39,12 +39,81 @@ import {
 import { EDITOR_WRITE_TAG } from './self-loop-filter.ts';
 
 /**
- * D-05 placeholder. Instrument actual P50/P95 input tokens during dogfood and
- * lock the final value before Phase 3 Bulletin. Cap is enforced BEFORE every
- * LLM call (not after) — output overage cannot bill us, only input overage
- * can.
+ * Input-token cap for a TL;DR compile.
+ *
+ * View-driven rework (2026-05-28) — RAISED 4000 → 16000. The old 4000 cap caused
+ * long tasks (e.g. a multi-paragraph strategy memo) to be SKIPPED entirely on
+ * BEAAA — "No TL;DR yet" forever on exactly the tasks most worth summarizing
+ * (live evidence: `input exceeds max_tokens cap (4758 > 4000)` skips). The modern
+ * agent summarizes 16k tokens comfortably, so the cap is raised to let it read
+ * the whole task. For pathological inputs BEYOND 16k, `truncateTldrInputs`
+ * head/tail-truncates as a backstop and flags it so the Reader can surface a
+ * "summarized from a long task" notice (operator decision 2026-05-28).
  */
-export const MAX_TOKENS = 4000;
+export const MAX_TOKENS = 16000;
+
+/** Tag stamped on a TL;DR whose input was truncated to fit the cap. Surfaced in the Reader. */
+export const TLDR_TRUNCATED_TAG = 'clarity:truncated';
+
+/** Marker inserted at the head/tail cut so the agent (and a reader) sees the gap. */
+const TLDR_TRUNCATION_MARKER =
+  '\n\n…[task content truncated for length — summarize the opening and the latest sections below]…\n\n';
+
+/**
+ * Fit the TL;DR inputs under `maxTokens`. A no-op when the full prompt already
+ * fits (the common case now that the cap is 16k). Over the cap, head/tail-cuts
+ * the body (keeps the opening + the latest section) and caps the comments,
+ * preserving refs, and returns `truncated:true` so the caller can flag it.
+ */
+export function truncateTldrInputs(
+  inputs: { body: string; comments: string[]; refs: string[] },
+  maxTokens: number = MAX_TOKENS,
+): { inputs: { body: string; comments: string[]; refs: string[] }; truncated: boolean } {
+  const fullPrompt = buildPrompt({
+    surface: 'issue',
+    scopeId: '',
+    inputs,
+    agentKey: '',
+    agentId: '',
+    companyId: '',
+  });
+  if (estimateTokens(fullPrompt) <= maxTokens) {
+    return { inputs, truncated: false };
+  }
+
+  // estimateTokens ≈ chars / 4. Reserve headroom for the prompt scaffolding +
+  // the truncation marker; split the remainder body-heavy (comments ≤ 25%).
+  const charBudget = maxTokens * 4;
+  const avail = Math.max(2000, charBudget - 1200);
+  const commentsJoined = inputs.comments.join('\n');
+  const commentBudget = Math.min(commentsJoined.length, Math.floor(avail * 0.25));
+  const bodyBudget = avail - commentBudget;
+
+  let truncated = false;
+  let body = inputs.body;
+  if (body.length > bodyBudget) {
+    const headLen = Math.floor(bodyBudget * 0.66);
+    const tailLen = Math.max(0, bodyBudget - headLen - TLDR_TRUNCATION_MARKER.length);
+    body =
+      body.slice(0, headLen) +
+      TLDR_TRUNCATION_MARKER +
+      (tailLen > 0 ? body.slice(body.length - tailLen) : '');
+    truncated = true;
+  }
+
+  const comments: string[] = [];
+  let used = 0;
+  for (const c of inputs.comments) {
+    if (used + c.length > commentBudget) {
+      truncated = true;
+      break;
+    }
+    comments.push(c);
+    used += c.length + 1;
+  }
+
+  return { inputs: { body, comments, refs: inputs.refs }, truncated };
+}
 
 /**
  * Stable agent id for compiled-by attribution. Survives reconciliation cycles;
@@ -185,13 +254,15 @@ function contentHashFor(args: CompileTldrArgs): string {
  */
 export type PrepareTldrResult =
   | { kind: 'cache-hit'; tldr: TldrRow }
-  | { kind: 'capped'; inputTokens: number }
-  | { kind: 'compile'; prompt: string; contentHash: string };
+  | { kind: 'compile'; prompt: string; contentHash: string; truncated: boolean };
 
 export async function prepareTldrCompile(
   ctx: CompileTldrCtx,
   args: CompileTldrArgs,
 ): Promise<PrepareTldrResult> {
+  // content_hash is over the ORIGINAL (untruncated) inputs so the cache key
+  // reflects the real task — a TL;DR is recompiled when the task actually
+  // changes, not when the truncation boundary shifts.
   const contentHash = contentHashFor(args);
 
   // EDITOR-03: check cache by (surface, scope_id). If the most-recent row's
@@ -201,20 +272,12 @@ export async function prepareTldrCompile(
     return { kind: 'cache-hit', tldr: cached };
   }
 
-  // EDITOR-05: enforce cap BEFORE invoking the LLM, not after.
-  const prompt = buildPrompt(args);
-  const inputTokens = estimateTokens(prompt);
-  if (inputTokens > MAX_TOKENS) {
-    await recordFailure(ctx, {
-      agentKey: args.agentKey,
-      agentId: args.agentId,
-      companyId: args.companyId,
-      reason: `input_tokens=${inputTokens} exceeds MAX_TOKENS=${MAX_TOKENS}`,
-    });
-    return { kind: 'capped', inputTokens };
-  }
-
-  return { kind: 'compile', prompt, contentHash };
+  // View-driven rework (2026-05-28) — no longer a hard cap-and-skip. The cap is
+  // raised (16k) so the agent reads the whole task; an input beyond the cap is
+  // head/tail-truncated as a backstop and flagged so the Reader can surface it.
+  const { inputs: promptInputs, truncated } = truncateTldrInputs(args.inputs, MAX_TOKENS);
+  const prompt = buildPrompt({ ...args, inputs: promptInputs });
+  return { kind: 'compile', prompt, contentHash, truncated };
 }
 
 /**
@@ -235,6 +298,8 @@ export async function finalizeTldr(
     agentKey: string;
     agentId: string;
     companyId: string;
+    /** When true, the input was truncated to fit the cap — stamp TLDR_TRUNCATED_TAG. */
+    truncated?: boolean;
   },
 ): Promise<TldrRow> {
   try {
@@ -251,6 +316,9 @@ export async function finalizeTldr(
 
   recordSuccess(args.agentKey);
 
+  const tags = [EDITOR_WRITE_TAG]; // D-04 self-loop filter tag
+  if (args.truncated) tags.push(TLDR_TRUNCATED_TAG);
+
   const tldr: TldrRow = {
     surface: args.surface,
     scope_id: args.scopeId,
@@ -259,7 +327,7 @@ export async function finalizeTldr(
     generated_at: new Date().toISOString(),
     source_revisions: [args.contentHash],
     compiled_by_agent_id: EDITOR_AGENT_ID_TAG,
-    tags: [EDITOR_WRITE_TAG], // D-04 self-loop filter tag
+    tags,
   };
   await upsertTldr(ctx, tldr);
   return tldr;
@@ -282,9 +350,6 @@ export async function compileTldr(
 ): Promise<TldrRow> {
   const prep = await prepareTldrCompile(ctx, args);
   if (prep.kind === 'cache-hit') return prep.tldr;
-  if (prep.kind === 'capped') {
-    throw new Error(`Editor-Agent input exceeds max_tokens cap (${prep.inputTokens} > ${MAX_TOKENS})`);
-  }
 
   // Resolve adapter (arg override > ctx.llm). No fallback to a global — we
   // want the call to fail loudly during wiring if production forgot to plumb it.
@@ -314,5 +379,6 @@ export async function compileTldr(
     agentKey: args.agentKey,
     agentId: args.agentId,
     companyId: args.companyId,
+    truncated: prep.truncated,
   });
 }

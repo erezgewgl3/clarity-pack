@@ -22,6 +22,7 @@ import {
   compileTldr,
   MAX_TOKENS,
   EDITOR_AGENT_ID_TAG,
+  estimateTokens,
 } from '../../src/worker/agents/compile-tldr.ts';
 import {
   resetCircuitBreakerState,
@@ -160,24 +161,25 @@ test('compileTldr is idempotent — same inputs twice invoke the LLM adapter EXA
   assert.equal(second.body, 'the tldr body 1', 'second result is the cached row');
 });
 
-test('compileTldr throws BEFORE invoking the LLM adapter when input exceeds MAX_TOKENS (EDITOR-05)', async () => {
+test('compileTldr TRUNCATES an oversized input and still compiles (view-driven raise+truncate backstop), stamping the truncated tag', async () => {
   resetCircuitBreakerState();
-  const llm = makeStubLlm(['should-not-be-called']);
+  const llm = makeStubLlm(['a TL;DR of the truncated task']);
   const fake = makeFakeCtx({ llm });
   const oversized = 'x'.repeat(MAX_TOKENS * 5); // ~5x cap (estimator is 4 chars/token)
-  await assert.rejects(
-    () =>
-      compileTldr(fake.ctx, {
-        surface: 'issue',
-        scopeId: 'BEAAA-OVER',
-        inputs: { body: oversized, comments: [], refs: [] },
-        agentKey: 'editor-agent',
-        agentId: 'uuid-1',
-        companyId: 'co-1',
-      }),
-    /max_tokens|MAX_TOKENS/i,
-  );
-  assert.equal(llm.calls.length, 0, 'LLM adapter never called when cap-check fires first');
+  const result = await compileTldr(fake.ctx, {
+    surface: 'issue',
+    scopeId: 'BEAAA-OVER',
+    inputs: { body: oversized, comments: [], refs: [] },
+    agentKey: 'editor-agent',
+    agentId: 'uuid-1',
+    companyId: 'co-1',
+  });
+  // Old behavior threw + skipped; new behavior truncates + compiles so the
+  // longest, most-worth-summarizing tasks still get a TL;DR.
+  assert.equal(llm.calls.length, 1, 'the LLM IS called on a truncated prompt (no skip)');
+  assert.ok(estimateTokens(llm.calls[0].prompt) <= MAX_TOKENS, 'the delivered prompt fits the cap');
+  assert.equal(result.body, 'a TL;DR of the truncated task');
+  assert.ok(result.tags.includes('clarity:truncated'), 'the row is flagged truncated so the Reader can surface it');
 });
 
 test('compileTldr stamps clarity:editor-write tag AND EDITOR_AGENT_ID_TAG on the cached row (D-04 self-loop input)', async () => {
@@ -242,6 +244,6 @@ test('compileTldr output failing schema validation (empty / too long) counts as 
   );
 });
 
-test('MAX_TOKENS is the locked literal 4000 (D-05 placeholder)', () => {
-  assert.equal(MAX_TOKENS, 4000);
+test('MAX_TOKENS is the raised literal 16000 (view-driven: agent summarizes the whole task)', () => {
+  assert.equal(MAX_TOKENS, 16000);
 });
