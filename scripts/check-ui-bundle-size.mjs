@@ -71,7 +71,13 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // 8s for ~90s → calm "still compiling" note; two useEffects, refs, the longer
 // settle copy). Net +4 bytes over the prior ceiling (700,420 bytes). Legitimate
 // feature delta, no SheetJS; 686 kB (702,464 bytes) absorbs it with ~2 kB headroom.
-const UI_BUNDLE_BYTES_CEILING = 686 * 1024; // 686 kB = 702,464 bytes
+// Bumped 2026-05-28 from 686 → 688 kB (view-driven rework): the Reader TL;DR
+// strip gained live "Compiling…", "paused — resume in Agents panel", and
+// "truncated" copy + status threading; the bulletin button gained the
+// enqueue/poll state machine. Net delta is small copy/logic, +173 bytes over the
+// prior ceiling (702,637 bytes). Legitimate feature delta, no SheetJS; 688 kB
+// (704,512 bytes) absorbs it with ~1.9 kB headroom.
+const UI_BUNDLE_BYTES_CEILING = 688 * 1024; // 688 kB = 704,512 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
