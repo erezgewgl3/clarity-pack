@@ -35,5 +35,10 @@ Fixed the false "paused by operator" banner (NEXT-SESSION-BRIEF.md §2 #1). clar
 ## Limitation
 - `ctx.agents.get`/`reconcile`/`resume` are host APIs flagged flaky on BEAAA; the try/catch fallback is mandatory and present. Authoritative status cannot be exercised against the live agent from local tests — verify on the box that the banner reflects `agent list --json` reality (gone when active).
 
-## Deploy
-Brief §5 stable-path to BEAAA `/home/beai-agent/clarity-pack-live/package` (see deploy log below / STATE.md).
+## Deploy — LIVE + VERIFIED on BEAAA (2026-05-28 ~13:52 UTC)
+Stable-path install to `/home/beai-agent/clarity-pack-live/package`; commit `38c149c` (pushed master). Result:
+- `✓ Installed clarity-pack v1.0.0 (ready)`; pm2 `paperclip` restarted (PID 408090, ↺ 12→13); health=200; clean worker boot "clarity-pack worker started … registered", plugin activated (worker:true, jobs:2, 5 event subs), no errors/crash/invocation issues. Installed `dist/worker.js` `agents.resumeHeartbeat` count = 5 (new bundle confirmed live).
+- **Behavioral proof of the fix:** Editor-Agent real status `status:idle pausedAt:null` (active, id 618eec58-…); the live `editor.pause-status` handler returns `{paused:false, lastFailureAt:null, reason:null}` for the active agent — the false banner is gone at the data source. Fix (b) confirmed (reconcile→get(uuid) resolved with no uuid-cast throw). Remaining: operator hard-refresh of Reader/chat to confirm banner UI gone + Resume button (brief §5.7 UAT).
+
+### Deploy incident (process lesson)
+First Path-A attempt got fail2ban-dropped mid-heredoc (10+ rapid SSH connections — see DEPLOY-RUNBOOK gotcha #10); the box was UP the whole time (11d uptime), deploy simply didn't take effect. Recovery: stopped hammering, let fail2ban cool, re-ran the install **detached on the box** (`setsid … >log 2>&1 </dev/null &`) so a connection drop can't corrupt mid-install, then verified via a single long-lived connection that waits on-box for `DEPLOY_DONE`. Lesson: read `.planning/DEPLOY-RUNBOOK.md` first and batch BEAAA work into as few SSH connections as possible.
