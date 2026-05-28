@@ -82,8 +82,19 @@ import { AgentPauseBanner } from '../../primitives/agent-pause-banner.tsx';
 import { SectionErrorBoundary } from '../../primitives/error-boundary.tsx';
 import type { RefCardData, TLDR } from '../../../shared/types.ts';
 
+// View-driven rework — while a TL;DR is compiling, poll issue.reader this often,
+// for up to this long, then stop (the agent's result lands within seconds-to-a-minute).
+const TLDR_POLL_INTERVAL_MS = 6_000;
+const TLDR_POLL_WINDOW_MS = 90_000;
+
 export type ReaderViewData = {
   tldr: TLDR | null;
+  /** View-driven rework — 'compiling' tells the Reader to poll for the fresh TL;DR;
+   *  'unavailable' shows the honest empty state. Optional for back-compat with a
+   *  cached pre-rework payload. */
+  tldrStatus?: 'cached' | 'compiling' | 'unavailable';
+  /** True when the TL;DR summarized a truncated (very long) task — surfaced as a note. */
+  tldrTruncated?: boolean;
   refCards: RefCardData[];
   ancestry: Ancestry | null;
   acItems: AcItem[];
@@ -276,6 +287,28 @@ function ReaderViewReady({
     acAutoData && !('error' in acAutoData) && acAutoData.kind === 'acAutoStatus'
       ? acAutoData.detections
       : null;
+
+  // View-driven rework (2026-05-28) — while the TL;DR is compiling (the Reader
+  // open kicked off the agent compile in issue.reader's valid scope), poll
+  // issue.reader so the fresh TL;DR appears without a manual reload. Cache hits
+  // report 'cached' and never enter this loop, so there is no recompile churn.
+  const tldrStatus =
+    data && !('error' in data) ? (data as ReaderViewData).tldrStatus : undefined;
+  const refreshRef = React.useRef(refresh);
+  refreshRef.current = refresh;
+  React.useEffect(() => {
+    if (tldrStatus !== 'compiling') return undefined;
+    const deadline = Date.now() + TLDR_POLL_WINDOW_MS;
+    const id = setInterval(() => {
+      if (Date.now() > deadline) {
+        clearInterval(id);
+        return;
+      }
+      void refreshRef.current();
+    }, TLDR_POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [tldrStatus]);
+
   if (loading || !data || 'error' in data) {
     // Loading state OR opt-in-guard short-circuited (shouldn't happen here
     // because we already gated on optedIn upstream AND userId is real).
@@ -338,7 +371,7 @@ function ReaderViewReady({
         <Breadcrumb ancestry={data.ancestry} />
       </SectionErrorBoundary>
       <SectionErrorBoundary name="tldr" resetKey={entityId}>
-        <TldrStrip tldr={data.tldr} />
+        <TldrStrip tldr={data.tldr} status={data.tldrStatus} truncated={data.tldrTruncated} />
       </SectionErrorBoundary>
       <div className="clarity-reader-body">
         <div className="clarity-reader-main">

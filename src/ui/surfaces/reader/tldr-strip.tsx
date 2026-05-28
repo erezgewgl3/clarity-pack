@@ -20,6 +20,11 @@ import type { TLDR } from '../../../shared/types.ts';
 
 export type TldrStripProps = {
   tldr: TLDR | { body: string; generated_at?: string; generatedAt?: string } | null | undefined;
+  /** View-driven rework — 'compiling' shows a live "Compiling…" state (the Reader
+   *  polls for the result); 'unavailable' shows the honest empty state. */
+  status?: 'cached' | 'compiling' | 'unavailable';
+  /** True when the TL;DR summarized a truncated (very long) task — shows a note. */
+  truncated?: boolean;
 };
 
 function formatStamp(iso: string | undefined): string {
@@ -31,13 +36,31 @@ function formatStamp(iso: string | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function TldrStrip({ tldr }: TldrStripProps): React.ReactElement {
+export function TldrStrip({ tldr, status, truncated }: TldrStripProps): React.ReactElement {
   if (!tldr || !tldr.body) {
+    // View-driven rework — opening the Reader kicks off the compile. While it
+    // runs, show a live "Compiling…" state (the Reader polls for the result);
+    // 'unavailable' (no Editor-Agent) or an untouched task shows the honest
+    // empty state.
+    if (status === 'compiling') {
+      return (
+        <section
+          className="clarity-tldr-strip clarity-tldr-strip--empty clarity-tldr-strip--compiling"
+          data-clarity-region="tldr"
+          data-clarity-tldr-status="compiling"
+        >
+          <p className="clarity-tldr-body">Compiling TL;DR…</p>
+          <p className="clarity-tldr-stamp">
+            The Editorial Desk is summarizing this task — it will appear here in a moment.
+          </p>
+        </section>
+      );
+    }
     return (
       <section className="clarity-tldr-strip clarity-tldr-strip--empty" data-clarity-region="tldr">
         <p className="clarity-tldr-body">No TL;DR yet</p>
         <p className="clarity-tldr-stamp">
-          Compiled by the Editorial Desk when this task is created or updated.
+          Compiled by the Editorial Desk when you open this task.
         </p>
       </section>
     );
@@ -49,8 +72,14 @@ export function TldrStrip({ tldr }: TldrStripProps): React.ReactElement {
   return (
     <section className="clarity-tldr-strip" data-clarity-region="tldr">
       <p className="clarity-tldr-body">{tldr.body}</p>
+      {truncated ? (
+        <p className="clarity-tldr-truncated-note" data-clarity-tldr-truncated="true">
+          Summarized from a long task — some detail was trimmed to fit.
+        </p>
+      ) : null}
       <p className="clarity-tldr-stamp">
         Regenerated when the task body changes • Generated {stamp}
+        {status === 'compiling' ? ' • refreshing…' : ''}
       </p>
     </section>
   );
