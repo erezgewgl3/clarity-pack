@@ -65,7 +65,13 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // import + result-state copy in bulletin/index.tsx) adds ~3 kB to the UI bundle
 // (695,615 → 698,689 bytes). Legitimate feature delta, no SheetJS; 684 kB
 // (700,416 bytes) absorbs it with ~1.7 kB headroom for minor downstream drift.
-const UI_BUNDLE_BYTES_CEILING = 684 * 1024; // 684 kB = 700,416 bytes
+// Bumped 2026-05-28 from 684 → 686 kB (delivery-layer rework): the
+// "Generate bulletin now" control was reworked from a synchronous 3-state result
+// into an enqueue + byCycle-poll state machine (queued → Compiling… → poll every
+// 8s for ~90s → calm "still compiling" note; two useEffects, refs, the longer
+// settle copy). Net +4 bytes over the prior ceiling (700,420 bytes). Legitimate
+// feature delta, no SheetJS; 686 kB (702,464 bytes) absorbs it with ~2 kB headroom.
+const UI_BUNDLE_BYTES_CEILING = 686 * 1024; // 686 kB = 702,464 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
