@@ -4,6 +4,17 @@ name: lockfile-audit
 # production dependencies. Production-only because devDeps may carry known
 # unfixable advisories that do not ship in the npm tarball (the `files`
 # field in package.json restricts publish to dist/ + migrations/ + README.md).
+#
+# 2026-05-28 fix — this repo is pnpm-based (pnpm-lock.yaml; there is NO
+# package-lock.json). The prior `npm ci` / `npm audit` steps failed on EVERY
+# run with `npm error code ENOLOCK` ("This command requires an existing
+# lockfile") because npm has no lockfile to read. Switched to pnpm:
+#   - `pnpm install --frozen-lockfile` is the real lockfile-drift gate (the
+#     pnpm equivalent of `npm ci`): it fails if pnpm-lock.yaml is out of sync
+#     with package.json.
+#   - `pnpm audit --prod` honors the `pnpm.auditConfig.ignoreGhsas` allowlist
+#     already declared in package.json (the 2 reviewed GHSAs) — which is why
+#     that config exists. `npm audit` ignored it entirely.
 
 on:
   pull_request:
@@ -16,16 +27,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Lockfile drift (npm ci would fail if package-lock.json is out of sync)
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --omit=dev
-          else
-            echo "No package-lock.json — skipping ci install (devDep-free dependency tree)"
-          fi
-      - name: Audit production dependencies (high+ blocks)
-        run: npm audit --audit-level=high --omit=dev
+      - name: Lockfile drift (frozen-lockfile fails if pnpm-lock.yaml is out of sync with package.json)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Audit production dependencies (high+ blocks; honors pnpm.auditConfig.ignoreGhsas)
+        run: pnpm audit --prod --audit-level high
