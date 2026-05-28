@@ -255,7 +255,7 @@ function BulletinPageBody({
         <div className="clarity-bulletin-first-edition">
           <p className="clarity-bulletin-quiet">
             First Edition — the Editorial Desk has not compiled a bulletin yet. The next cycle
-            runs at 06:30 ET.
+            runs at 06:30 Israel time.
           </p>
         </div>
       </>

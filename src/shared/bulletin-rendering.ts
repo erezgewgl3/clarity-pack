@@ -52,7 +52,7 @@ export function renderBulletinIssueBody(draft: BulletinDraft): string {
   parts.push(`# The Bulletin · Vol. ${m.volume} · No. ${m.number}`);
   parts.push('');
   parts.push(
-    `*${m.weekday}, ${m.dateText} · 06:30 ET · prepared for ${m.prepareForName}, Editor-in-Chief · Operations Cycle ${m.cycleNumber} · Auto-compiled*`,
+    `*${m.weekday}, ${m.dateText} · 06:30 Israel time · prepared for ${m.prepareForName}, Editor-in-Chief · Operations Cycle ${m.cycleNumber} · Auto-compiled*`,
   );
   parts.push('');
 

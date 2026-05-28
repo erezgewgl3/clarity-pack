@@ -84,10 +84,10 @@ test('Bulletin UI: masthead.tsx contains literal "The Bulletin"', () => {
   assert.ok(readSrc('masthead.tsx').includes('The Bulletin') || /The\s*<span/.test(readSrc('masthead.tsx')));
 });
 
-test('Bulletin UI: masthead.tsx contains Vol. I / 06:30 ET / Editor-in-Chief / Operations Cycle', () => {
+test('Bulletin UI: masthead.tsx contains Vol. I / 06:30 Israel time / Editor-in-Chief / Operations Cycle', () => {
   const src = readSrc('masthead.tsx');
   assert.ok(/Vol\./.test(src), 'missing Vol.');
-  assert.ok(src.includes('06:30 ET'), 'missing 06:30 ET');
+  assert.ok(src.includes('06:30 Israel time'), 'missing 06:30 Israel time');
   assert.ok(src.includes('Editor-in-Chief'), 'missing Editor-in-Chief');
   assert.ok(src.includes('Operations Cycle'), 'missing Operations Cycle');
 });

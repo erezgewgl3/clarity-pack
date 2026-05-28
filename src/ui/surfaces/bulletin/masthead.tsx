@@ -6,7 +6,7 @@
 // Visual contract: sketches/paperclip-fix-bulletin.html ll. 237-247 —
 //   "The Bulletin"  (Fraunces, "Bulletin" in italic)
 //   "Vol. I · No. 47"
-//   sub-masthead: "{weekday} · {dateText} · 06:30 ET"
+//   sub-masthead: "{weekday} · {dateText} · 06:30 Israel time"
 //                 "prepared for {name}, Editor-in-Chief"
 //                 "Operations Cycle {N} · Auto-compiled"
 
@@ -35,7 +35,7 @@ export function Masthead(props: MastheadProps): React.ReactElement {
       </div>
       <div className="clarity-bulletin-sub-mast">
         <div className="clarity-bulletin-sub-mast-date">
-          {props.weekday} · {props.dateText} · 06:30 ET
+          {props.weekday} · {props.dateText} · 06:30 Israel time
         </div>
         <div className="clarity-bulletin-sub-mast-editor">
           prepared for <em>{props.prepareForName}, Editor-in-Chief</em>
