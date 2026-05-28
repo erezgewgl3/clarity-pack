@@ -914,6 +914,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | 260516-gx4 | Compile-path host-faithful test-hardening pass + Defect B JSON-extraction fix | 2026-05-16 | 4ed04b1 | [260516-gx4-compile-path-host-faithful-test-hardenin](./quick/260516-gx4-compile-path-host-faithful-test-hardenin/) |
 | 260524-s2y | Fix ac-toggle → Reader refetch via UI-tier `usePluginData.refresh` (SDK has no manifest-side `actions[].invalidates`); rc.5 → rc.6 | 2026-05-24 | bd50484 | [260524-s2y-fix-ac-toggle-invalidates-manifest-gap-a](./quick/260524-s2y-fix-ac-toggle-invalidates-manifest-gap-a/) |
 | 260524-sm8 | Drill rc.6 on Countermoves — AC toggle → Reader refetch contract verified live (DevTools Network 3-call cluster, 2+ cycles, all 200); plugin-id UUID preserved; 7 defects filed (D-1..D-4 fixed in-flight; D-5/D-6/D-7 forward MemPalace) | 2026-05-25 | 90e760f | [260524-sm8-drill-clarity-pack-1-0-0-rc-6-tgz-on-cou](./quick/260524-sm8-drill-clarity-pack-1-0-0-rc-6-tgz-on-cou/) |
+| 260528-mn0 | Fix false "paused by operator" banner (#1): editor.pause-status now derives `paused` from real agent status (reconcile→get(uuid), self-clears on resume) not the stale failure-table heuristic; agentName via resolved UUID not the key; new `agents.resumeHeartbeat` action (was 502). v1.0.0, no migration. 23 tests | 2026-05-28 | 38c149c | [260528-mn0-fix-false-pause-banner-stale-read](./quick/260528-mn0-fix-false-pause-banner-stale-read/) |
 
 ### Phase History
 
