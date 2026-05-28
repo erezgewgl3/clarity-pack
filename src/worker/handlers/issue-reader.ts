@@ -56,7 +56,10 @@ import {
   type ChatTopicByOriginEntry,
 } from '../db/chat-topics-repo.ts';
 
-const REF_PATTERN = /\bBEAAA-\d+\b/g;
+// 07-01 — the module-level BEAAA-only REF_PATTERN is GONE. Both extraction
+// sites below derive the EXACT prefix from `issue.identifier` via the shared
+// editor.ts `prefixFromIdentifier` (broad fallback when null), so refs resolve
+// on ANY instance (COU/ACME/BEAAA), not just BEAAA.
 const ACTIVITY_LIMIT = 8; // READER-09
 const ANCESTRY_MAX_DEPTH = 8;
 const EXCERPT_MAX = 280;
@@ -177,6 +180,11 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
     // scope is dead — PR #6547). Cache hit → instant, no recompile. Cache miss →
     // start the agent compile + consume a ready result, all in this request's
     // valid scope.
+    // 07-01 — derive THIS issue's reference prefix once (de-BEAAA'd). Both the
+    // TL;DR-input extraction (here) and the refCards extraction (below) narrow
+    // to it; broad fallback when issue.identifier is null.
+    const issueIdentifier = (issue as unknown as { identifier?: string | null }).identifier ?? null;
+
     let tldr: TLDR | null = null;
     let tldrStatus: IssueReaderResult['tldrStatus'] = 'unavailable';
     let tldrTruncated = false;
@@ -187,7 +195,9 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
         inputs: {
           body: issueBodyValue ?? '',
           comments: commentsRaw.map((c) => (c as unknown as { body?: string }).body ?? ''),
-          refs: extractRefsFromBody(issueBodyValue ?? undefined),
+          // 07-01 — pass the derived identifier so TL;DR inputs extract refs on
+          // a non-BEAAA instance too (was a single-arg BEAAA-hardcoded call).
+          refs: extractRefsFromBody(issueBodyValue ?? undefined, issueIdentifier),
         },
       });
       tldr = step.tldr as unknown as TLDR | null;
@@ -220,9 +230,10 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
     // `id = the requested identifier` so reference-resolver's byId.get(ref) hits.
     let refCards: RefCardData[] = [];
     try {
-      const refs = Array.from(
-        new Set([...(issueBodyValue ?? '').matchAll(REF_PATTERN)].map((m) => m[0])),
-      );
+      // 07-01 — prefix-narrowed extraction (de-BEAAA'd) from issue.identifier;
+      // broad fallback when null. Uses the SAME shared editor.ts helper as the
+      // TL;DR-inputs call above so no extraction site keeps BEAAA-hardcoded.
+      const refs = extractRefsFromBody(issueBodyValue ?? undefined, issueIdentifier);
       if (refs.length > 0) {
         refCards = await resolveRefs(refs, async (uniqueIds) => {
           const resolved = await resolveRefsViaSdk(ctx.issues, uniqueIds, companyId);

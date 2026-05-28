@@ -119,13 +119,52 @@ export type EditorHeartbeatCtx = Parameters<typeof compileTldr>[0] &
     issues: PluginIssuesClient;
   };
 
+// 07-01 — broad fallback pattern, mirrors src/ui/surfaces/reader/
+// prose-with-ref-chips.tsx. Match a 2-8 char uppercase prefix (first char A-Z,
+// rest A-Z|0-9), a hyphen, and one or more digits. Used ONLY when the current
+// issue's `identifier` is null (plugin-op / fresh issues), where we have no
+// prefix to narrow to. Linear, no backtracking → ReDoS-safe over untrusted
+// bodies.
+const BROAD_REF_PATTERN = /\b[A-Z][A-Z0-9]{1,7}-\d+\b/g;
+
+/** Escape regex metacharacters so a hostile `identifier` cannot inject pattern
+ *  syntax when we build the narrow per-prefix regex. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
- * Extract BEAAA-NNN references from an issue body. Used to build the prompt
- * input set. Pure helper; exported for unit testability.
+ * 07-01 — derive the EXACT issue-reference prefix from an issue identifier.
+ * `'COU-2486'` → `'COU'`, `'ACME-7'` → `'ACME'`, `'OPS2-3'` → `'OPS2'`.
+ * Returns null when the identifier is null/empty or is not the canonical
+ * `<UPPER-PREFIX>-<digits>` shape (so callers fall back to BROAD_REF_PATTERN).
+ * Pure helper; exported and shared by editor.ts AND issue-reader.ts so neither
+ * worker extraction site keeps the old BEAAA-hardcoded behavior.
  */
-export function extractRefsFromBody(body: string | undefined): string[] {
+export function prefixFromIdentifier(identifier: string | null | undefined): string | null {
+  if (typeof identifier !== 'string') return null;
+  const m = /^([A-Z][A-Z0-9]{1,7})-\d+$/.exec(identifier.trim());
+  return m ? m[1] : null;
+}
+
+/**
+ * 07-01 — extract issue references from an issue body, narrowed to the current
+ * issue's company prefix (de-BEAAA'd). When `identifier` yields a prefix (via
+ * {@link prefixFromIdentifier}) the regex is narrowed to `\b<prefix>-\d+\b`
+ * (the prefix is regex-escaped); otherwise it falls back to the broad
+ * `/\b[A-Z][A-Z0-9]{1,7}-\d+\b/g`. De-dupes; returns a `string[]`. Used to
+ * build the prompt input set. Pure helper; exported for unit testability.
+ */
+export function extractRefsFromBody(
+  body: string | undefined,
+  identifier?: string | null,
+): string[] {
   if (!body) return [];
-  return Array.from(new Set([...body.matchAll(/\bBEAAA-\d+\b/g)].map((m) => m[0])));
+  const prefix = prefixFromIdentifier(identifier);
+  const re = prefix
+    ? new RegExp(`\\b${escapeRegex(prefix)}-\\d+\\b`, 'g')
+    : new RegExp(BROAD_REF_PATTERN.source, 'g');
+  return Array.from(new Set([...body.matchAll(re)].map((m) => m[0])));
 }
 
 /**
@@ -208,7 +247,9 @@ export async function handleEditorHeartbeat(
       const inputs = {
         body: issue.description ?? '',
         comments: comments.map((c) => c.body),
-        refs: extractRefsFromBody(issue.description ?? undefined),
+        // 07-01 — narrow to this issue's prefix (de-BEAAA'd); broad fallback
+        // when identifier is null.
+        refs: extractRefsFromBody(issue.description ?? undefined, issue.identifier ?? null),
       };
 
       // Delivery-layer rework (2026-05-28) — prepare (EDITOR-03 cache check +
@@ -298,7 +339,9 @@ export async function readTldrInputs(
   } catch {
     comments = [];
   }
-  return { body, comments, refs: extractRefsFromBody(body) };
+  // 07-01 — narrow ref extraction to THIS issue's prefix (de-BEAAA'd). Falls
+  // back to the broad pattern when the re-fetched identifier is null.
+  return { body, comments, refs: extractRefsFromBody(body, target?.identifier ?? null) };
 }
 
 /** The outcome of one view-driven TL;DR compile step (see {@link driveTldrCompileStep}). */
