@@ -340,8 +340,21 @@ export function extractJsonObject(raw: string): string {
   throw new Error('no balanced JSON object found in LLM output');
 }
 
-/** Build the pass-1 prompt — factsTable as DATA, never as instruction. */
-function buildPrompt(args: CompilePass1Args): string {
+/** The subset of CompilePass1Args the prompt builder reads. */
+export type BuildBulletinPromptArgs = Pick<
+  CompilePass1Args,
+  'cycleNumber' | 'departments' | 'factsTable' | 'standingNumbers'
+>;
+
+/**
+ * Build the pass-1 prompt — factsTable as DATA, never as instruction.
+ *
+ * Delivery-layer rework (2026-05-28) — exported so the cross-tick compile
+ * START step (compile-bulletin.ts) can build the prompt for `startAgentTask`
+ * without invoking the whole synchronous `compilePass1`. `compilePass1` still
+ * calls this for the in-one-call path.
+ */
+export function buildBulletinPrompt(args: BuildBulletinPromptArgs): string {
   return [
     'You are the Editorial Desk for Paperclip. Compose a Daily Bulletin in structured JSON form.',
     'Use the provided facts table as the ONLY source of numeric claims. NEVER type a number into prose; use `{{NUMBER:key}}` placeholders that reference factsTable keys.',
@@ -380,11 +393,46 @@ function buildPrompt(args: CompilePass1Args): string {
  *   - `buildMasthead` OVERWRITES the agent's masthead with a deterministic,
  *     pipeline-built one (the LLM masthead is never trusted — BULL-05).
  */
+/**
+ * Delivery-layer rework (2026-05-28) — turn a RAW agent result body into a
+ * validated, slot-resolved, deterministic-masthead BulletinDraft, using the
+ * FROZEN compile inputs (factsTable / cycleNumber / compiledAt / companyName)
+ * captured when the compile was STARTED. This is the "finish" half of
+ * `compilePass1` (everything after `llm.complete`), callable on a LATER job
+ * tick once `pollAgentTaskResult` returns the body. THROWS on bad JSON /
+ * invalid schema / unknown slot (the caller records the failure) — it does NOT
+ * call recordFailure itself, so the resume tick owns the breaker accounting.
+ *
+ * Reusing the frozen factsTable (not a fresh re-query) is what keeps the
+ * verifier honest across ticks — the agent compiled against these exact numbers
+ * (v0.6.6 Bug-2: no live re-query).
+ */
+export function finalizeBulletinDraft(
+  rawBody: string,
+  frozen: {
+    factsTable: FactsTable;
+    cycleNumber: number;
+    compiledAt?: Date;
+    companyName?: string;
+  },
+): BulletinDraft {
+  const parsed: unknown = JSON.parse(extractJsonObject(rawBody));
+  validateDraftSchema(parsed, frozen.factsTable);
+  const draft = parsed as BulletinDraft;
+  resolveDraftSlots(draft, frozen.factsTable);
+  draft.masthead = buildMasthead({
+    cycleNumber: frozen.cycleNumber,
+    compiledAt: frozen.compiledAt ?? new Date(),
+    companyName: frozen.companyName,
+  });
+  return draft;
+}
+
 export async function compilePass1(
   ctx: CompilePass1Ctx,
   args: CompilePass1Args,
 ): Promise<BulletinDraft> {
-  const prompt = buildPrompt(args);
+  const prompt = buildBulletinPrompt(args);
   const inputTokens = estimateTokens(prompt);
   if (inputTokens > MAX_BULLETIN_TOKENS) {
     await recordFailure(ctx, {
