@@ -124,7 +124,15 @@ export function ChatPage(_props?: PluginPageProps): React.ReactElement {
 }
 
 function ChatPageOptedIn(): React.ReactElement {
-  const { companyId, loading: companyLoading, error: companyError } = useResolvedCompanyId();
+  const {
+    companyId,
+    loading: companyLoading,
+    error: companyError,
+    // 07-01 — the resolved company display name (or URL prefix). Threaded down
+    // to the roster header + global-search placeholder, replacing the former
+    // hardcoded company label.
+    displayName: companyName,
+  } = useResolvedCompanyId();
   const { userId, loading: userLoading, error: userError } = useResolvedUserId();
 
   if (companyLoading || userLoading) {
@@ -159,7 +167,7 @@ function ChatPageOptedIn(): React.ReactElement {
           existed under Plan 04.1-09 has been REMOVED. ToastProvider now
           lives in ClaritySurfaceRoot (Task 4 hoist), so ChatPageBody's
           useToast() finds the provider one level up. */}
-      <ChatPageBody companyId={companyId} userId={userId} />
+      <ChatPageBody companyId={companyId} userId={userId} companyName={companyName} />
     </ClaritySurfaceRoot>
   );
 }
@@ -167,9 +175,12 @@ function ChatPageOptedIn(): React.ReactElement {
 function ChatPageBody({
   companyId,
   userId,
+  companyName,
 }: {
   companyId: string;
   userId: string;
+  /** 07-01 — resolved company display name (or URL prefix), never a literal. */
+  companyName: string | null;
 }): React.ReactElement {
   // Plan 04.1-10 drill fix #1 — useToast must be called INSIDE the
   // <ToastProvider> tree; ChatPageBody is the first descendant guaranteed
@@ -766,6 +777,7 @@ function ChatPageBody({
         userId={userId}
         activeEmployeeId={employee?.id ?? null}
         onSelectEmployee={handleSelectEmployee}
+        companyName={companyName}
       />
 
       <main className="thread" data-clarity-region="thread">
@@ -782,7 +794,11 @@ function ChatPageBody({
           <div className="global-search">
             <span className="icon">⌕</span>
             <input
-              placeholder="Search all chats and tasks across BEAAA…"
+              placeholder={
+                companyName
+                  ? `Search all chats and tasks across ${companyName}…`
+                  : 'Search all chats and tasks…'
+              }
               aria-label="Search chats"
             />
           </div>

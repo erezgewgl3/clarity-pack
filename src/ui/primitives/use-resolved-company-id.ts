@@ -29,10 +29,17 @@ import {
   usePluginData,
 } from '@paperclipai/plugin-sdk/ui/hooks';
 
+// 07-01 — every arm now carries `displayName: string | null`. The chat surface
+// renders it (or the URL prefix) instead of the hardcoded literal "BEAAA".
+//   - Path 1 (host-context short-circuit) + loading + error → URL prefix (the
+//     resolve-prefix handler never runs on these paths, per 07-CONTEXT line 41).
+//   - Path 5 (resolver landed) → data.displayName (companies.resolve-prefix
+//     already returns it), falling back to the URL prefix.
+// NEVER a literal company name.
 export type ResolvedCompanyId =
-  | { companyId: string; loading: false; error: null }
-  | { companyId: null; loading: true; error: null }
-  | { companyId: null; loading: false; error: 'no-company-context' };
+  | { companyId: string; loading: false; error: null; displayName: string | null }
+  | { companyId: null; loading: true; error: null; displayName: string | null }
+  | { companyId: null; loading: false; error: 'no-company-context'; displayName: string | null };
 
 type ResolvePrefixResult = { companyId: string; displayName: string };
 
@@ -70,27 +77,38 @@ export function useResolvedCompanyId(): ResolvedCompanyId {
     shouldResolve ? { companyPrefix: derivedPrefix } : {},
   );
 
-  // Path 1 — host context already has a UUID. Short-circuit.
+  // 07-01 — the URL prefix is the fallback display name on every path where the
+  // resolve-prefix handler's displayName is unavailable (host-context
+  // short-circuit, loading, error). NEVER a literal.
+  const urlPrefix = derivedPrefix || null;
+
+  // Path 1 — host context already has a UUID. Short-circuit (resolve-prefix
+  // never runs here, so displayName falls back to the URL prefix).
   if (hostCompanyId) {
-    return { companyId: hostCompanyId, loading: false, error: null };
+    return { companyId: hostCompanyId, loading: false, error: null, displayName: urlPrefix };
   }
 
   // Path 2 — no prefix available (root URL, settingsPage on a company-less
   // route, etc.). Surface the error immediately; UI must render a placeholder.
   if (!derivedPrefix) {
-    return { companyId: null, loading: false, error: 'no-company-context' };
+    return { companyId: null, loading: false, error: 'no-company-context', displayName: null };
   }
 
   // Path 3 — resolver in flight.
   if (loading) {
-    return { companyId: null, loading: true, error: null };
+    return { companyId: null, loading: true, error: null, displayName: urlPrefix };
   }
 
   // Path 4 — resolver failed.
   if (error || !data?.companyId) {
-    return { companyId: null, loading: false, error: 'no-company-context' };
+    return { companyId: null, loading: false, error: 'no-company-context', displayName: urlPrefix };
   }
 
-  // Path 5 — resolver landed.
-  return { companyId: data.companyId, loading: false, error: null };
+  // Path 5 — resolver landed (companies.resolve-prefix returns displayName).
+  return {
+    companyId: data.companyId,
+    loading: false,
+    error: null,
+    displayName: data.displayName ?? urlPrefix,
+  };
 }

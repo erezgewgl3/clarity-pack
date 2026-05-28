@@ -71,12 +71,17 @@ export function RosterRail({
   userId,
   activeEmployeeId,
   onSelectEmployee,
+  companyName,
 }: {
   companyId: string;
   userId: string;
   activeEmployeeId: string | null;
   /** Called with the full employee row so the thread head + context rail can render it. */
   onSelectEmployee: (employee: RosterEmployee) => void;
+  /** 07-01 — the resolved company display name (or URL prefix). Replaces the
+   *  former hardcoded company label; null/absent renders no suffix. NEVER a
+   *  literal company string. */
+  companyName?: string | null;
 }): React.ReactElement {
   const { data, loading } = usePluginData<RosterResult>('chat.roster', {
     companyId,
@@ -102,7 +107,11 @@ export function RosterRail({
       <div className="roster-head">
         <div className="ttl">Employees</div>
         <span className="ct">
-          {employees ? `${employees.length} · BEAAA` : 'BEAAA'}
+          {/* 07-01 — resolved company name (or URL prefix), never a literal.
+              When companyName is null the count stands alone (no " · " suffix). */}
+          {employees
+            ? `${employees.length}${companyName ? ` · ${companyName}` : ''}`
+            : (companyName ?? '')}
         </span>
       </div>
       <div className="roster-search">
