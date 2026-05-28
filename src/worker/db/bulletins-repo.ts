@@ -175,6 +175,30 @@ export async function getBulletinByCycle(
 }
 
 /**
+ * Quick task 260528-nns — read the most-recent PUBLISHED bulletin for a company
+ * (highest cycle_number whose compile_status = 'published'). Unlike
+ * getBulletinByCycle(…, 'latest') — which returns the MAX-cycle row regardless
+ * of status (could be a 'pending' bootstrap or an 'attempting' row) — this is
+ * scoped to actually-published rows so the on-demand compile can dedupe a fresh
+ * draft against the last bulletin the operator has SEEN. Returns null when the
+ * company has never published a bulletin.
+ */
+export async function getLatestPublishedBulletin(
+  ctx: BulletinsRepoCtx,
+  companyId: string,
+): Promise<BulletinRow | null> {
+  const rows = await ctx.db.query<BulletinRow>(
+    `SELECT ${BULLETIN_COLS}
+     FROM plugin_clarity_pack_cdd6bda4bd.bulletins
+     WHERE company_id = $1 AND compile_status = 'published'
+     ORDER BY cycle_number DESC
+     LIMIT 1`,
+    [companyId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
  * Read the most-recent `next_due_at` for a company. Returns null when no
  * bulletin row exists yet — the compile-bulletin job treats null as the
  * "first ever compile" bootstrap signal.

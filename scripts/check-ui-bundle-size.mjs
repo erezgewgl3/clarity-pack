@@ -60,7 +60,12 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // prose-with-ref-chips.tsx (needed to scope REF_PATTERN to the current
 // company prefix, fixing "Clarity Pack: failed to render" on YAML-shaped
 // issue bodies). Net delta ~470 bytes; ceiling bump gives modest headroom.
-const UI_BUNDLE_BYTES_CEILING = 680 * 1024; // 680 kB = 696,320 bytes
+// Bumped 2026-05-28 from 680 → 684 kB (quick task 260528-nns): the on-demand
+// "Generate bulletin now" control (GenerateBulletinNow component + usePluginAction
+// import + result-state copy in bulletin/index.tsx) adds ~3 kB to the UI bundle
+// (695,615 → 698,689 bytes). Legitimate feature delta, no SheetJS; 684 kB
+// (700,416 bytes) absorbs it with ~1.7 kB headroom for minor downstream drift.
+const UI_BUNDLE_BYTES_CEILING = 684 * 1024; // 684 kB = 700,416 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

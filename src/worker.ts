@@ -81,6 +81,14 @@ import {
   registerBulletinLatestStatus,
   type BulletinLatestStatusCtx,
 } from './worker/handlers/bulletin-latest-status.ts';
+// Quick task 260528-nns — bulletin.compileNow action: the operator's "Generate
+// bulletin now" button. Reuses the shared compileBulletinForCompany pipeline
+// with force:true (bypasses the due-gate, dedupes on content_hash, leaves the
+// daily schedule pointer untouched). Opt-in-guard wrapped.
+import {
+  registerBulletinCompileNow,
+  type BulletinCompileNowCtx,
+} from './worker/handlers/bulletin-compile-now.ts';
 // Plan 04-03 — Employee Chat send / edit action handlers + realtime bridge.
 import { registerChatSend, type ChatSendCtx } from './worker/handlers/chat-send.ts';
 import { registerChatEdit, type ChatEditCtx } from './worker/handlers/chat-edit.ts';
@@ -262,6 +270,8 @@ const plugin = definePlugin({
     registerBulletinActionDecline(ctx as unknown as BulletinActionDeclineCtx);
     registerBulletinErrata(ctx as unknown as BulletinErrataCtx);
     registerBulletinLatestStatus(ctx as unknown as BulletinLatestStatusCtx);
+    // Quick task 260528-nns — on-demand "Generate bulletin now" action.
+    registerBulletinCompileNow(ctx as unknown as BulletinCompileNowCtx);
 
     // ---- Plan 04-03 — Employee Chat send / edit action handlers -------------
     // chat.send is the canonical-write path (createComment -> public.

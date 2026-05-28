@@ -55,6 +55,40 @@ function syncHash(s: string): string {
   return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 }
 
+/**
+ * Quick task 260528-nns — the canonical content hash for a bulletin draft:
+ * `syncHash(renderBulletinIssueBody(draft))`, the exact value publishBulletin
+ * stores in `bulletins.content_hash`.
+ */
+export function computeBulletinContentHash(draft: BulletinDraft): string {
+  return syncHash(renderBulletinIssueBody(draft));
+}
+
+/**
+ * Quick task 260528-nns — a SUBSTANCE-only hash for the on-demand dedupe.
+ *
+ * `content_hash` (above, over the rendered body) is NOT usable for "did
+ * anything change since the last bulletin?" because the rendered body bakes in
+ * the auto-derived masthead — `No. <number>`, `Operations Cycle <cycleNumber>`,
+ * and the weekday/date — all of which change every cycle/day. Two compiles of
+ * identical editorial content therefore produce DIFFERENT content_hashes (the
+ * cycle number increments), so a content_hash-equality dedupe would never fire.
+ *
+ * This hash deliberately EXCLUDES the masthead and covers only the editorial
+ * substance (action inbox, department operations, standing numbers, lineage
+ * threads). The on-demand path compares this against the last published
+ * bulletin's draft_json: equal substance → no new bulletin.
+ */
+export function bulletinDedupeHash(draft: BulletinDraft): string {
+  const substance = {
+    actionInbox: draft.actionInbox ?? [],
+    departments: draft.departments ?? [],
+    standingNumbers: draft.standingNumbers ?? [],
+    lineageThreads: draft.lineageThreads ?? [],
+  };
+  return syncHash(JSON.stringify(substance));
+}
+
 const BULLETINS_TABLE = 'plugin_clarity_pack_cdd6bda4bd.bulletins';
 const ERRATA_TABLE = 'plugin_clarity_pack_cdd6bda4bd.bulletin_errata';
 
@@ -112,7 +146,7 @@ export async function publishBulletin(
   args: PublishBulletinArgs,
 ): Promise<PublishResult> {
   const body = renderBulletinIssueBody(args.draft);
-  const contentHash = syncHash(body);
+  const contentHash = computeBulletinContentHash(args.draft);
   const weekday = formatInTimeZone(args.compiledAt, BULLETIN_TZ, 'EEEE');
   const dateText = formatInTimeZone(args.compiledAt, BULLETIN_TZ, 'yyyy-MM-dd');
   const title = `Bulletin No. ${args.cycleNumber} — ${weekday}, ${dateText}`;

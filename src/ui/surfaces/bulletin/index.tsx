@@ -18,7 +18,7 @@
 // Visual fidelity target: sketches/paperclip-fix-bulletin.html.
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import { usePluginData, usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 import type { PluginPageProps } from '@paperclipai/plugin-sdk/ui';
 
 import { ClaritySurfaceRoot } from '../../primitives/clarity-surface-root.tsx';
@@ -134,6 +134,76 @@ function BulletinPageOptedIn(): React.ReactElement {
   );
 }
 
+// Quick task 260528-nns — the on-demand "Generate bulletin now" control.
+// Runs the same compile pipeline as the daily 06:30 cron via the
+// `bulletin.compileNow` action (force + content dedupe; the daily schedule is
+// left untouched). Three result states dispatch on the action's discriminated
+// return; on a fresh publish it refreshes the byCycle data so the new edition
+// renders without a manual reload.
+type CompileNowResult =
+  | { kind: 'published'; cycleNumber: number; publishedAt?: string | null }
+  | { kind: 'no-change'; cycleNumber: number; publishedAt?: string | null }
+  | { kind: 'error'; reason: string }
+  | { error: string };
+
+const COMPILE_UNAVAILABLE = 'Editorial Desk unavailable — resume it in the Agents panel.';
+
+function GenerateBulletinNow({
+  companyId,
+  userId,
+  onPublished,
+}: {
+  companyId: string;
+  userId: string;
+  onPublished: () => void;
+}): React.ReactElement {
+  const compileNow = usePluginAction('bulletin.compileNow');
+  const [compiling, setCompiling] = React.useState(false);
+  const [resultMsg, setResultMsg] = React.useState<string | null>(null);
+
+  const onClick = React.useCallback(async () => {
+    setCompiling(true);
+    setResultMsg(null);
+    try {
+      const r = (await compileNow({ companyId, userId })) as CompileNowResult;
+      if (r && 'kind' in r && r.kind === 'published') {
+        setResultMsg(`Published Bulletin No. ${r.cycleNumber}`);
+        onPublished();
+      } else if (r && 'kind' in r && r.kind === 'no-change') {
+        setResultMsg(`No changes since Bulletin No. ${r.cycleNumber}`);
+      } else if (r && 'kind' in r && r.kind === 'error') {
+        setResultMsg(r.reason || COMPILE_UNAVAILABLE);
+      } else {
+        // {error:'OPT_IN_REQUIRED'} or an unexpected shape.
+        setResultMsg(COMPILE_UNAVAILABLE);
+      }
+    } catch {
+      setResultMsg(COMPILE_UNAVAILABLE);
+    } finally {
+      setCompiling(false);
+    }
+  }, [compileNow, companyId, userId, onPublished]);
+
+  return (
+    <div className="clarity-bulletin-compile-now" data-clarity-region="bulletin-compile-now">
+      <button
+        type="button"
+        className="clarity-bulletin-compile-now-btn"
+        onClick={() => void onClick()}
+        disabled={compiling}
+        title="Compile a bulletin from the current state without waiting for the 06:30 cycle"
+      >
+        {compiling ? 'Compiling…' : 'Generate bulletin now'}
+      </button>
+      {resultMsg ? (
+        <span className="clarity-bulletin-compile-now-result" role="status">
+          {resultMsg}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function BulletinPageBody({
   companyId,
   userId,
@@ -141,7 +211,7 @@ function BulletinPageBody({
   companyId: string;
   userId: string;
 }): React.ReactElement {
-  const { data, loading } = usePluginData<BulletinByCycleResult>('bulletin.byCycle', {
+  const { data, loading, refresh } = usePluginData<BulletinByCycleResult>('bulletin.byCycle', {
     cycle: 'latest',
     companyId,
     userId,
@@ -149,12 +219,17 @@ function BulletinPageBody({
 
   // Plan 05-08 (D-17) — shared `+ Create task` header for cross-surface
   // cold-task creation. Mounted at the top of every BulletinPageBody return.
+  // Quick task 260528-nns — the "Generate bulletin now" control rides alongside
+  // it so it shows in every page state (loading / first-edition / published).
   const header = (
-    <ClaritySurfaceHeader
-      companyId={companyId}
-      userId={userId}
-      surface="bulletin"
-    />
+    <>
+      <ClaritySurfaceHeader
+        companyId={companyId}
+        userId={userId}
+        surface="bulletin"
+      />
+      <GenerateBulletinNow companyId={companyId} userId={userId} onPublished={refresh} />
+    </>
   );
 
   if (loading && !data) {
