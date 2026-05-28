@@ -2,11 +2,10 @@
 //
 // Plan 07-01 — shared SDK-based ref resolver used by BOTH worker resolution
 // paths (the issue.reader inline fetcher AND the standalone resolve-refs
-// handler). It replaces the SSRF-blocked
-// `ctx.http.fetch(.../api/companies/<id>/issues?ids=...)` path that Paperclip
-// 2026.525.0 rejects (private-IP block + ignored `?ids=` filter + stale
-// snake_case field mapping where `i.key` was null so the resolver's byId map
-// never matched → chips rendered "BEAAA-NNN · unknown").
+// handler). It replaces the SSRF-blocked HTTP batch path that Paperclip
+// 2026.525.0 rejects (private-IP block + ignored batch filter + stale
+// snake_case field mapping where the host key was null so the resolver's byId
+// map never matched → chips rendered "BEAAA-NNN · unknown").
 //
 // Strategy (LOCKED in 07-CONTEXT.md):
 //   1. Resolve each unique requested identifier via per-ref
