@@ -25,5 +25,9 @@ The spec said "dedupe on content_hash." The shipped dedupe uses a masthead-exclu
 - New `test/ui/bulletin-compile-now.test.mjs` (7, source-grep): button label, `usePluginAction('bulletin.compileNow')`, three states, Compiling…, refresh, scoped class. All pass.
 - Gates: `tsc --noEmit` 0; `check-css-scope` pass (all scoped); full suite **1985 pass / 1 fail** (the brief-documented pre-existing `situation.artifacts ... sorted DESC`); builds clean; `grep -c paperclipInvocation dist/worker.js` = 5; `bulletin.compileNow` present in dist/worker.js (2) + dist/ui/index.js (1); bulletin worker+UI tests **212/212**.
 
-## Deploy
-Stable-path detached install to BEAAA `/home/beai-agent/clarity-pack-live/package` (see STATE.md / deploy log).
+## Deploy — LIVE + VERIFIED on BEAAA (2026-05-28 ~14:27 UTC)
+Detached stable-path install to `/home/beai-agent/clarity-pack-live/package`; commit `d15d19f` (pushed master). Result:
+- `✓ Installed clarity-pack v1.0.0 (ready)`; pm2 `paperclip` restarted (PID 409069, ↺ 13→14); health=200; clean worker boot "clarity-pack worker started … registered", plugin activated (worker:true, jobs:2, 5 event subs), no errors/crash. Installed `dist/worker.js` `bulletin.compileNow` count = 2 (new bundle live).
+- **Action verified live:** `POST /api/plugins/a763176a-.../actions/bulletin.compileNow` with no userId → `{"data":{"error":"OPT_IN_REQUIRED"}}` at **http=200** (registered + reachable — a missing action would 502/404; opt-in guard short-circuited with no compile/publish triggered).
+- Used the fail2ban-safe flow from the #1 incident: fresh tgz name (no /tmp overwrite), detached `setsid` install, single on-box `DEPLOY_DONE` wait connection. No SSH lockout this time.
+- **Remaining UAT (operator):** click "Generate bulletin now" on the Bulletin page — it triggers a real LLM compile and either publishes a fresh "Bulletin No. N" or returns "No changes since Bulletin No. N" (the dedupe). This is the operator-driven "see a bulletin now" use case the feature was built for; I did not trigger a production compile autonomously.
