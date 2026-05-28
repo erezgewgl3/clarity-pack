@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0.0-rc.8
 milestone_name: phase-5-expanded-for-v1-final
 status: executing
-stopped_at: Phase 7 PLANNED 2026-05-28 — 07-01 (prerequisite chunk) plan-checker PASS; ready to execute
-last_updated: "2026-05-28T22:30:00.000Z"
-next_action: "Phase 7 (clarity-surfaces quality + portability) PLANNED. Plan 07-01-PLAN.md covers the PREREQUISITE chunk only (items 1+2): ref-resolution fix on BOTH worker paths (issue-reader.ts inline fetcher + standalone resolve-refs.ts) via per-ref ctx.issues.get(identifier,companyId) + cached ctx.issues.list-and-match fallback (real fields identifier/title/status/assigneeUserId/description; fetcher returns id=requested identifier); de-BEAAA BOTH extraction regexes (issue-reader.ts:58 REF_PATTERN + editor.ts:126 extractRefsFromBody, incl. the line-195 TL;DR-input call site) via exact-prefix derivation from issue.identifier; 2 hardcoded UI labels (roster-rail.tsx:105 + chat/index.tsx:785) via companies.resolve-prefix displayName. 6 TDD-ordered tasks; no version bump (stay 1.0.0); additive-only; no migration. Recon = workflow wf_ef5f2db9-be6 (07-RESEARCH.md); locked decisions in 07-CONTEXT.md. NEXT = /gsd:execute-phase 7, run FULLY AUTONOMOUSLY end-to-end — do NOT pause for operator approval. Eric authorized fully-autonomous deploy 2026-05-28 (memory feedback_autonomous-deploy-authorization): the bookended-by-snapshots rule is satisfied by the DO daily backup + the rehearsed Phase 1 restore, so NO manual pre-deploy snapshot. After the build/pack tasks, the orchestrator window deploys to BEAAA (DEPLOY-RUNBOOK Path A) + runs the live Playwright drill itself (it holds the localhost:3100 tunnel + BEAAA SSH that a build subagent lacks — so this MUST run from a LOCAL window, not a cloud/headless agent). The drill doubles as the runtime probe for the unverified SDK get-by-identifier question + the _viewer_can_read excerpt-gate open item; record verdicts in 07-01-SUMMARY.md. Items 3-5 (TL;DR cleanup / Situation Room org-level blocked-backlog clickable view / bulletin lineage filter+gloss+clickable) get their own discuss gate + later planning passes. Plan 05-10 (npm publish + milestone close) remains separately operator-gated."
+stopped_at: Plan 07-01 CODE-COMPLETE 2026-05-28 — all autonomous gates green + tarball packed; deploy + live BEAAA drill ORCHESTRATOR-PENDING
+last_updated: "2026-05-28T23:59:00.000Z"
+next_action: "Plan 07-01 (Phase 7 prerequisite chunk: ref-resolution fix + de-BEAAA extraction + 2 chat labels) CODE-COMPLETE 2026-05-28 — executed FULLY AUTONOMOUSLY end-to-end. 6 TDD tasks, commits a7fe79c (RED) / 46ae942 (GREEN issue.reader) / af63ed5 (GREEN resolve-refs) / 7cd908b (de-BEAAA extraction) / 7c4af6b (UI labels) + the docs commit (sequential mode on master). BOTH worker resolution paths rewritten to a shared src/worker/handlers/sdk-ref-fetch.ts: per-ref ctx.issues.get(identifier,companyId) in Promise.all + ONE cached ctx.issues.list({companyId})-and-match-on-.identifier fallback; fetcher echoes id=the requested identifier so reference-resolver byId.get(ref) hits (pure resolver UNCHANGED). Stale RawHostIssue snake_case mapping gone; real camelCase fields (title/status/assigneeUserId/description). resolve-refs D-09 owner-name enrichment (ctx.agents.get, NO_UUID_LEAK) preserved. Extraction de-BEAAA'd via exported editor.prefixFromIdentifier + extractRefsFromBody(body,identifier?); ALL FOUR call sites threaded (editor def + readTldrInputs + heartbeat + BOTH issue-reader sites). useResolvedCompanyId returns displayName; roster-rail + chat global-search show the company display name (URL-prefix fallback, BEAAA literals gone). NO version bump (1.0.0 in package.json + src/manifest.ts:337 + dist/manifest.js); no migration; no new deps. Gates ALL GREEN: tsc clean; check-css-scope 140 scoped; worker+UI+manifest builds OK; check-ui-bundle-size 703,238/704,512; full suite 2027 total / 2024 pass / 1 fail (pre-existing situation.artifacts) / 2 skip; grep -c paperclipInvocation dist/worker.js = 5. Tarball clarity-pack-1.0.0.tgz packed: sha256 baafb66a4117e0e792e8567ba1370ec585edc9d05acfc43960d025dbe3fc9124, 707,108 bytes, 18 files (0 src/test/png leaks). SUMMARY: 07-01-SUMMARY.md. NEXT (ORCHESTRATOR, PRE-AUTHORIZED — do NOT pause): deploy the tarball to BEAAA via DEPLOY-RUNBOOK Path A (bookended-by-snapshots satisfied by DO daily backup + rehearsed Phase 1 restore; NO manual pre-deploy snapshot) + run the live BEAAA Playwright drill from a LOCAL window (needs localhost:3100 tunnel + ssh ariclaw + Playwright MCP). The drill is (a) the runtime probe for whether host ctx.issues.get accepts a human identifier vs only a UUID — record which path fired from the worker log; (b) resolves the _viewer_can_read excerpt-gate open item (T-07-01); (c) the verification gate that flips REQUIREMENTS.md READER-03/READER-04 from Pending to Implemented. Fill the 5 TBD drill verdicts in 07-01-SUMMARY.md after PASS. Items 3-5 (TL;DR cleanup / Situation Room org-level blocked-backlog / bulletin lineage) get their own discuss gates + later planning passes. Plan 05-10 (npm publish + milestone close) remains separately operator-gated."
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 56
+  total_plans: 57
   completed_plans: 49
   percent: 86
 ---
@@ -17,6 +17,28 @@ progress:
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
+
+## Plan 07-01 CODE-COMPLETE 2026-05-28 — deploy + live BEAAA drill ORCHESTRATOR-PENDING
+
+**Phase 7 prerequisite chunk (items 1+2): ref-resolution fix + de-BEAAA extraction + 2 chat labels.** Executed fully autonomously (6 TDD tasks, sequential mode on master). The Reader's "zero rabbit-holes" core value was broken on EVERY instance — in-prose `BEAAA-NNN` chips rendered `"BEAAA-807 · unknown"`. Root cause (07-RESEARCH): both worker paths resolved refs via an SSRF-blocked `ctx.http.fetch(.../issues?ids=...)` whose `?ids=` filter was ignored AND whose stale snake_case mapping read a null host key so the resolver's `byId` map never matched.
+
+**What shipped:**
+- **NEW `src/worker/handlers/sdk-ref-fetch.ts`** (`resolveRefsViaSdk`) — per-ref `ctx.issues.get(identifier, companyId)` in `Promise.all` + ONE cached `ctx.issues.list({companyId})`-and-match-on-`.identifier` fallback. Pairs each resolved Issue with the REQUESTED identifier so callers echo `id = requested` (reference-resolver `byId.get(ref)` hits → real title/status). The pure `src/shared/reference-resolver.ts` is UNCHANGED.
+- **issue-reader.ts + resolve-refs.ts** both rewritten to the shared resolver; stale `RawHostIssue` snake_case mapping gone; real camelCase fields (`title/status/assigneeUserId/description`). resolve-refs D-09 owner-name enrichment (`ctx.agents.get`, NO_UUID_LEAK) preserved byte-for-byte. PRIM-01 redefined as "one fetcher invocation." `_viewer_can_read` (absent on the SDK Issue) → non-null `get` == readable (drill-confirmed open item).
+- **editor.ts** exports `prefixFromIdentifier`; `extractRefsFromBody(body, identifier?)` prefix-narrowed (de-BEAAA'd, mirrors `prose-with-ref-chips.tsx`). ALL FOUR extraction call sites threaded (editor def + `readTldrInputs` + heartbeat + BOTH issue-reader sites). Module-level BEAAA-only `REF_PATTERN` removed.
+- **useResolvedCompanyId** returns `displayName` on every arm; `roster-rail.tsx` + `chat/index.tsx` global-search render the company display name (URL-prefix fallback, both `BEAAA` literals gone).
+
+**Constraints honoured:** NO version bump (1.0.0 in package.json + src/manifest.ts:337 + dist/manifest.js); no migration; no new runtime deps.
+
+**Commits (master):** `a7fe79c` (RED) → `46ae942` (GREEN issue.reader) → `af63ed5` (GREEN resolve-refs) → `7cd908b` (de-BEAAA extraction) → `7c4af6b` (UI labels) → docs commit.
+
+**Gates ALL GREEN:** tsc clean; check-css-scope 140 scoped; worker+UI+manifest builds OK; check-ui-bundle-size 703,238 / 704,512; full suite **2027 total / 2024 pass / 1 fail (pre-existing situation.artifacts) / 2 skip**; `grep -c paperclipInvocation dist/worker.js` = 5.
+
+**Tarball:** `clarity-pack-1.0.0.tgz` sha256 `baafb66a4117e0e792e8567ba1370ec585edc9d05acfc43960d025dbe3fc9124`, 707,108 bytes, 18 files (0 src/test/png leaks).
+
+**NEXT (ORCHESTRATOR, PRE-AUTHORIZED — do NOT pause):** deploy the tarball to BEAAA via DEPLOY-RUNBOOK Path A (bookended-by-snapshots satisfied by DO daily backup + rehearsed Phase 1 restore; NO manual pre-deploy snapshot) + run the live BEAAA Playwright drill from a LOCAL window (localhost:3100 tunnel + `ssh ariclaw` + Playwright MCP). The drill (a) probes whether host `ctx.issues.get` accepts a human identifier vs only a UUID — record which path fired from the worker log; (b) resolves the `_viewer_can_read` excerpt-gate open item (T-07-01); (c) is the verification gate that flips REQUIREMENTS.md READER-03/READER-04 from Pending to Implemented. Fill the 5 TBD drill verdicts in `07-01-SUMMARY.md` after PASS. **READER-03/04 are NOT yet flipped to Implemented — the worker-tier code is done but the live chip-resolution drill is the proof (per the "verify against running code, don't trust executor summaries" lesson).** Items 3-5 get their own discuss gates. SUMMARY: `07-01-SUMMARY.md`.
+
+---
 
 ## Phase B Closure Record (rc.8 final — 2026-05-26)
 
