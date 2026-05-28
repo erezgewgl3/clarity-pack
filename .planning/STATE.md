@@ -859,6 +859,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 ### Roadmap Evolution
 
 - Phase 4.2 inserted after Phase 4.1 (2026-05-22): **Reader↔Chat Bridge** — deterministic "Continue in chat" Reader primitive + bidirectional issue↔conversation backlinks. Pre-spec'd deferral from Phase 4.1 closure; full locked 8-task design in project memory `phase-4.2-deferred-from-4.1`. Not planned yet.
+- Phase 7 added (2026-05-28): **Clarity-surfaces quality + portability** — make the four surfaces genuinely insightful and fully instance-agnostic (no BEAAA hardcoding). Sequenced (Eric's locked order): (1 PREREQ) fix ref-resolution via per-ref `ctx.issues.get(identifier)` + `list`-and-match fallback (both the issue-reader inline fetcher AND standalone resolve-refs.ts); (2 PORTABILITY) exact-prefix-derived ref extraction replacing the two hardcoded `/\bBEAAA-\d+\b/g` regexes + 2 hardcoded UI labels via `companies.resolve-prefix` displayName; (3) TL;DR markdown render + tighter prompt + refs→titles; (4) Situation Room org-level blocked backlog (clickable, in the data handler); (5) bulletin lineage filter+gloss+clickable. No version bump (stay 1.0.0), additive-only, TDD-first. Recon complete (workflow `wf_ef5f2db9-be6`): confirmed all 3 resolution bugs + dual code paths + dual regexes; surfaced the critical risk that SDK `ctx.issues.get`'s identifier-vs-UUID acceptance is unverified (de-risked by the `list`-and-match fallback + live drill). Not planned yet.
 
 ### Locked Decisions (carry across phases)
 
