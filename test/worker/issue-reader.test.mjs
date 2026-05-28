@@ -33,10 +33,31 @@ const FIXTURE = JSON.parse(
   readFileSync(path.resolve(HERE, '..', 'fixtures', 'sample-issue.json'), 'utf8'),
 );
 
+// FIXTURE.refCards entries keyed by identifier, in the camelCase SDK Issue
+// shape `ctx.issues.get` returns. The 07-01 resolution rewrite resolves each
+// ref via per-ref ctx.issues.get(identifier, companyId) — the fetcher echoes
+// `id = the requested identifier` so reference-resolver's byId map hits.
+function refIssueByIdentifier(identifier) {
+  const card = FIXTURE.refCards.find((r) => r.id === identifier);
+  if (!card) return null;
+  return {
+    id: `uuid-${identifier}`, // host UUID — NOT what the resolver keys on
+    identifier, // the human identifier the resolver echoes as `id`
+    title: card.title,
+    status: card.status,
+    assigneeUserId: card.ownerUserId,
+    description: card.excerpt,
+  };
+}
+
 function makeFakeCtx() {
   const fetchCalls = [];
   const dbCalls = [];
   const registered = new Map();
+  // PRIM-01 (redefined for 07-01) — count ctx.issues.get calls for the REF
+  // identifiers. The single resolveRefs fetcher invocation calls get once per
+  // unique ref; the legacy `?ids=` http.fetch path must fire ZERO times.
+  const refGetCalls = [];
 
   const ctx = {
     logger: { info() {}, warn() {}, error() {}, debug() {} },
@@ -120,6 +141,7 @@ function makeFakeCtx() {
         if (issueId === FIXTURE.issueId) {
           return {
             id: FIXTURE.issueId,
+            identifier: FIXTURE.issueId,
             key: FIXTURE.issueId,
             title: 'test issue',
             description: FIXTURE.body, // SDK Issue field name is `description`
@@ -131,9 +153,21 @@ function makeFakeCtx() {
           };
         }
         if (issueId === 'BEAAA-100') {
-          return { id: 'BEAAA-100', key: 'BEAAA-100', title: 'Q3 underwriting prep', description: '' };
+          return { id: 'BEAAA-100', identifier: 'BEAAA-100', key: 'BEAAA-100', title: 'Q3 underwriting prep', description: '' };
+        }
+        // 07-01 — the three FIXTURE.refCards refs resolve via per-ref get.
+        const refIssue = refIssueByIdentifier(issueId);
+        if (refIssue) {
+          refGetCalls.push(issueId);
+          return refIssue;
         }
         return null;
+      },
+      // 07-01 — list-and-match fallback (fires only when get returns null).
+      // The happy-path tests resolve every ref via get, so this returns [] and
+      // is never the resolution path; a fallback regression would surface here.
+      async list(_input) {
+        return [];
       },
       async listComments(_issueId, _companyId) {
         // Stand-in for activity timeline: ctx.activity.log.read doesn't exist
@@ -186,7 +220,7 @@ function makeFakeCtx() {
     },
   };
 
-  return { ctx, fetchCalls, dbCalls, registered };
+  return { ctx, fetchCalls, dbCalls, registered, refGetCalls };
 }
 
 test('issue.reader handler assembles tldr + refCards + ancestry + acItems + activity + deliverable + issueBody', async () => {
@@ -199,6 +233,11 @@ test('issue.reader handler assembles tldr + refCards + ancestry + acItems + acti
   assert.equal(result.tldr.body.length > 0, true);
   assert.equal(result.refCards.length, 3);
   assert.equal(result.refCards[0].id, 'BEAAA-141');
+  // 07-01 — the chip resolves to the referenced issue's REAL title + status
+  // (byId.get(ref) hit), NOT the "unknown" placeholder. This is the headline
+  // fix: chips must no longer render "BEAAA-141 · unknown".
+  assert.equal(result.refCards[0].title, 'Compliance step v2');
+  assert.notEqual(result.refCards[0].status, 'unknown');
   assert.ok(result.ancestry, 'ancestry returned');
   assert.ok(result.ancestry.project, 'ancestry.project present');
   assert.equal(result.ancestry.project.title, 'BEAAA Insurance');
@@ -210,13 +249,24 @@ test('issue.reader handler assembles tldr + refCards + ancestry + acItems + acti
   assert.equal(result.deliverable.filename, 'Q3-underwriting-plan.xlsx');
 });
 
-test('issue.reader invokes the resolveRefs fetcher EXACTLY ONCE per render (PRIM-01 single round-trip)', async () => {
-  const { ctx, fetchCalls, registered } = makeFakeCtx();
+test('issue.reader invokes the resolveRefs fetcher EXACTLY ONCE per render (PRIM-01 redefined: one fetcher invocation, zero ?ids= http.fetch)', async () => {
+  const { ctx, fetchCalls, registered, refGetCalls } = makeFakeCtx();
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
   await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
+  // 07-01 — PRIM-01 is now "one fetcher invocation at the resolveRefs boundary"
+  // (per-ref ctx.issues.get is N calls inside that single invocation). The
+  // legacy SSRF-blocked `?ids=` http.fetch path must fire ZERO times.
   const issueFetches = fetchCalls.filter((url) => /\/issues\?ids=/.test(url));
-  assert.equal(issueFetches.length, 1, `expected 1 issues fetch for ref resolution; got ${issueFetches.length}`);
+  assert.equal(issueFetches.length, 0, `the legacy ?ids= http.fetch path must NOT be used; got ${issueFetches.length}`);
+  // The single fetcher invocation resolves all 3 unique refs via per-ref get
+  // (no duplicate get per render — the resolver dedupes + calls the fetcher once).
+  assert.equal(refGetCalls.length, 3, `expected 3 per-ref ctx.issues.get calls (one fetcher invocation); got ${refGetCalls.length}`);
+  assert.deepEqual(
+    [...refGetCalls].sort(),
+    ['BEAAA-141', 'BEAAA-203', 'BEAAA-417'],
+    'each unique ref identifier was resolved via ctx.issues.get exactly once',
+  );
 });
 
 test('issue.reader activity timeline is derived from listComments and capped at 8 (READER-09)', async () => {

@@ -68,9 +68,15 @@ function makeCtx(overrides = {}) {
     issues: {
       async get(id) {
         if (id === 'BEAAA-555') return fixtureIssue;
-        if (id === 'BEAAA-100') return { id: 'BEAAA-100', key: 'BEAAA-100', title: 'parent', description: '' };
+        if (id === 'BEAAA-100') return { id: 'BEAAA-100', identifier: 'BEAAA-100', key: 'BEAAA-100', title: 'parent', description: '' };
+        // 07-01 — the in-body ref BEAAA-141 resolves via per-ref get.
+        if (id === 'BEAAA-141') {
+          return { id: 'uuid-BEAAA-141', identifier: 'BEAAA-141', title: 'ref title', status: 'in_progress', assigneeUserId: 'a', description: 'ref body' };
+        }
         return null;
       },
+      // 07-01 — list-and-match fallback (fires only when get returns null).
+      async list() { return []; },
       async listComments() {
         return [
           { id: 'c-1', authorUserId: 'a', createdAt: '2026-05-13T19:30:00Z', body: 'comment-1' },
@@ -158,16 +164,24 @@ test('issue.reader DEV-16 — tldr_cache query throws → tldr=null; other field
 });
 
 // ---------------------------------------------------------------------------
-// Sub-step 3: refCards resolution failure (http.fetch throws) → refCards=[]
+// Sub-step 3: refCards resolution failure → refCards=[]
+// 07-01 — resolution moved to per-ref ctx.issues.get. Inject the failure there
+// FOR THE REF IDENTIFIER ONLY, while the top-level issue.get still succeeds, so
+// the refCards try/catch is exercised (not the top-level emptyResult bail).
 // ---------------------------------------------------------------------------
 
-test('issue.reader DEV-16 — refCards resolveRefs failure → refCards=[] (not undefined)', async () => {
+test('issue.reader DEV-16 — refCards resolveRefs failure (ctx.issues.get throws for the ref id) → refCards=[] (not undefined)', async () => {
   const result = await runHandler((ctx) => {
-    ctx.http.fetch = async () => { throw new Error('fetch broken'); };
+    const originalGet = ctx.issues.get.bind(ctx.issues);
+    ctx.issues.get = async (id, companyId) => {
+      // The in-body ref BEAAA-141 throws; the top-level + parent still resolve.
+      if (id === 'BEAAA-141') throw new Error('ref get broken');
+      return originalGet(id, companyId);
+    };
   });
   assertTypedDefaults(result);
-  assert.deepEqual(result.refCards, [], 'refCards is [] (the typed default) on fetch failure');
-  // Other fields populated:
+  assert.deepEqual(result.refCards, [], 'refCards is [] (the typed default) on ref resolution failure');
+  // Other fields populated (the top-level issue.get still succeeded):
   assert.match(result.issueBody, /BEAAA-141 ref/);
   assert.ok(result.ancestry, 'ancestry still populated');
 });
