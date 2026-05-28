@@ -90,8 +90,16 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 ## Current Position
 
-**▶ RESUME HERE (2026-05-28, end of a long multi-fix session) — Delivery-layer rework is MID-FLIGHT (foundation committed, not finished).**
-Read `.planning/DELIVERY-LAYER-REWORK-PLAN.md` §8 (execution status) + §9 (detailed resume plan) top-to-bottom FIRST. Summary of this session:
+**▶ RESUME HERE (2026-05-28 PM — VIEW-DRIVEN COMPILE REWORK SHIPPED + LIVE-VERIFIED on BEAAA).**
+Read MemPalace `clarity_pack/decisions` drawer `drawer_clarity_pack_decisions_8f2f846b8ace835af1cc8c30` ("View-driven compile rework") FIRST. Bottom line:
+- **Root cause (live-confirmed):** on paperclipai@2026.525.0 (PR #6547) the SCHEDULED-JOB invocation scope is DEAD for host calls — `compile-bulletin`'s `companies.list`/`state.*`/`agents.reconcile`/`issues.*` ALL fail every tick with "missing, expired, or unknown invocation scope". So the job-driven §9 cross-tick rework (commits 03612ae/bf2b358/cc45451 — on master, kept as a harmless best-effort fallback) could NOT publish on BEAAA. DATA HANDLERS + ACTIONS + agent runs have VALID scopes.
+- **Fix = VIEW-DRIVEN (commits 97c4565 / 32ef55d / c051d4f / 4aab297 + ceiling bumps d724bce/701ffa8, all pushed):** TL;DR driven by the `issue.reader` data handler (`driveTldrCompileStep`) — opening a task's Reader compiles its TL;DR in a valid scope; cache hit = instant (no recompile); agent id resolved from an existing op issue (no reconcile). Bulletin: `compileNow` ACTION does the START + `byCycle` data handler consumes/publishes (`resumePendingCompile`, RESUME-only). MAX_TOKENS 4000→16000 + truncation backstop. Reader shows Compiling…/paused/truncated honestly. TL;DR driver does NOT auto-resume a paused agent (Eric: explicit resume only; agent status persists across restarts).
+- **LIVE-VERIFIED via Playwright (clarity-pack-1.0.0.tgz sha 2d2fc091…e0e8 installed, status=ready, caps accepted):** Bulletin No. 1 published + rendered; BEAAA-702 TL;DR compiled + displayed + persisted (instant cache hit on reopen across a restart); BEAAA-704 second task compiling. Full suite 2012 pass / 1 known situation.artifacts fail.
+- **Next (operator-gated):** npm publish v1.0.0 + Plan 05-10 close. Daily 06:30 cron is best-effort only now (job scope dead) — bulletin reliably compiles when the operator opens the Bulletin page + clicks "Generate now". Report the job-scope bug upstream to Paperclip.
+
+---
+
+(SUPERSEDED — kept for history) Prior block: Delivery-layer rework was MID-FLIGHT (job-driven §9 plan in `.planning/DELIVERY-LAYER-REWORK-PLAN.md`). The job-driven approach is replaced by the view-driven fix above. Original session summary:
 - **Shipped + verified live on BEAAA:** pause-banner stale-read fix (`38c149c` — editor.pause-status reads real agent status + new `agents.resumeHeartbeat` action) and the "06:30 ET"→"06:30 Israel time" copy fix (`48f8c05`, committed, NOT yet deployed — bundles with the rework).
 - **Shipped to BEAAA but NON-FUNCTIONAL:** the on-demand "Generate bulletin now" button (Quick `260528-nns`, `d15d19f`). A synchronous UI action can't run the ~50s agent compile — paperclipai@2026.525.0 kills the cross-invocation result poll with "expired invocation scope" (PR #6547). The SAME flaw intermittently breaks the daily bulletin + every TL;DR (BEAAA has never published a bulletin).
 - **Rework FOUNDATION committed (behavior-neutral, green, NOT deployed):** delivery split `startAgentTask`/`pollAgentTaskResult` + `plugin.state.*` caps (`74c9ec6`); compile-pass-1 split `buildBulletinPrompt`/`finalizeBulletinDraft` (`ad87033`).
