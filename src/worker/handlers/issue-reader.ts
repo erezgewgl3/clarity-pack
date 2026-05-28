@@ -35,6 +35,7 @@ import type {
 
 import type { RefCardData, TLDR } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
+import { resolveRefsViaSdk } from './sdk-ref-fetch.ts';
 import { getTldrByScope, type TldrCacheCtx } from '../db/tldr-cache.ts';
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 // View-driven rework (2026-05-28) — the Reader DRIVES the TL;DR compile in its
@@ -99,15 +100,6 @@ export type IssueReaderResult = {
   topicsForIssue: ChatTopicByOriginEntry[];
 };
 
-type RawHostIssue = {
-  key: string;
-  title: string;
-  status: RefCardData['status'];
-  assignee_user_id: string | null;
-  body?: string;
-  _viewer_can_read?: boolean;
-};
-
 function truncate(s: string | undefined | null, max: number): string {
   if (!s) return '';
   if (s.length <= max) return s;
@@ -120,7 +112,10 @@ function truncate(s: string | undefined | null, max: number): string {
 // Ctx shape (see 02-03b-API-SHAPES.md Summary + Plan 02-04 critical anti-
 // pattern guard). OptInGuardCtx provides `data` + `db` for wrapDataHandler.
 export type IssueReaderCtx = OptInGuardDataCtx & {
-  http: PluginHttpClient;
+  // 07-01 — `http` is no longer used by the ref resolver (the SSRF-blocked
+  // batch fetch path was removed). Kept optional for back-compat with callers
+  // that still spread the full PluginContext.
+  http?: PluginHttpClient;
   issues: PluginIssuesClient;
   // projects + goals are optional at the local-type level so tests can stub
   // partial ctx without re-implementing every Paperclip client. Production
@@ -212,7 +207,17 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
       }
     }
 
-    // ---- refCards (PRIM-01 single round-trip) -------------------------------
+    // ---- refCards (PRIM-01: one fetcher invocation) -------------------------
+    // 07-01 — resolution rewritten to the SDK (see sdk-ref-fetch.ts). The old
+    // SSRF-blocked HTTP batch path is GONE: Paperclip 2026.525.0 blocks
+    // private-IP fetches, ignored the legacy batch filter, and the stale
+    // snake_case field mapping read a null host key so the resolver byId map
+    // never matched → chips rendered "BEAAA-NNN · unknown". Now: resolve each
+    // unique ref via per-ref `ctx.issues.get(identifier, companyId)` in parallel;
+    // on any null, fall back to ONE cached `ctx.issues.list({companyId})` matched
+    // on `.identifier` (the SDK `get` may only accept a UUID — the live drill is
+    // the runtime probe; the list-match is the de-risk). The fetcher echoes
+    // `id = the requested identifier` so reference-resolver's byId.get(ref) hits.
     let refCards: RefCardData[] = [];
     try {
       const refs = Array.from(
@@ -220,23 +225,21 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
       );
       if (refs.length > 0) {
         refCards = await resolveRefs(refs, async (uniqueIds) => {
-          // 2026-05-27 BEAAA hotfix — see resolve-refs.ts. Paperclip
-          // 2026.525.0 ctx.http.fetch requires absolute URLs.
-          const apiBase = (
-            (typeof process !== 'undefined' && process.env?.PAPERCLIP_API_URL) ||
-            'http://localhost:3100'
-          ).replace(/\/+$/, '');
-          const url = `${apiBase}/api/companies/${encodeURIComponent(companyId)}/issues?ids=${uniqueIds.map(encodeURIComponent).join(',')}`;
-          const resp = await ctx.http.fetch(url, { method: 'GET' });
-          const items = (await resp.json()) as RawHostIssue[];
-          return items.map((i) => ({
-            id: i.key,
+          const resolved = await resolveRefsViaSdk(ctx.issues, uniqueIds, companyId);
+          return resolved.map(({ requestedId, issue: i }) => ({
+            // Echo the REQUESTED identifier so reference-resolver's byId.get(ref)
+            // hits (NOT the host-returned identifier, NOT the null host key).
+            id: requestedId,
             title: i.title,
-            status: i.status,
-            ownerUserId: i.assignee_user_id,
-            bodyExcerptForViewer:
-              i._viewer_can_read === false ? null : truncate(i.body, EXCERPT_MAX),
-            url: `/issues/${i.key}`,
+            status: i.status as RefCardData['status'],
+            ownerUserId: i.assigneeUserId ?? null,
+            // The SDK Issue has no viewer-readable flag. A non-null
+            // `ctx.issues.get` result is treated as readable-by-caller (the SDK
+            // proxies the caller's auth context). The live drill confirms whether
+            // `get` enforces viewer perms server-side (07-CONTEXT open item); if
+            // it does NOT, a follow-up gates excerpts.
+            bodyExcerptForViewer: truncate(i.description, EXCERPT_MAX) || null,
+            url: `/issues/${requestedId}`,
           }));
         });
       }

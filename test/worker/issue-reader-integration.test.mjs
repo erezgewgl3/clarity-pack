@@ -71,9 +71,22 @@ function makeIssueReaderCtx(overrides = {}) {
       async get(issueId, companyId) {
         issueGetCalls.push({ issueId, companyId });
         if (issueId === fixtureIssue.id) return fixtureIssue;
-        if (issueId === 'BEAAA-100') return { id: 'BEAAA-100', key: 'BEAAA-100', title: 'parent issue', description: '' };
+        if (issueId === 'BEAAA-100') return { id: 'BEAAA-100', identifier: 'BEAAA-100', key: 'BEAAA-100', title: 'parent issue', description: '' };
+        // 07-01 — the in-body refs resolve via per-ref get (camelCase Issue).
+        if (/^BEAAA-(141|203|417)$/.test(issueId)) {
+          return {
+            id: `uuid-${issueId}`,
+            identifier: issueId,
+            title: `Title ${issueId}`,
+            status: 'in_progress',
+            assigneeUserId: 'agent-x',
+            description: `Body of ${issueId}`,
+          };
+        }
         return null;
       },
+      // 07-01 — list-and-match fallback (unused on the happy path).
+      async list(_input) { return []; },
       async listComments(issueId, companyId) {
         listCommentsCalls.push({ issueId, companyId });
         return [
@@ -205,24 +218,16 @@ test('issue.reader — handler throws loudly when companyId missing', async () =
   );
 });
 
-test('issue.reader — refCards resolved in single round-trip (PRIM-01)', async () => {
+test('issue.reader — refCards resolved via per-ref ctx.issues.get (PRIM-01: one fetcher invocation, zero ?ids= http.fetch)', async () => {
   const ctxBag = makeIssueReaderCtx();
-  // Override http.fetch to count + return 3 distinct refs.
-  ctxBag.ctx.http.fetch = async (url) => {
-    ctxBag.calls.fetch.push(url);
-    return new Response(
-      JSON.stringify([
-        { key: 'BEAAA-141', title: 't1', status: 'in_progress', assignee_user_id: 'a', body: 'b1', _viewer_can_read: true },
-        { key: 'BEAAA-203', title: 't2', status: 'blocked', assignee_user_id: 'b', body: 'b2', _viewer_can_read: true },
-        { key: 'BEAAA-417', title: 't3', status: 'done', assignee_user_id: 'c', body: 'b3', _viewer_can_read: true },
-      ]),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
-  };
   const result = await invokeReader(ctxBag, { issueId: 'BEAAA-555', companyId: 'co-1' });
+  // 07-01 — the legacy SSRF-blocked `?ids=` http.fetch path must NOT be used.
   const refFetches = ctxBag.calls.fetch.filter((u) => /\/issues\?ids=/.test(u));
-  assert.equal(refFetches.length, 1, 'one outbound fetch for all 3 ids');
+  assert.equal(refFetches.length, 0, 'no legacy ?ids= http.fetch for ref resolution');
+  // All 3 in-body refs resolved to real titles (byId.get(ref) hit).
   assert.equal(result.refCards.length, 3);
+  assert.equal(result.refCards[0].id, 'BEAAA-141');
+  assert.notEqual(result.refCards[0].status, 'unknown');
 });
 
 test('issue.reader — each data slice wraps in try/catch and degrades gracefully', async () => {
