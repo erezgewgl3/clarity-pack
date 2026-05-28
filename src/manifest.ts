@@ -543,9 +543,9 @@ const manifest: PaperclipPluginManifestV1 = {
       },
       bulletinTimezone: {
         type: 'string',
-        default: 'America/New_York',
+        default: 'Asia/Jerusalem',
         description:
-          'BULL-01: timezone for the 06:30 daily compile. Locked to ET for v1.',
+          'BULL-01: IANA timezone for the 06:30 daily bulletin compile. Default Asia/Jerusalem (2026-05-28 — both founders work in Israel). Now wired through computeNextDueAt(now, tz); change this value (any IANA zone, e.g. America/New_York) and the next compile-bulletin tick recomputes next_due_at in the new zone.',
       },
       // Phase 6.1 ROOM-10 (D-05) — Situation Room per-agent artifact chip row
       // window. Mirrors the Phase 2 D-03 situationRefreshIntervalMs shape. The

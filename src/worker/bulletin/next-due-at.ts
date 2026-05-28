@@ -26,30 +26,43 @@ import {
   setSeconds,
 } from 'date-fns';
 
-/** IANA timezone for the daily compile. Locked to ET for v1 (BULL-01). */
-export const BULLETIN_TZ = 'America/New_York';
+/**
+ * Default IANA timezone for the daily compile when no config override is
+ * provided.
+ *
+ * 2026-05-28: changed the DEFAULT from 'America/New_York' to 'Asia/Jerusalem'
+ * at operator request (both founders work in Israel). The value is now also
+ * runtime-overridable via the `bulletinTimezone` instance-config field —
+ * `computeNextDueAt(now, tz)` accepts an explicit IANA zone, and
+ * `compile-bulletin.ts` passes `ctx.config.get('bulletinTimezone')`. This
+ * constant is the fallback when config is absent/empty/invalid. Callers that
+ * omit the argument (older tests) get the default.
+ */
+export const BULLETIN_TZ = 'Asia/Jerusalem';
 /** Wall-clock hour of the daily compile. */
 export const BULLETIN_HOUR = 6;
 /** Wall-clock minute of the daily compile. */
 export const BULLETIN_MINUTE = 30;
 
 /**
- * Pure function. Given a wall-clock `now` (a UTC `Date`), return the next
- * 06:30 America/New_York instant STRICTLY greater than `now`.
+ * Pure function. Given a wall-clock `now` (a UTC `Date`) and an IANA `tz`,
+ * return the next 06:30-in-`tz` instant STRICTLY greater than `now`.
  *
- * Round-trips cleanly across both 2026 DST transitions:
- *   - spring-forward (2026-03-08 02:00 local -> 03:00 local): 06:30 never
- *     falls inside the skipped hour, so the wall-clock target is unambiguous.
- *   - fall-back (2026-11-01 02:00 EDT -> 01:00 EST): 06:30 is well clear of
- *     the repeated 01:00-02:00 hour; re-firing inside that repeated hour
- *     resolves to the SAME next_due_at, so the bulletin compiles once.
- *
- * `date-fns-tz` `fromZonedTime` selects the correct UTC offset for the target
- * date, which is what makes the round-trip DST-safe.
+ * `tz` defaults to BULLETIN_TZ (Asia/Jerusalem) for back-compat with callers
+ * that don't pass it. The DST-safe round-trip property holds for ANY IANA
+ * zone because `date-fns-tz` `fromZonedTime` selects the correct UTC offset
+ * for the target wall-clock date in that zone — 06:30 is well clear of every
+ * common DST transition hour (spring-forward 02:00→03:00, fall-back
+ * 02:00→01:00), so the wall-clock target is always unambiguous and re-firing
+ * inside a repeated hour resolves to the same instant.
  */
-export function computeNextDueAt(now: Date): Date {
-  // Represent the UTC instant `now` as wall-clock time in America/New_York.
-  const nowZoned = toZonedTime(now, BULLETIN_TZ);
+export function computeNextDueAt(now: Date, tz: string = BULLETIN_TZ): Date {
+  // Guard: an empty/whitespace tz string would make date-fns-tz throw or
+  // silently treat it as UTC. Fall back to the default in that case.
+  const zone = typeof tz === 'string' && tz.trim() ? tz.trim() : BULLETIN_TZ;
+
+  // Represent the UTC instant `now` as wall-clock time in the target zone.
+  const nowZoned = toZonedTime(now, zone);
 
   // Build "today at 06:30" in that same wall-clock representation.
   let targetZoned = setMilliseconds(
@@ -64,8 +77,8 @@ export function computeNextDueAt(now: Date): Date {
   }
 
   // Convert the wall-clock target back to a UTC instant. fromZonedTime applies
-  // the timezone's offset for the target date (handling DST automatically).
-  return fromZonedTime(targetZoned, BULLETIN_TZ);
+  // the zone's offset for the target date (handling DST automatically).
+  return fromZonedTime(targetZoned, zone);
 }
 
 // Re-export the formatter so downstream plans (03-02/03-03 masthead date text)

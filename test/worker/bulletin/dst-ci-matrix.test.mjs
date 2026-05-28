@@ -40,14 +40,14 @@ const FIXTURES = [
 
 for (const fixture of FIXTURES) {
   test(`DST matrix: ${fixture.name} advances next_due_at to next 06:30 ET`, () => {
-    const next = computeNextDueAt(new Date(fixture.now)).toISOString();
+    const next = computeNextDueAt(new Date(fixture.now), TZ).toISOString();
     assert.equal(next, fixture.next);
     assert.equal(formatInTimeZone(next, TZ, 'HH:mm'), '06:30');
   });
 }
 
 test('DST matrix: every fixture preserves exactly one 06:30 ET wall-clock target', () => {
-  const nextDueAts = FIXTURES.map((f) => computeNextDueAt(new Date(f.now)).toISOString());
+  const nextDueAts = FIXTURES.map((f) => computeNextDueAt(new Date(f.now), TZ).toISOString());
   assert.deepEqual(nextDueAts, FIXTURES.map((f) => f.next));
   assert.deepEqual(nextDueAts.map((iso) => formatInTimeZone(iso, TZ, 'HH:mm')), [
     '06:30',
@@ -58,8 +58,8 @@ test('DST matrix: every fixture preserves exactly one 06:30 ET wall-clock target
 });
 
 test('DST matrix: deterministic across repeated runs', () => {
-  const first = FIXTURES.map((f) => computeNextDueAt(new Date(f.now)).toISOString());
-  const second = FIXTURES.map((f) => computeNextDueAt(new Date(f.now)).toISOString());
+  const first = FIXTURES.map((f) => computeNextDueAt(new Date(f.now), TZ).toISOString());
+  const second = FIXTURES.map((f) => computeNextDueAt(new Date(f.now), TZ).toISOString());
   assert.deepEqual(second, first);
 });
 

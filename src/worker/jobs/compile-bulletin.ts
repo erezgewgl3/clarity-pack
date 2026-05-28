@@ -37,6 +37,7 @@
 import type {
   PluginAgentsClient,
   PluginCompaniesClient,
+  PluginConfigClient,
   PluginDatabaseClient,
   PluginIssuesClient,
   PluginJobsClient,
@@ -186,9 +187,10 @@ async function advanceScheduleForCompany(
   ctx: { db: Pick<PluginDatabaseClient, 'execute'>; logger?: PluginLogger },
   companyId: string,
   now: Date,
+  tz?: string,
 ): Promise<void> {
   try {
-    const nextDueAt = computeNextDueAt(now);
+    const nextDueAt = computeNextDueAt(now, tz);
     await ctx.db.execute(
       `UPDATE plugin_clarity_pack_cdd6bda4bd.bulletins
          SET next_due_at = $1
@@ -259,7 +261,31 @@ export type CompileBulletinCtx = BulletinsRepoCtx & {
   companies: PluginCompaniesClient;
   agents: PluginAgentsClient;
   issues: PluginIssuesClient;
+  // 2026-05-28 — optional config client so the job can read the
+  // operator-configurable `bulletinTimezone` (default Asia/Jerusalem) and
+  // pass it to computeNextDueAt. Optional + defensively read so older test
+  // fixtures that omit it still type-check and fall back to BULLETIN_TZ.
+  config?: PluginConfigClient;
 };
+
+/**
+ * 2026-05-28 — resolve the configured bulletin timezone, defensively.
+ * Reads `bulletinTimezone` from instanceConfig; on any failure (no config
+ * client, get() throws, empty/non-string value) returns undefined so the
+ * caller falls back to computeNextDueAt's BULLETIN_TZ default.
+ */
+async function resolveBulletinTz(ctx: CompileBulletinCtx): Promise<string | undefined> {
+  try {
+    const raw = (await ctx.config?.get?.()) as Record<string, unknown> | undefined;
+    const tz = raw?.bulletinTimezone;
+    return typeof tz === 'string' && tz.trim() ? tz.trim() : undefined;
+  } catch (e) {
+    ctx.logger?.warn?.('compile-bulletin: config.get failed; using default timezone', {
+      err: (e as Error).message,
+    });
+    return undefined;
+  }
+}
 
 /**
  * Register the compile-bulletin job. On each fire it iterates companies; for a
@@ -268,6 +294,11 @@ export type CompileBulletinCtx = BulletinsRepoCtx & {
 export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
   ctx.jobs.register('compile-bulletin', async () => {
     const now = new Date();
+    // 2026-05-28 — resolve the operator-configured bulletin timezone once per
+    // tick (default Asia/Jerusalem via computeNextDueAt's BULLETIN_TZ fallback
+    // when this is undefined). Passed to every computeNextDueAt call below so
+    // the daily 06:30 target is in the configured zone.
+    const bulletinTz = await resolveBulletinTz(ctx);
 
     let companies: Company[] = [];
     try {
@@ -321,7 +352,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         // conflict, so the INSERT throws and the first bulletin can never
         // publish. Surfaced by the Plan 03-03 Countermoves drill 2026-05-15.
         if (!nextDueAtIso) {
-          const nextDueAt = computeNextDueAt(now);
+          const nextDueAt = computeNextDueAt(now, bulletinTz);
           await upsertBulletin(ctx, {
             cycle_number: 0,
             company_id: company.id,
@@ -378,14 +409,14 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           ctx.logger?.warn?.(`compile-bulletin: editor-agent reconcile failed: ${errText(e)}`, {
             companyId: company.id,
           });
-          await advanceScheduleForCompany(ctx, company.id, now);
+          await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
           continue;
         }
         if (!editorAgentId) {
           ctx.logger?.warn?.('compile-bulletin: no editor-agent id', {
             companyId: company.id,
           });
-          await advanceScheduleForCompany(ctx, company.id, now);
+          await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
           continue;
         }
         editorAgentIdForCatch = editorAgentId;
@@ -429,7 +460,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
                   `circuit breaker is open — not resuming (D-06: operator must click ` +
                   `Resume). companyId=${company.id} agentId=${editorAgentId}`,
               );
-              await advanceScheduleForCompany(ctx, company.id, now);
+              await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
               continue;
             }
             await ctx.agents.resume(editorAgentId, company.id);
@@ -442,7 +473,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           ctx.logger?.warn?.(`compile-bulletin: editor-agent resume failed: ${errText(e)}`, {
             companyId: company.id,
           });
-          await advanceScheduleForCompany(ctx, company.id, now);
+          await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
           continue;
         }
 
@@ -516,7 +547,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           ctx.logger?.warn?.(`compile-bulletin: standing-numbers failed: ${errText(e)}`, {
             companyId: company.id,
           });
-          await advanceScheduleForCompany(ctx, company.id, now);
+          await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
           continue;
         }
 
@@ -582,7 +613,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
             reason: `pass-1 failed: ${(e as Error).message}`,
             now,
           });
-          await advanceScheduleForCompany(ctx, company.id, now);
+          await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
           continue;
         }
 
@@ -635,7 +666,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           // the daily schedule pointer so the every-minute heartbeat does NOT
           // immediately recompile; the D-22 15-minute retry timer owns the
           // re-attempt of THIS cycle.
-          await advanceScheduleForCompany(ctx, company.id, now);
+          await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
           continue;
         }
 
@@ -682,7 +713,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
           });
           // v0.6.6 (Bug 1) — a publish failure consumed a due tick. Advance the
           // schedule pointer; the D-22 retry timer owns the re-attempt.
-          await advanceScheduleForCompany(ctx, company.id, now);
+          await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
           continue;
         }
 
@@ -707,7 +738,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         // never advanced at all, that left `getNextDueAtForCompany` reading a
         // stale past pointer and the every-minute cron re-publishing a fresh
         // cycle every ~2 minutes (the 2026-05-18 drill runaway).
-        await advanceScheduleForCompany(ctx, company.id, now);
+        await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
       } catch (e) {
         // Defect D — an UNEXPECTED throw reached the per-company catch-all (a
         // render/publish-path TypeError, or any bug not caught by one of the
@@ -756,7 +787,7 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
         // the every-minute recompile runaway. The advance is itself best-effort
         // (its own try/catch inside), so it cannot re-throw out of the catch-all.
         if (gatePassed) {
-          await advanceScheduleForCompany(ctx, company.id, now);
+          await advanceScheduleForCompany(ctx, company.id, now, bulletinTz);
         }
       }
     }
