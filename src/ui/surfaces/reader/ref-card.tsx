@@ -19,6 +19,7 @@ import * as React from 'react';
 
 import type { RefCardData } from '../../../shared/types.ts';
 import { StatePill, type StatePillState } from '../../primitives/state-pill.tsx';
+import { SafeMarkdown } from '../../primitives/safe-markdown.tsx';
 
 function statusToPill(status: RefCardData['status']): StatePillState {
   switch (status) {
@@ -73,7 +74,11 @@ export function RefCard({ card }: { card: RefCardData }): React.ReactElement {
           Quote unavailable (permission-gated)
         </blockquote>
       ) : (
-        <blockquote className="clarity-ref-card-quote">{card.excerpt}</blockquote>
+        // 07-02 (D-I3-01) — render the upstream issue-body excerpt's markdown as
+        // formatted React nodes (was a raw text node showing literal "## BLUF").
+        <blockquote className="clarity-ref-card-quote">
+          <SafeMarkdown text={card.excerpt} />
+        </blockquote>
       )}
     </li>
   );

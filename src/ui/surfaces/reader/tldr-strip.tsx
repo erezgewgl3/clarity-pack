@@ -17,6 +17,7 @@
 import * as React from 'react';
 
 import type { TLDR } from '../../../shared/types.ts';
+import { SafeMarkdown } from '../../primitives/safe-markdown.tsx';
 
 export type TldrStripProps = {
   tldr: TLDR | { body: string; generated_at?: string; generatedAt?: string } | null | undefined;
@@ -86,7 +87,11 @@ export function TldrStrip({ tldr, status, truncated }: TldrStripProps): React.Re
   );
   return (
     <section className="clarity-tldr-strip" data-clarity-region="tldr">
-      <p className="clarity-tldr-body">{tldr.body}</p>
+      {/* 07-02 (D-I3-01) — render the Editor-Agent's markdown as formatted React
+          nodes (was a raw text node showing literal "## BLUF" / "**bold**"). */}
+      <div className="clarity-tldr-body">
+        <SafeMarkdown text={tldr.body} />
+      </div>
       {truncated ? (
         <p className="clarity-tldr-truncated-note" data-clarity-tldr-truncated="true">
           Summarized from a long task — some detail was trimmed to fit.

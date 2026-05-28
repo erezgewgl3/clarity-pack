@@ -76,6 +76,7 @@ Additional tab on every issue page; never replaces classic UI.
 - [ ] **READER-07**: Acceptance criteria checklist with manual marking; auto-status from acceptance-criteria text + acceptance-event log is deferred to Phase 5.
 - [ ] **READER-08**: Right-rail "Live blocker · on you" panel renders the blocker-chain terminal as a single one-click action (matches the mockup's `⚑ ON YOU` callout).
 - [ ] **READER-09**: Activity timeline ("distilled") summarizes the most relevant N events, not the full audit log.
+- [ ] **READER-10**: TL;DR strip and the "Anchored to (resolved)" excerpt render the Editor-Agent's markdown as formatted text (not literal markup) via a safe plugin-local renderer, and `<PREFIX>-NNN` references inside the TL;DR are rewritten inline to "ID — title" using the 07-01 SDK resolver (instance-agnostic).
 
 ### Surface 2 — Situation Room (ROOM)
 
@@ -250,6 +251,7 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | READER-07 | Phase 2 | Pending |
 | READER-08 | Phase 2 | Pending |
 | READER-09 | Phase 2 | Pending |
+| READER-10 | Phase 7 / Plan 07-02 | Pending |
 | ROOM-01 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | ROOM-02 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | ROOM-03 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |

@@ -182,11 +182,23 @@ export function buildTldrPrompt(args: CompileTldrArgs): string {
 }
 
 function buildPrompt(args: CompileTldrArgs): string {
-  // Minimal v1 prompt. Phase 3 will tune for Bulletin/Situation Room voice
-  // ("Editorial Desk" persona). Kept short here so input tokens stay well
-  // under MAX_TOKENS for typical issues.
+  // Plan 07-02 (D-I3-03) — tightened to a hard, founder-readable OUTPUT shape.
+  // The old prompt ("Compile a plain-English TL;DR") gave the agent no shape, so
+  // it emitted long, raw-markdown blobs the operator could not skim. We now
+  // instruct a 1-2 sentence headline + at most 3 bullets + a length cap, in the
+  // busy-founder voice (decision → current state → next action). This is an
+  // OUTPUT-shape instruction only — the INPUT cap (MAX_TOKENS) is unchanged and
+  // the input scaffolding (Surface / Scope id / Issue body / comments / refs)
+  // below is intact. Phase 3 deepens the Bulletin/Situation Room voice.
   const lines = [
     'You are the Clarity Pack Editorial Desk. Compile a plain-English TL;DR for the following Paperclip issue.',
+    '',
+    'Write for a busy founder who has 10 seconds: lead with the decision, then the current state, then the single next action.',
+    'Use this hard shape and DO NOT exceed it:',
+    '  - A 1-2 sentence headline (the decision or the one thing that matters now).',
+    '  - Then AT MOST 3 short bullets (current state / blockers / next action).',
+    '  - Keep the whole TL;DR concise — under ~80 words. Be brief; cut filler.',
+    'You may use light markdown (bold, bullets, links); never pad to fill space.',
     '',
     `Surface: ${args.surface}`,
     `Scope id: ${args.scopeId}`,
