@@ -173,8 +173,29 @@ No new network endpoints, auth paths, or schema changes. T-07-01 (excerpt viewer
 5. **Labels.** Confirm the chat roster header + global-search placeholder show the resolved company
    name (or URL prefix), not the literal `BEAAA`. **Verdict: TBD.**
 
+## Orchestrator deploy status (2026-05-28) — gates re-verified + pushed; deploy BLOCKED on fail2ban (Path B awaits operator)
+
+The orchestrator window independently re-ran the full gate battery (trust-but-verify; project rule "don't trust executor summaries — verify against running code") and all gates reproduced green:
+
+- `npx tsc --noEmit` clean; `check-css-scope` 140 scoped; worker(2.4 MB)+UI(703,238 B)+manifest builds OK; `check-ui-bundle-size` 703,238 ≤ 704,512 (1,274 B headroom); `grep -c paperclipInvocation dist/worker.js` = 5; version `1.0.0` in package.json + src/manifest.ts + dist/manifest.js.
+- Full suite reproduced **2027 total**, only the documented pre-existing `situation.artifacts` test fails. Two transient FAILs during the loaded full-suite run (`visual/sketch-regression 03-bulletin.png` waitForLoadState timeout; `chat/chat-messages U7 WATCHDOG-FIRE-AND-FORGET` 120 ms > 85 ms timing) both **PASS in isolation** (4/4 and 29/29) — confirmed machine-load flakes, not regressions.
+- All source greps reproduced (no `?ids=`, no `BEAAA` labels, `prefixFromIdentifier` exported, both call sites pass the identifier).
+
+**Pushed:** origin/master advanced `4f11bf8..e4c206f` (all 10 local commits incl. the 6 plan commits). `git log origin/master..HEAD` is empty (runbook §1 pre-flight satisfied).
+
+**Deploy — Path A started, then SSH blocked mid-flight:**
+- `ssh ariclaw whoami` → `root` (Path A selected).
+- Built + `npm pack` → `clarity-pack-1.0.0.tgz` sha256 `baafb66a4117e0e792e8567ba1370ec585edc9d05acfc43960d025dbe3fc9124` / 707,108 B (reproducible — matches the executor's pack byte-for-byte).
+- Upload (rm-first dance, runbook §3 A2) **SUCCEEDED**; remote `sha256sum /tmp/clarity-pack-1.0.0.tgz` = `baafb66a…` (matches). **The tarball is staged + SHA-verified on the box.**
+- The §3 A3 install here-string then timed out **"during banner exchange"**, and a single probe 90 s later got a full TCP connect timeout — the classic **fail2ban DROP** signature (gotcha §10; several rapid connections whoami+rm+scp+sha tripped the jail). Eric hardens SSH on every box (likely a long bantime). Per the operator instruction "do NOT retry-spam; STOP and hand me Path B," the orchestrator stopped Path A rather than fight the ban (the live drill in the section above ALSO needs the SSH tunnel, which is equally blocked).
+
+**Handover = DEPLOY-RUNBOOK §3-bis Path B (SSH-independent):** flip repo PUBLIC → DO Web Console paste the §B3 clone-build-install block (it produces the identical artifact; `grep -c paperclipInvocation dist/worker.js` must print ≥ 5, NOT 0) → flip repo PRIVATE. Expected tail `key=clarity-pack status=ready version=1.0.0 id=a763176a-…`. ALTERNATIVELY, once fail2ban releases (~15–30 min), a single Path-A retry of just the §3 A3 install here-string works — the verified tarball is already at `/tmp/clarity-pack-1.0.0.tgz` on the box.
+
+**The 5 live-drill verdicts above remain TBD** — they are the runtime probe (SDK get-by-identifier path + `_viewer_can_read` T-07-01) and the proof that flips READER-03/04 to Implemented. READER-03/04 stay un-flipped until the live chip-resolution drill PASSES post-deploy.
+
 ## Self-Check: PASSED
 
 - Created files exist: `src/worker/handlers/sdk-ref-fetch.ts`, `test/worker/editor.test.mjs`, `07-01-SUMMARY.md`, `clarity-pack-1.0.0.tgz` — all FOUND.
 - Per-task commits exist: `a7fe79c`, `46ae942`, `af63ed5`, `7cd908b`, `7c4af6b` — all FOUND.
 - Modified source/test files staged + committed across Tasks 1–5; full gate battery green (Task 6) except the documented pre-existing `situation.artifacts` test.
+- Orchestrator: gates re-verified green, pushed to origin/master, tarball uploaded + SHA-verified on the box; install blocked by fail2ban → Path B handed to operator; live-drill verdicts TBD pending deploy.
