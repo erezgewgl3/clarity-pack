@@ -165,18 +165,18 @@ Cross-cutting; verified by a checklist that runs on every PR.
 - [ ] **COEXIST-02**: Schema is additive-only; no DDL touches `public.*`; plugin-namespace tables are isolated.
 - [ ] **COEXIST-03**: Disabling the plugin in Paperclip's classic plugin-admin UI leaves data intact (no destructive uninstall hook).
 - [ ] **COEXIST-04**: Editor-Agent has no special privileges (verified by inspecting capabilities with the same plugin-admin UI a user would).
-- [ ] **COEXIST-05**: Clean uninstall preserves data; `--purge` flag is opt-in only and is documented in the runbook.
+- [x] **COEXIST-05**: Clean uninstall preserves data; `--purge` flag is opt-in only and is documented in the runbook. **(Implemented — additive plugin-namespace schema; the disable/enable byte-identical row-count drill PASSED on live Countermoves at Phase 4.1 closure 2026-05-22 + re-affirmed at Phase 6.1 closure 2026-05-27; Phase 7 added NO migration so the guarantee holds "by construction"; README `## Uninstall` documents the default-preserve + opt-in `--purge`.)**
 - [ ] **COEXIST-06**: Coexistence verification checklist runs in CI on every PR — fails the build if any of the above is regressed.
 
 ### Distribution & Polish (DIST)
 
 Phase 5 work — unblocks broader use without blocking BEAAA value.
 
-- [ ] **DIST-01**: Plugin is published to npm as `clarity-pack` with the `paperclipPlugin` field in `package.json` pointing at `dist/manifest.js`, `dist/worker.js`, and `dist/ui/`.
-- [ ] **DIST-02**: README documents install + opt-in toggle + rollback flow + the runbook reference.
+- [ ] **DIST-01**: Plugin is published to npm as `clarity-pack` with the `paperclipPlugin` field in `package.json` pointing at `dist/manifest.js`, `dist/worker.js`, and `dist/ui/`. **WON'T-DO (operator decision 2026-05-29 — internal-only): the plugin will NOT be published to public npm; it is used solely on operator-controlled Paperclip instances. The packaging half is DONE (the `paperclipPlugin` field points at dist/manifest.js + dist/worker.js + dist/ui/), and distribution is the local-tarball `paperclipai plugin install <package-dir>` path already used for every BEAAA deploy (DEPLOY-RUNBOOK Path A/B). Public publish is a deliberate non-goal, not a gap.**
+- [x] **DIST-02**: README documents install + opt-in toggle + rollback flow + the runbook reference. **(Implemented — `README.md` ships `## Install`, `## Opt in (per-user)`, `## Rollback` (snapshot→verify→mutate→restore), `## Uninstall`, and `## Runbook` sections.)**
 - [x] **DIST-03**: Acceptance-criteria auto-status promotes from manual checklist (Phase 2) to event-derived auto-status — without breaking Phase 2's manual UX.
-- [ ] **DIST-04**: XLSX / PDF deliverable preview promotes from Phase 2's placeholder to a registry of full-fidelity previewers (xlsx → grid, pdf → embed, md → rendered, png → img).
-- [ ] **DIST-05**: Lockfile audit + accessibility pass (axe-core or equivalent) + visual regression baseline run in CI; results recorded in the milestone audit.
+- [x] **DIST-04**: XLSX / PDF deliverable preview promotes from Phase 2's placeholder to a registry of full-fidelity previewers (xlsx → grid, pdf → embed, md → rendered, png → img). **(Implemented — Plan 05-04 previewer registry; xlsx + pdf previews verified live at the rc.8 drill, see `rc.8-xlsx-preview-verified.png` / `rc.8-pdf-preview-verified.png`.)**
+- [ ] **DIST-05**: Lockfile audit + accessibility pass (axe-core or equivalent) + visual regression baseline run in CI; results recorded in the milestone audit. **PARTIAL: lockfile audit (`.github/workflows/lockfile-audit.yml`) + a11y (`.github/workflows/a11y-check.yml` + `scripts/check-a11y.mjs`) are ACTIVE in CI; the visual-regression baseline is `.github/workflows/visual-regression.yml.disabled` — DEFERRED (the Playwright sketch-regression test depends on a headless-browser network fetch of Google Fonts for the baseline; it is gated behind `SKIP_VISUAL=1` locally). Tracked as the one open Phase-5 CI gate; not blocking internal use.**
 
 ## v2 Requirements
 
@@ -309,13 +309,13 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | COEXIST-02 | Phase 2 | Pending |
 | COEXIST-03 | Phase 2 | Pending |
 | COEXIST-04 | Phase 2 | Pending |
-| COEXIST-05 | Phase 5 | Pending |
+| COEXIST-05 | Phase 5 | Implemented (additive plugin-namespace; disable/enable byte-identical drill PASS at 4.1 closure 2026-05-22 + 6.1 closure 2026-05-27; Phase 7 added no migration → holds by construction; README `## Uninstall` documents --purge opt-in) |
 | COEXIST-06 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
-| DIST-01 | Phase 5 | Pending |
-| DIST-02 | Phase 5 | Pending |
+| DIST-01 | Phase 5 | Won't-do (operator decision 2026-05-29 — internal-only; NOT published to public npm; packaging done; distribution = local-tarball `paperclipai plugin install`) |
+| DIST-02 | Phase 5 | Implemented (README documents Install + Opt-in + Rollback + Uninstall + Runbook) |
 | DIST-03 | Phase 5 | Implemented (Plan 05-03 — comment-marker scanner via reader.ac.autostatus; side-by-side with manual checklist; v1.0.0-rc.5) |
-| DIST-04 | Phase 5 | Pending |
-| DIST-05 | Phase 5 | Pending |
+| DIST-04 | Phase 5 | Implemented (Plan 05-04 previewer registry — xlsx/pdf/md/png; xlsx + pdf verified at rc.8 drill) |
+| DIST-05 | Phase 5 | Partial (lockfile-audit + a11y CI active; visual-regression CI .disabled — deferred, not blocking internal use) |
 
 **Coverage:**
 - v1 requirements: 97 total (79 original + CTT-01..08 added Phase 4.1 + RCB-01..07 added Phase 4.2 + ROOM-09..11 added Phase 6.1)
