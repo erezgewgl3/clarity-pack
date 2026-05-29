@@ -41,6 +41,7 @@ function makeCtx({
   createCommentFails = false,
   getDelayMs = 0,
   wakeupFails = false,
+  wakeupHangs = false,
 } = {}) {
   const handlers = new Map();
   const createCommentCalls = [];
@@ -77,6 +78,7 @@ function makeCtx({
       },
       async requestWakeup(issueId, companyId, opts) {
         wakeupCalls.push({ issueId, companyId, opts });
+        if (wakeupHangs) return new Promise(() => {}); // never resolves (host hang)
         if (wakeupFails) throw new Error('host requestWakeup 503');
         return { ok: true };
       },
@@ -223,6 +225,27 @@ test('chat.send: a requestWakeup failure is NON-FATAL — the send still succeed
   assert.equal(result.ok, true, 'a wake failure must not fail the send');
   assert.equal(result.commentId, 'comment-1');
   assert.equal(ctx._insertedMessages.length, 1, 'the message is still persisted on a wake failure');
+});
+
+test('chat.send: DE-BLOCK — a never-resolving requestWakeup must NOT stall the send (2026-05-29)', async () => {
+  // Decisive proof of the fire-and-forget transform. requestWakeup is unreliable
+  // on paperclipai@2026.525.0 (30s timeout / scope errors). With the prior
+  // `await ctx.issues.requestWakeup(...)`, a hung wake would block the send ACK
+  // for the full 30s. With fire-and-forget (void Promise.resolve().then(...)),
+  // the handler resolves immediately even though the wake never settles.
+  const ctx = makeCtx({ wakeupHangs: true });
+  registerChatSend(ctx);
+  const before = Date.now();
+  const result = await ctx._handlers.get('chat.send')(sendParams());
+  const elapsed = Date.now() - before;
+
+  assert.equal(result.ok, true, 'chat.send must resolve even when the wake never settles');
+  assert.equal(result.commentId, 'comment-1');
+  assert.equal(ctx._wakeupCalls.length, 1, 'requestWakeup is still invoked (kept, just not awaited)');
+  assert.ok(
+    elapsed < 40,
+    `chat.send must NOT await requestWakeup (elapsed=${elapsed}ms; threshold=40ms)`,
+  );
 });
 
 test('chat.send: a resend (replay) does NOT wake again — dedup returns before the wake (CHAT-06)', async () => {

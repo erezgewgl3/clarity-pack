@@ -402,18 +402,27 @@ export async function startAgentTask(
     );
   }
 
-  // 3. Wake the agent now. Non-fatal — the next heartbeat still picks it up.
-  try {
-    await ctx.issues.requestWakeup(issue.id, opts.companyId, {
-      reason: `clarity-pack ${opts.operationKind}`,
-      idempotencyKey: opts.operationId,
-    });
-  } catch (e) {
-    ctx.logger?.warn?.(
-      `agent-task-delivery: requestWakeup failed for issue ${issue.id} ` +
-        `(non-fatal — heartbeat will still pick it up): ${(e as Error).message}`,
+  // 3. Wake the agent now — FIRE-AND-FORGET. requestWakeup is unreliable on
+  //    this host (paperclipai@2026.525.0): it times out after 30s and scope-
+  //    errors in worker→host calls. This delivery path fires on every
+  //    TL;DR / bulletin compile, so AWAITing it was the storm source — each
+  //    compile burst stacked up to 30s-per-call of blocked worker→host channel.
+  //    The next heartbeat picks the operation issue up regardless (native
+  //    wake), so we keep the call (harmless when it works) but NEVER await it.
+  const wakeIssueId = issue.id;
+  void Promise.resolve()
+    .then(() =>
+      ctx.issues.requestWakeup(wakeIssueId, opts.companyId, {
+        reason: `clarity-pack ${opts.operationKind}`,
+        idempotencyKey: opts.operationId,
+      }),
+    )
+    .catch((e) =>
+      ctx.logger?.warn?.(
+        `agent-task-delivery: requestWakeup non-fatal for issue ${wakeIssueId} ` +
+          `(heartbeat will still pick it up): ${(e as Error).message}`,
+      ),
     );
-  }
 
   return { operationIssueId: issue.id, reused };
 }

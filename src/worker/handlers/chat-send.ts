@@ -118,17 +118,27 @@ export function registerChatSend(ctx: ChatSendCtx): void {
     //    double-wakes. Non-fatal: the comment is already persisted above, so a
     //    wake failure (e.g., expired scope on an older host) must NEVER fail the
     //    send — it degrades to the prior native-wake-only behaviour.
-    try {
-      await ctx.issues.requestWakeup(topicIssueId, companyId, {
-        reason: 'clarity-pack chat: operator message',
-        idempotencyKey: messageUuid,
-      });
-    } catch (e) {
-      ctx.logger?.info?.('chat.send: requestWakeup non-fatal failure (native wake still applies)', {
-        topicIssueId,
-        reason: (e as Error).message,
-      });
-    }
+    //
+    //    2026-05-29 — FIRE-AND-FORGET. requestWakeup is unreliable on this host
+    //    (paperclipai@2026.525.0): proven to time out after 30s and to scope-
+    //    error in worker→host calls. AWAITing it blocked the send ACK up to 30s
+    //    and congested the worker→host channel during compile bursts. Native
+    //    wake (the comment persisted above + ensureTopicWakeable) already
+    //    delivers the reply, so we keep the call (harmless when it works) but
+    //    NEVER await it — the send ACK returns immediately below.
+    void Promise.resolve()
+      .then(() =>
+        ctx.issues.requestWakeup(topicIssueId, companyId, {
+          reason: 'clarity-pack chat: operator message',
+          idempotencyKey: messageUuid,
+        }),
+      )
+      .catch((e) =>
+        ctx.logger?.info?.('chat.send: requestWakeup non-fatal (native wake applies)', {
+          topicIssueId,
+          reason: (e as Error).message,
+        }),
+      );
 
     return { ok: true, commentId: comment.id };
   });

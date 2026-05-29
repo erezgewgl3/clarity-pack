@@ -24,6 +24,7 @@ import test from 'node:test';
 
 import {
   deliverAgentTask,
+  startAgentTask,
   deliveryLlmAdapter,
   AGENT_TASK_DELIVERY_TIMEOUT,
   RESULT_DOCUMENT_KEY,
@@ -260,6 +261,41 @@ test('deliverAgentTask: REGRESSION (Plan 03-09) — a BulletinDraft whose editor
     result,
     draft,
     'the readback ACCEPTS the placeholder-bearing draft and resolves it (structure-only validation)',
+  );
+});
+
+// ---- Test 1c — Plan 250529 DE-BLOCK: startAgentTask never awaits the wake --
+
+test('startAgentTask: DE-BLOCK — a never-resolving requestWakeup must NOT prevent startAgentTask from resolving { operationIssueId } (2026-05-29)', async () => {
+  // requestWakeup is the bulletin/TL;DR storm source — it fires on EVERY compile
+  // delivery and is unreliable on paperclipai@2026.525.0 (30s timeout / scope
+  // errors). With the prior `await ctx.issues.requestWakeup(...)`, a hung wake
+  // stalled the whole delivery up to 30s and congested the worker→host channel
+  // during compile bursts. Fire-and-forget: the operation issue is created and
+  // returned immediately; the next heartbeat picks it up regardless.
+  const { ctx, calls } = makeFakeCtx({ existing: [] });
+  // Replace requestWakeup with a hang that still records the call (so we can
+  // prove the call is KEPT, just not awaited).
+  ctx.issues.requestWakeup = (issueId, companyId, options) => {
+    calls.requestWakeup.push({ issueId, companyId, options });
+    return new Promise(() => {}); // never resolves (host hang)
+  };
+
+  const before = Date.now();
+  const result = await startAgentTask(ctx, BASE_OPTS);
+  const elapsed = Date.now() - before;
+
+  assert.equal(result.operationIssueId, 'op-1', 'resolves the created operation issue id');
+  assert.equal(result.reused, false, 'a fresh operation issue was created');
+  assert.equal(calls.create.length, 1, 'one operation issue created');
+  assert.equal(
+    calls.requestWakeup.length,
+    1,
+    'requestWakeup is still invoked (kept, just not awaited)',
+  );
+  assert.ok(
+    elapsed < 40,
+    `startAgentTask must NOT await requestWakeup (elapsed=${elapsed}ms; threshold=40ms)`,
   );
 });
 
