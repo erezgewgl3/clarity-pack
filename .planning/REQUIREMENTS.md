@@ -7,6 +7,8 @@
 
 Requirements for the Clarity Pack v1 milestone (the four surfaces + Editor-Agent + safe rollout against the live BEAAA Paperclip instance). Each maps to exactly one roadmap phase.
 
+> **Status of record = the [Traceability](#traceability) table at the bottom of this file** (reconciled 2026-05-29 against the phase-level closures + the live code). The inline `- [ ]` / `- [x]` checkboxes in the sections below are the ORIGINAL requirement *definitions* captured at roadmap time; they are not kept in lockstep, so many still read `- [ ]` for requirements that are in fact Implemented and live-verified (all seven phases are closed — see ROADMAP.md). When you need the current state of a requirement, read the Traceability table, not the checkbox.
+
 ### Pre-Install Safety (SAFE)
 
 The discipline that lets us touch a live Paperclip install without unbounded blast radius.
@@ -217,45 +219,45 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SAFE-01 | Phase 1 | Done (Plan 01-01) |
-| SAFE-02 | Phase 1 | Part A done (Plan 01-01); Part B (rehearsed) pending Eric's drill |
+| SAFE-02 | Phase 1 | Done — Part A (restore CLI) Plan 01-01; Part B rehearsal PASS 2026-05-13 (Phase 1 CLOSED, REHEARSAL.md drill row landed) |
 | SAFE-03 | Phase 1 | Done (Plan 01-02) |
 | SAFE-04 | Phase 1 | Done (Plan 01-03) |
 | SAFE-05 | Phase 1 | Done (Plan 01-03) |
-| SCAF-01 | Phase 2 | Pending |
-| SCAF-02 | Phase 2 | Pending |
-| SCAF-03 | Phase 2 | Pending |
-| SCAF-04 | Phase 2 | Pending |
-| SCAF-05 | Phase 2 | Pending |
-| SCAF-06 | Phase 2 | Pending |
-| SCAF-07 | Phase 2 | Pending |
-| SCAF-08 | Phase 2 | Pending |
-| SCAF-09 | Phase 2 | Pending |
+| SCAF-01 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill; single npm package + one manifest for all four surfaces, live on BEAAA) |
+| SCAF-02 | Phase 2 | Implemented (Phase 2; TS 5.7.3 + esbuild + ESM + Node≥20; React/react-dom/jsx-runtime + SDK ui/hooks externalized — built bundle verified) |
+| SCAF-03 | Phase 2 | Implemented (Phase 2; `paperclipai plugin install` succeeds end-to-end — every BEAAA deploy via DEPLOY-RUNBOOK Path A/B; detailTab slot resolved) |
+| SCAF-04 | Phase 2 | Implemented (Phase 2; pnpm-lock committed + pinned; `.github/workflows/lockfile-audit.yml` + scaffold-check.yml in CI) |
+| SCAF-05 | Phase 2 | Implemented (Phase 2; UI data access via usePluginData/usePluginAction — scaffold-check guards raw host fetch from src/ui) |
+| SCAF-06 | Phase 2 | Implemented (Phase 2; all plugin CSS scoped to [data-clarity-surface] — `check-css-scope.mjs` gate 164/164) |
+| SCAF-07 | Phase 2 | Implemented (Phase 2; `src/ui/primitives/usePoll.ts` lifecycle-aware poll primitive) |
+| SCAF-08 | Phase 2 | Implemented (Phase 2; theme tokens + state pill + ref chip primitives match the mockups) |
+| SCAF-09 | Phase 2 | Implemented (Phase 2; SPA nav via useHostNavigation().linkProps() — breadcrumb test pins SCAF-09 no-raw-href) |
 | OPTIN-01 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | OPTIN-02 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | OPTIN-03 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | OPTIN-04 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | OPTIN-05 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
-| PRIM-01 | Phase 2 | Pending |
-| PRIM-02 | Phase 2 | Pending |
-| PRIM-03 | Phase 2 | Pending |
-| PRIM-04 | Phase 2 | Pending |
-| PRIM-05 | Phase 2 | Pending |
-| PRIM-06 | Phase 2 | Pending |
-| EDITOR-01 | Phase 2 | Pending |
-| EDITOR-02 | Phase 2 | Pending |
-| EDITOR-03 | Phase 2 | Pending |
-| EDITOR-04 | Phase 2 | Pending |
-| EDITOR-05 | Phase 2 | Pending |
-| EDITOR-06 | Phase 2 | Pending |
-| READER-01 | Phase 2 | Pending |
-| READER-02 | Phase 2 | Pending |
+| PRIM-01 | Phase 2 | Implemented (Phase 2; `src/shared/reference-resolver.ts` batch resolver — single round-trip, redefined to one fetcher invocation in Plan 07-01; live-verified BEAAA-828 13/13 chips) |
+| PRIM-02 | Phase 2 | Implemented (Phase 2; resolver forwards `bodyExcerptForViewer:null` when the viewer can't see a ref — reference-resolver.ts:60. NOTE: the SDK Issue has no `_viewer_can_read` flag, so the gate relies on host `ctx.issues.get` enforcing perms server-side; on the single-tenant admin BEAAA box the multi-viewer excerpt-leak case is not falsifiable — documented open item, not a known leak) |
+| PRIM-03 | Phase 2 | Implemented (Phase 2; `src/shared/blocker-chain.ts` deterministic DFS — PRIM-03 grep-guard pins byte-identical flatten; LLM never picks terminals) |
+| PRIM-04 | Phase 2 | Implemented (Phase 2; cycle detection emits a typed Cycle terminal — path-stack guard) |
+| PRIM-05 | Phase 2 | Implemented (Phase 2; typed terminal taxonomy HUMAN_ACTION_ON/SELF_RESOLVING/EXTERNAL/CYCLE — every chain ends in exactly one) |
+| PRIM-06 | Phase 2 | Implemented (Phase 2; TL;DR types + tldr_cache schema in `src/shared/types.ts`, consumed by worker + every TL;DR surface) |
+| EDITOR-01 | Phase 2 | Implemented (Phase 2; Editor-Agent declared in manifest `agents[]` + reconciled via ctx.agents.managed — runs live on BEAAA as a regular org-chart hire, no DIY setInterval) |
+| EDITOR-02 | Phase 2 | Implemented (Phase 2; MCP server pattern wired for reads. NOTE: the production compile path that proved out live is the operation-issue handoff (Plan 03-06/03-08) — see EDITOR delivery notes; MCP reads remain the declared adapter) |
+| EDITOR-03 | Phase 2 | Implemented (Phase 2; every compile idempotent on (surface, scope_id, content_hash) — tldr_cache UNIQUE; re-run with unchanged inputs is a no-op cache hit, live-verified) |
+| EDITOR-04 | Phase 2 | Implemented (Phase 2; self-loop filter on plugin-origin events + the bulletin self-tag filter — Editor-Agent does not re-trigger on its own writes) |
+| EDITOR-05 | Phase 2 | Implemented (Phase 2; hard max_tokens cap per call (16000) + circuit breaker pauses the agent after consecutive failures + surfaces a banner, not silent retry) |
+| EDITOR-06 | Phase 2 | Implemented (Phase 2; Editor-Agent inherits Paperclip heartbeat/budget/pause-terminate/audit by construction — it IS a managed agent; pause halts compile output) |
+| READER-01 | Phase 2 | Implemented (Phase 2; Reader contributes the `detailTab` slot with entityTypes:["issue"] — the "Reader" tab renders next to classic Paperclip tabs, live-verified on BEAAA) |
+| READER-02 | Phase 2 | Implemented (Phase 2; TL;DR strip at the top of the tab with a freshness stamp; view-driven recompile on body change — live-verified 07-xx drills) |
 | READER-03 | Phase 2 / Plan 07-01 | Implemented |
 | READER-04 | Phase 2 / Plan 07-01 | Implemented |
-| READER-05 | Phase 2 | Pending |
-| READER-06 | Phase 2 | Pending |
-| READER-07 | Phase 2 | Pending |
-| READER-08 | Phase 2 | Pending |
-| READER-09 | Phase 2 | Pending |
+| READER-05 | Phase 2 | Implemented (Phase 2 placeholder preview; promoted to the full-fidelity previewer registry in Plan 05-04 / DIST-04 — deliverable-preview.tsx, xlsx/pdf live-verified) |
+| READER-06 | Phase 2 | Implemented (Phase 2; goal ancestry breadcrumb project→milestone→parent→task — breadcrumb.tsx) |
+| READER-07 | Phase 2 | Implemented (Phase 2 manual AC checklist; auto-status promoted in Plan 05-03 / DIST-03 — ac-checklist.tsx, side-by-side with manual UX) |
+| READER-08 | Phase 2 | Implemented (Phase 2; right-rail "Live blocker · on you" panel renders the chain terminal as a one-click action — live-blocker-panel.tsx) |
+| READER-09 | Phase 2 | Implemented (Phase 2; distilled activity timeline summarizes the most relevant N events — activity-timeline.tsx) |
 | READER-10 | Phase 7 / Plan 07-02 | Implemented |
 | ROOM-01 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | ROOM-02 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
@@ -269,15 +271,15 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | ROOM-10 | Phase 6.1 | Implemented (Phase 6.1 closed VERIFIED 2026-05-27; `situation.artifacts` worker handler + inline chip row UI; live drill confirms 2 chips on CEO card within 24h window) |
 | ROOM-11 | Phase 6.1 | Implemented (Phase 6.1 closed VERIFIED 2026-05-27; Critical Path UI ships Open-chat engagement entry + standalone `+ Create task` over byte-identical chain walk; CYCLE-terminal renders as-is in v1.0) |
 | ROOM-12 | Phase 7 / Plan 07-03 | Implemented |
-| BULL-01 | Phase 3 | In Progress — DST kernel (computeNextDueAt + 4 DST CI fixtures) delivered by Plan 03-01 2026-05-15; end-to-end DST CI matrix completes in Plan 03-04 |
-| BULL-02 | Phase 3 | In Progress — idempotency foundation (UNIQUE(next_due_at,content_hash), no-op compile gate, self-loop bulletin-tag filter) delivered by Plan 03-01 2026-05-15; publish atomicity completes in Plan 03-02 |
-| BULL-03 | Phase 3 | Pending |
-| BULL-04 | Phase 3 | Pending |
+| BULL-01 | Phase 3 | Implemented (Phase 3 CLOSED 2026-05-18; America/New_York next_due_at via date-fns-tz + DST CI fixtures. NOTE: the 06:30 cron is best-effort on paperclipai@2026.525.0 — scheduled-job scope is dead, PR #6547 — so the bulletin reliably compiles VIEW-DRIVEN when the Bulletin page is opened) |
+| BULL-02 | Phase 3 | Implemented (Phase 3 CLOSED 2026-05-18; idempotent compile — UNIQUE(next_due_at,content_hash) + no-op gate + atomic publish in Plan 03-02; partial compiles never publish) |
+| BULL-03 | Phase 3 | Implemented (Phase 3; "Requires Your Decision" actionInbox renders one card per outstanding decision — bulletin-rendering.ts) |
+| BULL-04 | Phase 3 | Implemented (Phase 3; department sections Production/Sales/Customer/Builder with item rows + lineage threads — live on BEAAA) |
 | BULL-05 | Phase 3 | Implemented (Plan 03-02) |
 | BULL-06 | Phase 3 | Implemented (Plan 03-02) |
-| BULL-07 | Phase 3 | Pending |
-| BULL-08 | Phase 3 | Pending |
-| BULL-09 | Phase 3 | Partial (Plan 03-02 — persists as Paperclip issue + survives disable; page-slot rendering pending Plan 03-03) |
+| BULL-07 | Phase 3 | Implemented (Phase 3; errata is a first-class item type — ErratumEntry + append-not-rewrite + errata footer on next view) |
+| BULL-08 | Phase 3 | Implemented (Phase 3; failed compile renders "Bulletin compile failed at HH:MM · retrying at NN" — failed-compile-banner.tsx; no silent failures) |
+| BULL-09 | Phase 3 | Implemented (Phase 3 CLOSED 2026-05-18; renders via the page slot AND persists as a "Bulletin No. N" Paperclip issue — survives disable + searchable in classic UI; page-slot render completed Plan 03-03, live on BEAAA) |
 | BULL-10 | Phase 7 / Plan 07-05 | Implemented (lineage filter + gloss + 2 affordances; live BEAAA drill 2026-05-29 PASS — routine/dup filtered to "Work in motion — 1 thread", surviving thread shows the Editor-Agent gloss text, both affordances present, NO_UUID_LEAK; the gloss read-back idempotency bug fixed in commit dad114b — view 1 reads back the existing op, view 2+ are cache hits, no fresh op per view) |
 | CHAT-01 | Phase 4 | Implemented (Plan 04-04 read/CRUD handlers + Plan 04-05 four-region chat UI shell) |
 | CHAT-02 | Phase 4 | Implemented (Plan 04-03 — chat.send writes canonical to public.issue_comments; chat_messages side table has no body column) |
@@ -305,10 +307,10 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | RCB-05 | Phase 4.2 | Implemented (Plan 04.2-01 — topic-strip `About <COU-NNNN> ↗` backlink chip wired against `chat_topics.origin_issue_id`. RCB-07 spot-check on pre-0009 topics verifies the rendering is conditional and degrades gracefully when `origin_issue_id IS NULL`.) |
 | RCB-06 | Phase 4.2 | Implemented (Plan 04.2-01 — Reader header `N conversations about this issue ↗` popover via `topicsForIssue` extension to `issue-reader` response.) |
 | RCB-07 | Phase 4.2 | Implemented (Plan 04.2-01 — additive plugin-namespace migration `0009` is idempotent; pre-0009 topics render with no `About …` chip and no error. Operator-drill PASS 2026-05-24: zero About-chip elements on the page; zero console errors during topic-strip render.) |
-| COEXIST-01 | Phase 2 | Pending |
-| COEXIST-02 | Phase 2 | Pending |
-| COEXIST-03 | Phase 2 | Pending |
-| COEXIST-04 | Phase 2 | Pending |
+| COEXIST-01 | Phase 2 | Implemented (Phase 2; per-user opt-in via profile toggle, default OFF — OPTIN-01..05; verified at Phase 2 closure) |
+| COEXIST-02 | Phase 2 | Implemented (Phase 2; original UI never replaced — Reader is an additional detailTab, classic tabs untouched) |
+| COEXIST-03 | Phase 2 | Implemented (Phase 2; schema is additive plugin-namespace only — disable/enable byte-identical row-count drill PASS at 4.1 closure 2026-05-22 + 6.1 closure 2026-05-27) |
+| COEXIST-04 | Phase 2 | Implemented (Phase 2; Editor-Agent is a regular org-chart hire with no special privileges — EDITOR-01/06) |
 | COEXIST-05 | Phase 5 | Implemented (additive plugin-namespace; disable/enable byte-identical drill PASS at 4.1 closure 2026-05-22 + 6.1 closure 2026-05-27; Phase 7 added no migration → holds by construction; README `## Uninstall` documents --purge opt-in) |
 | COEXIST-06 | Phase 2 | Implemented (Phase 2 closed APPROVED 2026-05-15 via Plan 02-09 re-drill) |
 | DIST-01 | Phase 5 | Won't-do (operator decision 2026-05-29 — internal-only; NOT published to public npm; packaging done; distribution = local-tarball `paperclipai plugin install`) |
