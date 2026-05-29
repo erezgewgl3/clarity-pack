@@ -237,3 +237,111 @@ test('NO_UUID_LEAK: no raw UUID appears in any returned gloss string', async () 
     if (t.gloss) assert.ok(!UUID_RE.test(t.gloss), `gloss must not contain a raw UUID: ${t.gloss}`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Plan 07-05 read-back fix (BUG 2) — the compile lands on a LATER view.
+//
+// The Editor-Agent files its compile-result document AND (per
+// RESULT_DELIVERY_INSTRUCTION) marks the operation issue `done` ~40s after the
+// START view's immediate poll has already returned `pending`. By the next view
+// the op is TERMINAL, so startAgentTask's idempotency search (which reuses only
+// NON-terminal ops) skips it and spawns a fresh op whose immediate poll is again
+// `pending` → permanent "Gloss pending…" + a wasteful recompile per view.
+//
+// A stateful host stub reproduces the two-view sequence: view 1 creates op-1 +
+// returns `compiling`; the agent then stores the result on op-1 and marks it
+// done; view 2 must READ BACK op-1's stored result (NOT spawn a duplicate op),
+// finalize it into the cache, and return `glossed`.
+test('compile lands on a LATER view → existing op READ BACK, same op reused, gloss applied (no duplicate op)', async () => {
+  const GLOSS = 'We re-ran the live tests to confirm the quality numbers stay trustworthy.';
+  const GLOSS_BODY = `{"${THREAD_ID}":"${GLOSS}"}`;
+
+  const opStore = []; // { id, originId, status, doc: string|null }
+  let opSeq = 0;
+  const spies = { creates: 0, finalizeUpserts: 0 };
+
+  const ctx = {
+    logger: { warn() {}, info() {} },
+    db: {
+      async query() {
+        return []; // ALWAYS a cache miss — forces the read-back / start path.
+      },
+      async execute(sql) {
+        if (/INSERT INTO plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
+          spies.finalizeUpserts += 1;
+        }
+        return { rowCount: 0 };
+      },
+    },
+    issues: {
+      async list(args) {
+        // startAgentTask idempotency AND the read-back lookup both pass originId.
+        if (args && args.originId) {
+          return opStore.filter((o) => o.originId === args.originId);
+        }
+        // resolveEditorAgentId op-issue discovery (originKindPrefix, no originId).
+        if (args && args.originKindPrefix) {
+          return [{ assigneeAgentId: 'agent-editor' }];
+        }
+        return [];
+      },
+      async create(input) {
+        spies.creates += 1;
+        const id = `op-${++opSeq}`;
+        opStore.push({ id, originId: input.originId, status: 'todo', doc: null });
+        return { id };
+      },
+      async requestWakeup() {
+        return undefined;
+      },
+      async listComments() {
+        return [];
+      },
+      async update(id, patch) {
+        const o = opStore.find((x) => x.id === id);
+        if (o && patch && patch.status) o.status = patch.status;
+        return undefined;
+      },
+      documents: {
+        async get(opId, key) {
+          const o = opStore.find((x) => x.id === opId);
+          if (o && o.doc && key === 'compile-result') return { body: o.doc, key: 'compile-result' };
+          return null;
+        },
+        async list(opId) {
+          const o = opStore.find((x) => x.id === opId);
+          return o && o.doc ? [{ key: 'compile-result' }] : [];
+        },
+      },
+    },
+    agents: {
+      async get() {
+        return null; // status unknown → never the paused branch.
+      },
+      managed: {
+        async reconcile() {
+          return { agentId: 'agent-editor' };
+        },
+      },
+    },
+  };
+
+  // VIEW 1 — no op yet → create op-1, immediate poll pending → compiling.
+  const v1 = await driveBulletinGlossStep(ctx, { companyId: 'co-1', cycleNumber: 1, threads: threads() });
+  assert.equal(v1.status, 'compiling', 'view 1 has no result yet');
+  assert.equal(spies.creates, 1, 'view 1 creates exactly one op');
+  assert.equal(opStore.length, 1);
+
+  // AGENT compiles op-1 asynchronously: stores the compile-result document AND
+  // marks the op done (exactly what RESULT_DELIVERY_INSTRUCTION instructs).
+  opStore[0].doc = GLOSS_BODY;
+  opStore[0].status = 'done';
+
+  // VIEW 2 — cache still misses → must READ BACK op-1's stored result rather than
+  // spawning a duplicate op whose immediate poll would again be pending.
+  const v2 = await driveBulletinGlossStep(ctx, { companyId: 'co-1', cycleNumber: 1, threads: threads() });
+  assert.equal(v2.status, 'glossed', 'view 2 must read back the gloss the agent already stored');
+  assert.equal(v2.threads[0].gloss, GLOSS);
+  assert.equal(spies.creates, 1, 'view 2 must NOT create a duplicate op — it reads back the existing one');
+  assert.equal(spies.finalizeUpserts, 1, 'view 2 finalizes the read-back result into the cache');
+});

@@ -41,6 +41,7 @@ import { getTldrByScope } from '../db/tldr-cache.ts';
 import {
   startAgentTask,
   pollAgentTaskResult,
+  OPERATION_ORIGIN_KIND_PREFIX,
 } from '../agents/agent-task-delivery.ts';
 
 /** The ctx the gloss step needs — the SAME shape as the TL;DR view driver plus
@@ -128,6 +129,77 @@ function nullGlosses(threads: LineageThread[]): LineageThread[] {
   return threads.map((t) => ({ ...t, gloss: NULL }));
 }
 
+/** The per-cycle operation dedupe key (shared by start + read-back). */
+function glossOperationId(cycleNumber: number): string {
+  return `bulletin-gloss-${cycleNumber}`;
+}
+
+/**
+ * Plan 07-05 read-back fix (2026-05-29, BUG 2) — consume an EXISTING op's result
+ * on a cache-miss BEFORE starting a new one.
+ *
+ * The Editor-Agent files its `compile-result` document AND (per the shared
+ * RESULT_DELIVERY_INSTRUCTION) marks the operation issue `done` ~40s after the
+ * START view's single immediate poll has already returned `pending`. By the next
+ * Bulletin view that op is TERMINAL, so startAgentTask's idempotency search —
+ * which reuses only NON-terminal ops — skips it and spawns a fresh op whose
+ * immediate poll is again `pending`. Result: the stored gloss is never read back
+ * (permanent "Gloss pending…") and every view recompiles.
+ *
+ * This look-up lists the op(s) for THIS cycle's operationId — INCLUDING terminal
+ * ones (`includePluginOperations:true`, no status filter) — and returns the first
+ * stored `compile-result` body via the shared `pollAgentTaskResult` document
+ * path. It mutates NOTHING shared in agent-task-delivery (option (b), lowest blast
+ * radius). Read-only + degrade-safe: any throw → null so the read never blocks.
+ */
+async function readBackExistingGlossOp(
+  ctx: BulletinGlossCtx,
+  args: { companyId: string; cycleNumber: number; editorAgentId: string },
+): Promise<string | null> {
+  const { companyId, cycleNumber, editorAgentId } = args;
+  let ops: Array<{ id?: string }>;
+  try {
+    ops = (await ctx.issues.list({
+      companyId,
+      originKindPrefix: OPERATION_ORIGIN_KIND_PREFIX,
+      originId: glossOperationId(cycleNumber),
+      includePluginOperations: true,
+    })) as Array<{ id?: string }>;
+  } catch (e) {
+    ctx.logger?.warn?.(`bulletin-gloss: existing-op lookup failed: ${(e as Error).message}`, {
+      companyId,
+      cycleNumber,
+    });
+    return null;
+  }
+  for (const op of ops ?? []) {
+    if (!op?.id) continue;
+    try {
+      const poll = await pollAgentTaskResult(ctx, {
+        operationIssueId: op.id,
+        companyId,
+        operationKind: 'bulletin-gloss',
+        agentId: editorAgentId,
+      });
+      if (poll.status === 'ready') {
+        // Best-effort: mark the consumed op done so a later view doesn't re-read it.
+        try {
+          await ctx.issues.update(op.id, { status: 'done' }, companyId);
+        } catch {
+          /* non-fatal */
+        }
+        return poll.body;
+      }
+    } catch (e) {
+      ctx.logger?.info?.('bulletin-gloss: existing-op poll skipped (non-fatal)', {
+        operationIssueId: op.id,
+        reason: (e as Error).message,
+      });
+    }
+  }
+  return null;
+}
+
 /**
  * D-I5-02 — advance the per-bulletin gloss compile by exactly one step, in the
  * CALLER's (valid HTTP-request) invocation scope. Mirrors editor.ts
@@ -170,6 +242,38 @@ export async function driveBulletinGlossStep(
     return { threads: nullGlosses(threads), status: 'unavailable' };
   }
 
+  // READ-BACK (Plan 07-05 fix, BUG 2) — BEFORE starting a fresh op, consume the
+  // result of an EXISTING op for this cycle if the agent already delivered it on
+  // a prior view (the agent marks its op `done`, so startAgentTask's reuse can't
+  // catch it). A ready body → finalize into the cache + apply NOW. This is the
+  // step that turns "Gloss pending…" on view 1 into the real gloss on view 2.
+  const priorBody = await readBackExistingGlossOp(ctx, { companyId, cycleNumber, editorAgentId });
+  if (priorBody != null) {
+    const priorMap = parseGlossMap(priorBody);
+    try {
+      await finalizeTldr(ctx, {
+        surface: 'bulletin',
+        scopeId,
+        contentHash,
+        body: priorBody,
+        agentKey: EDITOR_AGENT_KEY,
+        agentId: editorAgentId,
+        companyId,
+        truncated: false,
+      });
+    } catch (e) {
+      // A finalize hiccup must not fail the read — still apply the gloss in-memory.
+      ctx.logger?.warn?.(`bulletin-gloss: finalize (read-back) failed: ${(e as Error).message}`, {
+        companyId,
+        cycleNumber,
+      });
+    }
+    return {
+      threads: priorMap ? applyGlosses(threads, priorMap) : nullGlosses(threads),
+      status: 'glossed',
+    };
+  }
+
   // PAUSED check (mirror editor.ts) — a paused agent never processes the compile;
   // we do NOT auto-resume on a passive Bulletin view. Render without a gloss.
   try {
@@ -192,7 +296,7 @@ export async function driveBulletinGlossStep(
       agentId: editorAgentId,
       companyId,
       operationKind: 'bulletin-gloss',
-      operationId: `bulletin-gloss-${cycleNumber}`,
+      operationId: glossOperationId(cycleNumber),
       title: `Compile bulletin lineage gloss — cycle ${cycleNumber}`,
       prompt: buildGlossPrompt(threads),
     });
