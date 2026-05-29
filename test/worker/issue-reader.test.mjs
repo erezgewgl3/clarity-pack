@@ -249,80 +249,61 @@ test('issue.reader handler assembles tldr + refCards + ancestry + acItems + acti
   assert.equal(result.deliverable.filename, 'Q3-underwriting-plan.xlsx');
 });
 
-// --- Plan 07-02 Task 2 (D-I3-02) — refs→title rewrite WIRED into the handler ---
-test('issue.reader rewrites <PREFIX>-NNN tokens in tldr.body to "ID — title" (handler→post-processor wire-in)', async () => {
+// --- Plan 07-04 Task 4 (D-I31-04) — the worker TL;DR text-rewrite is REMOVED ---
+// The 07-02 worker text-rewrite is superseded by the client-side titled chips
+// (07-04 D-I31-01..03). Keeping it would double-render
+// ("ID — title" chip + a trailing " — title" text). So the TL;DR body now
+// reaches the UI RAW: the chip supplies the title client-side.
+test('issue.reader passes tldr.body through UNREWRITTEN — the chip supplies the title client-side (07-04, no double-render)', async () => {
   // The FIXTURE TL;DR body contains BEAAA-141 / BEAAA-203 / BEAAA-417, the
-  // FIXTURE issue is BEAAA-555 (prefix derivable), and ctx.issues.get resolves
-  // each ref to a title. This proves the handler calls buildTitleMap +
-  // inlineRefTitles end-to-end — not just that the reader didn't break.
+  // FIXTURE issue is BEAAA-555 (prefix derivable), and ctx.issues.get could
+  // resolve each ref to a title — but the worker rewrite is GONE, so the body
+  // must keep the BARE BEAAA-141 token (no " — Compliance step v2" suffix). The
+  // UI's ref-aware SafeMarkdown renders the single titled chip.
   const { ctx, registered } = makeFakeCtx();
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
   const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
   assert.ok(result.tldr, 'tldr returned');
-  // BEAAA-141 → "Compliance step v2" (the refIssueByIdentifier title for that id).
-  assert.match(
-    result.tldr.body,
-    /BEAAA-141 — Compliance step v2/,
-    'resolved token rewritten inline as "ID — title"',
+  // The bare token survives unrewritten.
+  assert.match(result.tldr.body, /BEAAA-141\b/, 'the bare ref token is preserved');
+  // No worker-side "ID — title" suffix (the chip is the SOLE title source).
+  assert.equal(
+    /BEAAA-141 —/.test(result.tldr.body),
+    false,
+    'no worker-side title suffix — the chip supplies the title client-side (no double-render)',
   );
-  // The raw ID is kept traceable (not replaced by the title alone).
-  assert.match(result.tldr.body, /BEAAA-141 —/);
 });
 
-test('issue.reader leaves tldr.body unchanged when the refs→title rewrite resolver throws (degrade-safe)', async () => {
-  const { ctx, registered } = makeFakeCtx();
-  // Make ctx.issues.get throw ONLY for ref identifiers (the title-map build),
-  // while the issue-under-test + parent still resolve so the rest of the Reader
-  // works. buildTitleMap swallows the throw → empty map → bare IDs survive.
-  const origGet = ctx.issues.get;
-  ctx.issues.get = async (id, companyId) => {
-    if (refIssueByIdentifier(id)) throw new Error('simulated ref resolution failure');
-    return origGet(id, companyId);
-  };
-  registerIssueReader(ctx);
-  const handler = registered.get('issue.reader');
-  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
-  assert.ok(result.tldr, 'tldr still returned (Reader never blanks on a rewrite failure)');
-  // The bare ID survives (no em-dash title suffix) — degrade-safe.
-  assert.match(result.tldr.body, /BEAAA-141\b/);
-  assert.equal(/BEAAA-141 —/.test(result.tldr.body), false, 'no title suffix when resolution failed');
-});
-
-test('issue.reader invokes the resolveRefs fetcher EXACTLY ONCE per render (PRIM-01 redefined: one fetcher invocation, zero ?ids= http.fetch)', async () => {
+test('issue.reader invokes the resolveRefs fetcher EXACTLY ONCE per render (PRIM-01: one fetcher invocation, zero ?ids= http.fetch)', async () => {
   const { ctx, fetchCalls, registered, refGetCalls } = makeFakeCtx();
   registerIssueReader(ctx);
   const handler = registered.get('issue.reader');
   await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
-  // 07-01 — PRIM-01 is now "one fetcher invocation at the resolveRefs boundary"
+  // 07-01 — PRIM-01 is "one fetcher invocation at the resolveRefs boundary"
   // (per-ref ctx.issues.get is N calls inside that single invocation). The
   // legacy SSRF-blocked `?ids=` http.fetch path must fire ZERO times.
   const issueFetches = fetchCalls.filter((url) => /\/issues\?ids=/.test(url));
   assert.equal(issueFetches.length, 0, `the legacy ?ids= http.fetch path must NOT be used; got ${issueFetches.length}`);
-  // 07-02 (D-I3-02) — the Reader now resolves the SAME 3 unique refs via TWO
-  // independent per-ref-get passes per render: (1) the TL;DR refs→title rewrite
-  // (buildTitleMap) and (2) the refCards resolution. Each pass dedupes within
-  // its single fetcher invocation (no duplicate get per ref per pass), so the
-  // total is 3 unique refs × 2 passes = 6. The legacy `?ids=` http.fetch path
-  // still fires ZERO times; the per-ref-get-with-dedup boundary (PRIM-01) holds
-  // for EACH pass.
+  // 07-04 (D-I31-04) — the TL;DR title-map pass was REMOVED, so
+  // there is now ONLY the refCards resolution pass: 3 unique refs × 1 pass = 3
+  // per-ref gets. The legacy `?ids=` http.fetch path still fires ZERO times.
   assert.equal(
     refGetCalls.length,
-    6,
-    `expected 3 unique refs × 2 per-ref-get passes (TL;DR title-map + refCards); got ${refGetCalls.length}`,
+    3,
+    `expected 3 unique refs × 1 per-ref-get pass (refCards only; the TL;DR title-map pass was removed in 07-04); got ${refGetCalls.length}`,
   );
-  // The UNIQUE set resolved is exactly the 3 refs (each pass deduped to these 3).
+  // The UNIQUE set resolved is exactly the 3 refs (the single pass deduped).
   assert.deepEqual(
     [...new Set(refGetCalls)].sort(),
     ['BEAAA-141', 'BEAAA-203', 'BEAAA-417'],
-    'each unique ref identifier is resolved via ctx.issues.get (deduped per pass)',
+    'each unique ref identifier is resolved via ctx.issues.get (deduped)',
   );
-  // Each unique ref was asked for exactly twice (once per pass) — no pass
-  // duplicated a get for the same ref.
+  // Each unique ref was asked for exactly ONCE (the single refCards pass).
   const counts = {};
   for (const id of refGetCalls) counts[id] = (counts[id] ?? 0) + 1;
   for (const id of ['BEAAA-141', 'BEAAA-203', 'BEAAA-417']) {
-    assert.equal(counts[id], 2, `${id} resolved exactly twice (TL;DR title-map + refCards); got ${counts[id]}`);
+    assert.equal(counts[id], 1, `${id} resolved exactly once (refCards only); got ${counts[id]}`);
   }
 });
 

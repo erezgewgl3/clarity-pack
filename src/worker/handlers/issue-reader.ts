@@ -36,9 +36,11 @@ import type {
 import type { RefCardData, TLDR } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { resolveRefsViaSdk } from './sdk-ref-fetch.ts';
-// 07-02 (D-I3-02) — post-process the compiled TL;DR body so `<PREFIX>-NNN`
-// tokens render as "ID — title" (reuses the 07-01 resolver + prefix helper).
-import { buildTitleMap, inlineRefTitles } from './tldr-ref-titles.ts';
+// 07-04 (D-I31-04) — the worker-side TL;DR refs-to-title rewrite module is
+// REMOVED. Client-side titled chips (the ref-aware SafeMarkdown + RefChip,
+// 07-04 D-I31-01..03) supply the title, so the worker rewrite was redundant and
+// double-rendered ("ID — title" chip + a trailing " — title" text). The TL;DR
+// body now reaches the result RAW; the chip is the sole title source.
 import { getTldrByScope, type TldrCacheCtx } from '../db/tldr-cache.ts';
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 // View-driven rework (2026-05-28) — the Reader DRIVES the TL;DR compile in its
@@ -220,25 +222,12 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
       }
     }
 
-    // ---- 07-02 (D-I3-02): refs → titles inside the TL;DR body ----------------
-    // Rewrite each resolvable `<PREFIX>-NNN` token in the compiled TL;DR to
-    // `ID — title` (ID kept traceable) using the SAME 07-01 SDK resolver
-    // (resolveRefsViaSdk via buildTitleMap) and the in-scope companyId/identifier.
-    // Post-process the COMPILED body — do NOT trust the agent to avoid raw IDs.
-    // Degrade discipline: any failure leaves the un-rewritten body (never blanks
-    // the TL;DR), mirroring the TL;DR-drive degrade above.
-    if (tldr && typeof tldr.body === 'string' && tldr.body.length > 0) {
-      try {
-        const titleById = await buildTitleMap(ctx.issues, tldr.body, issueIdentifier, companyId);
-        if (titleById.size > 0) {
-          tldr = { ...tldr, body: inlineRefTitles(tldr.body, issueIdentifier, titleById) };
-        }
-      } catch (e) {
-        ctx.logger?.warn?.('issue.reader: TL;DR refs→title rewrite failed; leaving body unchanged', {
-          err: (e as Error).message,
-        });
-      }
-    }
+    // ---- 07-04 (D-I31-04): the worker TL;DR refs→title rewrite is REMOVED ----
+    // The client-side ref-aware SafeMarkdown + RefChip now render each in-prose
+    // `<PREFIX>-NNN` token as a clickable titled chip (`ID — title`). Keeping the
+    // old worker text-rewrite would DOUBLE-RENDER ("ID — title" chip + a trailing
+    // " — title" text). The TL;DR body reaches the result RAW; the chip is the
+    // sole title source.
 
     // ---- refCards (PRIM-01: one fetcher invocation) -------------------------
     // 07-01 — resolution rewritten to the SDK (see sdk-ref-fetch.ts). The old
