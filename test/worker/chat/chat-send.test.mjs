@@ -40,6 +40,7 @@ function makeCtx({
   issueStatus = 'in_progress',
   createCommentFails = false,
   getDelayMs = 0,
+  wakeupFails = false,
 } = {}) {
   const handlers = new Map();
   const createCommentCalls = [];
@@ -74,8 +75,9 @@ function makeCtx({
         updateCalls.push({ issueId, patch, companyId });
         return { id: issueId };
       },
-      async requestWakeup(issueId, companyId) {
-        wakeupCalls.push({ issueId, companyId });
+      async requestWakeup(issueId, companyId, opts) {
+        wakeupCalls.push({ issueId, companyId, opts });
+        if (wakeupFails) throw new Error('host requestWakeup 503');
         return { ok: true };
       },
     },
@@ -193,21 +195,54 @@ test('chat.send: sending to a done topic logs hint and does NOT call issues.upda
   assert.equal(ctx._updateCalls.length, 0, 'CTT-07: zero issues.update calls');
 });
 
-test('chat.send: PROBE-OQ3 PASS-NATIVE — requestWakeup is NEVER called (REST returns 404; native wake suffices)', async () => {
-  // Regression guard — Plan 04.1-03 drops requestWakeup per 04.1-01-SPIKE-
-  // FINDINGS PROBE-OQ3. If a future "helpful" edit re-introduces the call,
-  // the wakeupCalls counter would be non-zero on any of these status paths.
-  for (const status of ['done', 'cancelled', 'blocked', 'in_progress', 'todo']) {
-    const ctx = makeCtx({ issueStatus: status });
-    registerChatSend(ctx);
-    await ctx._handlers.get('chat.send')(sendParams());
-    await new Promise((r) => setImmediate(r));
-    assert.equal(
-      ctx._wakeupCalls.length,
-      0,
-      `requestWakeup must NOT be called (status=${status}) — 04.1-01-SPIKE-FINDINGS PROBE-OQ3`,
-    );
-  }
+test('chat.send: ACTIVE WAKE — requestWakeup IS called for the topic with messageUuid as the idempotency key (2026-05-29 usability fix)', async () => {
+  // SUPERSEDES the prior "requestWakeup NEVER called" guard. The Phase 4.1
+  // PROBE-OQ3 "native wake suffices" conclusion did NOT hold on
+  // paperclipai@2026.525.0 — idle agents never ran, so the operator's chat
+  // message got no reply (the whole point of chat). chat.send now explicitly
+  // wakes the topic's assignee (requestWakeup works in this valid ACTION scope;
+  // it only fails in the dead scheduled-job scope). One wake per fresh send,
+  // keyed by messageUuid so a CHAT-06 resend never double-wakes.
+  const ctx = makeCtx();
+  registerChatSend(ctx);
+  await ctx._handlers.get('chat.send')(sendParams());
+  await new Promise((r) => setImmediate(r));
+  assert.equal(ctx._wakeupCalls.length, 1, 'chat.send must actively wake the assignee on a fresh send');
+  assert.equal(ctx._wakeupCalls[0].issueId, 'issue-topic-1');
+  assert.equal(
+    ctx._wakeupCalls[0].opts?.idempotencyKey,
+    'uuid-fresh-1',
+    'idempotencyKey must be the messageUuid so a resend never double-wakes',
+  );
+});
+
+test('chat.send: a requestWakeup failure is NON-FATAL — the send still succeeds (comment already persisted)', async () => {
+  const ctx = makeCtx({ wakeupFails: true });
+  registerChatSend(ctx);
+  const result = await ctx._handlers.get('chat.send')(sendParams());
+  assert.equal(result.ok, true, 'a wake failure must not fail the send');
+  assert.equal(result.commentId, 'comment-1');
+  assert.equal(ctx._insertedMessages.length, 1, 'the message is still persisted on a wake failure');
+});
+
+test('chat.send: a resend (replay) does NOT wake again — dedup returns before the wake (CHAT-06)', async () => {
+  const ctx = makeCtx({
+    chatMessages: [
+      {
+        message_uuid: 'uuid-fresh-1',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        comment_id: 'comment-existing',
+        sender_kind: 'user',
+        supersedes_uuid: null,
+        pinned: false,
+        sent_at: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+  });
+  registerChatSend(ctx);
+  await ctx._handlers.get('chat.send')(sendParams());
+  assert.equal(ctx._wakeupCalls.length, 0, 'an idempotent replay must not re-wake the agent');
 });
 
 test('chat.send: in_progress topic is NOT updated (no needless flip, but watchdog STILL fires — D-11 anti-regression)', async () => {

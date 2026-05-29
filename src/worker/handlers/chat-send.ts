@@ -96,19 +96,39 @@ export function registerChatSend(ctx: ChatSendCtx): void {
       sent_at: new Date().toISOString(),
     });
 
-    // 4. D-09 / D-11 — ensure the topic is wakeable on EVERY send. The
-    //    watchdog REPLACES the prior auto-reopen block: it does the same
-    //    flip-off-done sweep (done / cancelled / blocked → in_progress) from
-    //    a single source of truth shared with Plan 04.1-04's chat.messages
-    //    per-poll watchdog. Per 04.1-01-SPIKE-FINDINGS PROBE-OQ3 PASS-NATIVE
-    //    the helper does NOT call requestWakeup — multi-turn native re-wake
-    //    works (REST surface returns 404).
-    //
-    //    Fire-and-forget after the comment lands — the helper internally
-    //    catches every step, so a wake-gate / status-flip failure cannot
-    //    fail the send. `void` is REQUIRED: awaiting it would re-introduce
-    //    the delay the original inline block did not have either.
+    // 4. D-09 / D-11 — ensure the topic is in a WAKEABLE status (flip off
+    //    done / cancelled / blocked → in_progress) so a woken agent will
+    //    actually run. Single source of truth shared with the chat.messages
+    //    per-poll watchdog. Fire-and-forget — the helper internally catches
+    //    every step, so a slow / failing watchdog cannot delay or fail the send.
     void ensureTopicWakeable(ctx, topicIssueId, companyId);
+
+    // 5. ACTIVE WAKE (2026-05-29 usability fix — the whole point of chat is to
+    //    get a reply). Posting a comment relies on the host's PASSIVE "native
+    //    wake"; on this org that leaves idle agents un-run, so the operator's
+    //    message gets NO response. We now explicitly requestWakeup the topic's
+    //    assignee so it runs a heartbeat and can reply.
+    //
+    //    The Phase 4.1 note that "requestWakeup 404s; native wake suffices" is
+    //    STALE for paperclipai@2026.525.0: requestWakeup works in a valid ACTION
+    //    scope — it's the same call agent-task-delivery uses successfully in its
+    //    (valid) view-driven scope; it only fails in the dead SCHEDULED-JOB
+    //    scope. chat.send IS an action handler (valid scope), so this fires.
+    //    idempotencyKey=messageUuid so a resend (CHAT-06 replay) never
+    //    double-wakes. Non-fatal: the comment is already persisted above, so a
+    //    wake failure (e.g., expired scope on an older host) must NEVER fail the
+    //    send — it degrades to the prior native-wake-only behaviour.
+    try {
+      await ctx.issues.requestWakeup(topicIssueId, companyId, {
+        reason: 'clarity-pack chat: operator message',
+        idempotencyKey: messageUuid,
+      });
+    } catch (e) {
+      ctx.logger?.info?.('chat.send: requestWakeup non-fatal failure (native wake still applies)', {
+        topicIssueId,
+        reason: (e as Error).message,
+      });
+    }
 
     return { ok: true, commentId: comment.id };
   });
