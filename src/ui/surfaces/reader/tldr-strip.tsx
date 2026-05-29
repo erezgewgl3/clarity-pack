@@ -15,9 +15,14 @@
 // rather than asserting a compile that isn't running.
 
 import * as React from 'react';
+import { useHostLocation } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { TLDR } from '../../../shared/types.ts';
 import { SafeMarkdown } from '../../primitives/safe-markdown.tsx';
+// Plan 07-04 Task 3 (D-I31-03) — derive the company prefix so the TL;DR body's
+// SafeMarkdown can render in-prose PREFIX-NNN refs as clickable titled chips
+// (instance-agnostic; broad fallback when the pathname has no prefix).
+import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 
 export type TldrStripProps = {
   tldr: TLDR | { body: string; generated_at?: string; generatedAt?: string } | null | undefined;
@@ -39,6 +44,11 @@ function formatStamp(iso: string | undefined): string {
 }
 
 export function TldrStrip({ tldr, status, truncated }: TldrStripProps): React.ReactElement {
+  // Plan 07-04 Task 3 — derive the prefix unconditionally (hook must run before
+  // any early return). Only consumed by the populated path below; the
+  // empty/compiling/paused branches are otherwise byte-unchanged.
+  const { pathname } = useHostLocation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname);
   if (!tldr || !tldr.body) {
     // View-driven rework — opening the Reader kicks off the compile. While it
     // runs, show a live "Compiling…" state (the Reader polls for the result);
@@ -88,9 +98,13 @@ export function TldrStrip({ tldr, status, truncated }: TldrStripProps): React.Re
   return (
     <section className="clarity-tldr-strip" data-clarity-region="tldr">
       {/* 07-02 (D-I3-01) — render the Editor-Agent's markdown as formatted React
-          nodes (was a raw text node showing literal "## BLUF" / "**bold**"). */}
+          nodes (was a raw text node showing literal "## BLUF" / "**bold**").
+          07-04 (D-I31-03) — enable ref-awareness so in-TL;DR PREFIX-NNN refs
+          render as clickable titled chips (the operator's "same behavior in
+          TLDR" ask). The worker-side text rewrite is REMOVED (Task 4) so the
+          chip is the SOLE title source — no double-render. */}
       <div className="clarity-tldr-body">
-        <SafeMarkdown text={tldr.body} />
+        <SafeMarkdown text={tldr.body} linkRefs companyPrefix={companyPrefix} />
       </div>
       {truncated ? (
         <p className="clarity-tldr-truncated-note" data-clarity-tldr-truncated="true">

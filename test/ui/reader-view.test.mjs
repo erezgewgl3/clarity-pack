@@ -77,13 +77,19 @@ test('index.tsx imports all nine reader subcomponents (sketches mockup structure
   }
 });
 
-test('prose-with-ref-chips.tsx exports ProseWithRefChips and renders <RefChip /> from 02-02 primitives (READER-03)', () => {
+test('prose-with-ref-chips.tsx exports ProseWithRefChips and delegates to ref-aware SafeMarkdown (READER-03, 07-04)', () => {
+  // Plan 07-04 (D-I31-03) — ProseWithRefChips is rewritten to delegate to the
+  // ref-aware SafeMarkdown (Task 2) instead of the old manual BEAAA-NNN regex
+  // split. The RefChip is now rendered by SafeMarkdown (for a `ref` span), and
+  // the instance-agnostic ref regex lives ONCE in safe-markdown.ts. READER-03
+  // (chips clickable) is preserved + ENHANCED (chips now show ID — title) and
+  // the markdown in the prose body now renders formatted (no more literal `##`).
   const src = readSrc('prose-with-ref-chips.tsx');
   assert.match(src, /export function ProseWithRefChips/);
-  assert.match(src, /<RefChip\b/);
-  assert.match(src, /from\s+['"]\.\.\/\.\.\/primitives\/ref-chip\.tsx['"]|from\s+['"]\.\.\/\.\.\/primitives\/ref-chip['"]/);
-  // Regex literal driving the split must match BEAAA-NNN pattern
-  assert.match(src, /BEAAA-\\d\+|BEAAA-\\\\d\\\\+/, 'splits prose on BEAAA-NNN regex');
+  assert.match(src, /<SafeMarkdown\b/, 'delegates to SafeMarkdown');
+  assert.match(src, /linkRefs/, 'enables ref-awareness on the SafeMarkdown render');
+  assert.match(src, /companyPrefix/, 'threads the derived companyPrefix');
+  assert.match(src, /extractCompanyPrefixFromPathname/, 'still derives the prefix instance-agnostically');
 });
 
 test('deliverable-preview.tsx exports DeliverablePreview and dispatches on data.kind via usePluginData and renders four real previewers (DIST-04)', () => {

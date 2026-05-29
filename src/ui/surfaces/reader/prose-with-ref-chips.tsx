@@ -33,51 +33,34 @@
 // the narrow regex is more correct. Fallback to the broad pattern when
 // the pathname has no prefix (root URL / standalone surfaces).
 
+// Plan 07-04 Task 3 (D-I31-03) — REWRITTEN to delegate to the ref-aware
+// SafeMarkdown (Task 2). The old manual-regex split rendered text segments as
+// PLAIN text (literal `## BLUF` / `**bold**` / `-` bullets) and refs as a
+// title-less chip — the operator's "rest of the reader looks half rendered"
+// complaint (BEAAA-828, 2026-05-29). Now the prose body renders formatted
+// markdown AND clickable titled chips, identical to the TL;DR strip.
+//
+// The instance-agnostic ref regex (BROAD_REF_PATTERN + escapeRegex) moved to
+// safe-markdown.ts as the SINGLE source-of-truth; the prefix-narrowing happens
+// there. This file keeps the { body } prop shape (so the Reader index.tsx and
+// the chat message-thread.tsx call sites are unchanged), the companyPrefix
+// derivation, the clarity-reader-prose wrapper, and the empty-body guard. The
+// no-innerHTML posture (T-04-18 in chat) is preserved — SafeMarkdown never sets
+// innerHTML.
+
 import * as React from 'react';
 import { useHostLocation } from '@paperclipai/plugin-sdk/ui/hooks';
 
-import { RefChip } from '../../primitives/ref-chip.tsx';
+import { SafeMarkdown } from '../../primitives/safe-markdown.tsx';
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
-
-// Match a 2-8 char uppercase prefix (first char A-Z, rest A-Z|0-9), a
-// hyphen, and one or more digits. Word boundaries on both sides so we
-// don't match inside identifiers or lowercase tokens. Examples that match:
-// BEAAA-141 / COU-2486 / ACME-9 / OPS2-3. Examples that DO NOT match:
-// foo-bar (lowercase), A-1 (single-char prefix), 123-456 (no leading
-// letter). This stays as the fallback when no company prefix is on the URL.
-const BROAD_REF_PATTERN = /\b[A-Z][A-Z0-9]{1,7}-\d+\b/g;
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 export function ProseWithRefChips({ body }: { body: string | null | undefined }): React.ReactElement | null {
   const { pathname } = useHostLocation();
   const companyPrefix = extractCompanyPrefixFromPathname(pathname);
   if (!body) return null;
-  const nodes: React.ReactElement[] = [];
-  let lastIndex = 0;
-  let segmentSeq = 0;
-  // Fresh regex per render so lastIndex state is isolated. Scoped to the
-  // current company's prefix when known.
-  const re = companyPrefix
-    ? new RegExp(`\\b${escapeRegex(companyPrefix)}-\\d+\\b`, 'g')
-    : new RegExp(BROAD_REF_PATTERN.source, 'g');
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(body)) !== null) {
-    if (match.index > lastIndex) {
-      const text = body.slice(lastIndex, match.index);
-      nodes.push(
-        <React.Fragment key={`text-${segmentSeq++}-${match.index}`}>{text}</React.Fragment>,
-      );
-    }
-    nodes.push(<RefChip key={`ref-${segmentSeq++}-${match.index}`} refId={match[0]} />);
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < body.length) {
-    nodes.push(
-      <React.Fragment key={`text-${segmentSeq++}-tail`}>{body.slice(lastIndex)}</React.Fragment>,
-    );
-  }
-  return <div className="clarity-reader-prose">{nodes}</div>;
+  return (
+    <div className="clarity-reader-prose">
+      <SafeMarkdown text={body} linkRefs companyPrefix={companyPrefix} />
+    </div>
+  );
 }

@@ -16,10 +16,15 @@
 // test/ui/chat-react-key-console-capture.test.mjs.
 
 import * as React from 'react';
+import { useHostLocation } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { RefCardData } from '../../../shared/types.ts';
 import { StatePill, type StatePillState } from '../../primitives/state-pill.tsx';
 import { SafeMarkdown } from '../../primitives/safe-markdown.tsx';
+// Plan 07-04 Task 3 (D-I31-03) — the prefix the excerpt's SafeMarkdown uses to
+// chip-ify in-quote PREFIX-NNN refs (derived once in AnchoredToCards, threaded
+// to each RefCard). Instance-agnostic; broad fallback when no prefix.
+import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 
 function statusToPill(status: RefCardData['status']): StatePillState {
   switch (status) {
@@ -37,6 +42,10 @@ function statusToPill(status: RefCardData['status']): StatePillState {
 }
 
 export function AnchoredToCards({ cards }: { cards: RefCardData[] | undefined }): React.ReactElement {
+  // Plan 07-04 Task 3 — derive the company prefix once and thread it to each
+  // RefCard so the excerpt's SafeMarkdown can chip-ify in-quote refs.
+  const { pathname } = useHostLocation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname);
   // DEV-15 (drill 2026-05-14): defensive null-safety. The issue-reader
   // worker handler returns `refCards: undefined` when resolve-refs fails to
   // fetch a referenced issue (e.g. cross-org BEAAA-* placeholders in a test
@@ -52,7 +61,7 @@ export function AnchoredToCards({ cards }: { cards: RefCardData[] | undefined })
       ) : (
         <ul className="clarity-anchored-list">
           {safe.map((c) => (
-            <RefCard key={c.id} card={c} />
+            <RefCard key={c.id} card={c} companyPrefix={companyPrefix} />
           ))}
         </ul>
       )}
@@ -60,7 +69,13 @@ export function AnchoredToCards({ cards }: { cards: RefCardData[] | undefined })
   );
 }
 
-export function RefCard({ card }: { card: RefCardData }): React.ReactElement {
+export function RefCard({
+  card,
+  companyPrefix,
+}: {
+  card: RefCardData;
+  companyPrefix?: string | null;
+}): React.ReactElement {
   return (
     <li className="clarity-ref-card" data-ref-id={card.id}>
       <header className="clarity-ref-card-header">
@@ -76,8 +91,12 @@ export function RefCard({ card }: { card: RefCardData }): React.ReactElement {
       ) : (
         // 07-02 (D-I3-01) — render the upstream issue-body excerpt's markdown as
         // formatted React nodes (was a raw text node showing literal "## BLUF").
+        // 07-04 (D-I31-03) — enable ref-awareness so in-quote PREFIX-NNN refs
+        // become clickable titled chips (consistent with the prose body + TL;DR).
+        // The card header's own id/title (line above) is separate from this
+        // quote body, so there is no double-up.
         <blockquote className="clarity-ref-card-quote">
-          <SafeMarkdown text={card.excerpt} />
+          <SafeMarkdown text={card.excerpt} linkRefs companyPrefix={companyPrefix} />
         </blockquote>
       )}
     </li>

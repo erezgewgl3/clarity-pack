@@ -1,14 +1,23 @@
 // test/ui/prose-with-ref-chips.test.mjs
 //
-// Plan B rc.8 hotfix (2026-05-26 Playwright verification) — REF_PATTERN
-// generalization. The Plan 02-03 implementation hardcoded `/\bBEAAA-\d+\b/g`
-// so refs only resolved for the BEAAA company. On every other company prefix
-// (COU on Countermoves, ACME on a hypothetical install, etc.) every
-// `COU-NNN` mention in chat bodies stayed plain text — directly violating
-// the project's "zero rabbit-holes" core value (PROJECT.md).
+// Plan 07-04 Task 3 (D-I31-03) — ProseWithRefChips is REWRITTEN to delegate to
+// the ref-aware SafeMarkdown (Task 2) instead of its old manual-regex split.
+// The operator reviewed BEAAA-828 (2026-05-29) and reported the main Reader
+// prose body "looks half rendered… still asterisks, and still BEAAA-704 etc.
+// that do not show the title." The old ProseWithRefChips rendered text segments
+// as PLAIN text (literal `## BLUF` / `**bold**`) and refs as a title-less chip.
+// Now the body renders via `<SafeMarkdown text={body} linkRefs companyPrefix=…/>`
+// — formatted markdown AND clickable titled chips, identical to the TL;DR strip.
 //
-// Test is source-grep style: assert the regex matches a generic prefix
-// pattern (2-8 uppercase letters + digits) so refs work for ANY company.
+// The instance-agnostic ref regex now lives ONCE in safe-markdown.ts (asserted
+// in test/ui/safe-markdown.test.mjs). prose-with-ref-chips keeps:
+//   - the `{ body }` prop shape (so the Reader + chat call sites are unchanged),
+//   - the companyPrefix derivation (useHostLocation + extractCompanyPrefixFromPathname),
+//   - the `clarity-reader-prose` wrapper class,
+//   - the `if (!body) return null` guard,
+// and DROPS the manual `re.exec(body)` split loop + the local BROAD_REF_PATTERN.
+//
+// Source-grep idiom (Node 24's strip-types loads .ts but NOT .tsx).
 
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
@@ -23,64 +32,39 @@ const SRC = readFileSync(
   'utf8',
 );
 
-test('prose-with-ref-chips: BROAD_REF_PATTERN fallback matches any uppercase company prefix (used when URL has no prefix)', () => {
-  // 2026-05-27 BEAAA hotfix: the runtime regex is now company-prefix-scoped
-  // (companyPrefix from extractCompanyPrefixFromPathname → /\b<PREFIX>-\d+\b/g).
-  // The BROAD pattern is the FALLBACK when pathname has no prefix (root URL,
-  // standalone surfaces). This test still validates the broad pattern's
-  // generality — it just no longer covers the in-company-router primary path.
-  const match = SRC.match(/const\s+BROAD_REF_PATTERN\s*=\s*(\/[^/]+\/[gimsuy]*)/);
-  assert.ok(match, 'BROAD_REF_PATTERN constant must be defined as the no-prefix fallback');
-  // eslint-disable-next-line no-new-func
-  const re = new Function('return ' + match[1])();
-  assert.ok(re instanceof RegExp, 'BROAD_REF_PATTERN must be a RegExp');
+function code(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
 
-  // Must match a variety of company prefixes when the fallback is in effect.
-  const cases = [
-    { input: 'See BEAAA-141 for details', want: ['BEAAA-141'] },
-    { input: 'Recovery issue COU-2486 is resolving the missing disposition.', want: ['COU-2486'] },
-    { input: 'Filed under ACME-9999 last week.', want: ['ACME-9999'] },
-    { input: 'Two refs: COU-1 and BEAAA-2.', want: ['COU-1', 'BEAAA-2'] },
-    { input: 'Mixed-case foo-bar should not match.', want: [] },
-    { input: 'lowercase abc-123 should not match.', want: [] },
-    { input: 'A-1 too short prefix should not match.', want: [] },
-  ];
-
-  for (const { input, want } of cases) {
-    const found = input.match(new RegExp(re.source, 'g')) ?? [];
-    assert.deepEqual(found, want, `regex match failure for input: ${JSON.stringify(input)}`);
-  }
+test('prose-with-ref-chips (07-04): delegates to ref-aware SafeMarkdown (linkRefs + companyPrefix)', () => {
+  const c = code(SRC);
+  assert.match(c, /import\s*\{[^}]*\bSafeMarkdown\b[^}]*\}\s*from/, 'imports SafeMarkdown');
+  assert.match(c, /<SafeMarkdown\b/, 'renders <SafeMarkdown />');
+  assert.match(c, /linkRefs/, 'passes linkRefs to enable ref-awareness');
+  assert.match(c, /companyPrefix=\{companyPrefix\}/, 'threads the derived companyPrefix into SafeMarkdown');
 });
 
-test('prose-with-ref-chips: BROAD_REF_PATTERN is NOT hardcoded to BEAAA', () => {
-  // The old broken pattern was /\bBEAAA-\d+\b/g — the fallback broad
-  // pattern must remain BEAAA-agnostic.
-  assert.doesNotMatch(
-    SRC,
-    /BROAD_REF_PATTERN\s*=\s*\/\\bBEAAA-/,
-    'BROAD_REF_PATTERN must not be hardcoded to BEAAA — must generalize across company prefixes',
-  );
+test('prose-with-ref-chips (07-04): derives companyPrefix from the pathname (instance-agnostic intent preserved)', () => {
+  const c = code(SRC);
+  assert.match(c, /useHostLocation/, 'reads the current pathname via useHostLocation');
+  assert.match(c, /extractCompanyPrefixFromPathname/, 'derives the prefix via extractCompanyPrefixFromPathname');
 });
 
-test('prose-with-ref-chips (2026-05-27 BEAAA hotfix): runtime regex is company-prefix-scoped to prevent over-match on YAML-shaped body content', () => {
-  // BEAAA-828's body contained YAML tokens like DAY-3, GATE-2, PAGE-1, BY-1,
-  // DRAFT-1 — all matched by the broad pattern, all 404'd on fetch, the
-  // Reader threw and rendered "Clarity Pack: failed to render". The fix
-  // narrows the regex to the current company's prefix when the URL exposes
-  // one (always the case inside /:companyPrefix/issues/:id).
-  assert.match(
-    SRC,
-    /useHostLocation/,
-    'must import useHostLocation to learn the current pathname',
-  );
-  assert.match(
-    SRC,
-    /extractCompanyPrefixFromPathname/,
-    'must call extractCompanyPrefixFromPathname to scope the regex',
-  );
-  assert.match(
-    SRC,
-    /companyPrefix\s*\n?\s*\?\s*new RegExp/,
-    'must build a prefix-scoped regex when companyPrefix is known',
-  );
+test('prose-with-ref-chips (07-04): keeps the clarity-reader-prose wrapper + the empty-body guard + the { body } prop shape', () => {
+  const c = code(SRC);
+  assert.match(c, /clarity-reader-prose/, 'keeps the clarity-reader-prose wrapper class');
+  assert.match(c, /if\s*\(!body\)\s*return null/, 'keeps the empty-body guard');
+  assert.match(c, /ProseWithRefChips\(\{\s*body\s*\}/, 'prop shape stays { body } so call sites are unchanged');
+});
+
+test('prose-with-ref-chips (07-04): the manual regex split loop is GONE (delegation, not hand-rolled split)', () => {
+  const c = code(SRC);
+  assert.doesNotMatch(c, /re\.exec\(body\)/, 'no manual re.exec(body) split loop');
+  assert.doesNotMatch(c, /while\s*\(\s*\(match\s*=\s*re\.exec/, 'no manual match-loop');
+  assert.doesNotMatch(c, /const\s+BROAD_REF_PATTERN/, 'the local BROAD_REF_PATTERN moved to safe-markdown.ts');
+});
+
+test('prose-with-ref-chips (07-04): no dangerouslySetInnerHTML (SafeMarkdown preserves the no-innerHTML posture)', () => {
+  const c = code(SRC);
+  assert.doesNotMatch(c, /dangerouslySetInnerHTML/);
 });
