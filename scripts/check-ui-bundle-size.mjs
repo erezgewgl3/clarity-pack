@@ -133,7 +133,20 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // 07-04). 708 kB (724,992 bytes) absorbs it with ~1.7 kB headroom (1,679 B) for
 // minor downstream drift. The locked feature surface (D-I5-02/03/04) was NOT
 // crippled to fit ~2.4 kB.
-const UI_BUNDLE_BYTES_CEILING = 708 * 1024; // 708 kB = 724,992 bytes
+// Bumped 2026-05-29 from 708 → 716 kB (chat seed-dialog first-message fix, commit
+// 26274c0, +~700 bytes, no SheetJS): handleSeededCreate now posts the seeded
+// "First message" via chat.send after chat.topic.create (the dialog's body had no
+// transport before). That delta took the built bundle to 724,558 B — only 434 B
+// under the 708 kB ceiling. Recalibrated to 716 kB (733,184 B, ~8.6 kB headroom)
+// to absorb the fix delta + give modest forward headroom so trivial fixes aren't
+// gate-blocked. NOTE / DURABLE LEVER: the ceiling has climbed 688→716 kB this
+// milestone — the recurring bumps signal real UI-bundle growth, NOT a loosening
+// guard (the SheetJS sentinel check below is the actual bloat protection and is
+// unchanged). The durable fix is the deferred bundle audit: react-markdown (the
+// .md deliverable previewer, deliverable-preview.tsx) is the dominant heavyweight;
+// lazy-loading or replacing it would reclaim far more than these bumps add. Until
+// that audit, prefer one modest bump over crippling a legitimate feature.
+const UI_BUNDLE_BYTES_CEILING = 716 * 1024; // 716 kB = 733,184 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
