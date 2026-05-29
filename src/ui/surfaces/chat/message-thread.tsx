@@ -837,6 +837,12 @@ function PromoteActions({
     // inline fire-and-forget chat.promote — same behaviour as Plan 04.1-06.
     setBusy(true);
     setFeedback(null);
+    // Plan 250529 Task 1 — same never-brick guarantee as onPin: an 8s safety
+    // timeout resets `busy` so a slow/hung chat.promote ACK (the same 45s-under-
+    // load pathology) can never leave the Promote button stuck on cursor:not-
+    // allowed. The inline path still awaits for the feedback span; the timeout
+    // only protects against the ACK never returning.
+    const safety = setTimeout(() => setBusy(false), 8000);
     try {
       const result = await promote({
         commentId,
@@ -862,6 +868,7 @@ function PromoteActions({
     } catch {
       setFeedback({ kind: 'error', text: 'Could not promote (CREATE_FAILED)' });
     } finally {
+      clearTimeout(safety);
       setBusy(false);
     }
   }, [
@@ -878,6 +885,7 @@ function PromoteActions({
   ]);
 
   const onPin = React.useCallback(async () => {
+    if (busy) return; // double-click guard (button is also disabled={busy})
     setBusy(true);
     setFeedback(null);
     // Plan 05-06 Task 1 (D-11) — the new toggle-target boolean for this click.
@@ -885,38 +893,49 @@ function PromoteActions({
     // pinned"); `false` means pinned → unpinned ("Message unpinned"). Mirrors
     // chat.topic.archive's silent-toggle shape from Plan 04.1-05.
     const nextPinned = !(pinned || optimisticPinned);
-    try {
-      const result = await pin({
-        commentId,
-        topicIssueId,
-        companyId,
-        userId,
-        pinned: nextPinned,
+    // Plan 250529 Task 1 — OPTIMISTIC + NEVER-BRICK. Flip the marker and toast
+    // IMMEDIATELY (don't wait on the ACK), then fire pin() without blocking
+    // `busy` for its full duration. 2026-05-29: under box load the chat.pin ACK
+    // was measured at 45s+ with the write still persisting server-side, which
+    // bricked the disabled button. A confirmed { error } reverts the marker; a
+    // timeout/hang is NOT a confirmed failure — leave the marker, the next
+    // onRefresh/poll reconciles. `busy` resets via BOTH .finally() AND an 8s
+    // safety timeout so a slow/hung ACK can never leave the button stuck.
+    setOptimisticPinned(nextPinned);
+    showToast({
+      message: nextPinned ? 'Message pinned' : 'Message unpinned',
+    });
+    const safety = setTimeout(() => setBusy(false), 8000);
+    pin({
+      commentId,
+      topicIssueId,
+      companyId,
+      userId,
+      pinned: nextPinned,
+    })
+      .then((result) => {
+        const err = resultError(result);
+        if (err) {
+          // Confirmed failure — revert the optimistic marker and surface the
+          // error LOUD on the bubble (a transient toast is not a safe failure
+          // channel; the operator might miss it).
+          setOptimisticPinned(!nextPinned);
+          setFeedback({ kind: 'error', text: `Could not pin (${err})` });
+        } else {
+          // Persisted `⚑ Pinned` marker re-renders after onRefresh re-fetches.
+          onRefresh?.();
+        }
+      })
+      .catch(() => {
+        /* timeout/hang ≠ confirmed failure; the write usually lands — leave the
+           optimistic marker, poll/onRefresh reconciles. */
+      })
+      .finally(() => {
+        clearTimeout(safety);
+        setBusy(false);
       });
-      const err = resultError(result);
-      if (err) {
-        // Errors stay LOUD on the bubble. A transient toast that auto-dismisses
-        // is not a safe channel for failure (operator might miss it). D-11
-        // silent-toggle is success-only.
-        setFeedback({ kind: 'error', text: `Could not pin (${err})` });
-      } else {
-        // Plan 05-06 Task 1 (D-11) — D-11 silent-toggle: success path NO
-        // longer mounts the `⚑ Pinned` inline span. The clarity-pack toast
-        // is the sole operator confirmation. The persisted `⚑ Pinned` marker
-        // on the bubble (rendered by the `msg.pinned` branch in PersistedMessage)
-        // appears after onRefresh re-fetches the thread.
-        setOptimisticPinned(true);
-        showToast({
-          message: nextPinned ? 'Message pinned' : 'Message unpinned',
-        });
-        onRefresh?.();
-      }
-    } catch {
-      setFeedback({ kind: 'error', text: 'Could not pin (PIN_FAILED)' });
-    } finally {
-      setBusy(false);
-    }
   }, [
+    busy,
     pin,
     commentId,
     topicIssueId,
