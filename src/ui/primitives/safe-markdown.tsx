@@ -28,6 +28,11 @@ import {
   type InlineSpan,
   type MarkdownBlock,
 } from './safe-markdown.ts';
+// Plan 07-04 Task 2 (D-I31-02) — a `ref` span renders as a clickable titled
+// chip (RefChip), so an in-prose PREFIX-NNN token resolves to `ID — title`
+// instead of plain text. RefChip carries no href/HTML of its own beyond the
+// nav.linkProps anchor it already used (no new XSS surface).
+import { RefChip } from './ref-chip.tsx';
 
 function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[] {
   return spans.map((span, i) => {
@@ -60,6 +65,11 @@ function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[]
           </a>
         );
       }
+      case 'ref':
+        // Plan 07-04 (D-I31-02) — render the validated PREFIX-NNN token as a
+        // clickable titled chip. RefChip resolves {id,title,status} via the
+        // 'resolve-refs' handler and renders `ID — title` (Task 1).
+        return <RefChip key={key} refId={span.refId} />;
       case 'text':
       default:
         return <React.Fragment key={key}>{span.text}</React.Fragment>;
@@ -101,9 +111,24 @@ function renderBlock(block: MarkdownBlock, idx: number): React.ReactElement {
 /**
  * Render `text` (markdown) as safe React nodes. Returns null for empty / nullish
  * input. NEVER uses React's raw-innerHTML escape hatch (no-raw-HTML invariant).
+ *
+ * Plan 07-04 Task 2 (D-I31-02) — opt-in ref-awareness: when `linkRefs` is true,
+ * `PREFIX-NNN` tokens render as clickable titled <RefChip> nodes (the prefix is
+ * derived by the caller via extractCompanyPrefixFromPathname; a null/empty
+ * `companyPrefix` falls back to the broad pattern). When `linkRefs` is
+ * falsy/absent → no `ref` spans are produced, so existing callers that do not
+ * pass it are byte-unchanged (back-compat).
  */
-export function SafeMarkdown({ text }: { text: string | null | undefined }): React.ReactElement | null {
-  const blocks = parseMarkdownBlocks(text);
+export function SafeMarkdown({
+  text,
+  linkRefs,
+  companyPrefix,
+}: {
+  text: string | null | undefined;
+  linkRefs?: boolean;
+  companyPrefix?: string | null;
+}): React.ReactElement | null {
+  const blocks = parseMarkdownBlocks(text, linkRefs ? { prefix: companyPrefix ?? null } : undefined);
   if (blocks.length === 0) return null;
   return <div className="clarity-md">{blocks.map((b, i) => renderBlock(b, i))}</div>;
 }

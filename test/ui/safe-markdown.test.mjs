@@ -214,3 +214,125 @@ test('safe-markdown.tsx applies the href allowlist (sanitizeHref) — no unvette
   // lives in the parser; the .tsx must not re-introduce a raw href bypass).
   assert.match(TSX_SRC, /sanitizeHref|href === null|href == null|\.href\b/);
 });
+
+// ---------------------------------------------------------------------------
+// Plan 07-04 Task 2 (D-I31-02) — opt-in ref-awareness (parseMarkdownBlocks /
+// parseInline gain an optional refOpts param; a PREFIX-NNN token becomes a
+// `ref` span). Instance-agnostic; back-compat (no opt-in = no chips); the XSS
+// guards still hold with refOpts on.
+// ---------------------------------------------------------------------------
+
+/** Collect every `ref` span across all blocks. */
+function refSpans(blocks) {
+  return allSpans(blocks).filter((s) => s.type === 'ref');
+}
+
+test('ref-aware (D-I31-02): a PREFIX-NNN token becomes a `ref` span when refOpts.prefix is given; surrounding text survives', () => {
+  const blocks = parseMarkdownBlocks('Blocked by BEAAA-141 until review', { prefix: 'BEAAA' });
+  const refs = refSpans(blocks);
+  assert.equal(refs.length, 1, 'exactly one ref span');
+  assert.equal(refs[0].refId, 'BEAAA-141', 'refId is the matched token');
+  // surrounding text survives as text spans
+  const text = allSpans(blocks)
+    .filter((s) => s.type === 'text')
+    .map((s) => s.text)
+    .join('');
+  assert.equal(text.includes('Blocked by'), true, 'leading text survives');
+  assert.equal(text.includes('until review'), true, 'trailing text survives');
+});
+
+test('ref-aware (D-I31-02): WITHOUT refOpts the SAME input yields NO `ref` span (back-compat)', () => {
+  const blocks = parseMarkdownBlocks('Blocked by BEAAA-141 until review');
+  assert.equal(refSpans(blocks).length, 0, 'no ref span without the opt-in');
+  // and the token survives as plain text
+  const text = allSpans(blocks)
+    .map((s) => s.text ?? s.label ?? '')
+    .join('');
+  assert.equal(text.includes('BEAAA-141'), true, 'token stays plain text');
+});
+
+test('ref-aware (D-I31-02): instance-agnostic — prefix:"COU" chip-ifies COU-12 and NOT BEAAA-807', () => {
+  const blocks = parseMarkdownBlocks('see COU-12 and BEAAA-807', { prefix: 'COU' });
+  const refs = refSpans(blocks);
+  assert.deepEqual(
+    refs.map((r) => r.refId),
+    ['COU-12'],
+    'only the COU token becomes a ref; BEAAA-807 stays text',
+  );
+  const text = allSpans(blocks)
+    .filter((s) => s.type === 'text')
+    .map((s) => s.text)
+    .join('');
+  assert.equal(text.includes('BEAAA-807'), true, 'the off-prefix token stays plain text');
+});
+
+test('ref-aware (D-I31-02): broad fallback — prefix:null (or {}) chip-ifies both COU-12 and BEAAA-807', () => {
+  const a = refSpans(parseMarkdownBlocks('see COU-12 and BEAAA-807', { prefix: null }));
+  assert.deepEqual(a.map((r) => r.refId).sort(), ['BEAAA-807', 'COU-12']);
+  const b = refSpans(parseMarkdownBlocks('see COU-12 and BEAAA-807', {}));
+  assert.deepEqual(b.map((r) => r.refId).sort(), ['BEAAA-807', 'COU-12']);
+});
+
+test('ref-aware (D-I31-02): markdown still works alongside refs (heading + list with a ref span)', () => {
+  const blocks = parseMarkdownBlocks('## Plan\n\n- do BEAAA-9 thing', { prefix: 'BEAAA' });
+  assert.equal(blocks[0].type, 'heading', 'first block is a heading');
+  const list = blocks.find((b) => b.type === 'list');
+  assert.ok(list, 'a list block exists');
+  const itemSpans = list.items.flatMap((it) => it.spans);
+  const ref = itemSpans.find((s) => s.type === 'ref');
+  assert.ok(ref, 'the list item contains a ref span');
+  assert.equal(ref.refId, 'BEAAA-9');
+});
+
+test('ref-aware (D-I31-02): a ref INSIDE a link label stays a single link span (the link wins — no split)', () => {
+  const blocks = parseMarkdownBlocks('[BEAAA-1 details](https://e.com)', { prefix: 'BEAAA' });
+  const links = allSpans(blocks).filter((s) => s.type === 'link');
+  assert.equal(links.length, 1, 'one link span');
+  assert.equal(links[0].label, 'BEAAA-1 details', 'the ref token stays inside the link label');
+  assert.equal(refSpans(blocks).length, 0, 'no ref span carved out of the link label');
+});
+
+test('ref-aware (D-I31-02): XSS STILL HOLDS with refOpts on — <script> is inert text, no js: href', () => {
+  // <script> tag → inert text even with the opt-in enabled
+  const sb = parseMarkdownBlocks('<script>BEAAA-1</script>', { prefix: 'BEAAA' });
+  for (const s of allSpans(sb)) {
+    assert.notEqual(s.type, 'html');
+    assert.notEqual(s.type, 'script');
+  }
+  // the literal <script> survives as text content (React escapes it on render)
+  const text = allSpans(sb)
+    .map((s) => s.text ?? s.label ?? s.refId ?? '')
+    .join('');
+  assert.equal(text.includes('<script>'), true, 'script tag preserved as inert text');
+
+  // a javascript: href is still rejected with refOpts on
+  const jb = parseMarkdownBlocks('click [x](javascript:alert(1))', { prefix: 'BEAAA' });
+  assert.equal(
+    allSpans(jb).some((s) => s.href === 'javascript:alert(1)'),
+    false,
+    'no span carries a javascript: href even with refOpts on',
+  );
+});
+
+test('ref-aware (D-I31-02): sanitizeHref source is UNCHANGED (the allowlist is load-bearing)', () => {
+  // sanitizeHref still allows http/https/mailto/relative and rejects the
+  // dangerous schemes — refOpts must not touch the href allowlist.
+  assert.equal(sanitizeHref('https://e.com'), 'https://e.com');
+  assert.equal(sanitizeHref('javascript:alert(1)'), null);
+  assert.equal(sanitizeHref('data:text/html,x'), null);
+});
+
+test('safe-markdown.tsx renders RefChip for a `ref` span and STILL has no dangerouslySetInnerHTML', () => {
+  assert.match(TSX_SRC, /RefChip/, 'the component imports + renders RefChip for a ref span');
+  assert.match(TSX_SRC, /case 'ref'|case "ref"/, "renderInline handles the 'ref' span case");
+  assert.equal(
+    /dangerouslySetInnerHTML/.test(TSX_SRC),
+    false,
+    'SafeMarkdown must NEVER use dangerouslySetInnerHTML',
+  );
+});
+
+test('safe-markdown.tsx SafeMarkdown props widen to accept linkRefs + companyPrefix', () => {
+  assert.match(TSX_SRC, /linkRefs/, 'SafeMarkdown accepts a linkRefs prop');
+  assert.match(TSX_SRC, /companyPrefix/, 'SafeMarkdown accepts a companyPrefix prop');
+});
