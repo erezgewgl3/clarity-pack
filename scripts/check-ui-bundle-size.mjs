@@ -116,7 +116,24 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // 05-04 / 05-11 / 07-02 / 07-04). 704 kB (720,896 bytes) absorbs it with
 // ~1.4 kB headroom for minor downstream drift. The locked banner feature
 // surface (D-I4-01..04) was NOT crippled to fit ~1.3 kB.
-const UI_BUNDLE_BYTES_CEILING = 704 * 1024; // 704 kB = 720,896 bytes
+// Bumped 2026-05-29 from 704 → 708 kB (Plan 07-05: bulletin lineage gloss + 2
+// affordances + count-aware heading, +3,811 bytes, no SheetJS): Phase 7 ITEM 5
+// adds the ONLY new UI-bundle code in this plan — the LineageFooter changes
+// (src/ui/surfaces/bulletin/lineage-footer.tsx): the one-line gloss element (or
+// quiet pending note), the two per-thread affordances (open issue + open chat
+// via the reused ROOM-09 buildChatDeepLink carrier), the count-aware heading,
+// and the now-required hook wiring (useHostNavigation/useHostLocation +
+// extractCompanyPrefixFromPathname). The filter + gloss step are worker-side
+// (zero UI cost) and the LineageThread type fields are type-only (zero runtime).
+// It overflowed the ~1.4 kB 07-03 headroom: the built bundle went 719,502 →
+// 723,313 bytes (+3,811 B over the 07-03 build; +2,417 B over the prior 704 kB
+// ceiling). Verified zero SheetJS sentinels (XLSX/SheetJS/!ref all 0 in the UI
+// bundle), so the delta is the legitimate LineageFooter code — recalibrated per
+// the empirical-recalibration precedent (Plan 05-04 / 05-11 / 07-02 / 07-03 /
+// 07-04). 708 kB (724,992 bytes) absorbs it with ~1.7 kB headroom (1,679 B) for
+// minor downstream drift. The locked feature surface (D-I5-02/03/04) was NOT
+// crippled to fit ~2.4 kB.
+const UI_BUNDLE_BYTES_CEILING = 708 * 1024; // 708 kB = 724,992 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
