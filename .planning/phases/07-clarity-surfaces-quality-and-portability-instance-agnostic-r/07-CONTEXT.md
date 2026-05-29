@@ -162,5 +162,62 @@ Builds directly on the 07-01 SDK ref-resolver (`resolveRefsViaSdk` + `prefixFrom
 
 ---
 
+# ITEM 4 — Situation Room org-level blocked backlog
+
+**Discussed:** 2026-05-29 (fast discuss; items 1+2 and item 3 CLOSED & VERIFIED LIVE first)
+**Status:** Ready for planning (next plan — 07-03)
+
+<domain>
+## Phase Boundary (item 4)
+
+The Situation Room reports "No blockers" on every agent card while ~24 issues sit `status=blocked` — the opposite of the plugin's core promise ("every blocker chain flattened to a single human action"). Root cause: `situation-snapshot.ts buildEmployeeRow` walks blockers PER AGENT from `current_focus_issue_id`, gated `if (startId)`; every agent is idle/Standby (no focus) → empty chain → "No blockers". FIX: add an ORG-LEVEL blocked-issue backlog — walk `status=blocked` issues directly, flatten each to its single human action via the EXISTING blocker-chain flattener, surface them clickable. Compute in the situation DATA HANDLER (valid HTTP-request scope), NOT the scope-dead recompute-situation job. OUTPUT/INSIGHT only — no new schema.
+</domain>
+
+<decisions>
+## Implementation Decisions (item 4 — LOCKED via fast discuss 2026-05-29)
+
+### Placement (D-I4-01)
+- A **top-of-room banner** ("N blocked · M need you" style summary) that **expands to a full panel** with the backlog list. The existing agent grid stays as-is (the misleading per-agent "No blockers" is left untouched for this item — the banner is the org-truth surface).
+
+### Row content (D-I4-02)
+- Each blocked-issue row shows: **issue title + the single flattened human action + owner (display NAME, never a UUID) + age** (how long it has been blocked).
+
+### Click target (D-I4-03)
+- **Two affordances per row:** (a) open the issue (`/<prefix>/issues/<identifier>`), and (b) **"open chat with <owner>"** — REUSE the existing Situation Room engagement-entry / Open-chat pattern + the chat deep-link carrier (ROOM-09 lineage; URL_HASH `{"employee":"<uuid>"}` decode).
+
+### Scope + ordering (D-I4-04)
+- ALL company-wide `status=blocked` issues, **ranked HUMAN_ACTION_ON first** (reuse the flattener's `pickTopChains` ranking — HUMAN_ACTION_ON outranks SELF_RESOLVING/EXTERNAL/CYCLE), **capped at ~12–15** with a "N total" count + an overflow indicator. Keeps the panel scannable.
+
+### Compute location + reuse (D-I4-05)
+- Compute in the **situation DATA HANDLER** (valid scope), NOT the scope-dead recompute-situation job (the job's `companies.list`/`state.*` fail every tick — PR #6547). Walk `status=blocked` directly (`ctx.issues.list({ companyId, status: 'blocked' })` or list+filter). Flatten each via the EXISTING `src/shared/blocker-chain.ts` (PRIM-03/04/05 deterministic DFS; `pickTopChains` ranks HUMAN_ACTION_ON first) — do NOT re-implement flattening. Resolve owner→display-name via the D-09 `ctx.agents.get` pattern (NO_UUID_LEAK).
+
+### Claude's Discretion
+- Exact banner copy + collapse/expand interaction; the precise cap number (12–15); age formatting ("blocked 3d" vs since-timestamp); whether the banner auto-expands when M (need-you count) > 0.
+
+### Constraints
+- Stay version **1.0.0**; additive-only; **NO migration** (the backlog is COMPUTED, not stored — no schema); **NO new runtime deps**; **TDD-first**; instance-agnostic (no BEAAA hardcoding). New requirement id likely **ROOM-12** (ROOM-09/10/11 are taken — Phase 6.1).
+</decisions>
+
+<canonical_refs>
+## Canonical References (item 4)
+
+- `src/worker/handlers/` situation data handler + `src/worker/.../situation-snapshot.ts` (`buildEmployeeRow` — the current per-agent `current_focus_issue_id`-gated walk; the new org-walk lives in the DATA HANDLER).
+- `src/shared/blocker-chain.ts` — the deterministic flattener + `pickTopChains` (PRIM-03/04/05) to REUSE for each blocked issue.
+- Situation Room UI (the ROOM-09 engagement-entry / "Open chat with <Role>" pattern + the chat deep-link carrier `parseChatDeepLink` / URL_HASH) — REUSE for the per-row "chat with owner" affordance.
+- `src/worker/handlers/resolve-refs.ts` — the D-09 `ownerName` via `ctx.agents.get` NO_UUID_LEAK pattern to REUSE for owner display names.
+- MemPalace `clarity_pack/decisions` drawer `drawer_clarity_pack_decisions_af74a33adb4d28b47ae8894e` finding #4 (the original diagnosis) + `drawer_clarity_pack_decisions_c261097e92ac88e11f361376` (item 3 closure + the 2-connection deploy technique).
+- `.planning/DEPLOY-RUNBOOK.md` Path A (deploy) — minimize SSH connections (rm+cat-over-stdin upload + one install here-string).
+</canonical_refs>
+
+<deferred>
+## Deferred Ideas (item 4)
+
+- Fixing the per-agent "No blockers" walk itself (the banner/panel is the org-truth surface; the per-agent text is left for a possible later polish).
+- The scope-dead recompute-situation JOB — NOT revived here (we compute in the handler instead; the job stays a best-effort no-op).
+- **Item 5** (bulletin lineage) + **Plan 05-10** (npm publish) — separately gated.
+</deferred>
+
+---
+
 *Phase: 07-clarity-surfaces-quality-and-portability*
-*Context gathered: 2026-05-28 (items 1+2) + 2026-05-29 (item 3)*
+*Context gathered: 2026-05-28 (items 1+2) + 2026-05-29 (item 3 + item 4)*
