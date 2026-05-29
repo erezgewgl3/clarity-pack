@@ -89,7 +89,19 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // the delta is the legitimate renderer code — recalibrated per the empirical-
 // recalibration precedent (Plan 05-04 / 05-11). 694 kB (710,656 bytes) absorbs
 // it with ~1.3 kB headroom for minor downstream drift.
-const UI_BUNDLE_BYTES_CEILING = 694 * 1024; // 694 kB = 710,656 bytes
+// Bumped 2026-05-29 from 694 → 696 kB (Plan 07-04: ref-aware SafeMarkdown +
+// RefChip title, +2,046 bytes, no SheetJS): D-I31-01..03 add a `ref` InlineSpan +
+// `case 'ref'` in SafeMarkdown, the RefChip `ID — title` label/badge render, the
+// RefChip import into safe-markdown.tsx, and companyPrefix threading in
+// tldr-strip/ref-card (prose-with-ref-chips SHRANK to a one-line delegation, but
+// the net is +2,046 B). The worker-side text-rewrite removal is worker-side (zero
+// UI cost). It overflowed the ~1,273 B 07-02 headroom: the built bundle went
+// 709,383 → 711,429 bytes (+2,046 B over the 07-02 build; +773 B over the prior
+// ceiling). Verified zero SheetJS sentinels (XLSX/SheetJS/!ref all 0), so the
+// delta is the legitimate ref-aware renderer code — recalibrated per the
+// empirical-recalibration precedent (Plan 05-04 / 05-11 / 07-02). 696 kB
+// (712,704 bytes) absorbs it with ~1.2 kB headroom for minor downstream drift.
+const UI_BUNDLE_BYTES_CEILING = 696 * 1024; // 696 kB = 712,704 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
