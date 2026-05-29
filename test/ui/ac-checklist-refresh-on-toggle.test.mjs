@@ -114,10 +114,16 @@ test('260524-s2y C — no unconditional onMutated() outside the .then(...) block
 
 test('260524-s2y D — index.tsx destructures refresh from BOTH usePluginData calls', () => {
   const src = stripped(READER_INDEX);
+  // `loading` was intentionally DROPPED from this destructure by the 2026-05-29
+  // scroll-stability fix: gating the render on `loading` unmounted the populated
+  // Reader on every TL;DR poll (refresh() sets loading=true + data=null per the
+  // SDK contract), collapsing the page and resetting scroll. `refresh` is still
+  // destructured (the poll + the AC-toggle refresh both need it); `data` is
+  // aliased to `rawData` and run through resolveReaderData().
   assert.match(
     src,
-    /\{\s*data\s*,\s*loading\s*,\s*refresh\s*\}\s*=\s*usePluginData[^(]*\(\s*['"]issue\.reader['"]/,
-    'expected `const { data, loading, refresh } = usePluginData<...>(\'issue.reader\', ...)`',
+    /\{\s*data\s*:\s*rawData\s*,\s*refresh\s*\}\s*=\s*usePluginData[^(]*\(\s*['"]issue\.reader['"]/,
+    'expected `const { data: rawData, refresh } = usePluginData<...>(\'issue.reader\', ...)`',
   );
   assert.match(
     src,

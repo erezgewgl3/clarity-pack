@@ -80,6 +80,10 @@ import { AgentPauseBanner } from '../../primitives/agent-pause-banner.tsx';
 // a Clarity-side throw and rendering "Clarity Pack: failed to render" with
 // EVERY section blanked. Per-section boundaries close that wide blast radius.
 import { SectionErrorBoundary } from '../../primitives/error-boundary.tsx';
+// Scroll-stability fix (2026-05-29) — pure selector that keeps the last-good
+// payload mounted across a background TL;DR poll so scroll isn't reset. See
+// reader-render-state.ts for the full root-cause writeup.
+import { resolveReaderData } from './reader-render-state.ts';
 import type { RefCardData, TLDR } from '../../../shared/types.ts';
 
 // View-driven rework — while a TL;DR is compiling, poll issue.reader this often,
@@ -266,7 +270,7 @@ function ReaderViewReady({
   // manual AC toggle because the auto-status caption derives from the same
   // row state — refreshing only `issue.reader` would leave the auto-status
   // caption stale until a manual nav-away.
-  const { data, loading, refresh } = usePluginData<ReaderViewData | { error: string }>('issue.reader', {
+  const { data: rawData, refresh } = usePluginData<ReaderViewData | { error: string }>('issue.reader', {
     issueId: entityId,
     companyId,
     userId,
@@ -288,12 +292,30 @@ function ReaderViewReady({
       ? acAutoData.detections
       : null;
 
+  // Scroll-stability fix (2026-05-29) — usePluginData NULLS `data` + sets
+  // loading=true for the in-flight window of EVERY refresh() (SDK
+  // PluginDataResult contract). The TL;DR compile poll below calls refresh()
+  // every few seconds, so without this the whole populated Reader unmounted to
+  // the loading placeholder each tick — collapsing the page and snapping the
+  // operator's scroll back to the top. Cache the last good payload (keyed to
+  // THIS issue so a navigation never shows stale content) and keep rendering it
+  // across a background refresh. See reader-render-state.ts for the full writeup.
+  const cacheKey = `${companyId}:${entityId}`;
+  const lastGoodRef = React.useRef<{ key: string; data: ReaderViewData } | null>(null);
+  if (rawData && !('error' in rawData)) {
+    lastGoodRef.current = { key: cacheKey, data: rawData as ReaderViewData };
+  }
+  const cachedLastGood =
+    lastGoodRef.current && lastGoodRef.current.key === cacheKey ? lastGoodRef.current.data : null;
+  const data = resolveReaderData<ReaderViewData>(rawData, cachedLastGood);
+
   // View-driven rework (2026-05-28) — while the TL;DR is compiling (the Reader
   // open kicked off the agent compile in issue.reader's valid scope), poll
   // issue.reader so the fresh TL;DR appears without a manual reload. Cache hits
   // report 'cached' and never enter this loop, so there is no recompile churn.
-  const tldrStatus =
-    data && !('error' in data) ? (data as ReaderViewData).tldrStatus : undefined;
+  // The cadence is driven by the EFFECTIVE payload's status so a background
+  // refresh window (rawData momentarily null) doesn't thrash the interval.
+  const tldrStatus = data?.tldrStatus;
   const refreshRef = React.useRef(refresh);
   refreshRef.current = refresh;
   React.useEffect(() => {
@@ -309,9 +331,11 @@ function ReaderViewReady({
     return () => clearInterval(id);
   }, [tldrStatus]);
 
-  if (loading || !data || 'error' in data) {
-    // Loading state OR opt-in-guard short-circuited (shouldn't happen here
-    // because we already gated on optedIn upstream AND userId is real).
+  if (!data) {
+    // INITIAL load only (no fresh payload AND no cached one yet), or an
+    // opt-in-guard short-circuit with no prior good payload. A BACKGROUND
+    // refresh never lands here — resolveReaderData keeps the last-good payload
+    // mounted, so the TL;DR poll no longer collapses the page or resets scroll.
     // Plan 04.2-01 — ContinueInChatButton is NOT rendered here: it mounts
     // only in the populated render below, so it never fires chat.openForIssue
     // before issue data + companyId + userId have all resolved (Task 4
