@@ -102,6 +102,20 @@ type ArchivedTopicsResult =
   | { error: string }
   | null;
 
+/** Client-generated message uuid for the chat.send idempotency key — mirrors
+ *  composer.tsx newMessageUuid (the seeded New-Topic dialog posts its first
+ *  message via chat.send, so it needs the same idempotency contract). */
+function newSeedMessageUuid(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // fall through
+  }
+  return `m-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function ChatPage(_props?: PluginPageProps): React.ReactElement {
   // OPTIN — gate BEFORE resolution.
   const { optedIn, loading: optInLoading } = useOptIn();
@@ -265,6 +279,12 @@ function ChatPageBody({
 
   const createTopic = usePluginAction('chat.topic.create');
   const archive = usePluginAction('chat.topic.archive');
+  // Bugfix 2026-05-29 — the seeded New-Topic dialog collects a "First message"
+  // (seedDialog.body), but chat.topic.create has NO first-message param, so the
+  // seed message was dropped and the topic opened empty ("No messages yet").
+  // handleSeededCreate now posts that body via chat.send (the composer's path)
+  // to the freshly-created topic. This action is the transport for that.
+  const sendFirstMessage = usePluginAction('chat.send');
   const [creating, setCreating] = React.useState(false);
 
   const handleNewTopic = React.useCallback(async () => {
@@ -518,6 +538,9 @@ function ChatPageBody({
     if (!employee || !seedDialog) return;
     const title = seedDialog.title.trim();
     if (!title) return;
+    // The dialog's "First message" field. chat.topic.create has no body param,
+    // so this is posted separately via chat.send after the topic is created.
+    const seedFirstMessage = seedDialog.body.trim();
     setCreating(true);
     setCreateError(null);
     try {
@@ -546,6 +569,23 @@ function ChatPageBody({
           issueId: string;
           parentIssueId: string;
         };
+        // Persist the seeded "First message" BEFORE switching to the new topic,
+        // so the thread's initial chat.messages fetch shows it. chat.topic.create
+        // does not accept a body — post it via chat.send (the composer's path).
+        // Best-effort: a failed send leaves the topic created (operator can retype).
+        if (seedFirstMessage) {
+          try {
+            await sendFirstMessage({
+              topicIssueId: created.issueId,
+              body: seedFirstMessage,
+              messageUuid: newSeedMessageUuid(),
+              companyId,
+              userId,
+            });
+          } catch {
+            // Non-fatal — the topic exists; the operator can retype the message.
+          }
+        }
         setTopic({
           topicId: created.topicId,
           issueId: created.issueId,
@@ -569,7 +609,7 @@ function ChatPageBody({
     } finally {
       setCreating(false);
     }
-  }, [employee, seedDialog, createTopic, companyId, userId]);
+  }, [employee, seedDialog, createTopic, sendFirstMessage, companyId, userId]);
 
   // Plan 04.1-08 — archive panel state + data fetch + handlers.
   const { data: archivedRaw, refresh: refreshArchived } =
