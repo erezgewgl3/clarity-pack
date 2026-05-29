@@ -219,5 +219,52 @@ The Situation Room reports "No blockers" on every agent card while ~24 issues si
 
 ---
 
+# ITEM 3.1 — Unified ref-aware markdown rendering (operator feedback on item 3)
+
+**Discussed:** 2026-05-29 (operator reviewed item 3 live on BEAAA-828)
+**Status:** Ready for planning (next plan — 07-04; JUMPS AHEAD of item 4 / 07-03 which is planned-but-deferred)
+
+<domain>
+## Phase Boundary (item 3.1)
+
+**Operator feedback after item 3 shipped:** "The TLDR looks perfect. The rest of the reader looks half rendered… still asterisks, and still BEAAA-704 etc. that do not show the title. The way things are rendered in the TLDR should be rendered in the rest of the reader as well." Root cause: the **main Reader prose body** is rendered by `src/ui/surfaces/reader/prose-with-ref-chips.tsx`, which (a) renders text segments as PLAIN TEXT (literal `## BLUF`, `**bold**`, `-` bullets) and (b) renders refs as `RefChip` showing `ID · status` (never the title). Item 3 only applied SafeMarkdown to the TL;DR strip + the Anchored-to excerpt — the main prose body was in NO item's render scope. FIX: a UNIFIED ref-aware markdown renderer used everywhere.
+</domain>
+
+<decisions>
+## Implementation Decisions (item 3.1 — LOCKED via operator review 2026-05-29)
+
+### Unified clickable titled chips (operator's exact ask: "a clickable chip with a title, but I also want the same behavior in TLDR")
+- **D-I31-01 — RefChip shows "ID — title", clickable, status as a small badge.** `ref-chip.tsx` already resolves `{id, title, status}` via the `resolve-refs` handler — it currently renders only `ID · status`; change it to render `ID — <title>` (still the clickable link to `/<prefix>/issues/<id>`), keeping status as a small badge/dot. Long titles: wrap or clamp with the full title on hover (Claude's discretion). Degrade: if title unresolved, show the bare ID (current behavior).
+- **D-I31-02 — SafeMarkdown becomes ref-aware.** Add an opt-in mode (e.g. `linkRefs` + a `companyPrefix`) so that during inline parsing, `PREFIX-NNN` tokens render as a `RefChip` (clickable titled chip) instead of plain text. Instance-agnostic: derive the prefix via `extractCompanyPrefixFromPathname` (broad `/\b[A-Z][A-Z0-9]{1,7}-\d+\b/g` fallback). Keyed nodes (no React key warnings — mirror the existing prose-with-ref-chips keying).
+- **D-I31-03 — BOTH the TL;DR strip AND the main prose body (AND the Anchored-to excerpt) render via ref-aware SafeMarkdown.** `prose-with-ref-chips.tsx` is REWRITTEN to delegate to ref-aware SafeMarkdown (markdown + titled clickable chips) instead of its plain-text split. `tldr-strip.tsx` enables ref-awareness on its SafeMarkdown. The excerpt (`ref-card.tsx`) also enables ref-awareness for consistency (chips inside the quote).
+- **D-I31-04 — SUPERSEDE the item-3 worker-side TL;DR text rewrite.** With client-side titled chips, the worker `src/worker/handlers/tldr-ref-titles.ts` rewrite (body → "ID — title" text) is REDUNDANT and would DOUBLE-RENDER (chip "ID — title" + trailing " — title" text). Remove the wire-in from `issue-reader.ts` (and the now-unused `tldr-ref-titles.ts` module + its tests). READER-10's "refs resolve to ID — title" is now delivered client-side via the chip (clickable — strictly better); READER-10 stays Implemented (re-verified at drill).
+
+### Claude's Discretion
+- Long-title handling (wrap vs clamp+tooltip); whether the status badge stays a word ("done") or a colored dot; exact ref-aware SafeMarkdown API shape (prop name).
+
+### Constraints
+- Stay version **1.0.0**; additive-only; **NO migration**; **NO new runtime deps**; **TDD-first**; instance-agnostic. Preserve READER-03 (chips clickable — now ENHANCED with titles) + the XSS guards from item 3 (no `dangerouslySetInnerHTML`, href allowlist) UNCHANGED. The `tldr-strip.tsx` empty/compiling/paused branches + the stamp stay byte-unchanged.
+</decisions>
+
+<canonical_refs>
+## Canonical References (item 3.1)
+
+- `src/ui/surfaces/reader/prose-with-ref-chips.tsx` — the main prose body (REWRITE to ref-aware SafeMarkdown).
+- `src/ui/primitives/safe-markdown.tsx` + `.ts` — item-3 renderer (ADD ref-awareness).
+- `src/ui/primitives/ref-chip.tsx` — the clickable chip (CHANGE display to "ID — title"; it already resolves the title via `resolve-refs`).
+- `src/ui/surfaces/reader/tldr-strip.tsx` + `ref-card.tsx` — enable ref-awareness on their SafeMarkdown.
+- `src/worker/handlers/tldr-ref-titles.ts` + `src/worker/handlers/issue-reader.ts` (the item-3 wire-in) — REMOVE (superseded by D-I31-04).
+- `src/ui/primitives/use-resolved-company-id.ts` — `extractCompanyPrefixFromPathname` (instance-agnostic prefix).
+- MemPalace `clarity_pack/decisions` `drawer_clarity_pack_decisions_c261097e92ac88e11f361376` (item 3 closure).
+</canonical_refs>
+
+<deferred>
+## Deferred Ideas (item 3.1)
+
+- **Item 4** (07-03, PLANNED) — Situation Room org blocked backlog; RESUME after item 3.1 ships. **Item 5** + **Plan 05-10** — later.
+</deferred>
+
+---
+
 *Phase: 07-clarity-surfaces-quality-and-portability*
-*Context gathered: 2026-05-28 (items 1+2) + 2026-05-29 (item 3 + item 4)*
+*Context gathered: 2026-05-28 (items 1+2) + 2026-05-29 (item 3 + item 4 + item 3.1)*
