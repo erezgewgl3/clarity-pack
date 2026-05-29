@@ -90,7 +90,7 @@ import type { LlmAdapter } from '../bulletin/compile-pass-1.ts';
 export const OPERATION_ORIGIN_KIND_PREFIX = 'plugin:clarity-pack:operation:';
 
 /** The two operation kinds Clarity Pack delivers to the Editor-Agent. */
-export type OperationKind = 'bulletin-compile' | 'tldr-compile';
+export type OperationKind = 'bulletin-compile' | 'tldr-compile' | 'bulletin-gloss';
 
 /**
  * The EXACT issue-document key the agent is instructed to file its result
@@ -220,6 +220,20 @@ function isResultComment(body: string, operationKind: OperationKind): boolean {
     // compileTldr's own validateLlmOutput enforces the real bound downstream;
     // here we only need "the agent posted a usable, non-empty completion".
     return body.trim().length > 0 && body.length <= 8000;
+  }
+  if (operationKind === 'bulletin-gloss') {
+    // Plan 07-05 — the gloss result is a STRICT JSON {threadId→sentence} object.
+    // Structure only: it must parse to a non-array object. driveBulletinGlossStep
+    // re-parses defensively (a non-object → all-null glosses), so accept any
+    // JSON object body of a sane size here.
+    if (body.length > 8000) return false;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(extractJsonObject(body));
+    } catch {
+      return false;
+    }
+    return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
   }
   // bulletin-compile — the body must be a STRUCTURALLY-valid BulletinDraft
   // JSON. Structure only: unresolved `{{NUMBER:key}}` placeholders are

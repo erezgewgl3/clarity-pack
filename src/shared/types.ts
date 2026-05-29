@@ -107,6 +107,16 @@ export type LineageThread = {
   entityId: string;
   nodes: Array<{ time: string; name: string; detail: string; isTerminal: boolean }>;
   truncatedCount: number;
+  // Plan 07-05 (Phase 7 ITEM 5) — ADDITIVE/optional read-time enrichment fields.
+  // Pre-05 persisted draft_json rows lack these and still type-check (all optional).
+  /** The Editor-Agent one-line plain-English gloss ("what this means for you").
+   *  null = no gloss available / compile pending (a graceful state, NOT an error). */
+  gloss?: string | null;
+  /** The issue's human identifier (e.g. "COU-42") for the open-issue affordance. */
+  identifier?: string | null;
+  /** The terminal actor's agent id for the open-chat affordance — carried ONLY as
+   *  the chat-deep-link target, NEVER rendered as visible text (NO_UUID_LEAK). */
+  ownerAgentId?: string | null;
 };
 
 /** Pass-1 structured draft (D-14). The verified version is persisted as draft_json. */

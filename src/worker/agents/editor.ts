@@ -383,7 +383,7 @@ export type TldrViewDriverCtx = Parameters<typeof prepareTldrCompile>[0] &
  * `ctx.agents.managed.reconcile` (best-effort) only when no operation issue
  * exists yet (a brand-new company).
  */
-async function resolveEditorAgentId(
+export async function resolveEditorAgentId(
   ctx: TldrViewDriverCtx,
   companyId: string,
 ): Promise<string | null> {
