@@ -36,6 +36,15 @@ import {
   resolveBulletinTz,
   type CompileBulletinCtx,
 } from '../jobs/compile-bulletin.ts';
+// Plan 07-05 (Phase 7 ITEM 5) — read-time lineage FILTER + GLOSS + enrichment.
+// The filter (routine + dups dropped) and the per-thread gloss run HERE in the
+// valid request scope (NOT the scope-dead compile-bulletin job), mirroring the
+// existing resume step above. Each survivor is enriched with identifier +
+// ownerAgentId from ctx.issues.get (NO_UUID_LEAK — the UUID is the chat-link
+// target only, never rendered as text).
+import { filterLineageThreads } from '../bulletin/lineage-filter.ts';
+import { driveBulletinGlossStep, type BulletinGlossCtx } from '../bulletin/bulletin-gloss.ts';
+import type { LineageThread } from '../../shared/types.ts';
 
 export type BulletinByCycleCtx = OptInGuardDataCtx &
   BulletinsRepoCtx &
@@ -134,6 +143,70 @@ export function registerBulletinByCycle(ctx: BulletinByCycleCtx): void {
       errata = [];
     }
 
+    // Plan 07-05 — read-time lineage FILTER + enrichment + GLOSS (all
+    // best-effort; a hiccup NEVER fails the bulletin read).
+    //   1. FILTER — drop routine/scheduled + exact-dup threads (D-I5-01).
+    //   2. ENRICH — resolve each survivor's human identifier + ownerAgentId from
+    //      ctx.issues.get (deduped, parallel; a thrown/absent get → nulls). The
+    //      UUID is carried ONLY as ownerAgentId (the chat-link target) — the
+    //      open-issue link uses the human identifier (NO_UUID_LEAK).
+    //   3. GLOSS — compile a one-line plain-English gloss per survivor in THIS
+    //      valid request scope (the gloss step is paused-aware + never throws).
+    const driveCtx = ctx as unknown as CompileBulletinCtx;
+    let lineageThreads: LineageThread[] = filterLineageThreads(
+      (draft.lineageThreads ?? []) as LineageThread[],
+    );
+
+    // Enrich (dedupe distinct entityIds; resolve in parallel; degrade to null).
+    try {
+      const distinctEntityIds = [
+        ...new Set(lineageThreads.map((t) => t.entityId).filter((id): id is string => !!id)),
+      ];
+      const enrichMap = new Map<string, { identifier: string | null; ownerAgentId: string | null }>();
+      await Promise.all(
+        distinctEntityIds.map(async (entityId) => {
+          try {
+            const issue = (await ctx.issues.get(entityId, companyId)) as {
+              identifier?: string | null;
+              assigneeAgentId?: string | null;
+              assigneeUserId?: string | null;
+            } | null;
+            enrichMap.set(entityId, {
+              identifier: issue?.identifier ?? null,
+              ownerAgentId: issue?.assigneeAgentId ?? issue?.assigneeUserId ?? null,
+            });
+          } catch {
+            enrichMap.set(entityId, { identifier: null, ownerAgentId: null });
+          }
+        }),
+      );
+      lineageThreads = lineageThreads.map((t) => {
+        const e = enrichMap.get(t.entityId) ?? { identifier: null, ownerAgentId: null };
+        return { ...t, identifier: e.identifier, ownerAgentId: e.ownerAgentId };
+      });
+    } catch (e) {
+      ctx.logger?.warn?.('bulletin.byCycle: lineage enrichment failed', {
+        companyId,
+        err: (e as Error).message,
+      });
+    }
+
+    // Gloss (view-driven, valid scope). A throw/paused/unavailable → gloss:null.
+    try {
+      const glossed = await driveBulletinGlossStep(driveCtx as unknown as BulletinGlossCtx, {
+        companyId,
+        cycleNumber: row.cycle_number,
+        threads: lineageThreads,
+      });
+      lineageThreads = glossed.threads;
+    } catch (e) {
+      ctx.logger?.warn?.('bulletin.byCycle: gloss step failed — rendering without glosses', {
+        companyId,
+        err: (e as Error).message,
+      });
+      lineageThreads = lineageThreads.map((t) => ({ ...t, gloss: null }));
+    }
+
     return {
       kind: 'published' as const,
       cycleNumber: row.cycle_number,
@@ -143,7 +216,7 @@ export function registerBulletinByCycle(ctx: BulletinByCycleCtx): void {
       masthead: draft.masthead ?? null,
       departments: draft.departments ?? [],
       standingNumbers: draft.standingNumbers ?? [],
-      lineageThreads: draft.lineageThreads ?? [],
+      lineageThreads,
       actionInbox,
       errata,
     };

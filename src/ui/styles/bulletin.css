@@ -505,6 +505,49 @@
   border-style: dashed;
 }
 
+/* ---- Plan 07-05 — per-thread gloss + the two affordances (D-I5-02/03) ---- */
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread-wrap {
+  margin-bottom: 20px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread-wrap .clarity-bulletin-thread {
+  margin-bottom: 8px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread-gloss {
+  font-family: "Newsreader", serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread-gloss--pending {
+  font-style: italic;
+  color: var(--muted);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread-actions {
+  display: flex;
+  gap: 10px;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread-action {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread-action:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+[data-clarity-surface="bulletin"] .clarity-bulletin-thread-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ---- Errata footer ---- */
 [data-clarity-surface="bulletin"] .clarity-bulletin-errata-footer {
   margin-top: 34px;

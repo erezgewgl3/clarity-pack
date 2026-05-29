@@ -114,6 +114,7 @@ Auto-compiled morning editorial digest.
 - [ ] **BULL-07**: Errata is a first-class item type — adding an erratum to a published bulletin appends rather than rewrites; subscribers see the errata footer on the next view.
 - [ ] **BULL-08**: A failed compile renders an explicit "Bulletin compile failed at HH:MM — retrying at NN" banner; no silent failures.
 - [ ] **BULL-09**: Bulletin renders inside Paperclip via the plugin's page slot AND persists as a Paperclip issue ("Bulletin No. N") so it survives plugin disable and is searchable in classic Paperclip.
+- [ ] **BULL-10** (Phase 7 / ITEM 5): The lineage section reads as insight, not a flat LOG — routine/scheduled outputs (Daily/Nightly digests, status reports) AND exact-duplicate threads are filtered out (agent-self substantive threads kept, conservative); each surviving thread shows a one-line plain-English Editor-Agent gloss ("what this means for you", compiled view-driven + cached, graceful when the agent is paused) and TWO clickable affordances (open the issue + open chat with the owner via the ROOM-09 carrier); the heading reflects the multi-thread reality; no raw UUID is rendered (NO_UUID_LEAK).
 
 ### Surface 4 — Employee Chat (CHAT)
 
@@ -277,6 +278,7 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | BULL-07 | Phase 3 | Pending |
 | BULL-08 | Phase 3 | Pending |
 | BULL-09 | Phase 3 | Partial (Plan 03-02 — persists as Paperclip issue + survives disable; page-slot rendering pending Plan 03-03) |
+| BULL-10 | Phase 7 / Plan 07-05 | Pending (lineage filter + gloss + 2 affordances; flips to Implemented after the live BEAAA drill confirms routine/dup filtered, surviving threads glossed, both affordances work) |
 | CHAT-01 | Phase 4 | Implemented (Plan 04-04 read/CRUD handlers + Plan 04-05 four-region chat UI shell) |
 | CHAT-02 | Phase 4 | Implemented (Plan 04-03 — chat.send writes canonical to public.issue_comments; chat_messages side table has no body column) |
 | CHAT-03 | Phase 4 | Implemented (Plan 04-02 — 0006_chat.sql chat_topics maps each CHT-NN topic to one issue, metadata only) |
