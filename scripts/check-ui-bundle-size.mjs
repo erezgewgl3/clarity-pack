@@ -101,7 +101,22 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // delta is the legitimate ref-aware renderer code — recalibrated per the
 // empirical-recalibration precedent (Plan 05-04 / 05-11 / 07-02). 696 kB
 // (712,704 bytes) absorbs it with ~1.2 kB headroom for minor downstream drift.
-const UI_BUNDLE_BYTES_CEILING = 696 * 1024; // 696 kB = 712,704 bytes
+// Bumped 2026-05-29 from 696 → 704 kB (Plan 07-03: org-blocked-backlog banner,
+// +8,073 bytes, no SheetJS): Phase 7 ITEM 4 adds the ONLY new UI-bundle code in
+// this plan — src/ui/surfaces/situation-room/org-blocked-backlog-banner.tsx (the
+// top-of-room "N blocked · M need you" banner + expandable panel with per-row
+// title + human action + owner NAME + age + the two affordances) plus the
+// banner mount + SituationData.org_blocked_backlog field in index.tsx. The pure
+// builder is worker-side (zero UI cost) and pickTopChains moved into a shared
+// module the UI does not import. It overflowed the ~1,275 B 07-04 headroom: the
+// built bundle went 711,429 → 719,502 bytes (+8,073 B over the 07-04 build;
+// +6,798 B over the prior ceiling). Verified zero SheetJS sentinels
+// (XLSX/SheetJS/!ref all 0 in the UI bundle), so the delta is the legitimate
+// banner code — recalibrated per the empirical-recalibration precedent (Plan
+// 05-04 / 05-11 / 07-02 / 07-04). 704 kB (720,896 bytes) absorbs it with
+// ~1.4 kB headroom for minor downstream drift. The locked banner feature
+// surface (D-I4-01..04) was NOT crippled to fit ~1.3 kB.
+const UI_BUNDLE_BYTES_CEILING = 704 * 1024; // 704 kB = 720,896 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
