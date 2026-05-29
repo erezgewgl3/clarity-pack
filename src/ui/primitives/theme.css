@@ -111,6 +111,43 @@
   opacity: 0.6;
 }
 
+/* Plan 07-04 Task 1 (D-I31-01) — the chip now renders `ID — title` with status
+ * as a small badge. The label clamps long titles to a single line; the full
+ * title remains available on the hover-peek popover. */
+[data-clarity-surface] .clarity-ref-chip-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  max-width: 32em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-clarity-surface] .clarity-ref-chip-id {
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+[data-clarity-surface] .clarity-ref-chip-status {
+  flex: 0 0 auto;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.7;
+  padding: 0 0.35em;
+  border-radius: 3px;
+  border: 1px solid var(--clarity-border);
+}
+
+[data-clarity-surface] .clarity-ref-chip-status[data-status='done'] {
+  border-color: var(--clarity-state-working-bg);
+}
+
+[data-clarity-surface] .clarity-ref-chip-status[data-status='blocked'] {
+  border-color: var(--clarity-state-stuck-bg);
+}
+
 [data-clarity-surface] .clarity-ref-chip[data-status='done'] {
   border-color: var(--clarity-state-working-bg);
 }

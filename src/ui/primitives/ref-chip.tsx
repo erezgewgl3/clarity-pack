@@ -144,11 +144,28 @@ export function RefChip({ refId }: { refId: string }): React.ReactElement {
   // as a host-routed anchor (nav.linkProps — NEVER raw <a href>; SCAF-09 +
   // ESLint no-raw-anchor rule). Without a prefix the chip stays a span so
   // there's no broken `/undefined/issues/...` link.
+  // Plan 07-04 Task 1 (D-I31-01) — render `ID — title` (em-dash), clickable,
+  // with status as a SMALL badge span (clarity-ref-chip-status / data-status)
+  // instead of the legacy inline `· status` suffix. The operator reviewed
+  // BEAAA-828 (2026-05-29) and reported in-prose refs "do not show the title".
+  // Degrade: when card.title is empty/missing, render just card.id (no trailing
+  // em-dash). Long titles wrap/clamp via the .clarity-ref-chip-label class
+  // (CSS-scoped under [data-clarity-surface]); the full title is on hover-peek.
+  const hasTitle = typeof card.title === 'string' && card.title.trim().length > 0;
+  const label = (
+    <span className="clarity-ref-chip-label">
+      <span className="clarity-ref-chip-id">{card.id}</span>
+      {hasTitle ? <> — {card.title}</> : null}
+      <span className="clarity-ref-chip-status" data-status={card.status}>
+        {card.status}
+      </span>
+    </span>
+  );
   if (!companyPrefix) {
     return (
       <span {...wrapProps}>
         <span className="clarity-ref-chip" data-status={card.status}>
-          {card.id} · {card.status}
+          {label}
         </span>
         {peek}
       </span>
@@ -161,7 +178,7 @@ export function RefChip({ refId }: { refId: string }): React.ReactElement {
         className="clarity-ref-chip"
         data-status={card.status}
       >
-        {card.id} · {card.status}
+        {label}
       </a>
       {peek}
     </span>
