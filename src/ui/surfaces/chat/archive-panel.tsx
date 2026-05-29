@@ -117,14 +117,21 @@ export function ArchivePanel({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
-
+  // Rules of hooks: useMemo MUST run on EVERY render, BEFORE any conditional
+  // return. (2026-05-29 crash fix — this useMemo previously sat BELOW the early
+  // `!open` return-null guard, so the hook count jumped 5→6 when the panel opened
+  // and React threw "Rendered more hooks than during the previous render"; the
+  // host PluginSlotErrorBoundary surfaced it as "Clarity Pack failed to render"
+  // and the whole chat blanked when the +N archived pill was clicked.)
   const totalCount = archivedTopics.length;
   const filtered = React.useMemo(() => {
     if (!searchQuery.trim()) return archivedTopics;
     const q = searchQuery.toLowerCase();
     return archivedTopics.filter((t) => (t.title ?? '').toLowerCase().includes(q));
   }, [archivedTopics, searchQuery]);
+
+  // Early return AFTER all hooks have run — safe.
+  if (!open) return null;
 
   return (
     <div
