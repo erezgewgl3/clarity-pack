@@ -628,8 +628,12 @@ test('Chat thread: chat.promote handler requires commentId + topicIssueId (GAP 1
 
 test('Chat thread: PromoteActions pin({...}) passes commentId + topicIssueId (GAP 12)', () => {
   const code = readChatCode('message-thread.tsx');
-  const call = code.match(/await\s+pin\(\{([\s\S]*?)\}\)/);
-  assert.ok(call, 'message-thread.tsx must contain an `await pin({ ... })` call');
+  // Plan 250529 Task 1 — onPin no longer AWAITs pin(): it fires a
+  // pin({...}).then().catch().finally() chain so a slow ACK can't brick the
+  // button. The GAP-12 contract is unchanged — pin is still called with
+  // commentId + topicIssueId and never messageUuid — so match the bare call.
+  const call = code.match(/\bpin\(\{([\s\S]*?)\}\)/);
+  assert.ok(call, 'message-thread.tsx must contain a `pin({ ... })` call');
   const body = call[1];
   assert.match(body, /commentId/, 'pin must pass commentId');
   assert.match(body, /topicIssueId/, 'pin must pass topicIssueId');
