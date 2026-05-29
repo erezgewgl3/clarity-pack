@@ -334,7 +334,21 @@ const manifest: PaperclipPluginManifestV1 = {
   // §2); the old 5 slots referenced invented columns (active_subscription_cents,
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
-  version: '1.0.0',
+  //
+  // 1.1.0 (Plan 250529 — three shippable fixes from the 2026-05-29 BEAAA
+  // diagnostic session):
+  //   (1) PIN-NO-BRICK UI — message-thread.tsx onPin/onPromote made optimistic
+  //       with an 8s safety timeout so a slow action ACK (measured 45s+ under
+  //       box load, write still persisting) can never leave the button stuck
+  //       on cursor:not-allowed.
+  //   (2) requestWakeup DE-BLOCKED — the two awaited sites (chat-send.ts +
+  //       agent-task-delivery.startAgentTask) are now fire-and-forget;
+  //       requestWakeup is unreliable on paperclipai@2026.525.0 (30s timeout /
+  //       scope errors) and native wake is the real delivery mechanism.
+  //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
+  //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
+  //       reachable only by direct URL. Adds the ui.sidebar.register capability.
+  version: '1.1.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
@@ -350,6 +364,13 @@ const manifest: PaperclipPluginManifestV1 = {
     'ui.detailTab.register',
     'ui.page.register',
     'instance.settings.register',
+    // Plan 250529 Task 3 — launcher nav entries (ui.launchers below). The host
+    // capability validator maps every launcher placementZone to a required
+    // capability (server/src/services/plugin-capability-validator.ts:
+    // LAUNCHER_PLACEMENT_CAPABILITIES) and enforces it at install: the three
+    // 'sidebar'-zone launchers require 'ui.sidebar.register' or install fails
+    // with "Missing required capabilities: ui.sidebar.register".
+    'ui.sidebar.register',
     // Data + agents capabilities — full Phase-2 scope.
     'database.namespace.migrate',
     'database.namespace.read',
@@ -504,6 +525,51 @@ const manifest: PaperclipPluginManifestV1 = {
         id: 'clarity-settings',
         displayName: 'Clarity Pack',
         exportName: 'SettingsPage',
+      },
+    ],
+    // Plan 250529 Task 3 — LAUNCHER NAV ENTRIES. The four surfaces above are
+    // declared as ui.slots (page routes), but slots alone ship NO nav affordance
+    // — pre-1.1.0 the only way to reach them was a direct URL. These launchers
+    // surface Situation Room / Daily Bulletin / Employee Chat as left-nav entries.
+    //
+    // Verified against paperclipai/paperclip@master (2026-05-29):
+    //   • placementZone 'sidebar' is the ONLY zone rendered in the persistent
+    //     left <nav> (ui/src/components/Sidebar.tsx mounts
+    //     <PluginLauncherOutlet placementZones={['sidebar']}/>). Requires the
+    //     'ui.sidebar.register' capability declared above.
+    //   • action.target for a 'navigate' launcher is the BARE routePath — the
+    //     host prepends /<companyPrefix>/ for relative targets
+    //     (ui/src/plugins/launchers.tsx resolveLauncherNavigationTarget). A
+    //     leading '/' would be treated as already-absolute and skip the prefix,
+    //     landing on the wrong company — so target is 'situation-room', NOT
+    //     '/BEAAA/situation-room' and NOT the slot id 'clarity-situation'.
+    //   • ui.launchers (nested) is the non-legacy home (preferred over the
+    //     legacy top-level launchers field); the host loader + validator read
+    //     both. Targets match the page slots' routePaths exactly.
+    launchers: [
+      {
+        id: 'clarity-launch-situation-room',
+        displayName: 'Situation Room',
+        description: 'Clarity Pack — live cockpit of every agent',
+        placementZone: 'sidebar',
+        order: 1,
+        action: { type: 'navigate', target: 'situation-room' },
+      },
+      {
+        id: 'clarity-launch-bulletin',
+        displayName: 'Daily Bulletin',
+        description: 'Clarity Pack — morning editorial digest',
+        placementZone: 'sidebar',
+        order: 2,
+        action: { type: 'navigate', target: 'bulletin' },
+      },
+      {
+        id: 'clarity-launch-chat',
+        displayName: 'Employee Chat',
+        description: 'Clarity Pack — chat with any employee',
+        placementZone: 'sidebar',
+        order: 3,
+        action: { type: 'navigate', target: 'chat' },
       },
     ],
   },

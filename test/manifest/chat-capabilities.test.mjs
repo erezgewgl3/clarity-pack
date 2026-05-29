@@ -24,14 +24,15 @@ import test from 'node:test';
 
 import manifest from '../../src/manifest.ts';
 
-test('manifest version is in the 1.0.0 family (rc.X release candidate or final)', () => {
-  // The single canonical 1.0.0 bump happens at the close of Phase B audit.
-  // Between then and now we iterate as 1.0.0-rc.N — the test accepts either
-  // shape so the suite stays green during rc-iteration.
+test('manifest version is in the 1.x family (final or rc.X)', () => {
+  // The canonical 1.0.0 shipped; post-1.0.0 we bump minor/patch per change
+  // (1.1.0 = launchers + pin-no-brick + requestWakeup de-block). The guard
+  // accepts any 1.x.y (optionally -rc.N) so it still catches a 0.x regression
+  // or a stray non-1 major while permitting real post-1.0.0 releases.
   assert.match(
     manifest.version,
-    /^1\.0\.0(-rc\.\d+)?$/,
-    `manifest.version='${manifest.version}' must be 1.0.0 or 1.0.0-rc.N`,
+    /^1\.\d+\.\d+(-rc\.\d+)?$/,
+    `manifest.version='${manifest.version}' must be 1.x.y or 1.x.y-rc.N`,
   );
 });
 

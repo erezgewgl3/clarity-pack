@@ -138,13 +138,15 @@ test('caller audit — .d.mts signature mirrors the .mjs change (optional employ
 // Plan 05-10 Task 2 lands the atomic rc.7 -> 1.0.0 commit.)
 // ---------------------------------------------------------------------------
 
-test('Plan 05-10 atomic version bump — package.json reads 1.0.0 or 1.0.0-rc.N during iteration', () => {
+test('package.json version is in the 1.x family (final or rc.N)', () => {
   const pkgPath = path.join(SRC, '..', 'package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  // 1.0.0 shipped; post-1.0.0 we bump minor/patch per change (1.1.0 = launchers
+  // + pin-no-brick + requestWakeup de-block). Accept any 1.x.y(-rc.N).
   assert.match(
     pkg.version,
-    /^1\.0\.0(-rc\.\d+)?$/,
-    `package.json version='${pkg.version}' must be 1.0.0 or 1.0.0-rc.N (rc.7 was retired; we iterate as rc.8+ pre-final-ship)`,
+    /^1\.\d+\.\d+(-rc\.\d+)?$/,
+    `package.json version='${pkg.version}' must be 1.x.y or 1.x.y-rc.N`,
   );
 });
 
