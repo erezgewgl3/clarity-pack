@@ -47,6 +47,73 @@ const CAP = 15;
 // need_you_count (they need an OWNER first, not the viewer specifically).
 const UNOWNED_SENTINEL = '__unowned__';
 
+// Hex UUID (8-4-4-4-12). Mirrors humanize-snapshot.ts:30 so the item-4 builder
+// scrubs labels with the SAME shape contract the job path enforces.
+const UUID_RE_G = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** True iff `s` is exactly a hex UUID (strict, full string). */
+function isUuid(s: unknown): s is string {
+  return typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
+
+/** Every distinct hex UUID inside an arbitrary string. */
+function uuidsIn(s: string): string[] {
+  return s.match(UUID_RE_G) ?? [];
+}
+
+/**
+ * 07-03 HOTFIX — produce a human-action label that contains ZERO raw UUIDs,
+ * for ANY terminal kind. This is the item-4 builder's OWN humanize step,
+ * mirroring src/worker/jobs/humanize-snapshot.ts:103-152 (the JOB path) so the
+ * situation.snapshot DATA HANDLER — which does NOT run that job — gets the same
+ * NO_UUID_LEAK guarantee.
+ *
+ * Pure: depends only on the terminal, the viewer id, and the pre-resolved
+ * UUID→name map (D-09 degrade-safe — a name is null/absent ⇒ short-form
+ * `agent#<8>` fallback, NEVER the raw UUID).
+ *
+ *   1. __unowned__ HUMAN_ACTION_ON → clean "{name} — assign an owner first" if
+ *      the label's embedded UUID resolves to a name, else
+ *      "Owner unknown — assign an owner first". No raw UUID either way.
+ *   2. Any other terminal → replace EVERY UUID with its resolved name, else
+ *      `agent#<first-8-hex>` (humanize-snapshot.ts step-2 fallback).
+ *   3. Non-__unowned__ HUMAN_ACTION_ON whose userId is the viewer → substitute
+ *      that id with "You" (humanize-snapshot.ts step 3).
+ *   4. Belt-and-suspenders: any UUID that somehow survived → short form.
+ */
+function scrubHumanAction(
+  terminal: Terminal,
+  viewerUserId: string,
+  nameByUuid: Map<string, string | null>,
+): string {
+  const nameOf = (uuid: string): string | null => nameByUuid.get(uuid) ?? null;
+
+  if (terminal.kind === 'HUMAN_ACTION_ON' && terminal.userId === UNOWNED_SENTINEL) {
+    const m = terminal.label.match(UUID_RE);
+    const name = m ? nameOf(m[0]) : null;
+    return name ? `${name} — assign an owner first` : 'Owner unknown — assign an owner first';
+  }
+
+  // Step 2 — substitute every embedded UUID with a name or short-form.
+  let label = terminal.label.replace(UUID_RE_G, (uuid) => nameOf(uuid) ?? `agent#${uuid.slice(0, 8)}`);
+
+  // Step 3 — viewer userId → "You" for a non-__unowned__ human action. Run
+  // AFTER step 2 because the userId is itself a UUID that step 2 would have
+  // already rewritten to a name; substitute against the resolved fragment too.
+  if (terminal.kind === 'HUMAN_ACTION_ON' && terminal.userId !== UNOWNED_SENTINEL) {
+    if (terminal.label.includes(terminal.userId)) {
+      const resolved = nameOf(terminal.userId) ?? `agent#${terminal.userId.slice(0, 8)}`;
+      if (terminal.userId === viewerUserId) {
+        label = label.split(resolved).join('You');
+      }
+    }
+  }
+
+  // Step 4 — belt-and-suspenders: no UUID may survive.
+  return label.replace(UUID_RE_G, (uuid) => `agent#${uuid.slice(0, 8)}`);
+}
+
 /** A single blocked-issue row in the org backlog. */
 export type OrgBlockedRow = {
   issueId: string;
@@ -284,7 +351,13 @@ export async function buildOrgBlockedBacklog(
     CAP,
   );
 
-  // 4. Resolve distinct owner UUIDs → display NAMES (D-09 NO_UUID_LEAK).
+  // 4. Resolve distinct UUIDs → display NAMES (D-09 NO_UUID_LEAK). This now
+  //    covers BOTH the issue OWNER (for row.ownerName) AND every UUID the
+  //    flattened terminal LABEL embeds (for scrubHumanAction) — the issue's
+  //    HUMAN_ACTION_ON terminal.userId when it is a real UUID (not the
+  //    __unowned__ sentinel) plus any UUID found inside terminal.label (07-03
+  //    HOTFIX: previously only the owner was resolved, so the raw blocker-node
+  //    UUID leaked through terminal.label into row.humanAction).
   const ownerUuidFor = (issue: IssueLike): string | null =>
     (typeof issue.assigneeUserId === 'string' && issue.assigneeUserId
       ? issue.assigneeUserId
@@ -292,33 +365,43 @@ export async function buildOrgBlockedBacklog(
         ? issue.assigneeAgentId
         : null);
 
-  const ownerNamesByUuid = new Map<string, string | null>();
+  // The shared UUID→name map consumed by both ownerName and scrubHumanAction.
+  const nameByUuid = new Map<string, string | null>();
   if (typeof ctx.agents?.get === 'function') {
-    const distinctOwners = Array.from(
-      new Set(
-        rankedChains
-          .map((c) => ownerUuidFor(chainToIssue.get(c)!))
-          .filter((u): u is string => u !== null),
-      ),
-    );
-    for (const ownerUuid of distinctOwners) {
+    const wanted = new Set<string>();
+    for (const c of rankedChains) {
+      // The issue OWNER → row.ownerName. Resolve ANY non-empty owner id (not
+      // gated on UUID-shape — ownerName is a display field, unchanged from the
+      // pre-HOTFIX behavior).
+      const owner = ownerUuidFor(chainToIssue.get(c)!);
+      if (owner) wanted.add(owner);
+      // Terminal-label UUIDs → scrubHumanAction. Only hex UUIDs need resolving
+      // for the scrubber; the viewer "You" substitution uses terminal.userId.
+      const t = c.terminal;
+      if (t.kind === 'HUMAN_ACTION_ON' && t.userId !== UNOWNED_SENTINEL && isUuid(t.userId)) {
+        wanted.add(t.userId);
+      }
+      for (const u of uuidsIn(t.label)) wanted.add(u);
+    }
+    for (const uuid of wanted) {
       try {
-        const agent = await ctx.agents.get(ownerUuid, companyId);
+        const agent = await ctx.agents.get(uuid, companyId);
         if (agent && typeof (agent as { name?: unknown }).name === 'string') {
           const candidate = (agent as { name: string }).name.trim();
-          ownerNamesByUuid.set(ownerUuid, candidate || null);
+          nameByUuid.set(uuid, candidate || null);
         } else {
-          ownerNamesByUuid.set(ownerUuid, null);
+          nameByUuid.set(uuid, null);
         }
       } catch (e) {
         // D-09 — degrade silently to null on agents.get throw. NEVER fall back
-        // to the UUID; the NO_UUID_LEAK guarantee depends on this.
+        // to the UUID; the NO_UUID_LEAK guarantee depends on this (the scrubber
+        // then uses the agent#<short> / clean-unowned fallback).
         ctx.logger?.warn?.('org-blocked-backlog: agents.get failed', {
           companyId,
-          ownerUuid,
+          uuid,
           err: (e as Error).message,
         });
-        ownerNamesByUuid.set(ownerUuid, null);
+        nameByUuid.set(uuid, null);
       }
     }
   }
@@ -344,9 +427,11 @@ export async function buildOrgBlockedBacklog(
       issueId: issue.id ?? issue.identifier ?? '',
       identifier: issue.identifier ?? issue.id ?? '',
       title: issue.title ?? '',
-      humanAction: terminal.label,
+      // 07-03 HOTFIX — scrub the raw terminal.label so the rendered action can
+      // NEVER carry a raw UUID (mirrors the JOB path's humanize-snapshot.ts).
+      humanAction: scrubHumanAction(terminal, viewerUserId, nameByUuid),
       terminalKind: terminal.kind,
-      ownerName: ownerUuid ? (ownerNamesByUuid.get(ownerUuid) ?? null) : null,
+      ownerName: ownerUuid ? (nameByUuid.get(ownerUuid) ?? null) : null,
       ownerAgentId: ownerUuid,
       age_ms: ageMsFrom(issue),
     });

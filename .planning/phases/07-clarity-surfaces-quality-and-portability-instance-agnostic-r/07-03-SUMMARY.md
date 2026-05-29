@@ -172,3 +172,31 @@ Record the verdicts here. **ROOM-12 flips to Implemented** after the drill confi
 - Per-task commits exist: `f437191` (Task 1), `e892efc` (Task 2) — both FOUND in git log.
 - Full gate battery green (Task 3) except the documented pre-existing `situation.artifacts` test; bundle ceiling recalibrated 696→704 kB (justified, zero SheetJS); tarball packed sha256 `b3dc5d37…`.
 - Live BEAAA deploy + Playwright drill NOT run in this build task — orchestrator-pending (verdicts TBD above).
+
+---
+
+## HOTFIX 2026-05-29 — NO_UUID_LEAK on org-blocked `humanAction`
+
+**Defect (live BEAAA Playwright drill).** The org-blocked-backlog panel rendered a human-action label containing a RAW UUID, e.g. `Owner unknown — assign 7b5c7deb-8135-4d23-b41b-6cf7b724e945 first` — a NO_UUID_LEAK violation (Reader/Situation-Room zero-rabbit-holes contract).
+
+**Root cause.** `src/worker/handlers/org-blocked-backlog.ts` step 5 set `humanAction: terminal.label`, passing the blocker-chain flattener's RAW terminal label straight through. For an unowned terminal, `src/shared/blocker-chain.ts:178-179` builds `userId: '__unowned__'`, `label: \`Owner unknown — assign ${current} first\`` where `current` is a raw node UUID; for an owned terminal the label is `\`${ownerUserId} to act on ${current}\``. The JOB-driven snapshot path scrubs these via `src/worker/jobs/humanize-snapshot.ts` (steps 1-4), but the item-4 backlog is computed in the situation.snapshot **DATA HANDLER**, which does NOT run that job — so the raw label leaked to the UI. The flattener was correctly left UNCHANGED (it intentionally embeds the UUID so the job's humanize step 1 can resolve it to a name).
+
+**Fix (worker-side only; no version bump, no migration, no new deps).** Added a pure `scrubHumanAction(terminal, viewerUserId, nameByUuid)` helper to the item-4 builder, mirroring `humanize-snapshot.ts`:
+1. `__unowned__` HUMAN_ACTION_ON → clean `"{name} — assign an owner first"` if the embedded UUID resolves to an agent name, else `"Owner unknown — assign an owner first"` (no raw UUID either way).
+2. Any other terminal → replace EVERY UUID with the resolved name, else `agent#<first-8-hex>`.
+3. Non-`__unowned__` HUMAN_ACTION_ON whose `userId === viewerUserId` → substitute the resolved fragment with `"You"`.
+4. Belt-and-suspenders short-form pass so no UUID can survive.
+Extended step-4 name resolution to ALSO collect, for each ranked chain, the terminal's `userId` (when a real hex UUID, not `__unowned__`) and every UUID inside `terminal.label`, into a shared `nameByUuid` map consumed by both `ownerName` and the scrubber. The D-09 degrade is preserved: a thrown/absent `ctx.agents.get` → name null → scrubber falls back to `agent#<short>` / the clean unowned phrase, NEVER the raw UUID. `ownerName` behavior unchanged (still resolves any non-empty owner id to its display name).
+
+**Load-bearing invariant pinned by tests:** `row.humanAction` can NEVER match `/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i` for ANY terminal kind.
+
+**TDD.** RED-first in `test/worker/org-blocked-backlog.test.mjs` — 6 new cases (unowned-with-embedded-UUID clean phrase; unowned embedded UUID resolves to name; owned label UUIDs → name; viewer userId → "You"; `agents.get` throws on the label UUID still no raw UUID; owned label `agents.get` throws → `agent#<short>`). Confirmed RED (raw passthrough leaked the UUID), then GREEN. Suite for this file: 20/20 pass.
+
+**Gates (all green).** `tsc --noEmit` 0; `check-css-scope.mjs` (164 selectors scoped); `build-worker.mjs` (2.4 mb); `build-ui.mjs` (702.6 kB — UNCHANGED, worker-side fix); `tsc --project tsconfig.manifest.json` 0; `check-ui-bundle-size.mjs` 719,502 / 720,896 byte ceiling, zero SheetJS; full suite 2112 pass / 1 fail (= documented pre-existing `situation.artifacts: per-agent arrays sorted DESC by createdAt`, unrelated); `grep -c paperclipInvocation dist/worker.js` = 5 (≥ 5).
+
+**New tarball (repacked, NO version bump — still `clarity-pack-1.0.0.tgz`):**
+- sha256 `b42f0785f6ee3fe448d4f4d3d5fd4222510c6bc2e5f5ebef75348cf02324eae8`
+- size 711,942 bytes
+- (supersedes the pre-HOTFIX `b3dc5d37c7f1b165a00955880a2699ecc0117814f8a8d2f549dadb75b5154f41` / 711,589 bytes — the orchestrator must deploy THIS tarball and re-run the live drill, esp. step 2's NO_UUID_LEAK row check.)
+
+**Commit:** `fix(07-03-hotfix): humanize org-blocked humanAction — no raw UUID in the action label`. Not deployed (orchestrator re-deploys + re-drills).
