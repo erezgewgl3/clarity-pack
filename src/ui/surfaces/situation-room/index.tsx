@@ -47,6 +47,10 @@ import { PauseBanner } from '../reader/pause-banner.tsx';
 import { CriticalPathStrip } from './critical-path-strip.tsx';
 import { AgentCard, type AgentEmployee } from './agent-card.tsx';
 import { AwaitingYouPill } from './awaiting-you-pill.tsx';
+import {
+  OrgBlockedBacklogBanner,
+  type OrgBlockedBacklog,
+} from './org-blocked-backlog-banner.tsx';
 import type { Artifact } from './artifact-chip-row.tsx';
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
@@ -59,6 +63,11 @@ type SituationData = {
   awaiting_you_oldest_age: number | null;
   narrative?: string | null;
   taken_at?: string;
+  // Plan 07-03 (Phase 7 ITEM 4) — the org-level blocked backlog computed in the
+  // situation.snapshot DATA HANDLER and attached on every call (rides even when
+  // the materialized snapshot row is empty/stale — the recompute job is dead on
+  // this host).
+  org_blocked_backlog?: OrgBlockedBacklog | null;
 };
 
 /**
@@ -266,6 +275,13 @@ function SituationRoomBody({
 
   return (
     <>
+      {/* Plan 07-03 (Phase 7 ITEM 4 / D-I4-01) — org-truth banner at the TOP of
+       *  the room, above the header + agent grid. Renders nothing when there
+       *  are zero blocked issues; the agent grid below is unchanged. */}
+      <OrgBlockedBacklogBanner
+        backlog={payload.org_blocked_backlog ?? null}
+        companyId={companyId}
+      />
       <header className="clarity-room-header">
         <AwaitingYouPill
           count={payload.awaiting_you_count ?? 0}
