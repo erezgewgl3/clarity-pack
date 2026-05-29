@@ -195,3 +195,36 @@ export function flattenBlockerChain(input: BlockerChainInput): BlockerChainResul
   };
   return { startId: input.startId, pathIds, terminal, isStale: false };
 }
+
+/**
+ * Plan 07-03 Task 1 — single source of truth for the HUMAN_ACTION_ON-first
+ * ranking. MOVED here verbatim from the recompute-situation job
+ * (src/worker/jobs/situation-snapshot.ts:286-303) so the job AND the new
+ * org-blocked-backlog handler share one definition. Behavior is byte-identical
+ * to the prior private function — the job now imports this instead of declaring
+ * its own.
+ *
+ * Priority: HUMAN_ACTION_ON=0 > SELF_RESOLVING=1 > EXTERNAL=2 > CYCLE=3
+ * (default 99). Stable sort by priority, then slice(0, max). Pure — does not
+ * mutate the input array.
+ */
+export function pickTopChains(
+  chains: BlockerChainResult[],
+  max: number,
+): BlockerChainResult[] {
+  const priority = (c: BlockerChainResult): number => {
+    switch (c.terminal.kind) {
+      case 'HUMAN_ACTION_ON':
+        return 0;
+      case 'SELF_RESOLVING':
+        return 1;
+      case 'EXTERNAL':
+        return 2;
+      case 'CYCLE':
+        return 3;
+      default:
+        return 99;
+    }
+  };
+  return [...chains].sort((a, b) => priority(a) - priority(b)).slice(0, max);
+}

@@ -25,6 +25,7 @@ import type {
 
 import {
   flattenBlockerChain,
+  pickTopChains,
   type BlockerEdge,
 } from '../../shared/blocker-chain.ts';
 import type { BlockerChainResult } from '../../shared/types.ts';
@@ -283,24 +284,10 @@ async function buildEmployeeRow(
   };
 }
 
-function pickTopChains(chains: BlockerChainResult[], max: number): BlockerChainResult[] {
-  // Priority: HUMAN_ACTION_ON > SELF_RESOLVING > EXTERNAL > CYCLE.
-  const priority = (c: BlockerChainResult): number => {
-    switch (c.terminal.kind) {
-      case 'HUMAN_ACTION_ON':
-        return 0;
-      case 'SELF_RESOLVING':
-        return 1;
-      case 'EXTERNAL':
-        return 2;
-      case 'CYCLE':
-        return 3;
-      default:
-        return 99;
-    }
-  };
-  return [...chains].sort((a, b) => priority(a) - priority(b)).slice(0, max);
-}
+// Plan 07-03 Task 1 — pickTopChains MOVED to src/shared/blocker-chain.ts as an
+// exported pure function (single source of truth shared with the org-blocked-
+// backlog handler). The job imports it above; the call site at the critical-
+// path computation below is unchanged (byte-identical runtime behavior).
 
 export function registerSituationSnapshotJob(ctx: SituationSnapshotCtx): void {
   ctx.jobs.register('recompute-situation', async () => {

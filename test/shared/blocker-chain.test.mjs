@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { flattenBlockerChain } from '../../src/shared/blocker-chain.ts';
+import { flattenBlockerChain, pickTopChains } from '../../src/shared/blocker-chain.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BLOCKER_CHAIN_SRC = path.resolve(HERE, '..', '..', 'src', 'shared', 'blocker-chain.ts');
@@ -111,6 +111,82 @@ test('Determinism — same input produces same output bytes across 100 invocatio
       `iteration ${i} diverged from reference output`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Plan 07-03 Task 1 — pickTopChains MOVED into the shared module (single
+// source of truth for the HUMAN_ACTION_ON-first ranking; the recompute-
+// situation job + the org-blocked-backlog builder both import it from here).
+// Verbatim semantics from situation-snapshot.ts:286-303 (priority
+// HUMAN_ACTION_ON=0 > SELF_RESOLVING=1 > EXTERNAL=2 > CYCLE=3; stable sort
+// then slice(0, max); pure).
+// ---------------------------------------------------------------------------
+
+/** Build a BlockerChainResult of a given terminal kind for ranking tests. */
+function chainOf(kind, startId) {
+  let terminal;
+  switch (kind) {
+    case 'HUMAN_ACTION_ON':
+      terminal = { kind, userId: 'eric', label: `${startId} human` };
+      break;
+    case 'SELF_RESOLVING':
+      terminal = { kind, etaIso: '2026-05-30T00:00:00Z', label: `${startId} self` };
+      break;
+    case 'EXTERNAL':
+      terminal = { kind, label: `${startId} external` };
+      break;
+    case 'CYCLE':
+      terminal = { kind, cycleNodes: [startId], label: `${startId} cycle` };
+      break;
+    default:
+      terminal = { kind: 'EXTERNAL', label: 'x' };
+  }
+  return { startId, pathIds: [startId], terminal, isStale: false };
+}
+
+test('pickTopChains — sorts HUMAN_ACTION_ON first, then SELF_RESOLVING, EXTERNAL, CYCLE', () => {
+  const input = [
+    chainOf('CYCLE', 'c'),
+    chainOf('EXTERNAL', 'e'),
+    chainOf('SELF_RESOLVING', 's'),
+    chainOf('HUMAN_ACTION_ON', 'h'),
+  ];
+  const ranked = pickTopChains(input, 10);
+  assert.deepEqual(
+    ranked.map((c) => c.terminal.kind),
+    ['HUMAN_ACTION_ON', 'SELF_RESOLVING', 'EXTERNAL', 'CYCLE'],
+  );
+});
+
+test('pickTopChains — slice(0, max) caps the result length', () => {
+  const input = [
+    chainOf('HUMAN_ACTION_ON', 'h1'),
+    chainOf('HUMAN_ACTION_ON', 'h2'),
+    chainOf('SELF_RESOLVING', 's1'),
+    chainOf('EXTERNAL', 'e1'),
+  ];
+  const ranked = pickTopChains(input, 2);
+  assert.equal(ranked.length, 2);
+  // The two highest-priority survive the cap.
+  assert.deepEqual(
+    ranked.map((c) => c.terminal.kind),
+    ['HUMAN_ACTION_ON', 'HUMAN_ACTION_ON'],
+  );
+});
+
+test('pickTopChains — empty list yields empty list', () => {
+  assert.deepEqual(pickTopChains([], 5), []);
+});
+
+test('pickTopChains — is pure (does not mutate the input array order)', () => {
+  const input = [
+    chainOf('CYCLE', 'c'),
+    chainOf('HUMAN_ACTION_ON', 'h'),
+  ];
+  const before = input.map((c) => c.startId).join(',');
+  pickTopChains(input, 10);
+  const after = input.map((c) => c.startId).join(',');
+  assert.equal(before, after, 'pickTopChains must not mutate the input array');
 });
 
 test('PRIM-03 deterministic-graph-only — blocker-chain.ts source contains zero LLM/AI references', () => {
