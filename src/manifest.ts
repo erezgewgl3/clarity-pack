@@ -335,6 +335,20 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.2 (Plan 250530 — strong/em/link recursion in safe-markdown — fixes the
+  // bold-headline "mess" complaint on BEAAA-1047, 2026-05-30):
+  //   - InlineSpan.strong / .em / .link now carry `spans: InlineSpan[]` (was
+  //     a flat `text` / `label` string). The parser recursively re-parses
+  //     children so a ref / link / code / em nested INSIDE bold renders
+  //     correctly (was: literal markdown syntax inside <strong>). The TL;DR's
+  //     pattern `**BEAAA-1047 is blocked on countersigning [BEAAA-933](/.../BEAAA-933)**`
+  //     now resolves both ids to titled chips inside the bold.
+  //   - DISCOVERED (NOT FIXED — host bug, not plugin scope): 43+ console
+  //     /api/issues/PAGE-3, STAGE-1, STAGE-2 404s on BEAAA-1047 come from the
+  //     HOST's `paperclip-markdown-issue-ref` autolinker matching plain prose
+  //     like "page-3" / "Stage 1" against its broad ref pattern. Zero clarity-
+  //     pack chips here are bogus. Fix belongs upstream in paperclipai.
+  //
   // 1.1.1 (Plan 250530 — Reader rabbit-hole fix on BEAAA-1047, 2026-05-30):
   //   (1) SAFE-MARKDOWN PARSER — a code span that is JUST a PREFIX-NNN token
   //       (e.g. `` `BEAAA-933` ``) and a markdown link whose label is a bare
@@ -365,7 +379,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.1',
+  version: '1.1.2',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
