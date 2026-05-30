@@ -336,3 +336,159 @@ test('safe-markdown.tsx SafeMarkdown props widen to accept linkRefs + companyPre
   assert.match(TSX_SRC, /linkRefs/, 'SafeMarkdown accepts a linkRefs prop');
   assert.match(TSX_SRC, /companyPrefix/, 'SafeMarkdown accepts a companyPrefix prop');
 });
+
+// ---------------------------------------------------------------------------
+// Plan 250530 — code/link span ref-upgrade. The Editor-Agent dresses up issue
+// refs as backtick-code (`BEAAA-933`) or markdown links
+// ([BEAAA-933](/BEAAA/issues/BEAAA-933)) — both bypass the chip pipeline and
+// the operator sees a bare id without a title (the rabbit-hole the Reader was
+// meant to close, BEAAA-1047 case 2026-05-30). The parser now upgrades a
+// WHOLE-STRING ref token inside a code span — and a canonical issue link
+// (bare-token label + matching /<prefix>/issues/<sameId> href) — to a `ref`
+// span so the chip resolves the title. Mixed-content code stays code; non-
+// canonical links stay links; the XSS allowlist is unchanged.
+// ---------------------------------------------------------------------------
+
+test('code → ref (250530): a code span whose content is just a PREFIX-NNN token becomes a ref span', () => {
+  const blocks = parseMarkdownBlocks('see `BEAAA-933` now', { prefix: 'BEAAA' });
+  const refs = refSpans(blocks);
+  assert.equal(refs.length, 1, 'one ref span carved out of the code span');
+  assert.equal(refs[0].refId, 'BEAAA-933');
+  // and NO code span survives — the upgrade is the chosen span.
+  assert.equal(
+    allSpans(blocks).some((s) => s.type === 'code' && s.text === 'BEAAA-933'),
+    false,
+    'the bare-token code span was upgraded, not duplicated',
+  );
+});
+
+test('code stays code (250530): MIXED content inside backticks is NOT broken apart — code span survives intact', () => {
+  // The agent's hand-rolled gloss (BEAAA-933 — manual note — in_review) is the
+  // exact shape BEAAA-1047 exhibits; the parser must not torture this into a ref
+  // because the rest of the code span isn't a ref. The prompt fix (separately)
+  // teaches the agent to stop emitting these.
+  const input = 'pinned: `BEAAA-933 — BEAAA-187 child — v1.1.2 reconciliation of in_review`';
+  const blocks = parseMarkdownBlocks(input, { prefix: 'BEAAA' });
+  const code = allSpans(blocks).find((s) => s.type === 'code');
+  assert.ok(code, 'a code span survives');
+  assert.equal(code.text, 'BEAAA-933 — BEAAA-187 child — v1.1.2 reconciliation of in_review');
+  assert.equal(refSpans(blocks).length, 0, 'no ref carved out of mixed code');
+});
+
+test('code stays code (250530): non-ref content inside backticks (version string, status enum) stays code', () => {
+  for (const lit of ['v1.1.2', 'in_review', 'b5c5da95', 'npm test']) {
+    const blocks = parseMarkdownBlocks('x `' + lit + '` y', { prefix: 'BEAAA' });
+    assert.equal(refSpans(blocks).length, 0, `no ref for ${lit}`);
+    const code = allSpans(blocks).find((s) => s.type === 'code');
+    assert.ok(code, `code span survives for ${lit}`);
+    assert.equal(code.text, lit);
+  }
+});
+
+test('code stays code (250530): trimming — ` BEAAA-933 ` (whitespace inside ticks) STILL upgrades to ref', () => {
+  // The agent may add whitespace inside the backticks; the trimmed-token check
+  // handles that — the chip resolves on the trimmed id.
+  const blocks = parseMarkdownBlocks('see `  BEAAA-933  ` here', { prefix: 'BEAAA' });
+  const refs = refSpans(blocks);
+  assert.equal(refs.length, 1);
+  assert.equal(refs[0].refId, 'BEAAA-933');
+});
+
+test('code stays code (250530): WITHOUT refOpts the upgrade is OFF (back-compat — `BEAAA-933` stays code)', () => {
+  const blocks = parseMarkdownBlocks('see `BEAAA-933`');
+  assert.equal(refSpans(blocks).length, 0);
+  const code = allSpans(blocks).find((s) => s.type === 'code');
+  assert.ok(code);
+  assert.equal(code.text, 'BEAAA-933');
+});
+
+test('code → ref (250530): broad fallback — prefix:null upgrades any whole-token code span', () => {
+  const blocks = parseMarkdownBlocks('see `COU-2486` here', { prefix: null });
+  const refs = refSpans(blocks);
+  assert.equal(refs.length, 1);
+  assert.equal(refs[0].refId, 'COU-2486');
+});
+
+test('canonical link → ref (250530): [BEAAA-933](/BEAAA/issues/BEAAA-933) becomes a ref span', () => {
+  const blocks = parseMarkdownBlocks(
+    'blocked on [BEAAA-933](/BEAAA/issues/BEAAA-933) before op-seat',
+    { prefix: 'BEAAA' },
+  );
+  const refs = refSpans(blocks);
+  assert.equal(refs.length, 1, 'one ref span carved out of the canonical issue link');
+  assert.equal(refs[0].refId, 'BEAAA-933');
+  // and no link span lingers (the explicit anchor was the agent's "fancy
+  // version of a ref" — the chip is the better surface).
+  assert.equal(
+    allSpans(blocks).some((s) => s.type === 'link' && s.label === 'BEAAA-933'),
+    false,
+    'the canonical link was upgraded, not duplicated',
+  );
+});
+
+test('link stays link (250530): CUSTOM label is preserved — [BEAAA-933 — title](/BEAAA/issues/BEAAA-933)', () => {
+  // A label with extra content is an explicit author choice — keep it.
+  const blocks = parseMarkdownBlocks('[BEAAA-933 — title](/BEAAA/issues/BEAAA-933)', { prefix: 'BEAAA' });
+  const links = allSpans(blocks).filter((s) => s.type === 'link');
+  assert.equal(links.length, 1, 'link survives');
+  assert.equal(links[0].label, 'BEAAA-933 — title');
+  assert.equal(refSpans(blocks).length, 0, 'no ref upgrade for a custom-label link');
+});
+
+test('link stays link (250530): CROSS-INSTANCE — label prefix ≠ url prefix is NOT upgraded', () => {
+  // [BEAAA-933] href /COU/issues/BEAAA-933 — a deliberate cross-instance link.
+  const blocks = parseMarkdownBlocks('[BEAAA-933](/COU/issues/BEAAA-933)', { prefix: 'BEAAA' });
+  const links = allSpans(blocks).filter((s) => s.type === 'link');
+  assert.equal(links.length, 1, 'cross-instance link survives');
+  assert.equal(refSpans(blocks).length, 0);
+});
+
+test('link stays link (250530): EXTRA path/query is NOT upgraded — /BEAAA/issues/BEAAA-933?focus=ac1 stays a link', () => {
+  // A deep-link target is intentional — leave it.
+  const blocks = parseMarkdownBlocks('[BEAAA-933](/BEAAA/issues/BEAAA-933?focus=ac1)', { prefix: 'BEAAA' });
+  const links = allSpans(blocks).filter((s) => s.type === 'link');
+  assert.equal(links.length, 1, 'deep-link survives');
+  assert.equal(refSpans(blocks).length, 0);
+});
+
+test('link stays link (250530): OFF-PREFIX label (prefix-narrowed mode) is NOT upgraded', () => {
+  // prefix:'BEAAA' but the link refers to a COU issue — outside the narrowed prefix.
+  const blocks = parseMarkdownBlocks('[COU-12](/COU/issues/COU-12)', { prefix: 'BEAAA' });
+  const links = allSpans(blocks).filter((s) => s.type === 'link');
+  assert.equal(links.length, 1, 'off-prefix link survives');
+  assert.equal(refSpans(blocks).length, 0);
+});
+
+test('link → ref (250530): broad fallback (prefix:null) upgrades any canonical /<id>-prefix/issues/<id> link', () => {
+  const blocks = parseMarkdownBlocks('[COU-12](/COU/issues/COU-12)', { prefix: null });
+  const refs = refSpans(blocks);
+  assert.equal(refs.length, 1);
+  assert.equal(refs[0].refId, 'COU-12');
+});
+
+test('SAFETY (250530): a javascript: href is STILL rejected — no ref/link upgrade can bypass the allowlist', () => {
+  // Even though label "BEAAA-933" matches the canonical-ref shape, the hostile
+  // href fails sanitizeHref → the link downgrades to TEXT (label only). The
+  // ref-upgrade path is gated on a non-null `href` so it cannot fire here.
+  const blocks = parseMarkdownBlocks('click [BEAAA-933](javascript:alert(1))', { prefix: 'BEAAA' });
+  // no ref carved out of a hostile link, no anchor with the hostile href
+  assert.equal(refSpans(blocks).length, 0, 'no ref upgrade smuggling past sanitizeHref');
+  assert.equal(
+    allSpans(blocks).some((s) => s.href === 'javascript:alert(1)'),
+    false,
+    'no span carries the hostile href',
+  );
+});
+
+test('SAFETY (250530): a `ref` span carries ONLY a validated id string — no href/HTML can ride along', () => {
+  const blocks = parseMarkdownBlocks(
+    'see `BEAAA-933` and [BEAAA-141](/BEAAA/issues/BEAAA-141)',
+    { prefix: 'BEAAA' },
+  );
+  for (const r of refSpans(blocks)) {
+    // shape: { type: 'ref', refId: <id> } — nothing else.
+    const keys = Object.keys(r).sort();
+    assert.deepEqual(keys, ['refId', 'type'], 'ref span carries only type + refId');
+    assert.match(r.refId, /^[A-Z][A-Z0-9]{1,7}-\d+$/, 'refId is a validated token');
+  }
+});
