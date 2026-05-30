@@ -83,8 +83,25 @@ export function truncateTldrInputs(
 
   // estimateTokens ≈ chars / 4. Reserve headroom for the prompt scaffolding +
   // the truncation marker; split the remainder body-heavy (comments ≤ 25%).
+  //
+  // Plan 250530 — DYNAMIC reserve. The original 1200-char reserve was sized
+  // for the Plan 07-02 prompt; the 1.1.1 prompt-contract addition pushed the
+  // scaffolding past it and the truncated body overshot the cap by ~56 tokens.
+  // Compute the scaffolding length empirically: build the prompt with EMPTY
+  // body+comments (refs preserved — they appear in the footer) so any future
+  // prompt edit auto-adjusts the reserve. The TLDR_TRUNCATION_MARKER is added
+  // back inside the body during truncation, so we subtract its length too.
   const charBudget = maxTokens * 4;
-  const avail = Math.max(2000, charBudget - 1200);
+  const scaffolding = buildPrompt({
+    surface: 'issue',
+    scopeId: '',
+    inputs: { body: '', comments: [], refs: inputs.refs },
+    agentKey: '',
+    agentId: '',
+    companyId: '',
+  });
+  const reserve = scaffolding.length + TLDR_TRUNCATION_MARKER.length;
+  const avail = Math.max(2000, charBudget - reserve);
   const commentsJoined = inputs.comments.join('\n');
   const commentBudget = Math.min(commentsJoined.length, Math.floor(avail * 0.25));
   const bodyBudget = avail - commentBudget;
