@@ -3,19 +3,38 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
 status: executing
-stopped_at: Phase 6.1 UI-SPEC approved
-last_updated: "2026-05-30T15:04:52.823Z"
+stopped_at: Plan 08-02 CODE-COMPLETE (UI tier) — next /gsd:execute-phase 8 → Plan 08-03 live drill
+last_updated: "2026-05-30T15:25:01.708Z"
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 63
-  completed_plans: 55
+  completed_plans: 56
   percent: 78
 ---
 
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
+
+## ▶ Plan 08-02 CODE-COMPLETE 2026-05-30 — Situation Room people-first cockpit (UI tier)
+
+Phase 8 Plan 02 executed on master (sequential, 3 tasks, 5 commits `4ff8f95`→`679e831`). UI tier for the people-first cockpit: per-employee row strip + always-visible needs-you banner consuming Plan 08-01's worker rollup; ROOM-12 org-backlog banner repositioned below them and pinned collapsed (`defaultExpanded={false}`); 5 `--clarity-state-*` CSS tokens; bundle ceiling recalibrated 716 → 729 kB.
+
+**Covers:** ROOM-13/14/15/16/17/18 at UI tier.
+
+**Key decisions:**
+- **[Rule 1 fix]** Plan 08-01 clobbered the ROOM-01..08 agent-grid `employees` (`AgentEmployee[]`) with its rollup (`SituationEmployeeRow[]`); resolved by riding the rollup under a distinct `situation_employees` key in `situation.snapshot`. Agent grid stays byte-identical.
+- **B1 namespace correctness held at UI tier:** AGENT uuid (`blockerChain.ownerAgentId`) threaded into `buildChatDeepLink`, never a USER uuid / `topAction.agentId`.
+- **Bundle ceiling:** actual 742,840 B → recalibrated to 729 kB (746,496 B); under 740 kB sanity ceiling; no synthetic 724 kB cap. Version stays **1.1.11** (bump is Plan 08-03's job).
+
+**Gates:** check-css-scope (200 scoped) ✔ · tsc ✔ · full suite 2374 (2373 pass, 1 pre-existing out-of-scope `situation-artifacts` fail) ✔ · build worker/ui/manifest ✔ · check-ui-bundle-size ✔ · scope-dead job + package.json byte-identical ✔.
+
+**Next action:** `/gsd:execute-phase 8` continues to **Plan 08-03** — BEAAA live drill (Playwright probe of ≥3 states, ≥1 blocked-with-chain-leaf, ≥1 idle bubbled, needs-you banner click flow), which also ships the v1.2.0 version bump + manifest release-history note. Plan 08-03 consumes a green-gates Plan 08-02 (mn2 sequencing satisfied — source is committed on master).
+
+SUMMARY: `.planning/phases/08-situation-room-people-first-cockpit/08-02-SUMMARY.md`.
+
+---
 
 ## ✅ v1.1.9 SHIPPED on BEAAA — 2026-05-30 (deterministic polish pipeline — date/paren/jargon)
 
@@ -487,7 +506,7 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 ## Current Position
 
 Phase: 08 (situation-room-people-first-cockpit) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 **▶ RESUME HERE (2026-05-28 PM — VIEW-DRIVEN COMPILE REWORK SHIPPED + LIVE-VERIFIED on BEAAA).**
 Read MemPalace `clarity_pack/decisions` drawer `drawer_clarity_pack_decisions_8f2f846b8ace835af1cc8c30` ("View-driven compile rework") FIRST. Bottom line:
 
@@ -1235,7 +1254,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 87%
+**Progress:** [█████████░] 89%
 
 ## Performance Metrics
 
@@ -1255,6 +1274,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Plan 04.1-01 | 3 tasks across 2 sessions (Task 1 autonomous build + Task 2 Eric Countermoves live drill 4 min + Task 3 continuation lock), 4 commits `9703dbe..db29504`, 3 files created (probe + findings + traceability test), 3 modified (REQUIREMENTS + STATE + ROADMAP), 9 new tests RED→GREEN; Phase 4.1 Gate Verdict GO |
 | Phase 05-distribution-polish P05-07 | 19min | 2 tasks | 17 files |
 | Phase 08 P01 | 16 | 3 tasks | 9 files |
+| Phase 08 P02 | 16 | 3 tasks | 13 files |
 
 ## Accumulated Context
 
