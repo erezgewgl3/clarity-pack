@@ -146,7 +146,23 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // .md deliverable previewer, deliverable-preview.tsx) is the dominant heavyweight;
 // lazy-loading or replacing it would reclaim far more than these bumps add. Until
 // that audit, prefer one modest bump over crippling a legitimate feature.
-const UI_BUNDLE_BYTES_CEILING = 716 * 1024; // 716 kB = 733,184 bytes
+// Bumped 2026-05-30 from 716 → 729 kB (Plan 08-02: Phase 8 people-first cockpit,
+// +18,282 bytes, no SheetJS): the ONLY new UI-bundle code in this plan is the
+// per-employee row strip (employee-row.tsx + employee-row-strip.tsx), the always-
+// visible needs-you banner (needs-you-banner.tsx), the index.tsx mount wiring +
+// companyPrefix/navigate resolution, the OrgBlockedBacklogBanner defaultExpanded
+// prop, and the Phase 8 CSS (5 state tokens + scoped row/strip/banner chrome).
+// The 5-state classifier + per-employee rollup are worker-side (zero UI cost).
+// The built bundle went 724,558 → 742,840 bytes (+18,282 B over the prior 716 kB
+// build). Verified zero SheetJS sentinels (XLSX/SheetJS/!ref all 0 in the UI
+// bundle), so the delta is the legitimate cockpit code. Recalibrated per the
+// Phase 5/7 precedent (actual + 3 kB headroom rounded UP to the next kB; NO
+// synthetic per-phase cap — the obsolete 724 kB revision-draft cap is NOT used):
+//   ceil((742,840 + 3,072) / 1024) = 729 kB (746,496 bytes), ~3.6 kB headroom.
+// The 740 kB visual-regression baseline is the SANITY ceiling (operator
+// checkpoint required to breach it); 729 kB stays comfortably under it. The
+// LOCKED cockpit surface (ROOM-13..18) was NOT crippled to fit a tighter bump.
+const UI_BUNDLE_BYTES_CEILING = 729 * 1024; // 729 kB = 746,496 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

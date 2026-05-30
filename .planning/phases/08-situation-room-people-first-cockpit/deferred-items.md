@@ -15,3 +15,7 @@
 - **Disposition:** out of scope for Plan 08-01 (deviation-rules SCOPE BOUNDARY —
   only auto-fix issues DIRECTLY caused by the current task's changes). Logged here
   for a future debug pass; not fixed under this plan.
+- **Plan 08-02 re-confirmation (2026-05-30):** still failing identically; still
+  imports zero Plan 08-02 files (`employee-row*.tsx`, `needs-you-banner.tsx`,
+  `situation_employees` wiring). Full suite under Plan 08-02: 2374 tests, 2373
+  pass, 1 fail (this one). Remains out of scope — carried to a future debug pass.
