@@ -385,17 +385,26 @@ test('code → ref (250530): a code span whose content is just a PREFIX-NNN toke
   );
 });
 
-test('code stays code (250530): MIXED content inside backticks is NOT broken apart — code span survives intact', () => {
-  // The agent's hand-rolled gloss (BEAAA-933 — manual note — in_review) is the
-  // exact shape BEAAA-1047 exhibits; the parser must not torture this into a ref
-  // because the rest of the code span isn't a ref. The prompt fix (separately)
-  // teaches the agent to stop emitting these.
+test('code → ref + recursive gloss (250530 v1.1.3): MIXED content with leading PREFIX-NNN + em-dash IS broken apart', () => {
+  // EXPLICIT REVERSAL of the v1.1.1 conservative call. The agent's hand-rolled
+  // gloss (`BEAAA-933 — BEAAA-187 child — ...in_review`) is the pervasive
+  // shape on BEAAA-1000, BEAAA-1047, and every TL;DR. v1.1.3 detects the
+  // leading PREFIX-NNN + em-dash and chips it, then recursively parses the
+  // gloss so the EMBEDDED BEAAA-187 ALSO chips. The v1.1.1 test phrased this
+  // as "the parser must not torture mixed code into a ref" — that conservative
+  // call left the operator with a wall of boxed monospace text, which is
+  // exactly the "still reads like a mess" complaint v1.1.3 closes.
   const input = 'pinned: `BEAAA-933 — BEAAA-187 child — v1.1.2 reconciliation of in_review`';
   const blocks = parseMarkdownBlocks(input, { prefix: 'BEAAA' });
-  const code = allSpans(blocks).find((s) => s.type === 'code');
-  assert.ok(code, 'a code span survives');
-  assert.equal(code.text, 'BEAAA-933 — BEAAA-187 child — v1.1.2 reconciliation of in_review');
-  assert.equal(refSpans(blocks).length, 0, 'no ref carved out of mixed code');
+  // Leading id is now a ref.
+  const refs = refSpans(blocks).map((r) => r.refId).sort();
+  assert.deepEqual(refs, ['BEAAA-187', 'BEAAA-933'], 'BOTH refs (leading + embedded) chip');
+  // The original mixed-content code span is REPLACED by [ref, ...glossSpans];
+  // the verbatim gloss string no longer appears as a single code span.
+  const code = allSpans(blocks).find(
+    (s) => s.type === 'code' && s.text.includes('BEAAA-933 — BEAAA-187 child'),
+  );
+  assert.equal(code, undefined, 'the original mixed-content code span is broken apart');
 });
 
 test('code stays code (250530): non-ref content inside backticks (version string, status enum) stays code', () => {
@@ -641,6 +650,134 @@ test('SAFETY (250530 recursion): XSS still holds — a javascript: href inside b
     false,
     'no nested span carries the hostile href',
   );
+});
+
+// ---------------------------------------------------------------------------
+// Plan 250530 v1.1.3 — leading-PREFIX-NNN-with-separator in a code span. The
+// agent's BEAAA-1000 TL;DR + body shipped boxed `<id> — <gloss>` strings
+// everywhere; the conservative v1.1.1 left these as code and the operator saw
+// no chips. v1.1.3 splits: chip the leading id + recursively parse the gloss
+// so EMBEDDED refs ALSO chip. Separator set is explicit (whitespace / em-dash /
+// en-dash / colon) so derived tokens (BEAAA-933-foo, BEAAA-933.json) stay code.
+// ---------------------------------------------------------------------------
+
+test('v1.1.3 code-leading-ref: the BEAAA-1000 TL;DR pattern chips both refs', () => {
+  // EXACT shape from BEAAA-1000 TL;DR (2026-05-30 screenshot).
+  const input = 'closed (`BEAAA-1086 — UW operational pre-read of BEAAA-1000 Sco` /';
+  const blocks = parseMarkdownBlocks(input, { prefix: 'BEAAA' });
+  const refs = refSpans(blocks).map((r) => r.refId).sort();
+  assert.deepEqual(refs, ['BEAAA-1000', 'BEAAA-1086'], 'leading id + embedded id BOTH chip');
+});
+
+test('v1.1.3 code-leading-ref: the agent pervasive pattern `BEAAA-NNN — title-fragment — UUID`', () => {
+  // Another exact BEAAA-1000 fragment.
+  const input = '`BEAAA-1168 — Compile TL;DR — a119b8e7-d79e-404e-9e66-1`';
+  const blocks = parseMarkdownBlocks(input, { prefix: 'BEAAA' });
+  const refs = refSpans(blocks).map((r) => r.refId);
+  assert.deepEqual(refs, ['BEAAA-1168'], 'leading id chips; UUID tail discarded as plain text');
+  // No spurious chip from the UUID.
+  assert.equal(
+    refs.some((r) => r.includes('a119b8e7')),
+    false,
+    'UUID is not misread as a ref',
+  );
+});
+
+test('v1.1.3 code-leading-ref: SEPARATOR set — space, em-dash, en-dash, colon all trigger the split', () => {
+  for (const [sep, label] of [
+    [' ', 'space'],
+    [' — ', 'em-dash with spaces'],
+    ['—', 'bare em-dash'],
+    [' – ', 'en-dash with spaces'],
+    [': ', 'colon-space'],
+  ]) {
+    const blocks = parseMarkdownBlocks('x `BEAAA-933' + sep + 'gloss` y', { prefix: 'BEAAA' });
+    const refs = refSpans(blocks).map((r) => r.refId);
+    assert.deepEqual(refs, ['BEAAA-933'], `separator "${label}" triggers the chip split`);
+  }
+});
+
+test('v1.1.3 code-leading-ref: HYPHEN and DOT are NOT separators — `BEAAA-933-foo` / `BEAAA-933.json` stay as code', () => {
+  for (const lit of ['BEAAA-933-extension', 'BEAAA-933.json', 'BEAAA-933.md']) {
+    const blocks = parseMarkdownBlocks('see `' + lit + '` here', { prefix: 'BEAAA' });
+    assert.equal(refSpans(blocks).length, 0, `${lit} does NOT trigger the split`);
+    const code = allSpans(blocks).find((s) => s.type === 'code');
+    assert.ok(code, `${lit} survives as a code span`);
+    assert.equal(code.text, lit);
+  }
+});
+
+test('v1.1.3 code-leading-ref: PRE-EXISTING legit code still stays code (npm test, v1.1.2, in_review, status enums)', () => {
+  // Non-ref code spans are unaffected — these were the v1.1.1 protected cases
+  // and they remain protected: the split fires ONLY when the content STARTS
+  // with a valid PREFIX-NNN token.
+  for (const lit of ['npm test', 'v1.1.2', 'in_review', 'b5c5da95', 'scan_id 244ea118', 'done']) {
+    const blocks = parseMarkdownBlocks('x `' + lit + '` y', { prefix: 'BEAAA' });
+    assert.equal(refSpans(blocks).length, 0, `${lit} stays code (not a leading ref)`);
+    const code = allSpans(blocks).find((s) => s.type === 'code');
+    assert.ok(code, `${lit} code span survives`);
+    assert.equal(code.text, lit);
+  }
+});
+
+test('v1.1.3 code-leading-ref: OFF-PREFIX leading id (prefix-narrowed mode) stays as code', () => {
+  // With prefix:'BEAAA' a leading COU-12 must NOT split — only BEAAA-NNN does.
+  const blocks = parseMarkdownBlocks('see `COU-12 — sales project gloss` now', { prefix: 'BEAAA' });
+  assert.equal(refSpans(blocks).length, 0, 'off-prefix leading id stays code');
+  const code = allSpans(blocks).find((s) => s.type === 'code');
+  assert.ok(code, 'the code span survives');
+  assert.equal(code.text, 'COU-12 — sales project gloss');
+});
+
+test('v1.1.3 code-leading-ref: BROAD fallback (prefix:null) splits any leading PREFIX-NNN', () => {
+  const blocks = parseMarkdownBlocks('see `COU-12 — sales project gloss` now', { prefix: null });
+  const refs = refSpans(blocks).map((r) => r.refId);
+  assert.deepEqual(refs, ['COU-12']);
+});
+
+test('v1.1.3 code-leading-ref: a single bare-id code span still upgrades (back-compat — `BEAAA-933` alone)', () => {
+  // The whole-string check from v1.1.1 still fires before the split check.
+  const blocks = parseMarkdownBlocks('see `BEAAA-933` end', { prefix: 'BEAAA' });
+  const refs = refSpans(blocks).map((r) => r.refId);
+  assert.deepEqual(refs, ['BEAAA-933']);
+});
+
+test('v1.1.3 code-leading-ref: chained refs in the gloss ALL chip — `A-1 — B-2 — C-3`', () => {
+  // Three-deep ref chain — the leading splits, then the rest is recursively
+  // parsed and the gloss tokens chip via the normal in-prose ref regex.
+  const blocks = parseMarkdownBlocks('`BEAAA-1 — BEAAA-2 — BEAAA-3`', { prefix: 'BEAAA' });
+  const refs = refSpans(blocks).map((r) => r.refId).sort();
+  assert.deepEqual(refs, ['BEAAA-1', 'BEAAA-2', 'BEAAA-3']);
+});
+
+test('v1.1.3 code-leading-ref: WITHOUT refOpts the split is OFF (back-compat — code stays code)', () => {
+  const blocks = parseMarkdownBlocks('`BEAAA-933 — gloss BEAAA-1000`');
+  assert.equal(refSpans(blocks).length, 0, 'no refs without the opt-in');
+  const code = allSpans(blocks).find((s) => s.type === 'code');
+  assert.ok(code);
+  assert.equal(code.text, 'BEAAA-933 — gloss BEAAA-1000');
+});
+
+test('SAFETY (250530 v1.1.3): the ref span carved by the leading-id split carries ONLY a validated id', () => {
+  const blocks = parseMarkdownBlocks('`BEAAA-933 — anything <script>alert(1)</script> here`', {
+    prefix: 'BEAAA',
+  });
+  const refs = refSpans(blocks);
+  assert.ok(refs.length >= 1);
+  // The first ref MUST be the leading id (a validated token shape).
+  assert.match(refs[0].refId, /^[A-Z][A-Z0-9]{1,7}-\d+$/);
+  assert.equal(refs[0].refId, 'BEAAA-933');
+  // ref span has ONLY {type, refId} — no script HTML can ride along.
+  for (const r of refs) {
+    const keys = Object.keys(r).sort();
+    assert.deepEqual(keys, ['refId', 'type']);
+  }
+  // The <script> tag survives ONLY as inert text (React escapes it on render).
+  const all = allSpans(blocks);
+  for (const s of all) {
+    assert.notEqual(s.type, 'html');
+    assert.notEqual(s.type, 'script');
+  }
 });
 
 test('SAFETY (250530 recursion): no `text` field on strong/em/link spans (the old flat shape is GONE)', () => {

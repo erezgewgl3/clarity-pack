@@ -335,6 +335,23 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.3 (Plan 250530 — leading-PREFIX-NNN code-span split, closes the
+  // BEAAA-1000 / pervasive-agent-pattern mess):
+  //   - The agent's pervasive pattern is `<id> <separator> <gloss>` wrapped in
+  //     backticks (e.g. `BEAAA-1086 — UW operational pre-read of BEAAA-1000`).
+  //     v1.1.1 conservatively left these mixed-content code spans alone — the
+  //     operator saw a wall of boxed monospace strings with no chips. Explicit
+  //     reversal: a code span whose content STARTS with a valid PREFIX-NNN
+  //     token followed by a separator (whitespace, em-dash, en-dash, colon)
+  //     now chips the leading id AND recursively parses the trailing gloss so
+  //     embedded refs in the gloss ALSO chip.
+  //   - Hyphen (-) and dot (.) are NOT separators so derived tokens
+  //     (BEAAA-933-extension, BEAAA-933.json) and legit code (npm test,
+  //     v1.1.2, in_review, status enums) stay untouched.
+  //   - Internally: `Match.span: InlineSpan` widened to `Match.spans: InlineSpan[]`
+  //     so the code-span split can emit [ref, ...glossSpans] in one match step.
+  //     Every other match type wraps its span in a single-element array.
+  //
   // 1.1.2 (Plan 250530 — strong/em/link recursion in safe-markdown — fixes the
   // bold-headline "mess" complaint on BEAAA-1047, 2026-05-30):
   //   - InlineSpan.strong / .em / .link now carry `spans: InlineSpan[]` (was
@@ -379,7 +396,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.2',
+  version: '1.1.3',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
