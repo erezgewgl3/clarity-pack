@@ -115,3 +115,50 @@ test('JARGON CONTRACT (250530): the prompt instructs first-use expansion of abbr
     'the prompt gives a concrete expansion example',
   );
 });
+
+// ---------------------------------------------------------------------------
+// Plan 250530 v1.1.6 — CONTENT RULE. BEAAA-1000 (2026-05-30) shipped a TL;DR
+// that opened with "TL;DR stored as the compile-result document on BEAAA-1168
+// and the operation issue is marked done." — the Editor-Agent was describing
+// WHERE its own TL;DR was filed instead of summarizing the issue. The chip-
+// hide structural fix (v1.1.5) makes the operation refs invisible but the
+// prose is still meta-bureaucratic. Tighten the contract at the prompt level
+// with explicit BAD vs GOOD examples.
+// ---------------------------------------------------------------------------
+
+test('CONTENT RULE (v1.1.6): the prompt forbids meta-information about the compile process / storage / operation issues', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  // The instruction must explicitly call out the failure modes: don't describe
+  // HOW the TL;DR is compiled, WHERE it is stored, WHAT operation issue tracks
+  // it, or any internal bookkeeping.
+  assert.match(prompt, /compiled|stored|operation issue|bookkeeping|meta/i,
+    'prompt explicitly forbids meta-information about the compile process');
+  // The reader's POV anchor — what they actually want.
+  assert.match(prompt, /what.*issue.*about|decision.*flight|next action/i,
+    'prompt restates the reader\'s POV: what is the issue / decision / next action');
+});
+
+test('CONTENT RULE (v1.1.6): the prompt explicitly forbids referencing clarity-pack internal operation issues', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  // The agent should not name its own compile-tracking issues at all — they
+  // carry UUID-bearing titles and the reader has no context for them.
+  assert.match(
+    prompt,
+    /operation issue|compile-result|compile.*TL;DR|uuid/i,
+    'prompt names the forbidden reference shape (operation issues / compile-result / UUID titles)',
+  );
+});
+
+test('CONTENT RULE (v1.1.6): the prompt carries a BAD example AND a GOOD example so the agent has a concrete template', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  // BAD example: includes the exact phrase from the failed BEAAA-1000 TL;DR.
+  assert.match(prompt, /BAD example|what NOT to write|do not write/i,
+    'prompt labels a BAD example');
+  // GOOD example: contrasting template the agent should follow.
+  assert.match(prompt, /GOOD example|what TO write|should write/i,
+    'prompt labels a GOOD example');
+  // The BAD example should reference the actual failure (compile-result on an
+  // operation issue) so the agent can pattern-match.
+  assert.match(prompt, /compile-result/i,
+    'the BAD example mentions compile-result (the actual failure mode)');
+});

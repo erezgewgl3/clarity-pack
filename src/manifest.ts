@@ -335,6 +335,25 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.6 (Plan 250530 — Editor-Agent TL;DR content rule, BAD vs GOOD
+  // examples):
+  //   BEAAA-1000's TL;DR shipped: "TL;DR stored as the compile-result
+  //   document on BEAAA-1168 and the operation issue is marked done." — the
+  //   agent was describing WHERE its own TL;DR was filed instead of
+  //   summarizing the issue. v1.1.5 hid the operation chip, but the prose
+  //   remained meta-bureaucratic. v1.1.6 layers explicit CONTENT rules onto
+  //   the existing buildTldrPrompt:
+  //     - The TL;DR summarizes the ISSUE — not the compile process, not the
+  //       storage path, not the operation issue, not any agent bookkeeping.
+  //     - Never reference clarity-pack internal operation issues.
+  //     - Includes BOTH a labelled BAD example (the exact failure text from
+  //       BEAAA-1000) AND a labelled GOOD example (the same issue summarised
+  //       correctly) so the agent has a concrete contrast to pattern-match
+  //       against.
+  //   Effect is heartbeat-dependent — the new prompt only kicks in on the
+  //   next recompile of each issue. LLM compliance is best-effort, not
+  //   guaranteed.
+  //
   // 1.1.5 (Plan 250530 — structurally hide clarity-pack operation issues from
   // the chip pipeline):
   //   The Editor-Agent creates internal compile-tracking issues with computer-
@@ -430,7 +449,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.5',
+  version: '1.1.6',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
