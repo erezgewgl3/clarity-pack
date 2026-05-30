@@ -284,3 +284,92 @@ test('v1.1.7 splitSentences: empty input returns []', () => {
   assert.deepEqual(splitSentences(''), []);
   assert.deepEqual(splitSentences(null), []);
 });
+
+// ---------------------------------------------------------------------------
+// Plan 250530 v1.1.8 — TRANSLATOR ROLE + VOICE RULES. The v1.1.6+v1.1.7
+// fixes stopped meta-prose, but the resulting TL;DRs still read like agent-
+// to-agent reports ("the binding ratification of Scope-β", "operational
+// sign-offs closed", ISO dates, passive nominal voice). The operator's
+// directive: write like a top-0.1% communicator briefing a busy founder.
+// The prompt now frames the Editor-Agent's role as TRANSLATION (agent-
+// language → founder-language), with 5 explicit voice rules and a
+// stronger BAD/GOOD example pair grounded in the BEAAA-1000 failure.
+// ---------------------------------------------------------------------------
+
+test('v1.1.8 ROLE FRAME: the prompt declares the Editor-Agent\'s job as TRANSLATION (not summary)', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  // The role frame must explicitly call out translation as the duty — distinct
+  // from "summarize". Translation = convert agent-internal vocabulary to
+  // reader-readable English.
+  assert.match(prompt, /translation/i, 'prompt declares the role as TRANSLATION');
+  // Plus an explicit "internal vocabulary" or "agent language" framing.
+  assert.match(prompt, /internal\s+vocabulary|agent[- ]language|agent[- ]term|agent[- ]internal/i,
+    'prompt frames the source as agent-internal vocabulary');
+});
+
+test('v1.1.8 VOICE RULE 1 — DIRECT ADDRESS: the prompt instructs writing "you" when there is something Eric does', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  assert.match(prompt, /\bdirect\s+address\b|\bwrite\s+"you"|\baddress.*reader\b|\bwhen.*you\b/i,
+    'prompt instructs direct address using "you"');
+  // The contrast — what NOT to use — anchors the rule. Either "the operator"
+  // or "ratification is queued" / similar nominal phrasing.
+  assert.match(prompt, /\bthe\s+operator\b|\bratification\s+is\s+queued\b|\bqueued\b/i,
+    'prompt contrasts "you" with the nominal phrasing it replaces');
+});
+
+test('v1.1.8 VOICE RULE 2 — ACTIVE VERBS: the prompt instructs active verbs / present tense', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  assert.match(prompt, /active\s+verbs?|present\s+tense/i, 'active verbs / present tense rule');
+});
+
+test('v1.1.8 VOICE RULE 3 — CONCRETE > NOMINAL: the prompt instructs concrete decisions over codenames', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  assert.match(prompt, /concrete|nominal|plain\s+words|codename/i,
+    'prompt instructs concrete-over-nominal phrasing');
+});
+
+test('v1.1.8 VOICE RULE 4 — HUMAN DATES: the prompt forbids ISO dates and gives a human-date example', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  assert.match(prompt, /human\s+dates?|ISO|2026-06-03/i,
+    'prompt addresses date format (rejects ISO)');
+  // A concrete human-date example — "Wed 6/3" or "tomorrow morning" or similar.
+  assert.match(prompt, /Wed\s+6\/3|6\/3|tomorrow\s+morning/i,
+    'prompt gives a concrete human-date example');
+});
+
+test('v1.1.8 VOICE RULE 5 — TRANSLATE AGENT TERMS: the prompt names specific agent terms and instructs translation', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  assert.match(prompt, /translate.*agent\s+term|every\s+agent\s+term/i,
+    'prompt instructs translation of every agent term');
+  // Names specific agent-internal terms the agent commonly uses.
+  assert.match(prompt, /Scope-?β|operational\s+sign-?off|compile-result|op-seat|pre-read/i,
+    'prompt names specific agent-internal terms that need translation');
+});
+
+test('v1.1.8 BAD/GOOD EXAMPLE PAIR: the GOOD example demonstrates the new voice rules (you-address + human date + concrete decision)', () => {
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  // The GOOD example must use direct "you" address.
+  assert.match(prompt, /you\s+ratify|you\s+sign|you\s+approve|you\s+ship/i,
+    'GOOD example uses direct "you" address');
+  // The GOOD example must use a human date format.
+  assert.match(prompt, /Wed\s+6\/3/i, 'GOOD example uses human date "Wed 6/3"');
+  // The GOOD example must name the actual decision in plain words (rescans
+  // API + measurement) NOT by codename ("Scope-β binding ratification").
+  assert.match(prompt, /rescans\s+API|doc-only.*measurement|measurement.*rescans/i,
+    'GOOD example names the actual decision in plain words');
+});
+
+test('v1.1.8 EXISTING RULES still hold: ref-as-plain-prose / no-meta / no-operation-issues / abbreviation expansion', () => {
+  // The v1.1.8 rewrite must be ADDITIVE on top of the v1.1.3-1.1.7 contracts.
+  // None of the prior rules should be lost.
+  const prompt = promptFor({ body: 'A task body.', comments: [], refs: [] });
+  assert.match(prompt, /plain\s+prose/i, 'plain-prose ref rule preserved');
+  assert.match(prompt, /backticks?/i, 'no-backticks rule preserved');
+  assert.match(prompt, /markdown\s+link/i, 'no-markdown-link rule preserved');
+  assert.match(prompt, /compile-result/i, 'compile-result mention forbidden');
+  assert.match(prompt, /operation\s+issue/i, 'operation-issue rule preserved');
+  assert.match(prompt, /head\s+of\s+underwriting|acceptance\s+criterion/i, 'abbreviation example preserved');
+  // Hard-shape rules unchanged.
+  assert.match(prompt, /\b80\s+words?\b/i, '80-word cap preserved');
+  assert.match(prompt, /bullets?/i, 'bullets rule preserved');
+});

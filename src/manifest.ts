@@ -335,6 +335,29 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.8 (Plan 250530 — TRANSLATOR role frame + 5 voice rules; top-tier
+  // communication style baked into the prompt):
+  //   v1.1.6+v1.1.7 stopped meta-prose deterministically. But the surviving
+  //   TL;DRs still read like agent-to-agent reports (untranslated jargon,
+  //   ISO dates, passive nominal voice, no direct address). The operator's
+  //   directive: "Assume you are a top-notch communicator in the top 0.1% in
+  //   the world. How would you present this issue to an individual?"
+  //
+  //   buildPrompt is rewritten with that voice baked in:
+  //     - ROLE: the Editor-Agent's job is TRANSLATION (agent-internal
+  //       vocabulary → busy-founder-readable English), not summary.
+  //     - FIVE VOICE RULES: (1) direct "you" address; (2) active verbs, present
+  //       tense; (3) concrete > nominal — name the decision in plain words, not
+  //       by codename; (4) human dates ("Wed 6/3" not "2026-06-03"); (5)
+  //       translate every agent term (Scope-β, sign-off, op-seat, pre-read,
+  //       compile-result, G7) — the reader does NOT speak agent-language.
+  //     - STRONGER BAD/GOOD PAIR: BAD is the exact BEAAA-1000 failure text
+  //       annotated with all 6 failure modes; GOOD is the same source issue
+  //       translated by a top-0.1% communicator, annotated with all 8 things
+  //       it does right.
+  //   v1.1.7's deterministic strip stays as the safety net; v1.1.8 raises the
+  //   prompt floor. Effect is heartbeat-dependent (new prompt on next compile).
+  //
   // 1.1.7 (Plan 250530 — DETERMINISTIC META-PROSE STRIP, doesn't trust the LLM):
   //   v1.1.6 added prompt rules forbidding meta-prose; the LLM ignored them on
   //   BEAAA-1000 and shipped a TL;DR that was 100% meta-narration of its own
@@ -466,7 +489,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.7',
+  version: '1.1.8',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
