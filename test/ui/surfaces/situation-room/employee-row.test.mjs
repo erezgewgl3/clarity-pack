@@ -19,10 +19,20 @@ import test from 'node:test';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..');
-const ROW = readFileSync(
+/** Strip // line comments and block comments so forbidden-substring asserts
+ *  evaluate the CODE, not the prose (which legitimately documents the rule). */
+function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+const ROW_RAW = readFileSync(
   path.join(REPO_ROOT, 'src/ui/surfaces/situation-room/employee-row.tsx'),
   'utf8',
 );
+const ROW = ROW_RAW;
+const ROW_CODE = stripComments(ROW_RAW);
 const CSS = readFileSync(
   path.join(REPO_ROOT, 'src/ui/primitives/theme.css'),
   'utf8',
@@ -144,7 +154,7 @@ test('idle/stale affordance write-path deferred is documented (v1.2.0 comment)',
 
 test('row contains NO dangerouslySetInnerHTML', () => {
   assert.equal(
-    (ROW.match(/dangerouslySetInnerHTML/g) || []).length,
+    (ROW_CODE.match(/dangerouslySetInnerHTML/g) || []).length,
     0,
     'row must render React text nodes only (T-08-UI-01)',
   );

@@ -17,10 +17,20 @@ import test from 'node:test';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..');
-const STRIP = readFileSync(
+/** Strip // line comments and block comments so forbidden-substring asserts
+ *  evaluate the CODE, not the prose (which legitimately documents the rule). */
+function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+const STRIP_RAW = readFileSync(
   path.join(REPO_ROOT, 'src/ui/surfaces/situation-room/employee-row-strip.tsx'),
   'utf8',
 );
+const STRIP = STRIP_RAW;
+const STRIP_CODE = stripComments(STRIP_RAW);
 const CSS = readFileSync(
   path.join(REPO_ROOT, 'src/ui/primitives/theme.css'),
   'utf8',
@@ -31,7 +41,7 @@ test('exports EmployeeRowStrip', () => {
 });
 
 test('imports EmployeeRow (single source of truth for row render)', () => {
-  assert.match(STRIP, /import \{ EmployeeRow \} from '\.\/employee-row\.tsx'/);
+  assert.match(STRIP, /import \{ EmployeeRow[\s\S]*?\} from '\.\/employee-row\.tsx'/);
 });
 
 // ---------------------------------------------------------------------------
@@ -40,7 +50,7 @@ test('imports EmployeeRow (single source of truth for row render)', () => {
 
 test('strip does NOT call .sort() on the employees prop (verbatim consumption)', () => {
   assert.equal(
-    (STRIP.match(/\.sort\(/g) || []).length,
+    (STRIP_CODE.match(/\.sort\(/g) || []).length,
     0,
     'employees array must be consumed in worker order — no UI re-sort',
   );
@@ -48,7 +58,7 @@ test('strip does NOT call .sort() on the employees prop (verbatim consumption)',
 
 test('strip does NOT call .filter() on the employees prop (verbatim consumption)', () => {
   assert.equal(
-    (STRIP.match(/\.filter\(/g) || []).length,
+    (STRIP_CODE.match(/\.filter\(/g) || []).length,
     0,
     'employees array must be consumed in worker order — no UI filter',
   );

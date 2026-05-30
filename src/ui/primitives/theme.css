@@ -591,6 +591,179 @@
   background: var(--clarity-bg);
   padding: 24px 36px 64px;
   min-height: 100vh;
+
+  /* Phase 8 (Plan 08-02) state tokens — idle-LOUD posture per CONTEXT.md:
+   *   - running / reviewing → green family (healthy momentum)
+   *   - blocked → red (urgent)
+   *   - idle / stale → amber (a CEO problem; bubble up near stuck)
+   *   - unknown → neutral fallback (NEVER a 6th color) */
+  --clarity-state-running: #16a34a;     /* green-600 */
+  --clarity-state-reviewing: #15803d;   /* green-700 */
+  --clarity-state-blocked: #dc2626;     /* red-600 */
+  --clarity-state-idle: #d97706;        /* amber-600 — LOUD per LOCKED decision */
+  --clarity-state-stale: #b45309;       /* amber-700 — deeper amber */
+  --clarity-state-unknown: #6b7280;     /* gray-500 */
+}
+
+/* ---------- Phase 8 employee row strip (Plan 08-02 / ROOM-13/16/17) ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-employee-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0 1.25rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-strip-empty {
+  color: var(--clarity-ink-3, #8a8472);
+  font-style: italic;
+  margin: 0.5rem 0;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.75rem;
+  padding: 0.6rem 0.85rem 0.6rem 1.1rem;
+  border: 1px solid var(--clarity-line, rgba(255, 255, 255, 0.08));
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--clarity-bg), white 2%);
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-state-dot {
+  position: absolute;
+  left: 0.45rem;
+  top: 0.95rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--clarity-state-unknown);
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-name {
+  font-weight: 600;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-role {
+  color: var(--clarity-ink-3, #8a8472);
+  font-size: 0.9rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-state-pill {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.45rem;
+  border-radius: 2px;
+  color: var(--clarity-state-unknown);
+  border: 1px solid currentColor;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-age {
+  color: var(--clarity-ink-3, #8a8472);
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-focus {
+  flex-basis: 100%;
+  margin: 0.15rem 0 0;
+  color: var(--clarity-fg);
+  font-size: 0.92rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-focus-ref {
+  color: var(--clarity-ink-3, #8a8472);
+  font-size: 0.82rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-chain {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--clarity-state-blocked);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-chain-prefix {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  color: var(--clarity-ink-3, #8a8472);
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-chain-action {
+  font-weight: 500;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-chain-leaf {
+  color: var(--clarity-ink-3, #8a8472);
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-chain-open-chat,
+[data-clarity-surface='situation-room'] .clarity-employee-assign {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 2px;
+  border: 1px solid var(--clarity-line-bright, rgba(255, 255, 255, 0.2));
+  background: transparent;
+  color: var(--clarity-fg);
+  cursor: pointer;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-chain-open-chat:disabled,
+[data-clarity-surface='situation-room'] .clarity-employee-assign:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-action {
+  flex-basis: 100%;
+  margin: 0.2rem 0 0 0.5rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-state-running .clarity-employee-state-dot {
+  background: var(--clarity-state-running);
+}
+[data-clarity-surface='situation-room'] .clarity-state-reviewing .clarity-employee-state-dot {
+  background: var(--clarity-state-reviewing);
+}
+[data-clarity-surface='situation-room'] .clarity-state-blocked .clarity-employee-state-dot {
+  background: var(--clarity-state-blocked);
+}
+[data-clarity-surface='situation-room'] .clarity-state-idle .clarity-employee-state-dot {
+  background: var(--clarity-state-idle);
+}
+[data-clarity-surface='situation-room'] .clarity-state-stale .clarity-employee-state-dot {
+  background: var(--clarity-state-stale);
+}
+[data-clarity-surface='situation-room'] .clarity-state-unknown .clarity-employee-state-dot {
+  background: var(--clarity-state-unknown);
+}
+
+[data-clarity-surface='situation-room'] .clarity-state-running .clarity-employee-state-pill {
+  color: var(--clarity-state-running);
+}
+[data-clarity-surface='situation-room'] .clarity-state-reviewing .clarity-employee-state-pill {
+  color: var(--clarity-state-reviewing);
+}
+[data-clarity-surface='situation-room'] .clarity-state-blocked .clarity-employee-state-pill {
+  color: var(--clarity-state-blocked);
+}
+[data-clarity-surface='situation-room'] .clarity-state-idle .clarity-employee-state-pill {
+  color: var(--clarity-state-idle);
+}
+[data-clarity-surface='situation-room'] .clarity-state-stale .clarity-employee-state-pill {
+  color: var(--clarity-state-stale);
 }
 
 /* ---------- CTA cluster (every Clarity surface, opted-out state) ---------- */
