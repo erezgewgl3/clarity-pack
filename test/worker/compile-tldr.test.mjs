@@ -18,6 +18,11 @@ import {
   splitSentences,
   META_PROSE_PATTERNS,
   MIN_USEFUL_TLDR_LEN,
+  polishTldr,
+  isoDateToHuman,
+  stripRestatedParenAfterRef,
+  applyJargonGlossary,
+  JARGON_GLOSSARY,
 } from '../../src/worker/agents/compile-tldr.ts';
 
 function promptFor(inputs) {
@@ -372,4 +377,203 @@ test('v1.1.8 EXISTING RULES still hold: ref-as-plain-prose / no-meta / no-operat
   // Hard-shape rules unchanged.
   assert.match(prompt, /\b80\s+words?\b/i, '80-word cap preserved');
   assert.match(prompt, /bullets?/i, 'bullets rule preserved');
+});
+
+// ---------------------------------------------------------------------------
+// Plan 250530 v1.1.9 — DETERMINISTIC POLISH PIPELINE. The agent's surviving
+// (non-meta) output still reads like AI slop: ISO dates, parenthetical
+// restatements after chip ids, generic agent jargon ("operational sign-off",
+// "pre-read", "binding ratification"). Three narrow regex passes fix each
+// signature reliably.
+// ---------------------------------------------------------------------------
+
+// --- isoDateToHuman --------------------------------------------------------
+
+test('v1.1.9 isoDateToHuman: a standalone ISO date becomes "Weekday M/D" with computed weekday', () => {
+  // 2026-06-03 is a Wednesday. Verify computed weekday + zero-stripped M/D.
+  const out = isoDateToHuman('Ratification on 2026-06-03.');
+  assert.equal(out, 'Ratification on Wed 6/3.');
+});
+
+test('v1.1.9 isoDateToHuman: an agent-written weekday before the date is PRESERVED (no duplication)', () => {
+  // "Wed 2026-06-03" must NOT become "Wed Wed 6/3".
+  assert.equal(isoDateToHuman('Wed 2026-06-03 review'), 'Wed 6/3 review');
+  assert.equal(isoDateToHuman('Wednesday 2026-06-03'), 'Wednesday 6/3');
+  // Comma / period after the weekday word also works.
+  assert.equal(isoDateToHuman('Tue, 2026-06-03'), 'Tue 6/3');
+});
+
+test('v1.1.9 isoDateToHuman: identifier-like contexts (BEAAA-2026-06-03) are NOT touched (boundary class)', () => {
+  // The ISO date inside an identifier-shape must be left alone.
+  assert.equal(isoDateToHuman('see BEAAA-2026-06-03'), 'see BEAAA-2026-06-03');
+  assert.equal(isoDateToHuman('version 2026-06-03-rc1'), 'version 2026-06-03-rc1');
+});
+
+test('v1.1.9 isoDateToHuman: invalid dates (2026-13-45, 2026-02-30) pass through unchanged', () => {
+  // Round-trip validation rejects fake dates.
+  assert.equal(isoDateToHuman('see 2026-13-45'), 'see 2026-13-45'); // month > 12 already excluded by regex
+  // 2026-02-30 — Feb has 29 days max (2026 is not a leap year); the regex
+  // accepts day 30 syntactically but Date round-trip rejects it.
+  assert.equal(isoDateToHuman('see 2026-02-30'), 'see 2026-02-30');
+});
+
+test('v1.1.9 isoDateToHuman: multiple dates in one string are all transformed', () => {
+  const out = isoDateToHuman('Slipped from 2026-06-03 to 2026-06-10.');
+  assert.equal(out, 'Slipped from Wed 6/3 to Wed 6/10.');
+});
+
+test('v1.1.9 isoDateToHuman: empty/null/non-string input passes through', () => {
+  assert.equal(isoDateToHuman(''), '');
+  assert.equal(isoDateToHuman(null), null);
+  assert.equal(isoDateToHuman(undefined), undefined);
+});
+
+// --- stripRestatedParenAfterRef --------------------------------------------
+
+test('v1.1.9 stripRestatedParenAfterRef: a title-like parenthetical after a ref id is removed', () => {
+  // The exact BEAAA-1000 failure shape: "BEAAA-1086 (Underwriter pre-read)".
+  assert.equal(
+    stripRestatedParenAfterRef('see BEAAA-1086 (Underwriter pre-read).'),
+    'see BEAAA-1086.',
+  );
+  assert.equal(
+    stripRestatedParenAfterRef('BEAAA-1103 (Claims Architect).'),
+    'BEAAA-1103.',
+  );
+});
+
+test('v1.1.9 stripRestatedParenAfterRef: a lowercase-led parenthetical (footnote/note) is PRESERVED', () => {
+  // "(for context)" and "(now closed)" are not restatements — keep.
+  assert.equal(
+    stripRestatedParenAfterRef('BEAAA-1086 (for context).'),
+    'BEAAA-1086 (for context).',
+  );
+  assert.equal(
+    stripRestatedParenAfterRef('BEAAA-1086 (now closed).'),
+    'BEAAA-1086 (now closed).',
+  );
+});
+
+test('v1.1.9 stripRestatedParenAfterRef: a parenthetical containing ANOTHER ref is PRESERVED (cross-ref)', () => {
+  // "(or BEAAA-1103 as backup)" is a cross-ref the operator may want — keep.
+  assert.equal(
+    stripRestatedParenAfterRef('BEAAA-1086 (or BEAAA-1103 as backup).'),
+    'BEAAA-1086 (or BEAAA-1103 as backup).',
+  );
+});
+
+test('v1.1.9 stripRestatedParenAfterRef: status-like all-caps paren ("DONE", "BLOCKED") is stripped (chip shows status)', () => {
+  // The chip already shows the status badge; an explicit "(DONE)" is redundant.
+  assert.equal(
+    stripRestatedParenAfterRef('BEAAA-1086 (DONE).'),
+    'BEAAA-1086.',
+  );
+});
+
+test('v1.1.9 stripRestatedParenAfterRef: the same id appearing multiple times — each restatement stripped', () => {
+  const out = stripRestatedParenAfterRef(
+    'sign-offs in: BEAAA-1086 (Underwriter), BEAAA-1103 (Claims Architect).',
+  );
+  assert.equal(out, 'sign-offs in: BEAAA-1086, BEAAA-1103.');
+});
+
+// --- applyJargonGlossary ---------------------------------------------------
+
+test('v1.1.9 applyJargonGlossary: "operational sign-off" / "sign-offs" → "approval" / "approvals"', () => {
+  assert.equal(
+    applyJargonGlossary('Both operational sign-offs are in.'),
+    'Both approvals are in.',
+  );
+  assert.equal(
+    applyJargonGlossary('The operational sign-off is queued.'),
+    'The approval is queued.',
+  );
+  // Bare "sign-off" / "sign-offs" also normalized.
+  assert.equal(applyJargonGlossary('sign-offs pending'), 'approvals pending');
+});
+
+test('v1.1.9 applyJargonGlossary: "pre-read" / "pre-reads" → "review" / "reviews"', () => {
+  assert.equal(applyJargonGlossary('UW pre-read is in.'), 'UW review is in.');
+  assert.equal(applyJargonGlossary('Two pre-reads queued.'), 'Two reviews queued.');
+});
+
+test('v1.1.9 applyJargonGlossary: "binding ratification" → "final approval"; bare "ratification" → "approval"', () => {
+  assert.equal(
+    applyJargonGlossary('binding ratification on Wed 6/3.'),
+    'final approval on Wed 6/3.',
+  );
+  assert.equal(applyJargonGlossary('post-ratification kickoff'), 'post-approval kickoff');
+});
+
+test('v1.1.9 applyJargonGlossary: "countersign" inflections → "sign off" / "signed off" / etc.', () => {
+  assert.equal(applyJargonGlossary('HoUW must countersign.'), 'HoUW must sign off.');
+  assert.equal(applyJargonGlossary('HoUW countersigned today.'), 'HoUW signed off today.');
+  assert.equal(applyJargonGlossary('awaiting countersigning'), 'awaiting signing off');
+});
+
+test('v1.1.9 applyJargonGlossary: case-insensitive — "OPERATIONAL SIGN-OFF" still substitutes', () => {
+  assert.equal(
+    applyJargonGlossary('OPERATIONAL SIGN-OFF status: closed.'),
+    'approval status: closed.',
+  );
+});
+
+test('v1.1.9 applyJargonGlossary: domain-specific codenames (Scope-β, G7, Tier-2) are NOT translated', () => {
+  // These are unique to the source issue — the agent is meant to keep them.
+  const input = 'Scope-β engagement; G7 tabletop; Tier-2+ claim';
+  assert.equal(applyJargonGlossary(input), input);
+});
+
+test('v1.1.9 JARGON_GLOSSARY: entries are well-formed { pattern: RegExp, replacement: string }', () => {
+  assert.ok(Array.isArray(JARGON_GLOSSARY));
+  assert.ok(JARGON_GLOSSARY.length >= 5);
+  for (const e of JARGON_GLOSSARY) {
+    assert.ok(e.pattern instanceof RegExp, 'pattern is a RegExp');
+    assert.equal(typeof e.replacement, 'string', 'replacement is a string');
+    // All patterns use the case-insensitive flag.
+    assert.ok(e.pattern.flags.includes('i'), `pattern is case-insensitive: ${e.pattern}`);
+  }
+});
+
+// --- polishTldr (integration) ----------------------------------------------
+
+test('v1.1.9 polishTldr: the EXACT BEAAA-1000 v1.1.8-output failure transforms across all three passes', () => {
+  // Verbatim slice of the agent's v1.1.8 output, copied from the operator's screenshot:
+  // ISO date + restated paren + agent jargon all in one paragraph.
+  const input = 'Engagement plan is posted; both operational sign-offs are in hand: BEAAA-1086 (Underwriter pre-read) and BEAAA-1103 (Claims Architect). Wed 2026-06-03 CTO ↔ Head of Underwriting (HoUW) scanner-contract review — binding ratification.';
+  const out = polishTldr(input);
+
+  // 1. ISO date → human format (with weekday preserved).
+  assert.ok(out.includes('Wed 6/3'), `expected "Wed 6/3" in output: ${out}`);
+  assert.equal(/2026-06-03/.test(out), false, 'ISO date removed');
+
+  // 2. Restated parentheticals after ref ids removed.
+  assert.equal(/BEAAA-1086\s*\(Underwriter pre-read\)/.test(out), false, 'restated paren after BEAAA-1086 removed');
+  assert.equal(/BEAAA-1103\s*\(Claims Architect\)/.test(out), false, 'restated paren after BEAAA-1103 removed');
+  // The chips themselves survive.
+  assert.ok(out.includes('BEAAA-1086') && out.includes('BEAAA-1103'), 'ref ids survive');
+
+  // 3. Jargon substitutions applied.
+  assert.equal(/operational sign-offs/.test(out), false, '"operational sign-offs" translated');
+  assert.ok(out.includes('approvals'), 'jargon translated to "approvals"');
+  assert.equal(/binding ratification/.test(out), false, '"binding ratification" translated');
+  assert.ok(out.includes('final approval'), 'jargon translated to "final approval"');
+  // "(HoUW)" parenthetical is a first-use abbreviation expansion, NOT a title
+  // restatement after a ref id — preserved.
+  assert.ok(out.includes('(HoUW)'), 'abbreviation-expansion paren preserved');
+});
+
+test('v1.1.9 polishTldr: pure substantive prose with NO slop signatures is BYTE-IDENTICAL after polish', () => {
+  const clean = '**Wed 6/3 you ratify upgrading the rescans API from doc-only to actual measurement.**\n\n- Underwriter review and Claims Architect approval are both in (BEAAA-1086, BEAAA-1103). Pricing variance is settled.\n- Next: show up to the 6/3 review ready to sign.';
+  // Note: the GOOD example uses "Underwriter review" (already plain English),
+  // bare "BEAAA-NNN" refs (no restated parens), "Wed 6/3" (human date), and
+  // "ratify" (acceptable English verb; only "ratification" the noun is in the
+  // glossary). Polish should be a no-op.
+  assert.equal(polishTldr(clean), clean);
+});
+
+test('v1.1.9 polishTldr: empty/null/non-string input returns empty string', () => {
+  assert.equal(polishTldr(''), '');
+  assert.equal(polishTldr(null), '');
+  assert.equal(polishTldr(undefined), '');
 });

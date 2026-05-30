@@ -219,6 +219,135 @@ export function splitSentences(line: string): string[] {
   return parts.map((p) => p.trim()).filter((p) => p.length > 0);
 }
 
+// ---------------------------------------------------------------------------
+// Plan 250530 v1.1.9 — DETERMINISTIC POLISH PIPELINE.
+//
+// Honest read after v1.1.8: prompt-engineering plateaued. The agent stopped
+// writing meta-prose but its surviving output still reads like AI slop — ISO
+// dates ("Wed 2026-06-03"), titles restated in parens right after a chip
+// ("(Underwriter pre-read)"), generic agent jargon ("operational sign-off",
+// "binding ratification", "pre-read"). These are LLM-training-distribution
+// signatures that prompts move ~30% on the dial. The remaining 70% lands
+// with deterministic transforms.
+//
+// Three narrow passes, each pure, regex-bounded, testable:
+//   1. isoDateToHuman — `\d{4}-\d{2}-\d{2}` → "Wed 6/3" (weekday computed;
+//      preserved if the agent already wrote one). Skips identifier-like
+//      contexts (`BEAAA-2026-06-03` stays put — boundary class excludes
+//      word-or-hyphen on either side).
+//   2. stripRestatedParenAfterRef — `BEAAA-NNN (Title-like content)` → drop
+//      the parenthetical. Conservative: only strips when the parens content
+//      starts with a capital AND doesn't contain another PREFIX-NNN
+//      (cross-refs survive: "BEAAA-1086 (or BEAAA-1103 as backup)" stays put).
+//   3. applyJargonGlossary — 6 entries covering the worst agent-generic
+//      terms ("operational sign-off" → "approval", "pre-read" → "review",
+//      "binding ratification" → "final approval"). Case-insensitive. Plural
+//      handled via a captured `(s?)` group. Issue-specific codenames
+//      (Scope-β, Path B, G7, Tier-2) are deliberately NOT translated —
+//      those are unique to the source issue and the agent should keep them.
+//
+// polishTldr() runs all three in order. It's cosmetic only: no semantic
+// stripping (that's stripMetaProse's job from v1.1.7). Runs in finalizeTldr
+// AFTER stripMetaProse and AFTER the min-length gate, BEFORE upsertTldr.
+
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Pure: replace ISO dates (YYYY-MM-DD) with human format ("Wed M/D"). When
+ *  the agent already wrote a weekday word immediately before the date, that
+ *  weekday is preserved (no duplication). Identifier contexts like
+ *  `BEAAA-2026-06-03` are skipped via boundary class. Invalid dates pass
+ *  through unchanged. */
+export function isoDateToHuman(input: string): string {
+  if (typeof input !== 'string' || input.length === 0) return input;
+  return input.replace(
+    /(?<![\w-])(?:(Sun(?:day)?|Mon(?:day)?|Tue(?:s(?:day)?)?|Wed(?:nes(?:day)?)?|Thu(?:r(?:s(?:day)?)?)?|Fri(?:day)?|Sat(?:urday)?)[\s.,]+)?(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?![\w-])/gi,
+    (match, weekday: string | undefined, year: string, month: string, day: string) => {
+      const y = Number(year);
+      const mo = Number(month);
+      const d = Number(day);
+      const date = new Date(y, mo - 1, d);
+      // Validate by round-trip: if any field doesn't survive, the input was
+      // technically formatted but not a real date — leave alone.
+      if (
+        date.getFullYear() !== y ||
+        date.getMonth() !== mo - 1 ||
+        date.getDate() !== d
+      ) {
+        return match;
+      }
+      const computedWeekday = WEEKDAY_SHORT[date.getDay()];
+      // Use the agent's weekday spelling if they wrote one; else use computed.
+      const useWeekday = weekday ?? computedWeekday;
+      return `${useWeekday} ${mo}/${d}`;
+    },
+  );
+}
+
+/** Pure: when a `PREFIX-NNN` plain id is immediately followed by a
+ *  parenthetical that starts with a capital letter, the parenthetical is the
+ *  agent restating the chip's title (the chip auto-shows the title; the
+ *  parenthetical is redundant noise). Strip just the parenthetical, keep the
+ *  id. Conservative — never strips parens that contain ANOTHER PREFIX-NNN
+ *  (that's a cross-ref, not a restatement) and never strips lowercase-led
+ *  parens like "(for context)" / "(now closed)" (those are footnotes, not
+ *  title restatements). */
+export function stripRestatedParenAfterRef(input: string): string {
+  if (typeof input !== 'string' || input.length === 0) return input;
+  return input.replace(
+    /\b([A-Z][A-Z0-9]{1,7}-\d+)\s*\(([A-Z][^)]{0,80})\)/g,
+    (match, id: string, content: string) => {
+      // If the parens content references ANOTHER PREFIX-NNN, leave it alone —
+      // it's a cross-ref the operator may want.
+      if (/\b[A-Z][A-Z0-9]{1,7}-\d+\b/.test(content)) return match;
+      return id;
+    },
+  );
+}
+
+/** A small, conservative glossary of generic agent-language → plain English
+ *  substitutions. ONLY entries that translate cleanly out of context —
+ *  domain-specific codenames (Scope-β, G7, Tier-2, ARE Scanner) are NOT
+ *  touched because they are part of the source-issue's identity and the
+ *  reader is meant to learn them. Plural is handled via a captured `(s?)`
+ *  group so "sign-off" → "approval" AND "sign-offs" → "approvals". */
+export const JARGON_GLOSSARY: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
+  // Order matters: more specific phrases must match before their generic forms.
+  // "operational sign-off" → "approval" is more specific than bare "sign-off",
+  // so it goes first; the bare form catches any remaining "sign-off" usages.
+  { pattern: /\boperational\s+sign-?off(s?)\b/gi, replacement: 'approval$1' },
+  { pattern: /\bsign-?off(s?)\b/gi, replacement: 'approval$1' },
+  { pattern: /\bpre-?read(s?)\b/gi, replacement: 'review$1' },
+  { pattern: /\bbinding\s+ratification(s?)\b/gi, replacement: 'final approval$1' },
+  { pattern: /\bratification(s?)\b/gi, replacement: 'approval$1' },
+  { pattern: /\bcountersign\b/gi, replacement: 'sign off' },
+  { pattern: /\bcountersigns\b/gi, replacement: 'signs off' },
+  { pattern: /\bcountersigned\b/gi, replacement: 'signed off' },
+  { pattern: /\bcountersigning\b/gi, replacement: 'signing off' },
+];
+
+/** Pure: apply the glossary in order. Case-insensitive matches via the regex
+ *  `i` flag; plural handled by `(s?)` capture in the replacement template. */
+export function applyJargonGlossary(input: string): string {
+  if (typeof input !== 'string' || input.length === 0) return input;
+  let out = input;
+  for (const entry of JARGON_GLOSSARY) {
+    out = out.replace(entry.pattern, entry.replacement);
+  }
+  return out;
+}
+
+/** Pure: run all three polish passes in order. Cosmetic only — no sentence
+ *  drops, no semantic changes. Caller (finalizeTldr) runs this AFTER
+ *  stripMetaProse and AFTER the min-length gate, BEFORE upsertTldr. */
+export function polishTldr(input: string): string {
+  if (typeof input !== 'string' || input.length === 0) return '';
+  let out = input;
+  out = isoDateToHuman(out);
+  out = stripRestatedParenAfterRef(out);
+  out = applyJargonGlossary(out);
+  return out;
+}
+
 /** Pure: strip meta-prose sentences from a TL;DR body. Preserves markdown
  *  structure (bullets / headings / paragraph breaks). Returns the cleaned
  *  body (may be empty if every sentence was meta). Never throws. */
@@ -507,6 +636,12 @@ export async function finalizeTldr(
     );
   }
 
+  // Plan 250530 v1.1.9 — DETERMINISTIC POLISH. Cosmetic only — no sentence
+  // drops or semantic changes. Three passes: ISO→human dates, strip restated
+  // parenthetical after a ref id, generic-jargon glossary. Reliably moves the
+  // dial on the LLM-training-distribution slop that prompt rules don't reach.
+  const polished = polishTldr(stripped);
+
   recordSuccess(args.agentKey);
 
   const tags = [EDITOR_WRITE_TAG]; // D-04 self-loop filter tag
@@ -516,7 +651,7 @@ export async function finalizeTldr(
     surface: args.surface,
     scope_id: args.scopeId,
     content_hash: args.contentHash,
-    body: stripped, // Plan 250530 v1.1.7 — cache the cleaned body, not the raw LLM output.
+    body: polished, // Plan 250530 v1.1.9 — cache the polished body (strip + polish).
     generated_at: new Date().toISOString(),
     source_revisions: [args.contentHash],
     compiled_by_agent_id: EDITOR_AGENT_ID_TAG,

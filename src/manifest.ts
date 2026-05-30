@@ -335,6 +335,42 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.9 (Plan 250530 — DETERMINISTIC POLISH PIPELINE for the LLM-slop the
+  // prompt couldn't reach):
+  //   Honest post-mortem after v1.1.8: prompt-engineering moved the LLM ~30%
+  //   toward top-tier voice but the remaining 70% (ISO dates, restated
+  //   parentheticals after chip ids, generic agent jargon) is the LLM's
+  //   training-distribution default and prompts don't reliably override it.
+  //   v1.1.9 lands those wins deterministically.
+  //
+  //   New exports in compile-tldr.ts: polishTldr(body), isoDateToHuman(s),
+  //   stripRestatedParenAfterRef(s), applyJargonGlossary(s), JARGON_GLOSSARY.
+  //   Three narrow regex passes:
+  //     1. ISO → human dates ("2026-06-03" → "Wed 6/3", computing the
+  //        weekday; if the agent already wrote one it's preserved, no
+  //        duplication; identifier-shape contexts like BEAAA-2026-06-03 are
+  //        skipped via boundary class; invalid dates pass through unchanged).
+  //     2. Strip restated parenthetical after a ref id ("BEAAA-1086
+  //        (Underwriter pre-read)" → "BEAAA-1086"). Conservative: only
+  //        capital-letter-led parens, never if they contain another
+  //        PREFIX-NNN (cross-refs survive), never lowercase-led notes
+  //        ("(for context)").
+  //     3. Generic-jargon glossary: "operational sign-off(s)" → "approval(s)",
+  //        "pre-read(s)" → "review(s)", "binding ratification" → "final
+  //        approval", "countersign(ed/ing/s)" → "sign off / signed off /
+  //        signing off / signs off". Domain-specific codenames (Scope-β, G7,
+  //        Tier-2, ARE Scanner) are NOT translated — those are unique to the
+  //        source issue.
+  //   polishTldr runs in finalizeTldr AFTER stripMetaProse and AFTER the
+  //   min-length gate, BEFORE upsertTldr. Cosmetic only — no sentence drops,
+  //   no semantic changes.
+  //
+  //   FUTURE TECH DEBT (B): structured TL;DR output (JSON schema instead of
+  //   free-form prose). Deferred because rigid templates would fail on
+  //   heterogeneous issue types (research, status updates, post-mortems —
+  //   not every issue has a "next action"). The right shape is probably a
+  //   discriminated union of templates plus a free-prose escape hatch.
+  //
   // 1.1.8 (Plan 250530 — TRANSLATOR role frame + 5 voice rules; top-tier
   // communication style baked into the prompt):
   //   v1.1.6+v1.1.7 stopped meta-prose deterministically. But the surviving
@@ -489,7 +525,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.8',
+  version: '1.1.9',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
