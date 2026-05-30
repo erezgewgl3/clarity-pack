@@ -335,6 +335,24 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.5 (Plan 250530 — structurally hide clarity-pack operation issues from
+  // the chip pipeline):
+  //   The Editor-Agent creates internal compile-tracking issues with computer-
+  //   generated titles like "Compile TL;DR — a119b8e7-d79e-404e-9e66-…". When
+  //   the TL;DR refers back to these (which it does, every cycle), v1.1.3+v1.1.4
+  //   chipped them and the operator saw UUID-bearing chips polluting prose.
+  //   v1.1.5 detects them at the resolver:
+  //     - resolve-refs handler reads each issue's `originKind` and sets
+  //       hiddenAsRef:true when it starts with `plugin:clarity-pack:operation:`
+  //       (the namespace agent-task-delivery uses for every operation kind —
+  //       tldr-compile / bulletin-compile / bulletin-gloss / sign-off / etc.).
+  //     - Shared reference-resolver now forwards `hiddenAsRef` (was dropped
+  //       by the explicit field mapping).
+  //     - RefChip renders a plain `<span class="clarity-ref-chip-hidden">`
+  //       (no chip border, no status badge, no anchor, no hover-peek) when
+  //       card.hiddenAsRef. The id survives in prose as inert text.
+  //   No new bridge calls, no parser change, no XSS surface.
+  //
   // 1.1.4 (Plan 250530 — chip visual identity, BEAAA-1000 follow-up):
   //   v1.1.3 fixed the chip pipeline at the parser level, but the chip's CSS
   //   (`font-family: 'Geist Mono', ui-monospace, …`) made every chip visually
@@ -412,7 +430,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.4',
+  version: '1.1.5',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

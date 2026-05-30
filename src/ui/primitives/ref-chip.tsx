@@ -140,6 +140,16 @@ export function RefChip({ refId }: { refId: string }): React.ReactElement {
       </span>
     );
   }
+  // Plan 250530 v1.1.5 — clarity-pack internal operation issues
+  // (originKind starting with `plugin:clarity-pack:operation:`) carry computer-
+  // generated titles (often UUID-bearing) that pollute every TL;DR referencing
+  // them. resolve-refs flags the card with hiddenAsRef:true; the chip degrades
+  // to inert plain text so the id survives in prose but no chip/title/badge
+  // renders. No anchor, no peek — the operator should never need to navigate
+  // to internal compile-tracking bookkeeping.
+  if (card.hiddenAsRef) {
+    return <span className="clarity-ref-chip-hidden">{card.id}</span>;
+  }
   // Plan 04.2-05 D3 — once resolved AND companyPrefix is available, render
   // as a host-routed anchor (nav.linkProps — NEVER raw <a href>; SCAF-09 +
   // ESLint no-raw-anchor rule). Without a prefix the chip stays a span so

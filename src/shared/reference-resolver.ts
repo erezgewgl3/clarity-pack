@@ -19,6 +19,9 @@ export type RefResolverFetcher = (ids: string[]) => Promise<
     // still type-check; the worker handler always populates them.
     descriptionExcerpt?: string | null;
     ownerName?: string | null;
+    // Plan 250530 v1.1.5 — opt-in chip-render gate (resolve-refs sets it for
+    // clarity-pack internal operation issues). Forwarded verbatim to RefCardData.
+    hiddenAsRef?: boolean;
   }>
 >;
 
@@ -65,6 +68,8 @@ export async function resolveRefs(
       // consumer tolerates.
       descriptionExcerpt: r.descriptionExcerpt ?? null,
       ownerName: r.ownerName ?? null,
+      // Plan 250530 v1.1.5 — forward the chip-render gate.
+      hiddenAsRef: r.hiddenAsRef ?? false,
     };
   });
 }

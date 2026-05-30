@@ -32,6 +32,11 @@ import type { RefCardData } from '../../shared/types.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { resolveRefsViaSdk } from './sdk-ref-fetch.ts';
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
+// Plan 250530 v1.1.5 — detect clarity-pack internal operation issues so the
+// chip can degrade them to plain text. Their computer-generated titles (often
+// UUID-bearing) are meaningless to the operator and would pollute every TL;DR
+// that mentions them with bookkeeping noise.
+import { OPERATION_ORIGIN_KIND_PREFIX } from '../agents/agent-task-delivery.ts';
 
 const EXCERPT_MAX = 280;
 
@@ -160,6 +165,16 @@ export function registerResolveRefs(ctx: ResolveRefsCtx): void {
 
       return resolved.map(({ requestedId, issue: i }) => {
         const ownerUserId = i.assigneeUserId ?? null;
+        // Plan 250530 v1.1.5 — detect clarity-pack internal operation issues
+        // (Editor-Agent compile-result tracking, TL;DR-compile ops, sign-off
+        // operations). Their host originKind starts with the
+        // `plugin:clarity-pack:operation:` prefix. The chip hides itself for
+        // these so a reference like BEAAA-1168 (title literally "Compile
+        // TL;DR — <uuid>") doesn't pollute prose with bookkeeping noise.
+        const originKind =
+          (i as unknown as { originKind?: string | null }).originKind ?? null;
+        const isPluginOperation =
+          typeof originKind === 'string' && originKind.startsWith(OPERATION_ORIGIN_KIND_PREFIX);
         // 07-01 — the SDK Issue has no viewer-readable flag. A non-null
         // ctx.issues.get result is treated as readable-by-caller (the SDK
         // proxies the caller's auth context). The live drill confirms whether
@@ -177,6 +192,8 @@ export function registerResolveRefs(ctx: ResolveRefsCtx): void {
           // Plan 05-05 D-09 — server-resolved owner display name. Null when
           // ownerUserId is null OR when ctx.agents.get degraded above.
           ownerName: ownerUserId ? (ownerNamesByUuid.get(ownerUserId) ?? null) : null,
+          // Plan 250530 v1.1.5 — chip-render gate.
+          hiddenAsRef: isPluginOperation,
         };
       });
     });

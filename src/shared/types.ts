@@ -23,6 +23,16 @@ export type RefCardData = {
    *  server-side. Null when ownerUserId is null OR when the lookup degraded.
    *  UI fallback is the literal 'unassigned' — NEVER the UUID. */
   ownerName?: string | null;
+  /** Plan 250530 v1.1.5 — when true, the Reader's RefChip degrades to a plain
+   *  text id (no chip border, no status badge, no clickable anchor). Set by
+   *  resolve-refs when the resolved issue's originKind starts with
+   *  `plugin:clarity-pack:operation:` — i.e. an internal Editor-Agent
+   *  compile-tracking / sign-off issue whose computer-generated title (often
+   *  UUID-bearing) is meaningless to the operator and would pollute the TL;DR
+   *  with bookkeeping noise. The PARSER still emits a `ref` span; the CHIP
+   *  hides itself. Optional + defaulting to false preserves byte-compat for
+   *  every other ref. */
+  hiddenAsRef?: boolean;
 };
 
 export type Terminal =
