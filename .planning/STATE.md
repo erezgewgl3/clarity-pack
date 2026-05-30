@@ -2,20 +2,39 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
-status: executing
-stopped_at: Plan 08-02 CODE-COMPLETE (UI tier) — next /gsd:execute-phase 8 → Plan 08-03 live drill
-last_updated: "2026-05-30T15:25:01.708Z"
+status: phase-complete
+stopped_at: Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30 (v1.2.0 shipped) — next milestone per /gsd:progress
+last_updated: "2026-05-30T16:01:13Z"
 progress:
   total_phases: 9
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 63
-  completed_plans: 56
-  percent: 78
+  completed_plans: 57
+  percent: 89
 ---
 
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
+
+## ✅ Phase 8 CLOSED & VERIFIED LIVE on BEAAA — 2026-05-30 (v1.2.0 — Situation Room people-first cockpit)
+
+Phase 8 shipped end-to-end. v1.2.0 deployed to BEAAA via DEPLOY-RUNBOOK Path A (`clarity-pack-1.2.0.tgz`, sha256 `de16e83f0829f3b7f61f2035a4cdcdee961aa498f4dbd946f73f3b861a700d66`, 745,815 B; plugin UUID `a763176a-2f4d-4986-b190-b5151e42cc00` preserved, `status=ready version=1.2.0`). Live Playwright drill at `/BEAAA/situation-room` over the 18-agent roster returned **6/6 Success Criteria PASS**.
+
+**Shipped:** per-employee row strip (18 rows, idle-loud sort blocked→stale→idle→reviewing→running) + always-visible needs-you banner, mounted ABOVE the Phase 7 ROOM-12 org-blocked-backlog (pinned collapsed). ROOM-13..18 → Implemented.
+
+**Live findings (recorded in 08-VERIFICATION.md):**
+- The people-first strip is computed FRESH per request, so the full cockpit renders even though the materialized-snapshot job is dead. The legacy ROOM-01..08 agent grid renders empty on cold-start (dead-job path) — **pre-existing, byte-identical to the v1.1.11 path (proven at `d526987`), NOT a Phase 8 regression**.
+- M3 disabled-degrade case N/A — every blocked chain had a non-null `ownerAgentId` (= focusIssue.assigneeAgentId per B1), so open-chat buttons are correctly ENABLED; click deep-links to `/BEAAA/chat#h=<base64 {employee:agentId}>`, chat opens scoped.
+- NO_UUID_LEAK + scoped CSS + zero new migrations + zero dependency changes all confirmed live.
+
+**Commits:** 08-01 (`a9c7322`→`a93f731`) + 08-02 (`4ff8f95`→`ca9ced9`) source on master; 08-03 closure commit (docs + version bump only, mn2).
+
+**Next action:** Phase 8 was the last cockpit phase. Run `/gsd:progress` to route the next milestone (Phase 9 / Plan 05-10 lineage — npm publish is internal-only per `feedback_clarity-pack-internal-only-no-npm`).
+
+VERIFICATION: `.planning/phases/08-situation-room-people-first-cockpit/08-VERIFICATION.md`.
+
+---
 
 ## ▶ Plan 08-02 CODE-COMPLETE 2026-05-30 — Situation Room people-first cockpit (UI tier)
 

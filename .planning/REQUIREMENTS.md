@@ -282,12 +282,12 @@ Populated by the gsd-roadmapper agent during roadmap creation (2026-05-07).
 | ROOM-10 | Phase 6.1 | Implemented (Phase 6.1 closed VERIFIED 2026-05-27; `situation.artifacts` worker handler + inline chip row UI; live drill confirms 2 chips on CEO card within 24h window) |
 | ROOM-11 | Phase 6.1 | Implemented (Phase 6.1 closed VERIFIED 2026-05-27; Critical Path UI ships Open-chat engagement entry + standalone `+ Create task` over byte-identical chain walk; CYCLE-terminal renders as-is in v1.0) |
 | ROOM-12 | Phase 7 / Plan 07-03 | Implemented |
-| ROOM-13 | Phase 8 | Complete |
-| ROOM-14 | Phase 8 | Complete |
-| ROOM-15 | Phase 8 | Complete |
-| ROOM-16 | Phase 8 | Complete |
-| ROOM-17 | Phase 8 | Complete |
-| ROOM-18 | Phase 8 | Complete |
+| ROOM-13 | Phase 8 | Implemented (Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30; v1.2.0 drill 6/6 PASS — Plan 08-03) |
+| ROOM-14 | Phase 8 | Implemented (Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30; 5 states observed live — Plan 08-03) |
+| ROOM-15 | Phase 8 | Implemented (Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30; focusLine Reader-voice parity, 0 ISO — Plan 08-03) |
+| ROOM-16 | Phase 8 | Implemented (Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30; B1 AGENT-uuid deep-link + NO_UUID_LEAK 0 matches — Plan 08-03) |
+| ROOM-17 | Phase 8 | Implemented (Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30; idle-loud sort + amber/green tokens — Plan 08-03) |
+| ROOM-18 | Phase 8 | Implemented (Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30; needs-you banner + URL_HASH carrier click — Plan 08-03) |
 | BULL-01 | Phase 3 | Implemented (Phase 3 CLOSED 2026-05-18; America/New_York next_due_at via date-fns-tz + DST CI fixtures. NOTE: the 06:30 cron is best-effort on paperclipai@2026.525.0 — scheduled-job scope is dead, PR #6547 — so the bulletin reliably compiles VIEW-DRIVEN when the Bulletin page is opened) |
 | BULL-02 | Phase 3 | Implemented (Phase 3 CLOSED 2026-05-18; idempotent compile — UNIQUE(next_due_at,content_hash) + no-op gate + atomic publish in Plan 03-02; partial compiles never publish) |
 | BULL-03 | Phase 3 | Implemented (Phase 3; "Requires Your Decision" actionInbox renders one card per outstanding decision — bulletin-rendering.ts) |

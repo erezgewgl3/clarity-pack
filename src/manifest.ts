@@ -582,7 +582,15 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.11',
+  //
+  // 1.2.0 (Phase 8 — Situation Room people-first cockpit).
+  // Adds per-employee row strip + always-visible needs-you banner alongside the
+  // existing ROOM-12 org-blocked-backlog (Phase 7). No new schema, no new runtime
+  // dependency. Idle-loud sort (blocked → stale → idle → reviewing → running).
+  // focusLine voice = Reader voice (polishTldr). NO_UUID_LEAK preserved via the
+  // extracted scrubHumanAction (shared module). See:
+  //   .planning/phases/08-situation-room-people-first-cockpit/08-VERIFICATION.md
+  version: '1.2.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
