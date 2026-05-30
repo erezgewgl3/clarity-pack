@@ -335,6 +335,23 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.1 (Plan 250530 — Reader rabbit-hole fix on BEAAA-1047, 2026-05-30):
+  //   (1) SAFE-MARKDOWN PARSER — a code span that is JUST a PREFIX-NNN token
+  //       (e.g. `` `BEAAA-933` ``) and a markdown link whose label is a bare
+  //       PREFIX-NNN AND whose href is the canonical `/<prefix>/issues/<id>`
+  //       are now upgraded to a `ref` span so the Reader's chip resolves the
+  //       title. Mixed-content code (`` `BEAAA-933 — gloss` ``), custom-label
+  //       links, cross-instance links, and deep-link queries STAY their
+  //       original kind — the upgrade is conservative. XSS allowlist
+  //       (sanitizeHref) is unchanged; a hostile href still downgrades to text.
+  //   (2) EDITOR-AGENT TL;DR PROMPT — added a hard contract: cite issue ids as
+  //       plain prose (no backticks, no markdown link wrapping); never restate
+  //       a cited issue's title/status next to its id (the chip already shows
+  //       them); expand every internal abbreviation or jargon term on first
+  //       use ("Head of Underwriting (HoUW)" etc.). The visible win on the
+  //       existing BEAAA-1047 TL;DR is immediate via the parser fix; the
+  //       prompt fix takes effect on the next agent heartbeat recompile.
+  //
   // 1.1.0 (Plan 250529 — three shippable fixes from the 2026-05-29 BEAAA
   // diagnostic session):
   //   (1) PIN-NO-BRICK UI — message-thread.tsx onPin/onPromote made optimistic
@@ -348,7 +365,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.0',
+  version: '1.1.1',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
