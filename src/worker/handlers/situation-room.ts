@@ -33,15 +33,24 @@ import {
   type OrgBlockedBacklog,
   type OrgBlockedBacklogCtx,
 } from './org-blocked-backlog.ts';
+// Plan 08-01 Task 3 — the per-employee rollup (ROOM-13/15/16/17) computed
+// alongside org_blocked_backlog in this same valid HTTP-request scope.
+import {
+  buildEmployeesRollup,
+  type SituationEmployeeRow,
+  type NeedsYou,
+  type EmployeesRollupCtx,
+} from '../situation/build-employees-rollup.ts';
 
-// Plan 07-03 Task 2 — widen the ctx with the SDK clients the org-blocked-
-// backlog builder needs (mirror ResolveRefsCtx in resolve-refs.ts:76-83, but
-// with 'list' | 'relations' for issues). `agents` stays optional so older
-// fixtures without it still type-check; the builder narrows at runtime via
-// `typeof ctx.agents?.get === 'function'` and degrades ownerName to null.
+// Plan 07-03 Task 2 + Plan 08-01 Task 3 — widen the ctx with the SDK clients the
+// builders need (mirror ResolveRefsCtx in resolve-refs.ts:76-83). org-blocked-
+// backlog needs issues 'list' | 'relations'; the per-employee rollup also needs
+// issues 'get' (leaf-identifier lookup) and agents 'list' (roster). `agents`
+// stays optional so older fixtures without it still type-check; the builders
+// narrow at runtime (`typeof ctx.agents?.list === 'function'`) and degrade.
 export type SituationRoomCtx = OptInGuardDataCtx & {
-  issues: Pick<PluginIssuesClient, 'list' | 'relations'>;
-  agents?: Pick<PluginAgentsClient, 'get'>;
+  issues: Pick<PluginIssuesClient, 'list' | 'get' | 'relations'>;
+  agents?: Pick<PluginAgentsClient, 'list' | 'get'>;
   logger?: PluginLogger;
 };
 
@@ -96,6 +105,26 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       org_blocked_backlog = { ...EMPTY_BACKLOG };
     }
 
+    // Plan 08-01 Task 3 — compute the per-employee rollup FRESH alongside the
+    // backlog (same valid scope). Degrade-safe: a thrown builder leaves
+    // org_blocked_backlog + the agent grid intact.
+    let employees: SituationEmployeeRow[] = [];
+    let needsYou: NeedsYou = { count: 0, topAction: null };
+    try {
+      const rollup = await buildEmployeesRollup(
+        { issues: ctx.issues, agents: ctx.agents, logger: ctx.logger } as unknown as EmployeesRollupCtx,
+        companyId,
+        viewerUserId,
+      );
+      employees = rollup.employees;
+      needsYou = rollup.needsYou;
+    } catch (e) {
+      ctx.logger?.warn?.('situation.snapshot: employees rollup failed', {
+        companyId,
+        err: (e as Error).message,
+      });
+    }
+
     const rows = await ctx.db.query<SnapshotRow>(
       'SELECT id, taken_at, computed_for_company_id, payload, content_hash FROM plugin_clarity_pack_cdd6bda4bd.situation_snapshots WHERE computed_for_company_id = $1 ORDER BY taken_at DESC LIMIT 1',
       [companyId],
@@ -103,11 +132,11 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
     const row = rows[0];
     if (!row) {
       // <compute_vs_cache_note> — the dead-job path. No materialized row, but
-      // the backlog still rides so the banner renders. Do NOT `return null`
-      // (that would swallow the freshly computed backlog).
-      return { org_blocked_backlog, taken_at: new Date().toISOString() };
+      // the backlog + employees still ride so the cockpit renders. Do NOT
+      // `return null` (that would swallow the freshly computed data).
+      return { org_blocked_backlog, employees, needsYou, taken_at: new Date().toISOString() };
     }
     const payload = row.payload as Record<string, unknown>;
-    return { ...payload, org_blocked_backlog, taken_at: row.taken_at };
+    return { ...payload, org_blocked_backlog, employees, needsYou, taken_at: row.taken_at };
   });
 }

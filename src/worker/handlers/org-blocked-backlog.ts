@@ -159,8 +159,12 @@ function ageMsFrom(issue: IssueLike): number | null {
  *  relations.get, mirroring the snapshot job's BFS
  *  (situation-snapshot.ts:160-203). Bounded at MAX_CHAIN_DEPTH; a thrown
  *  relations.get on an inner node is skipped (continue), a thrown call on the
- *  ROOT propagates so the caller can skip the whole issue. */
-async function buildEdges(
+ *  ROOT propagates so the caller can skip the whole issue.
+ *
+ *  Plan 08-01 Task 3 — EXPORTED so build-employees-rollup.ts reuses the exact
+ *  same BFS (Don't-Hand-Roll: per-issue edge graph build). The ctx requirement
+ *  is only `issues.relations.get`, satisfied structurally by EmployeesRollupCtx. */
+export async function buildEdges(
   ctx: OrgBlockedBacklogCtx,
   companyId: string,
   startId: string,

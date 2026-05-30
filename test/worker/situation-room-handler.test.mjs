@@ -24,6 +24,13 @@ function makeCtx({
   blockedIssues = [],
   relations = {},
   agentsByUuid = {},
+  // Plan 08-01 Task 3 — stub the roster + per-agent issues the employees rollup
+  // reads. Defaults (empty roster) yield employees:[] + needsYou:{0,null} so the
+  // pre-existing tests are unaffected.
+  roster = [],
+  issuesByAgent = {},
+  issuesById = {},
+  rosterThrows = false,
 } = {}) {
   const dataRegistry = new Map();
   const actionRegistry = new Map();
@@ -33,8 +40,17 @@ function makeCtx({
     data: { register(k, fn) { dataRegistry.set(k, fn); } },
     actions: { register(k, fn) { actionRegistry.set(k, fn); } },
     issues: {
-      async list() {
+      async list(input) {
+        // org-blocked-backlog calls list({companyId, status:'blocked'}); the
+        // employees rollup calls list({companyId, assigneeAgentId}). Route by
+        // the presence of assigneeAgentId.
+        if (input && typeof input.assigneeAgentId === 'string') {
+          return issuesByAgent[input.assigneeAgentId] ?? [];
+        }
         return blockedIssues;
+      },
+      async get(id) {
+        return issuesById[id] ?? null;
       },
       relations: {
         async get(id) {
@@ -43,6 +59,10 @@ function makeCtx({
       },
     },
     agents: {
+      async list() {
+        if (rosterThrows) throw new Error('agents.list boom');
+        return roster;
+      },
       async get(uuid) {
         return agentsByUuid[uuid] ?? null;
       },
@@ -213,6 +233,40 @@ test('situation.snapshot: need_you_count is viewer-scoped (derived from params.u
   // a different viewer → does NOT count.
   const theirs = await handler({ userId: 'someone-else', companyId: 'co-1' });
   assert.equal(theirs.org_blocked_backlog.need_you_count, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Plan 08-01 Task 3 — employees + needsYou computed in the DATA HANDLER
+// alongside org_blocked_backlog (ROOM-13..17). Both return paths carry them.
+// ---------------------------------------------------------------------------
+
+test('situation.snapshot: no-row path returns {org_blocked_backlog, employees, needsYou, taken_at}', async () => {
+  const nowIso = new Date(Date.now() - 60_000).toISOString();
+  const roster = [
+    { id: 'ag-1', name: 'CTO', role: 'general', title: 'CTO', lastHeartbeatAt: nowIso },
+  ];
+  const bag = makeCtx({ snapshotRow: null, optedIn: true, roster, issuesByAgent: { 'ag-1': [] } });
+  registerSituationRoomHandlers(bag.ctx);
+  const handler = bag.dataRegistry.get('situation.snapshot');
+  const result = await handler({ userId: 'eric', companyId: 'co-1' });
+  assert.ok(result.org_blocked_backlog, 'org_blocked_backlog present');
+  assert.ok(Array.isArray(result.employees), 'employees array present');
+  assert.equal(result.employees.length, 1);
+  assert.equal(result.employees[0].state, 'running');
+  assert.ok(result.needsYou, 'needsYou present');
+  assert.equal(result.needsYou.count, 0);
+  assert.equal(typeof result.taken_at, 'string');
+});
+
+test('situation.snapshot: rollup builder throwing degrades to employees:[] (handler never throws)', async () => {
+  const bag = makeCtx({ snapshotRow: null, optedIn: true, rosterThrows: true });
+  registerSituationRoomHandlers(bag.ctx);
+  const handler = bag.dataRegistry.get('situation.snapshot');
+  const result = await handler({ userId: 'eric', companyId: 'co-1' });
+  assert.notEqual(result, null);
+  assert.ok(result.org_blocked_backlog, 'backlog still rides');
+  assert.deepEqual(result.employees, []);
+  assert.deepEqual(result.needsYou, { count: 0, topAction: null });
 });
 
 // ---------------------------------------------------------------------------
