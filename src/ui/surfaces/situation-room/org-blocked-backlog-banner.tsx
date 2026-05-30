@@ -61,9 +61,17 @@ export type OrgBlockedBacklog = {
 export function OrgBlockedBacklogBanner({
   backlog,
   companyId: _companyId,
+  // Phase 8 (Plan 08-02): when the NeedsYouBanner is mounted ABOVE, this banner
+  // ships as a secondary collapsed panel — defaultExpanded={false}. When false,
+  // the banner starts collapsed REGARDLESS of need_you_count (the new top banner
+  // now carries urgency, so this org-backlog panel should not auto-expand).
+  // Default true preserves the Plan 07-03 auto-expand behavior for any other
+  // caller (there are none at present).
+  defaultExpanded = true,
 }: {
   backlog: OrgBlockedBacklog | null | undefined;
   companyId: string;
+  defaultExpanded?: boolean;
 }): React.ReactElement | null {
   const { pathname } = useHostLocation();
   const { navigate } = useHostNavigation();
@@ -74,7 +82,11 @@ export function OrgBlockedBacklogBanner({
 
   // D-I4 — auto-expand when there is at least one human-action-on-you item so
   // the operator sees the backlog immediately; otherwise start collapsed.
-  const [expanded, setExpanded] = React.useState(needYouCount > 0);
+  // Phase 8 override (Open Question #5): an explicit `defaultExpanded === false`
+  // wins over `need_you_count > 0` — the consumer pins this panel collapsed.
+  const [expanded, setExpanded] = React.useState(
+    defaultExpanded === false ? false : needYouCount > 0,
+  );
 
   // Nothing to surface — render nothing (no empty banner noise).
   if (!backlog || blockedCount === 0) {

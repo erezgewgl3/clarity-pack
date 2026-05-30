@@ -32,6 +32,8 @@ import {
   usePluginAction,
   usePluginData,
   useHostContext,
+  useHostLocation,
+  useHostNavigation,
 } from '@paperclipai/plugin-sdk/ui/hooks';
 import type { PluginPageProps } from '@paperclipai/plugin-sdk/ui';
 
@@ -42,6 +44,7 @@ import { useInstanceConfig } from '../../primitives/use-instance-config.ts';
 import { usePollWithLeader } from '../../primitives/use-poll-with-leader.ts';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
+import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { PauseBanner } from '../reader/pause-banner.tsx';
 import { CriticalPathStrip } from './critical-path-strip.tsx';
@@ -51,6 +54,11 @@ import {
   OrgBlockedBacklogBanner,
   type OrgBlockedBacklog,
 } from './org-blocked-backlog-banner.tsx';
+// Phase 8 (Plan 08-02) — people-first cockpit: always-visible needs-you banner +
+// per-employee row strip, mounted ABOVE the repositioned org-backlog panel.
+import { NeedsYouBanner, type NeedsYou } from './needs-you-banner.tsx';
+import { EmployeeRowStrip } from './employee-row-strip.tsx';
+import type { SituationEmployeeRow } from './employee-row.tsx';
 import type { Artifact } from './artifact-chip-row.tsx';
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
@@ -68,6 +76,13 @@ type SituationData = {
   // the materialized snapshot row is empty/stale — the recompute job is dead on
   // this host).
   org_blocked_backlog?: OrgBlockedBacklog | null;
+  // Plan 08-01 (Phase 8) — per-employee row strip + pre-computed needs-you banner
+  // payload, attached on every situation.snapshot call alongside org_blocked_backlog.
+  // NOTE (Plan 08-02 fix): this rides under `situation_employees`, NOT `employees`
+  // — the latter is the ROOM-01..08 agent-grid AgentEmployee[] and must stay
+  // byte-identical. The Phase 8 rollup is a DIFFERENT shape (SituationEmployeeRow).
+  situation_employees?: SituationEmployeeRow[];
+  needsYou?: NeedsYou;
 };
 
 /**
@@ -206,6 +221,13 @@ function SituationRoomBody({
   const resolved = useResolvedUserId();
   const viewerUserId: string | null = resolved.userId;
 
+  // Plan 08-02 (Phase 8) — companyPrefix + navigate for the NeedsYouBanner +
+  // EmployeeRowStrip open-chat deep links (reuses the ROOM-09 buildChatDeepLink
+  // employee-only carrier, same pattern as OrgBlockedBacklogBanner).
+  const { pathname } = useHostLocation();
+  const { navigate } = useHostNavigation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
+
   // The actual snapshot fetch is via usePluginData (SDK-blessed bridge call).
   // usePluginData re-fetches when params change; we let it own the network
   // round-trip + cache key. The leader-election guard lives in
@@ -275,12 +297,30 @@ function SituationRoomBody({
 
   return (
     <>
-      {/* Plan 07-03 (Phase 7 ITEM 4 / D-I4-01) — org-truth banner at the TOP of
-       *  the room, above the header + agent grid. Renders nothing when there
-       *  are zero blocked issues; the agent grid below is unchanged. */}
+      {/* Plan 08-02 (Phase 8) — LOCKED mount order: the always-visible needs-you
+       *  banner carries urgency, the per-employee row strip is the people-first
+       *  cockpit, and the Plan 07-03 org-backlog banner is repositioned BELOW
+       *  them as a secondary collapsed panel (defaultExpanded={false}). The
+       *  ROOM-01..08 agent grid below stays byte-identical. */}
+      <NeedsYouBanner
+        needsYou={payload.needsYou ?? { count: 0, topAction: null }}
+        employees={payload.situation_employees ?? []}
+        companyPrefix={companyPrefix}
+        navigate={navigate}
+      />
+      <EmployeeRowStrip
+        employees={payload.situation_employees ?? []}
+        companyPrefix={companyPrefix}
+        navigate={navigate}
+      />
+      {/* Plan 07-03 (Phase 7 ITEM 4 / D-I4-01) — org-truth banner, repositioned
+       *  BELOW the Phase 8 strip and pinned collapsed (defaultExpanded={false})
+       *  since the NeedsYouBanner now carries urgency. Renders nothing when
+       *  there are zero blocked issues. */}
       <OrgBlockedBacklogBanner
         backlog={payload.org_blocked_backlog ?? null}
         companyId={companyId}
+        defaultExpanded={false}
       />
       <header className="clarity-room-header">
         <AwaitingYouPill

@@ -240,7 +240,9 @@ test('situation.snapshot: need_you_count is viewer-scoped (derived from params.u
 // alongside org_blocked_backlog (ROOM-13..17). Both return paths carry them.
 // ---------------------------------------------------------------------------
 
-test('situation.snapshot: no-row path returns {org_blocked_backlog, employees, needsYou, taken_at}', async () => {
+test('situation.snapshot: no-row path returns {org_blocked_backlog, situation_employees, needsYou, taken_at}', async () => {
+  // Plan 08-02 fix: the Phase 8 rollup rides under `situation_employees` so it
+  // does not clobber the agent-grid `employees` (AgentEmployee[]).
   const nowIso = new Date(Date.now() - 60_000).toISOString();
   const roster = [
     { id: 'ag-1', name: 'CTO', role: 'general', title: 'CTO', lastHeartbeatAt: nowIso },
@@ -250,22 +252,22 @@ test('situation.snapshot: no-row path returns {org_blocked_backlog, employees, n
   const handler = bag.dataRegistry.get('situation.snapshot');
   const result = await handler({ userId: 'eric', companyId: 'co-1' });
   assert.ok(result.org_blocked_backlog, 'org_blocked_backlog present');
-  assert.ok(Array.isArray(result.employees), 'employees array present');
-  assert.equal(result.employees.length, 1);
-  assert.equal(result.employees[0].state, 'running');
+  assert.ok(Array.isArray(result.situation_employees), 'situation_employees array present');
+  assert.equal(result.situation_employees.length, 1);
+  assert.equal(result.situation_employees[0].state, 'running');
   assert.ok(result.needsYou, 'needsYou present');
   assert.equal(result.needsYou.count, 0);
   assert.equal(typeof result.taken_at, 'string');
 });
 
-test('situation.snapshot: rollup builder throwing degrades to employees:[] (handler never throws)', async () => {
+test('situation.snapshot: rollup builder throwing degrades to situation_employees:[] (handler never throws)', async () => {
   const bag = makeCtx({ snapshotRow: null, optedIn: true, rosterThrows: true });
   registerSituationRoomHandlers(bag.ctx);
   const handler = bag.dataRegistry.get('situation.snapshot');
   const result = await handler({ userId: 'eric', companyId: 'co-1' });
   assert.notEqual(result, null);
   assert.ok(result.org_blocked_backlog, 'backlog still rides');
-  assert.deepEqual(result.employees, []);
+  assert.deepEqual(result.situation_employees, []);
   assert.deepEqual(result.needsYou, { count: 0, topAction: null });
 });
 

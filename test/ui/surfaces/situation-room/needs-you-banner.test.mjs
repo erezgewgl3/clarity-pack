@@ -150,8 +150,8 @@ test('banner contains NO dangerouslySetInnerHTML', () => {
 // ---------------------------------------------------------------------------
 
 test('index.tsx imports + mounts NeedsYouBanner and EmployeeRowStrip', () => {
-  assert.match(INDEX, /import \{ NeedsYouBanner \} from '\.\/needs-you-banner\.tsx'/);
-  assert.match(INDEX, /import \{ EmployeeRowStrip \} from '\.\/employee-row-strip\.tsx'/);
+  assert.match(INDEX, /import \{ NeedsYouBanner[\s\S]*?\} from '\.\/needs-you-banner\.tsx'/);
+  assert.match(INDEX, /import \{ EmployeeRowStrip[\s\S]*?\} from '\.\/employee-row-strip\.tsx'/);
   assert.match(INDEX, /<NeedsYouBanner/);
   assert.match(INDEX, /<EmployeeRowStrip/);
 });

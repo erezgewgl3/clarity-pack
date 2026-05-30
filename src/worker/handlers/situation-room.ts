@@ -134,9 +134,25 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       // <compute_vs_cache_note> — the dead-job path. No materialized row, but
       // the backlog + employees still ride so the cockpit renders. Do NOT
       // `return null` (that would swallow the freshly computed data).
-      return { org_blocked_backlog, employees, needsYou, taken_at: new Date().toISOString() };
+      return {
+        org_blocked_backlog,
+        situation_employees: employees,
+        needsYou,
+        taken_at: new Date().toISOString(),
+      };
     }
     const payload = row.payload as Record<string, unknown>;
-    return { ...payload, org_blocked_backlog, employees, needsYou, taken_at: row.taken_at };
+    // Plan 08-02 fix (Rule 1): the Phase 8 rollup rides under `situation_employees`
+    // — NOT `employees` — so it does not clobber the materialized snapshot's
+    // `employees` (AgentEmployee[]) that the ROOM-01..08 agent grid consumes. The
+    // earlier Plan 08-01 wiring spread `employees` into the same key, silently
+    // overwriting the agent-grid data (SituationEmployeeRow has no `userId`).
+    return {
+      ...payload,
+      org_blocked_backlog,
+      situation_employees: employees,
+      needsYou,
+      taken_at: row.taken_at,
+    };
   });
 }
