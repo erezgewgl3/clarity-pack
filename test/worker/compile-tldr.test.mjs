@@ -21,6 +21,7 @@ import {
   polishTldr,
   isoDateToHuman,
   stripRestatedParenAfterRef,
+  stripParensAroundLoneRef,
   applyJargonGlossary,
   JARGON_GLOSSARY,
 } from '../../src/worker/agents/compile-tldr.ts';
@@ -576,4 +577,67 @@ test('v1.1.9 polishTldr: empty/null/non-string input returns empty string', () =
   assert.equal(polishTldr(''), '');
   assert.equal(polishTldr(null), '');
   assert.equal(polishTldr(undefined), '');
+});
+
+// ---------------------------------------------------------------------------
+// Plan 250530 v1.1.10 — stripParensAroundLoneRef. BEAAA-1000's v1.1.9 output
+// shipped clean voice + good headline, but the agent wrote "(BEAAA-1086) and
+// (BEAAA-1103)" — agent parens wrapping a lone chip id. The chip then expands
+// to a wide titled element and the outer parens become orphan brackets around
+// the chip (compounded by chip-title CSS truncation cutting mid-content).
+// Strip the agent's wrapping parens; the chip itself is the affordance.
+// ---------------------------------------------------------------------------
+
+test('v1.1.10 stripParensAroundLoneRef: agent parens wrapping a lone ref id are removed', () => {
+  // EXACT BEAAA-1000 v1.1.9 shape: "Underwriter (BEAAA-1086) and Claims
+  // Architect (BEAAA-1103) approved".
+  assert.equal(
+    stripParensAroundLoneRef('Underwriter (BEAAA-1086) and Claims Architect (BEAAA-1103) approved.'),
+    'Underwriter BEAAA-1086 and Claims Architect BEAAA-1103 approved.',
+  );
+});
+
+test('v1.1.10 stripParensAroundLoneRef: tolerates whitespace inside parens', () => {
+  assert.equal(stripParensAroundLoneRef('see ( BEAAA-933 ) here'), 'see BEAAA-933 here');
+  assert.equal(stripParensAroundLoneRef('see (BEAAA-933 ) here'), 'see BEAAA-933 here');
+});
+
+test('v1.1.10 stripParensAroundLoneRef: parens with MULTIPLE refs are PRESERVED', () => {
+  // The v1.1.9 stripRestatedParenAfterRef preserves cross-ref parens; the
+  // v1.1.10 lone-ref strip ONLY matches a single id inside the parens.
+  assert.equal(
+    stripParensAroundLoneRef('see (BEAAA-1086, BEAAA-1103)'),
+    'see (BEAAA-1086, BEAAA-1103)',
+  );
+});
+
+test('v1.1.10 stripParensAroundLoneRef: parens with the id + extra content are PRESERVED', () => {
+  // "(BEAAA-1086 done)" / "(BEAAA-1086 — Title)" are handled by the v1.1.9
+  // stripRestatedParenAfterRef (when capital-led) or preserved as footnotes
+  // (when lowercase-led). The lone-ref strip does NOT fire here — its regex
+  // requires the parens to contain ONLY the id (plus optional whitespace).
+  assert.equal(stripParensAroundLoneRef('see (BEAAA-1086 done)'), 'see (BEAAA-1086 done)');
+  assert.equal(stripParensAroundLoneRef('see (BEAAA-1086 for context)'), 'see (BEAAA-1086 for context)');
+});
+
+test('v1.1.10 stripParensAroundLoneRef: empty/null/non-string input passes through', () => {
+  assert.equal(stripParensAroundLoneRef(''), '');
+  assert.equal(stripParensAroundLoneRef(null), null);
+  assert.equal(stripParensAroundLoneRef(undefined), undefined);
+});
+
+test('v1.1.10 polishTldr: the EXACT BEAAA-1000 v1.1.9-output layout disaster is fixed', () => {
+  // Verbatim slice from the operator's screenshot (2026-05-30 13:44 TL;DR):
+  // agent parens around lone refs + jargon + a human date (already good).
+  const input = 'Wed 6/3 you ratify upgrading the rescans API from ping-only to full measurement. Both approvals are in: Underwriter (BEAAA-1086) and Claims Architect (BEAAA-1103) approved; the SLA variance is resolved.';
+  const out = polishTldr(input);
+  // The agent's outer parens around lone ref ids are gone — chip sits inline.
+  assert.equal(/\(BEAAA-1086\)/.test(out), false, 'parens around BEAAA-1086 stripped');
+  assert.equal(/\(BEAAA-1103\)/.test(out), false, 'parens around BEAAA-1103 stripped');
+  // The refs survive as plain ids.
+  assert.ok(out.includes('BEAAA-1086'), 'BEAAA-1086 survives');
+  assert.ok(out.includes('BEAAA-1103'), 'BEAAA-1103 survives');
+  // The substantive prose survives.
+  assert.ok(out.includes('Wed 6/3 you ratify'), 'headline preserved');
+  assert.ok(out.includes('SLA variance is resolved'), 'tail content preserved');
 });

@@ -335,6 +335,28 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.10 (Plan 250530 — strip agent parens around lone ref ids, layout fix):
+  //   BEAAA-1000's v1.1.9 output shipped clean voice + good headline, but
+  //   the agent wrote `Underwriter (BEAAA-1086) and Claims Architect
+  //   (BEAAA-1103) approved`. When the chips expand to wide titled elements,
+  //   the agent's outer parens become orphan brackets visually wrapping the
+  //   chip — compounded by chip-title CSS truncation cutting mid-content
+  //   (the chip's own title contains "(for 2026-06-03...)" parens that get
+  //   chopped mid-string). The operator's report: "something is off in the
+  //   layout."
+  //
+  //   New export in compile-tldr.ts: stripParensAroundLoneRef(s). One regex
+  //   pass: `\(\s*PREFIX-NNN\s*\)` → bare id (chip itself is the affordance).
+  //   Conservative: only fires when the parens contain ONLY a lone id
+  //   (whitespace OK). Multi-ref parens like `(BEAAA-1086, BEAAA-1103)` and
+  //   composite parens like `(BEAAA-1086 done)` / `(BEAAA-1086 for context)`
+  //   are PRESERVED (handled by v1.1.9's stripRestatedParenAfterRef or kept
+  //   as legit footnotes).
+  //
+  //   Added to polishTldr after stripRestatedParenAfterRef (so composite
+  //   parens get the title-restatement strip first; only lone-ref parens
+  //   reach v1.1.10's transform). Cosmetic only.
+  //
   // 1.1.9 (Plan 250530 — DETERMINISTIC POLISH PIPELINE for the LLM-slop the
   // prompt couldn't reach):
   //   Honest post-mortem after v1.1.8: prompt-engineering moved the LLM ~30%
@@ -525,7 +547,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.9',
+  version: '1.1.10',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

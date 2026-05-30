@@ -304,6 +304,24 @@ export function stripRestatedParenAfterRef(input: string): string {
   );
 }
 
+/** Plan 250530 v1.1.10 — strip agent-written parens that wrap a LONE ref id.
+ *  When the agent writes "Underwriter (BEAAA-1086) and Claims Architect
+ *  (BEAAA-1103) approved", the chip renderer expands each id to a wide
+ *  titled element. The agent's outer parens then look like orphan brackets
+ *  around the chip (compounded by chip-title CSS truncation cutting
+ *  mid-content). The chip IS the affordance — the wrapping parens add
+ *  nothing once the title resolves inline.
+ *
+ *  Strip ONLY when the parens contain a single ref id with nothing else
+ *  (whitespace OK). Parens with extra content — multiple ids
+ *  ("(BEAAA-1086, BEAAA-1103)"), status notes ("(BEAAA-1086 done)"),
+ *  cross-refs — are left untouched (each handled by stripRestatedParenAfterRef
+ *  or preserved as legit footnote content). */
+export function stripParensAroundLoneRef(input: string): string {
+  if (typeof input !== 'string' || input.length === 0) return input;
+  return input.replace(/\(\s*([A-Z][A-Z0-9]{1,7}-\d+)\s*\)/g, '$1');
+}
+
 /** A small, conservative glossary of generic agent-language → plain English
  *  substitutions. ONLY entries that translate cleanly out of context —
  *  domain-specific codenames (Scope-β, G7, Tier-2, ARE Scanner) are NOT
@@ -336,14 +354,25 @@ export function applyJargonGlossary(input: string): string {
   return out;
 }
 
-/** Pure: run all three polish passes in order. Cosmetic only — no sentence
- *  drops, no semantic changes. Caller (finalizeTldr) runs this AFTER
- *  stripMetaProse and AFTER the min-length gate, BEFORE upsertTldr. */
+/** Pure: run all polish passes in order. Cosmetic only — no sentence drops,
+ *  no semantic changes. Caller (finalizeTldr) runs this AFTER stripMetaProse
+ *  and AFTER the min-length gate, BEFORE upsertTldr.
+ *
+ *  Order rationale:
+ *    1. isoDateToHuman               — independent of refs/parens
+ *    2. stripRestatedParenAfterRef   — parens AFTER an id: "(Underwriter pre-read)"
+ *    3. stripParensAroundLoneRef     — parens AROUND a lone id: "(BEAAA-1086)"
+ *       (runs after #2 so a "(BEAAA-1086 — Title)" composite stays handled
+ *       by #2; #3 only catches the unambiguous case)
+ *    4. applyJargonGlossary          — last so substitutions don't disturb
+ *       earlier paren/ref patterns
+ */
 export function polishTldr(input: string): string {
   if (typeof input !== 'string' || input.length === 0) return '';
   let out = input;
   out = isoDateToHuman(out);
   out = stripRestatedParenAfterRef(out);
+  out = stripParensAroundLoneRef(out);
   out = applyJargonGlossary(out);
   return out;
 }
