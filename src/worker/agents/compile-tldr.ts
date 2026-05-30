@@ -190,6 +190,17 @@ function buildPrompt(args: CompileTldrArgs): string {
   // OUTPUT-shape instruction only — the INPUT cap (MAX_TOKENS) is unchanged and
   // the input scaffolding (Surface / Scope id / Issue body / comments / refs)
   // below is intact. Phase 3 deepens the Bulletin/Situation Room voice.
+  //
+  // Plan 250530 — REF + JARGON contract added. BEAAA-1047 (2026-05-30) shipped a
+  // TL;DR riddled with `[BEAAA-933](/BEAAA/issues/BEAAA-933)` markdown links and
+  // backtick-wrapped ids (`BEAAA-933 — BEAAA-187 child — v1.1.2 reconciliation`)
+  // AND domain jargon (AC4 / HoUW / op-seat / dual-anchor) with no expansion.
+  // Both shapes BYPASS the Reader's ref-chip pipeline (which shows id + title +
+  // status as a clickable hover-peek) — the operator saw bare ids without
+  // titles and unexpanded acronyms, the exact rabbit-hole the Reader exists to
+  // close. The PARSER fix (safe-markdown.ts same commit family) catches the
+  // canonical `[ID](/<prefix>/issues/ID)` link and bare-id code span, but
+  // mixed-content code spans must be solved at the source — tighten the prompt.
   const lines = [
     'You are the Clarity Pack Editorial Desk. Compile a plain-English TL;DR for the following Paperclip issue.',
     '',
@@ -199,6 +210,10 @@ function buildPrompt(args: CompileTldrArgs): string {
     '  - Then AT MOST 3 short bullets (current state / blockers / next action).',
     '  - Keep the whole TL;DR concise — under ~80 words. Be brief; cut filler.',
     'You may use light markdown (bold, bullets, links); never pad to fill space.',
+    '',
+    'When you cite another issue, write its id as plain prose (e.g. "BEAAA-933"). DO NOT wrap it in backticks (`BEAAA-933`) or a markdown link ([BEAAA-933](/BEAAA/issues/BEAAA-933)). The Reader auto-renders every plain id as a clickable chip showing id + title + status + a hover-peek with the owner and a one-line excerpt — wrapping the id in code or a link strips the title and forces the reader to click out.',
+    'Do NOT restate a cited issue\'s title or status next to its id (the chip already shows them). Just write the id; the chip handles the rest.',
+    'Expand every internal abbreviation or jargon term on first use, e.g. "Head of Underwriting (HoUW)", "Acceptance Criterion 4 (AC4)", "operating seat (op-seat)". A reader without domain context must understand the TL;DR end-to-end.',
     '',
     `Surface: ${args.surface}`,
     `Scope id: ${args.scopeId}`,
