@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
-status: complete
-stopped_at: v1.0.0 milestone COMPLETE for INTERNAL use 2026-05-29. All 7 phases shipped + live-verified on BEAAA; Phase 7's last nub (Plan 07-05 gloss read-back) fixed (dad114b) + re-drilled 4/4 PASS. OPERATOR DECISION 2026-05-29: clarity-pack will NOT be published to public npm — it is internal-only on operator-controlled Paperclip instances, distributed via local-tarball `paperclipai plugin install`. So DIST-01 (npm publish) is WON'T-DO, and Plan 05-10's gated publish step is dropped. Non-blocking debt remains: (a) the REQUIREMENTS.md early-phase traceability rows (SCAF/PRIM/EDITOR/READER-01-09/ROOM-01-08/BULL-01-09/CHAT/COEXIST-01-04) are STALE — they read Pending/unchecked even though those phases are COMPLETE & VERIFIED at the phase level (ROADMAP table + per-phase VERIFICATION.md) and live on BEAAA; (b) DIST-05 visual-regression CI is `.disabled` (headless-browser Google-Fonts dependency); (c) the v1.1 deferral list below.
-last_updated: "2026-05-30T14:00:00.000Z"
-next_action: "Phase 8 (Situation Room people-first cockpit) PLANNED 2026-05-30. 3 plans authored after a plan-checker NEEDS-REVISION → PASS cycle (B1 ownerAgentId namespace bug caught + fixed before any code touched). Plans live at `.planning/phases/08-situation-room-people-first-cockpit/{08-01,08-02,08-03}-PLAN.md`. Wave 1 = 08-01 (worker tier: extract scrubHumanAction to src/shared/, pure 5-state classifier with boundary tests, per-agent rollup builder with Promise.all + polishTldr for focusLine + reused chain pipeline + NO_UUID_LEAK guard + deterministic sort + viewer-keyed needsYou.count; wires into situation.snapshot). Wave 2 = 08-02 (UI tier: EmployeeRow + EmployeeRowStrip + NeedsYouBanner with React text nodes only, 5 --clarity-state-* CSS tokens scoped, ROOM-12 banner accepts defaultExpanded={false} and mounts below the strip, bundle ceiling recalibrated per Phase 5/7 precedent with sanity 740 kB + operator checkpoint above). Wave 3 = 08-03 (live BEAAA drill + v1.1.11 → 1.2.0 ship: two-source version bump per `plugin-version-bump-two-sources` memory, Path A deploy from STABLE /home/beai-agent/clarity-pack-live/package, Playwright probe of all 6 Success Criteria including the M3 __unowned__ disabled-button degrade case + the M4 DOM-mount-order check + the M2 leafIssueId-no-uuid-suffix regex). All ROOM-13..18 mapped to plans; all 6 ROADMAP Success Criteria mapped to drill probes. Design locked via operator-picked AskUserQuestion 2026-05-30: people-first axis (NOT tri-panel / NOT heatmap), idle = LOUD (CEO problem, bubble idle near stuck), needs-you = top banner ONLY (no per-row highlight). Operator critique screenshots `situation-room-current-state-2026-05-30.png` + `situation-room-expanded-2026-05-30.png` are the design ground truth for what NOT to ship. NEXT: `/clear` then `/gsd:execute-phase 8` (clean boundary; HANDOFF.json restores position if you change your mind). --- v1.1.11 SHIPPED + LIVE-VERIFIED on BEAAA 2026-05-30 (CTO heartbeat loop killed + Reader-voice polish wired in chat-messages.ts; diagnostics-on probe of BEAAA-1000 returned 221 unfiltered → 9 rendered, with 47 heartbeat-loop messages caught by the 4 new RUNTIME_PHRASES additions). Tarball SHA 39294d44...fbed5fe; status=ready version=1.1.11; commit cec8c4b pushed to origin/master. --- Prior v1.1.9 context: v1.1.9 SHIPPED on BEAAA 2026-05-30 (deterministic polishTldr() pipeline — ISO→human dates, strip restated parens after ref ids, jargon glossary). Honest read after v1.1.8 was that prompt-only hit diminishing returns; v1.1.9 lands the remaining slop-cleanup deterministically. Tarball b29f9661f3b8123d... → status=ready version=1.1.9. Operator-gated cache-invalidation path unchanged: touch the issue body or add a comment to force a recompile with v1.1.6 prompt + v1.1.7 strip + v1.1.8 voice + v1.1.9 polish all in line. FUTURE TECH DEBT filed: Option B (structured TL;DR output with discriminated-union templates + free-prose escape hatch) — deferred per operator concern that rigid templates would fail on heterogeneous issue types. See the top '✅ v1.1.9 SHIPPED' section + the 'FUTURE TECH DEBT — Option B' section. --- Prior v1.1.7 context: v1.1.7 SHIPPED on BEAAA 2026-05-30 (deterministic meta-prose strip in finalizeTldr — stops trusting the LLM to follow v1.1.6's prompt rules; enforces the contract at the worker tier with regex patterns covering all the BEAAA-1000 failure modes). Tarball 8225b1ebd960345... → status=ready version=1.1.7. All commits pushed through bc489ed. To trigger BEAAA-1000's recompile: edit its body OR add a comment (content_hash changes → cache miss → recompile with v1.1.6 prompt + v1.1.7 strip). Recommended: pick a low-stakes issue (BEAAA-585 'Actual Test' is empty), comment 'test recompile', open Reader, verify the new TL;DR has zero meta-prose. If the agent's output trips a meta pattern, the gate fires (TL;DR stays in 'compiling' state and retries next view). See the top '✅ v1.1.7 SHIPPED' section. --- Prior v1.1.6 context: v1.1.6 SHIPPED on BEAAA 2026-05-30 (Editor-Agent TL;DR content rule with BAD/GOOD examples — stops the meta-prose 'TL;DR stored as compile-result document on…' at the prompt level). Effect is HEARTBEAT-DEPENDENT: BEAAA-1000's cached TL;DR will keep showing the old text until the agent recompiles (issue body or comments change). To force-recompile sooner, edit the issue body or add a comment. Tarball 5402217961bea3ff... → status=ready version=1.1.6. v1.1.5 SHIPPED & LIVE-VERIFIED same session (hide clarity-pack operation issues at resolve-refs — BEAAA-1168 the compile-tracker now renders as plain text, not a UUID-bearing chip). All commits pushed to origin/master through 59127e7. See the top '✅ v1.1.6 SHIPPED' section. --- Prior v1.1.4 context: v1.1.4 SHIPPED & LIVE-VERIFIED on BEAAA-1000 2026-05-30 (chip visual identity — CSS-only, drops monospace from chip body so chips no longer LOOK like code spans; 3px status-colored left bar + solid status pill make them unmistakably labelled links). Tarball 87ce50aa... → status=ready version=1.1.4. All commits pushed to origin/master through 80b1d6d. STILL OPEN (operator-gated): v1.1.5 (skip clarity-pack internal operation issues in resolve-refs — their UUID-bearing titles make chips messy even with v1.1.4 styling) and v1.1.6 (Editor-Agent TL;DR prompt rewrite — current TL;DRs lead with meta-information about compile-result file paths instead of summarizing the issue). See the top '✅ v1.1.4 SHIPPED' section. --- Prior v1.1.3 context: v1.1.3 SHIPPED & LIVE-VERIFIED across 5 BEAAA issues 2026-05-30 (leading-id code-span split — closes the BEAAA-1000 / pervasive-agent-pattern mess). Tarball 6267d981... → status=ready version=1.1.3. All commits pushed to origin/master through 0274fb1. Sweep across BEAAA-1000 (3 TL;DR chips), BEAAA-1047 (5 TL;DR chips), BEAAA-924 (6 TL;DR chips), BEAAA-918 (mid-recompile), BEAAA-585 (empty fixture) — 0 leftover `<id> — gloss` boxed code spans in any of them. Nothing pending. See the top '✅ v1.1.3 SHIPPED' section. --- Prior v1.1.2 context: v1.1.2 SHIPPED & LIVE-VERIFIED on BEAAA 2026-05-30 (bold-headline recursion fix — closes the BEAAA-1047 'still reads like a mess' complaint). v1.1.1 also shipped same session (canonical-link/bare-code ref upgrade in safe-markdown + Editor-Agent TL;DR prompt contract + dynamic truncation reserve). Tarballs 816081e2... (v1.1.1) and cb3bb647... (v1.1.2). All commits pushed to origin/master (68b6a0d, dd66abc, 580624c, 57b5d8b, e07dc2f, fca2aa0). Nothing pending. DISCOVERED OUT OF SCOPE: the 43+ console /api/issues/PAGE-3 / STAGE-1 / STAGE-2 404s on BEAAA-1047 are from the HOST's paperclip-markdown-issue-ref autolinker (not us — every clarity chip on the page has a valid BEAAA-NNN id); filed in MemPalace runbook for future. The Editor-Agent TL;DR prompt fix takes effect on the NEXT heartbeat recompile of an issue — existing cached TL;DRs still carry the old jargon/abbreviations until the issue body/comments change. See the top '✅ v1.1.2 SHIPPED' section. --- Prior v1.1.0 context: v1.1.0 SHIPPED & LIVE-VERIFIED on BEAAA 2026-05-29 (pin-no-brick UI + requestWakeup de-block + sidebar launchers; tarball 958edbc3… / 718,224 bytes; status=ready version=1.1.0 id=a763176a). The ONLY pending action: `git push origin master` was BLOCKED by the auto-mode guardrail — the 4 commits (bf08f90, 9c4370c, 1f112d8, 3b6ca57) are on LOCAL master only; the deploy used the local tarball so BEAAA is current, but the remote is behind until Eric pushes or grants push permission. See the top '✅ v1.1.0 SHIPPED' section for full detail. --- Prior v1.0.0 context: v1.0.0 is COMPLETE for internal use — nothing is required to ship. npm publish is a deliberate WON'T-DO (internal-only). OPTIONAL non-blocking follow-ups, in priority order: (1) Back-fill the stale REQUIREMENTS.md traceability table + top checklist for the early phases (SCAF/PRIM/EDITOR/READER-01-09/ROOM-01-08/BULL-01-09/CHAT/COEXIST-01-04) — they under-report shipped+verified work; reconcile each against its per-phase VERIFICATION.md before flipping (don't blind-flip). (2) v1.1 polish backlog: the chat React-key console warnings; the dormant 501 plugin-stream error; the listComments SDK-vs-REST window gap on >200-comment topics; the Phase 4.2 D1-D7 / GAP-D8 polish items routed to Plan 05-07; a real UI-bundle audit (6 ceiling recalibrations 688→708 kB this milestone). (3) The compile-bulletin 06:30 cron is best-effort only (paperclipai@2026.525.0 scheduled-job scope is dead — PR #6547); the bulletin reliably compiles view-driven when the Bulletin page is opened — report upstream if desired. The live BEAAA install carries the v1.0.0 label (id=a763176a) on tarball f34c5eee00b24cde4cc18c2d12b668432f6b7a1f190734dbc3e3328f4f495872 / 715,097 bytes, status=ready. --- ARCHIVED context for the now-FIXED Plan 07-05 gloss read-back bug (commit dad114b): the gloss step spawned a NEW operation issue every Bulletin view + did ONE immediate poll that always returned 'pending' (the agent compiled the brand-new op ~40s later, async + marked it done), so the stored compile-result was never read back → permanent 'Gloss pending…' + a recompile per view. FIX (option b, lowest blast radius — touches only src/worker/bulletin/bulletin-gloss.ts, NOT the shared agent-task-delivery): on a cache-miss, BEFORE startAgentTask, driveBulletinGlossStep now lists the existing op(s) for this cycle (INCLUDING terminal/done ones) and reads back the stored compile-result via the shared pollAgentTaskResult document path; a ready body → finalizeTldr into tldr_cache + apply; only spawn a new op if none found. TDD: a two-view RED→GREEN test (view1 → op created + pending; agent stores result + marks done; view2 → SAME op read back, finalized, gloss applied, no duplicate op). Re-drill PROOF (worker log): view1 10:58:47 'result DOCUMENT received on operation issue 5c9712b4-… (key=compile-result)' (an op created pre-deploy at 10:20:43) → finalized; view2 11:01:48 'bulletin.byCycle 200' with NO new op = cache hit. (Earlier BUG 1 — agent never produced the gloss because the manifest heartbeat instructions enumerated only bulletin-compile + tldr-compile — was fixed in manifest hotfix 4f224ad.)"
+status: executing
+stopped_at: Phase 6.1 UI-SPEC approved
+last_updated: "2026-05-30T15:04:52.823Z"
 progress:
-  total_phases: 7
+  total_phases: 9
   completed_phases: 7
-  total_plans: 59
-  completed_plans: 59
-  percent: 100
+  total_plans: 63
+  completed_plans: 55
+  percent: 78
 ---
 
 # State: Clarity Pack
@@ -23,6 +22,7 @@ progress:
 **Honest post-mortem after v1.1.8:** prompt-engineering moved the LLM ~30% toward top-tier voice but the surviving slop (ISO dates, restated parentheticals after chip ids, generic agent jargon) is the LLM's training-distribution default — prompts don't reliably override it. v1.1.9 lands those wins deterministically.
 
 **polishTldr() pipeline (commit 260a7f1) — three narrow regex passes in compile-tldr.ts:**
+
 1. `isoDateToHuman` — `2026-06-03` → `Wed 6/3` (weekday computed; preserved if the agent already wrote one — no duplication; identifier-shape contexts like BEAAA-2026-06-03 skipped via boundary class; invalid dates pass through via round-trip validation).
 2. `stripRestatedParenAfterRef` — `BEAAA-1086 (Underwriter pre-read)` → `BEAAA-1086`. Conservative: only capital-led parens; cross-ref parens containing another PREFIX-NNN are preserved; lowercase-led notes ("(for context)") are preserved.
 3. `applyJargonGlossary` — 6 entries: `operational sign-off(s)` → `approval(s)`, `pre-read(s)` → `review(s)`, `binding ratification` → `final approval`, `ratification` → `approval`, `countersign` inflections → `sign off / signed off / signing off / signs off`. Plural handled via `(s?)` capture in replacement template. Domain-specific codenames (Scope-β, G7, Tier-2, ARE Scanner) **NOT** translated — those are unique to the source issue.
@@ -74,12 +74,14 @@ Tarball `d1fc6e50eb90434973e4959c7257431d3edc564c4d2d6332a869f79b81ed9ead` (comm
 **v1.1.6 prompted the agent not to write meta-prose. The agent ignored the prompt on BEAAA-1000 and shipped a TL;DR that was 100% meta-narration of its own output.** The operator: "it's as if the TLDR is talking to itself." Lesson taken: stop trusting LLM prompt-rule compliance. v1.1.7 enforces the contract at the WORKER tier with a deterministic regex strip — no LLM trust required.
 
 **Fix (commit bc489ed):**
+
 - `compile-tldr.ts` exports `META_PROSE_PATTERNS` (7 narrow regexes), `MIN_USEFUL_TLDR_LEN` (50), `stripMetaProse(body)`, `splitSentences(line)`. All pure.
 - Patterns cover: TL;DR-as-subject + meta-verb ("The TL;DR leads with…", "TL;DR is stored…"), `compile-result document`, `operation issue is marked`, `stored as the <kind> document`, word-count claims (`82 words, within the…` / `~80-word envelope`).
 - `splitSentences` splits on `[.!?]\s+(?=\S)` so a meta sentence starting with a digit ("82 words…") cleanly separates from substantive prose preceding it.
 - `finalizeTldr` runs the strip after schema validation. The gate fires ONLY when the strip MEANINGFULLY removed content AND the remainder is below MIN_USEFUL_TLDR_LEN — a short clean body that doesn't match any meta pattern passes through unchanged. On gate-fire: `recordFailure` + throw → cache NOT written → next view-driven trigger retries. Bias is "retry, don't cache garbage."
 
 **Tests (13 new):**
+
 - The EXACT verbatim BEAAA-1000 failure text strips to (nearly) empty — proves the patterns catch the real-world drift.
 - Legit substantive prose ABOUT the issue (the GOOD-example shape from v1.1.6) is preserved unchanged — zero false positives.
 - Each meta pattern is detected individually.
@@ -100,6 +102,7 @@ Suite 2244/2247 — only the known pre-existing situation-artifacts failure rema
 **v1.1.6 closes the operator's BEAAA-1000 complaint at the prompt level.** v1.1.5 hid the operation-issue chips (BEAAA-1168 the compile-tracker is now plain text); v1.1.6 stops the agent from writing the meta-prose ("TL;DR stored as the compile-result document on…") in the first place.
 
 **Prompt additions (commit 59127e7):**
+
 - CRITICAL CONTENT RULE: the TL;DR summarizes the ISSUE itself — never describe how/where/by what process the TL;DR is compiled, never name operation issues, never mention storage paths or document keys.
 - NEVER reference clarity-pack operation issues (compile-result trackers / sign-off ops / bulletin compiles) — their UUID-bearing titles have no context for the reader.
 - BAD example included (the exact failure text from BEAAA-1000) AND a GOOD example (the same issue summarised correctly). The contrast is what the LLM patterns against.
@@ -115,6 +118,7 @@ Suite 2244/2247 — only the known pre-existing situation-artifacts failure rema
 **Structural fix for the UUID-bearing chip-title pollution.** The Editor-Agent creates internal compile-tracking issues (BEAAA-1168 etc.) with computer-generated titles like `Compile TL;DR — a119b8e7-d79e-404e-9e66-105a47e4d3b7`. Even with v1.1.4's chip restyle, references to these still showed UUID-titled chips in every TL;DR. v1.1.5 hides them from the chip pipeline entirely.
 
 **Fix (commit be45906):**
+
 - `src/shared/types.ts` — `RefCardData` adds optional `hiddenAsRef: boolean`.
 - `src/shared/reference-resolver.ts` — fetcher type + explicit field mapping now forward `hiddenAsRef` (was dropped by the existing explicit field whitelist — caught by the first test run).
 - `src/worker/handlers/resolve-refs.ts` — reads each issue's `originKind` and sets `hiddenAsRef:true` when it starts with `OPERATION_ORIGIN_KIND_PREFIX` (the shared `plugin:clarity-pack:operation:` namespace from agent-task-delivery.ts; matches `tldr-compile` / `bulletin-compile` / `bulletin-gloss` / `sign-off` / any future operation kind under the prefix).
@@ -133,12 +137,14 @@ Suite 2244/2247 — only the known pre-existing situation-artifacts failure rema
 **The operator's BEAAA-1000 feedback after v1.1.3 was that "it didn't show titles" — but it WAS showing titles; the CSS made chips look identical to inline code spans.** The chip used `font-family: 'Geist Mono'` same as `.clarity-md-code`, so monospace-in-a-border-box was the visual identity for BOTH. The operator legitimately couldn't tell them apart.
 
 **Fix (commit 80b1d6d, CSS-only):**
+
 - `.clarity-ref-chip` body drops monospace; inherits the surface's sans/serif font so the title reads as prose.
 - `.clarity-ref-chip-id` keeps `Geist Mono` so the identifier still reads as an identifier.
 - 3px status-colored LEFT BAR on the chip (`done` = green, `blocked` = red, default = neutral) — the strongest at-a-glance "this is a labelled ref" affordance.
 - `.clarity-ref-chip-status` upgraded from a faint outline (opacity 0.7) to a solid filled pill (border-radius: 999px) with contrasting text. The status is the operator's primary signal — now it pops.
 
 **Live verification on BEAAA-1000 (Playwright computed-style inspection):**
+
 - `chipFont`: `"Instrument Serif", Georgia, serif` (inherited from Reader) — NOT monospace.
 - `chipBorderLeft`: `3px solid oklch(0.62 0.18 25)` (red — `blocked` status).
 - `idFont`: `"Geist Mono", ui-monospace, …` — identifier still monospace.
@@ -150,6 +156,7 @@ The chip now reads as: red-bar + monospace id + sans/serif title + solid red pil
 **Tarball:** `clarity-pack-1.1.4.tgz` sha256 `87ce50aaa3b56e4ceb85a1a478027ac30cd5999d582c55388f44e00139a85783`. Deployed → `status=ready version=1.1.4 id=a763176a-2f4d-4986-b190-b5151e42cc00`. No parser, worker, or manifest-shape changes; pure CSS.
 
 **STILL OPEN (next, when the operator asks):**
+
 - **v1.1.5 (B):** skip clarity-pack internal operation issues in resolve-refs / parser. The Editor-Agent's TL;DR-compile and sign-off operation issues (`origin_kind = plugin:clarity-pack:operation:*`) have computer-generated titles containing UUIDs; chipping references to THEM still produces messy chip titles even with the v1.1.4 styling. The cleanest fix is to never render chips for plugin-operation issues — strip them at the parser level (treat as plain text or filter at resolve-refs).
 - **v1.1.6 (C):** Editor-Agent TL;DR prompt rewrite. The BEAAA-1000 TL;DR leads with "TL;DR stored as the compile-result document on …" — meta-information about where the TL;DR is stored, not a summary of what BEAAA-1000 IS. The agent needs a harder NEGATIVE-example contract: don't describe the compile process, summarize the issue.
 
@@ -194,6 +201,7 @@ Chip titles include full agent-relevant context (e.g. `BEAAA-1086 — UW operati
 **Tarball:** `clarity-pack-1.1.2.tgz` sha256 `cb3bb6470dbf4e3748922c2a4b3776d82e8adace72eb7214c7c5609b1e1fa0bb`. Deployed → `status=ready version=1.1.2 id=a763176a-2f4d-4986-b190-b5151e42cc00`.
 
 **Live verification (Playwright on BEAAA-1047, then tabs closed):**
+
 - `chipsInStrong: 2` (BEAAA-1047 + BEAAA-933) — both with full titles + status badges resolved inside the `<strong>`.
 - `chipTitlesInStrong: ["BEAAA-1047 — BEAAA-929 AC4 — Actuary...", "BEAAA-933 — BEAAA-187 child — v1.1.2 reconciliation..."]`.
 - `hasLiteralMarkdown: false` — no `[BEAAA-XXX](` syntax leaks as text.
@@ -230,6 +238,7 @@ Chip titles include full agent-relevant context (e.g. `BEAAA-1086 — UW operati
 **Tarball:** `clarity-pack-1.1.0.tgz` sha256 `958edbc3c7f113a2e96c93eb8ebe720ef6c42978a214e96e6b922da007abbc43`, 718,224 bytes. Deployed via NEXT-SESSION-BRIEF §5 (scp to /tmp → install from STABLE `/home/beai-agent/clarity-pack-live/package` → pm2 restart). `✓ Installed clarity-pack v1.1.0 (ready)`; `key=clarity-pack status=ready version=1.1.0 id=a763176a-2f4d-4986-b190-b5151e42cc00`. Box load ~0.08 (the prior load scare was open UI tabs, not the worker — confirmed again this session).
 
 **Live verification (Playwright on BEAAA, all 3 PASS, tabs closed after):**
+
 - **Launchers** — the three sidebar buttons render under "Work"; clicking "Employee Chat" navigated to `/BEAAA/chat` (bare-routePath resolution confirmed).
 - **Pin** — pinned an agent bubble in Scanner Engineer / BEAAA-808; `chat.pin` returned 200 (worker log); the Pin button stayed `cursor:pointer` (NOT bricked); after a HARD RELOAD the `⚑ Pinned` inline marker persisted AND the message appeared in the right-rail Pinned context (3 pins). Screenshot `v1.1.0-verified-launchers-and-pin.png`.
 - **De-block** — worker log: `16:15:01 POST .../actions/chat.send 200` returned in the same second the `issues.requestWakeup` host error fired (i.e. NOT blocked); the new `chat.send: requestWakeup non-fatal (native wake applies)` + agent-task-delivery `requestWakeup non-fatal for issue` log lines are live. Sent message persisted across the reload.
@@ -247,6 +256,7 @@ Chip titles include full agent-relevant context (e.g. `BEAAA-1086 — UW operati
 **Phase 5 closure (the genuinely-autonomous part, done 2026-05-29):** DIST-02 (README install/opt-in/rollback/uninstall/runbook) → Implemented; DIST-03 (ac auto-status, Plan 05-03) → already Implemented; DIST-04 (previewer registry, Plan 05-04) → Implemented; COEXIST-05 (disable preserves data) → Implemented (by construction + 4.1/6.1 drills + README Uninstall). DIST-01 → Won't-do. **DIST-05 → PARTIAL** (lockfile-audit + a11y CI active; visual-regression CI `.disabled` — the lone deferred Phase-5 CI gate; not blocking).
 
 **Known non-blocking debt (answer to "anything deferred?"):**
+
 1. **Doc debt — the biggest item:** REQUIREMENTS.md early-phase rows (SCAF-01..09, PRIM-01..06, EDITOR-01..06, READER-01/02/05-09, ROOM-01..08, BULL-01..04/07/08/09, CHAT-01..11, COEXIST-01..04) read Pending/unchecked even though those phases are COMPLETE & VERIFIED at the phase level (ROADMAP table + per-phase VERIFICATION.md) and demonstrably live on BEAAA. This is un-backfilled bookkeeping, NOT missing features. Reconcile each against its phase VERIFICATION.md before flipping (do NOT blind-flip).
 2. **v1.1 polish backlog (filed, non-blocking):** chat React-key console warnings (need jsdom real-DOM tests); the dormant 501 plugin-stream error (host doesn't implement plugin streams — handled best-effort); the `listComments` SDK-vs-REST window gap on >200-comment topics; Phase 4.2 D1-D7 / GAP-D8 polish items routed to Plan 05-07; a real UI-bundle audit (6 ceiling recalibrations 688→708 kB this milestone).
 3. **Upstream limitation (not ours):** the compile-bulletin 06:30 cron is best-effort only because paperclipai@2026.525.0's scheduled-job invocation scope is dead (PR #6547); the bulletin reliably compiles view-driven when the Bulletin page is opened.
@@ -267,6 +277,7 @@ Chip titles include full agent-relevant context (e.g. `BEAAA-1086 — UW operati
 **Tarball:** `clarity-pack-1.0.0.tgz` sha256 `f34c5eee00b24cde4cc18c2d12b668432f6b7a1f190734dbc3e3328f4f495872`, 715,097 bytes, 18 files. Deployed to BEAAA via DEPLOY-RUNBOOK Path A in 2 SSH connections (rm+cat-over-stdin upload, then one install here-string; 7s settle). `✓ Installed clarity-pack v1.0.0 (ready)`; pm2 `paperclip` online; `key=clarity-pack status=ready version=1.0.0 id=a763176a-2f4d-4986-b190-b5151e42cc00`.
 
 **Re-drill (live BEAAA Bulletin, Editor-Agent "1 live") — 4/4 PASS:**
+
 1. **Filter** — lineage rendered `Work in motion — 1 thread`; routine/scheduled outputs + exact dups filtered out.
 2. **Gloss DISPLAY** — the surviving thread shows the gloss TEXT: *"We re-ran the live quality tests on your voice assistant 25 times to confirm its answers stay consistent run-to-run, so the quality numbers you cite are trustworthy."* `browser_evaluate`: `hasGlossPending:false`, no UUID — on BOTH views. **Worker-log op-reuse proof:** view 1 (10:58:47) `result DOCUMENT received on operation issue 5c9712b4-… (key=compile-result)` (an op created pre-deploy at 10:20:43) → finalized into the cache; view 2 (11:01:48) `bulletin.byCycle 200` with NO new `kind=bulletin-gloss` op + NO read-back poll = a pure cache hit. The "fresh op per view" loop is gone.
 3. **Affordances** — both "Open issue" + "Open chat with owner" present on the surviving thread.
@@ -283,6 +294,7 @@ Screenshots: `07-05-readback-view1-gloss-displays.png`, `07-05-readback-view2-gl
 **Phase 7 item 5: bulletin lineage filter + view-driven gloss + clickable.** Executed fully autonomously (3 tasks, Tasks 1+2 TDD-first RED→GREEN, sequential mode on master). The Daily Bulletin's "ONE ARTIFACT, END-TO-END" lineage section rendered a FLAT chronological list that included routine/scheduled outputs (Daily Founder digest, Daily CEO status report ×2, Nightly Auditor Report) + exact duplicates — it read like a LOG; the heading falsely claimed "one artifact" while showing many; the squares were not clickable. FIX (bulletin OUTPUT QUALITY — the bulletin still compiles via the unchanged view-driven compileNow/byCycle path).
 
 **What shipped:**
+
 - **PURE lineage FILTER (Task 1, D-I5-01):** `src/worker/bulletin/lineage-filter.ts` — `filterLineageThreads` + the unit-testable `isRoutineThread`. Drops routine/scheduled threads (a thread is routine only when EVERY node is cadence-shaped: case-insensitive `daily`/`nightly`/`weekly`/`digest`/`status report`/`status update` + a `<cadence> … report` pairing; a single substantive node defeats it) + exact-dup threads (entityId+node signature, keep first), KEEPS agent-self substantive, conservative (unsure→keep). No ctx/no I/O, byte-equal output, never mutates input, never throws on a malformed thread. No `BEAAA` literal.
 - **View-driven gloss COMPILE step (Task 1, D-I5-02):** `src/worker/bulletin/bulletin-gloss.ts` — `driveBulletinGlossStep` mirrors editor.ts `driveTldrCompileStep`: cache-check `getTldrByScope('bulletin','bulletin-gloss:<cycle>')` (content-hash keyed to the FILTERED thread set) → on hit apply instantly with NO agent call → on miss `resolveEditorAgentId` (op-issue discovery, no dead reconcile) → PAUSED check (no auto-resume) → `startAgentTask`('bulletin-gloss') + ONE poll → `finalizeTldr` the JSON {threadId→gloss} map into the EXISTING tldr_cache (surface='bulletin'). ONE agent op per view emits a map for ALL threads. Paused/unavailable → gloss:null graceful (never an error); NEVER throws.
 - **Handler wire-in + enrichment (Task 2, D-I5-03):** `src/worker/handlers/bulletin-by-cycle.ts` — filters `draft.lineageThreads`, enriches each survivor with `identifier` + `ownerAgentId` from `ctx.issues.get` (deduped distinct entityIds, parallel, each in try/catch → null on throw; the UUID is the chat-link target ONLY — never rendered), and attaches the gloss via the gloss step in its VALID request scope. All best-effort — a hiccup never fails the read.
@@ -308,6 +320,7 @@ Screenshots: `07-05-readback-view1-gloss-displays.png`, `07-05-readback-view2-gl
 **Phase 7 item 4: Situation Room org-level blocked backlog.** Executed fully autonomously (3 TDD-first tasks, sequential mode on master). The Situation Room reported "No blockers" on EVERY agent card while ~24 issues sit `status=blocked` — the inverse of the plugin's core promise. Root cause (07-CONTEXT item 4 + `situation-snapshot.ts`): `buildEmployeeRow` walks blockers PER AGENT from `current_focus_issue_id`, gated `if (startId)`; every idle/Standby agent has no focus → empty chain → "No blockers". FIX (output/insight only — NO new schema): an ORG-LEVEL backlog walked from `status=blocked` directly.
 
 **What shipped:**
+
 - **`pickTopChains` EXPORTED (Task 1):** MOVED verbatim from the private declaration in the recompute job (`situation-snapshot.ts:286-303`) into `src/shared/blocker-chain.ts` as an exported pure function (single source of truth for the HUMAN_ACTION_ON-first ranking). The job now imports it — **byte-identical runtime** (the critical-path call site is unchanged). `flattenBlockerChain`'s bytes untouched (PRIM-03 grep-guard passes).
 - **NEW `src/worker/handlers/org-blocked-backlog.ts` (Task 1):** `buildOrgBlockedBacklog(ctx, companyId, viewerUserId)` — pure, structurally-typed. Walks `ctx.issues.list({companyId, status:'blocked'})` (defensive `status==='blocked'` filter), builds edges/nodeMeta per issue via the snapshot relations.get BFS (MAX_CHAIN_DEPTH=6; per-issue try/catch → skip), flattens via the EXISTING `flattenBlockerChain`, ranks via `pickTopChains(chains, 15)`, resolves distinct owner UUIDs → display NAMES via the D-09 `ctx.agents.get` NO_UUID_LEAK pattern (degrade→null/"Unassigned", NEVER the UUID). Emits `{rows, total, blocked_count, need_you_count, overflow}` (need_you = HUMAN_ACTION_ON rows whose terminal.userId === viewer, excl. __unowned__). Degrade-safe (thrown list→empty backlog; per-issue throw→skip) + instance-agnostic (no company-prefix literal).
 - **Wired into the situation.snapshot DATA HANDLER (Task 2):** `SituationRoomCtx` widened with `issues: Pick<PluginIssuesClient,'list'|'relations'>` + `agents?: Pick<PluginAgentsClient,'get'>` (mirror ResolveRefsCtx). The handler computes the backlog FRESH (valid scope — NOT the scope-dead recompute job) and attaches `org_blocked_backlog`; the no-row path now returns `{org_blocked_backlog, taken_at:now}` instead of null so the banner renders on the dead-job host. viewerUserId derives from `params.userId`.
@@ -332,6 +345,7 @@ Screenshots: `07-05-readback-view1-gloss-displays.png`, `07-05-readback-view2-gl
 **Phase 7 item 3.1: unified ref-aware markdown render.** Executed fully autonomously (5 TDD tasks, sequential mode on master). After 07-02 the operator reviewed BEAAA-828 and reported the main Reader prose "looks half rendered… still asterisks, and still BEAAA-704 etc. that do not show the title. The way things are rendered in the TLDR should be rendered in the rest of the reader as well." Root cause: `prose-with-ref-chips.tsx` rendered text segments as PLAIN text + refs as a title-less `ID · status` chip; the main prose body was in NO item-3 render scope. Item 3.1 delivers ONE unified ref-aware renderer used everywhere.
 
 **What shipped:**
+
 - **RefChip `ID — title` (D-I31-01):** `ref-chip.tsx` two resolved paths render `card.id — card.title` (em-dash) with status as a `clarity-ref-chip-status` badge (was the inline `· status` suffix); bare-ID loading degrade + `nav.linkProps` anchor + hover-peek unchanged; scoped CSS for the label clamp.
 - **SafeMarkdown opt-in ref-awareness (D-I31-02):** `safe-markdown.ts` gains a `{type:'ref'}` InlineSpan + the exported single-source BROAD_REF_PATTERN/escapeRegex + an optional `RefOpts {prefix}` threaded through parseMarkdownBlocks→parseInline→firstInlineMatch (a ref competes by leftmost index — a ref inside a link label stays in the link). `safe-markdown.tsx` maps a `ref` span to `<RefChip>` and widens props to `{text, linkRefs?, companyPrefix?}`. Back-compat (no prop = no chips); instance-agnostic; XSS guards (no innerHTML, sanitizeHref) byte-unchanged.
 - **Render everywhere (D-I31-03):** `prose-with-ref-chips.tsx` REWRITTEN to delegate to `<SafeMarkdown linkRefs companyPrefix=…>` ({ body } prop shape kept → Reader index.tsx + chat message-thread.tsx call sites unchanged); `tldr-strip.tsx` (populated path) + `ref-card.tsx` (non-null excerpt) enable ref-awareness; other branches byte-unchanged.
@@ -358,6 +372,7 @@ Screenshots: `07-05-readback-view1-gloss-displays.png`, `07-05-readback-view2-gl
 **Phase 7 item 3: TL;DR cleanup (markdown render + refs→titles + tighter prompt).** Executed fully autonomously (4 TDD tasks, sequential mode on master). After 07-01 the chips resolve but the TL;DR + the Anchored-to excerpt still rendered RAW markdown (`## BLUF`/`**bold**`) with bare IDs — the operator-perceived "is this thing even working" gap. Item 3 closes the readability payoff.
 
 **What shipped:**
+
 - **NEW `src/ui/primitives/safe-markdown.ts`** (pure parser: block heading/list/paragraph + inline strong/em/code/link tokenizer; `sanitizeHref` allowlist — http/https/mailto/relative only, rejects javascript:/data:/vbscript:/file: incl. case + control-char obfuscations) **+ `safe-markdown.tsx`** (`SafeMarkdown` component — keyed React nodes, NEVER an innerHTML escape hatch). Split so the load-bearing parse + safety logic is `node --test`-loadable (Node can't load `.tsx`); the `.tsx` is grep-verified (no-innerHTML + SafeMarkdown/sanitizeHref).
 - **NEW `src/worker/handlers/tldr-ref-titles.ts`** (`inlineRefTitles` + `buildTitleMap`) — REUSES the 07-01 `resolveRefsViaSdk` + `extractRefsFromBody` to rewrite `<PREFIX>-NNN` → `ID — title` in the TL;DR body. Instance-agnostic (prefix-narrowed), idempotent (skip a token already followed by ` — `), degrade-safe (empty map → bare IDs), never throws. Wired into `issue-reader.ts` at the post-`tldr` seam behind a try/catch (failure leaves the un-rewritten body).
 - **tldr-strip.tsx + ref-card.tsx** render the body/excerpt via `<SafeMarkdown>` (the null "permission-gated" branch preserved). **compile-tldr.ts buildPrompt** tightened to a busy-founder headline + ≤3 bullets + ~80-word cap (input scaffolding + MAX_TOKENS=16000 unchanged). **READER-10** added to REQUIREMENTS.md as Pending.
@@ -467,10 +482,12 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 5 Plan 05-10 (rc → 1.0.0 + npm publish + ALL-paths drill) — **unblocked 2026-05-27 by Phase 6.1 closure**.
+**Current Focus:** Phase 08 — situation-room-people-first-cockpit
 
 ## Current Position
 
+Phase: 08 (situation-room-people-first-cockpit) — EXECUTING
+Plan: 2 of 3
 **▶ RESUME HERE (2026-05-28 PM — VIEW-DRIVEN COMPILE REWORK SHIPPED + LIVE-VERIFIED on BEAAA).**
 Read MemPalace `clarity_pack/decisions` drawer `drawer_clarity_pack_decisions_8f2f846b8ace835af1cc8c30` ("View-driven compile rework") FIRST. Bottom line:
 
@@ -1217,8 +1234,8 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Executing Phase 6.1
-**Progress:** [████████░░] 84%
+**Status:** Ready to execute
+**Progress:** [█████████░] 87%
 
 ## Performance Metrics
 
@@ -1237,6 +1254,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Plan 04-03 | ~7 min, 7 commits (6 TDD + 1 wiring), 7 files (6 created), suite 767→798 (+31; 796 pass / 0 fail / 2 skip) |
 | Plan 04.1-01 | 3 tasks across 2 sessions (Task 1 autonomous build + Task 2 Eric Countermoves live drill 4 min + Task 3 continuation lock), 4 commits `9703dbe..db29504`, 3 files created (probe + findings + traceability test), 3 modified (REQUIREMENTS + STATE + ROADMAP), 9 new tests RED→GREEN; Phase 4.1 Gate Verdict GO |
 | Phase 05-distribution-polish P05-07 | 19min | 2 tasks | 17 files |
+| Phase 08 P01 | 16 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -1327,7 +1345,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-05-26T20:16:43.764Z
+**Last session:** 2026-05-30T15:04:41.903Z
 
 **Stopped at:** Phase 6.1 UI-SPEC approved
 
