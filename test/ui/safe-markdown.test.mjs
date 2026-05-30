@@ -104,11 +104,16 @@ test('parseMarkdownBlocks: blank-line-separated prose becomes multiple paragraph
 // Inline parse
 // ---------------------------------------------------------------------------
 
-test('inline: **bold** becomes a strong span whose text is the inner content', () => {
+test('inline: **bold** becomes a strong span whose nested spans carry the inner content', () => {
+  // Plan 250530 — `strong` now carries `spans: InlineSpan[]` (was `text:string`).
+  // A simple `**hello**` yields a strong with a single nested text span.
   const blocks = parseMarkdownBlocks('say **hello** now');
   const strong = allSpans(blocks).find((s) => s.type === 'strong');
   assert.ok(strong, 'a strong span exists');
-  assert.equal(strong.text, 'hello');
+  assert.ok(Array.isArray(strong.spans), 'strong carries `spans: InlineSpan[]`');
+  assert.equal(strong.spans.length, 1, 'single nested text span for "hello"');
+  assert.equal(strong.spans[0].type, 'text');
+  assert.equal(strong.spans[0].text, 'hello');
   assert.equal(spanTypes(blocks).includes('strong'), true);
 });
 
@@ -124,12 +129,17 @@ test('inline: `code` becomes a code span', () => {
   assert.equal(code.text, 'npm test');
 });
 
-test('inline: [label](https://e.com) becomes a link span with label text + the href', () => {
+test('inline: [label](https://e.com) becomes a link span with nested label spans + the href', () => {
+  // Plan 250530 — `link` now carries `spans: InlineSpan[]` (was `label:string`).
+  // A plain label yields a single nested text span; `href` is unchanged.
   const blocks = parseMarkdownBlocks('see [the doc](https://e.com)');
   const link = allSpans(blocks).find((s) => s.type === 'link');
   assert.ok(link, 'a link span exists');
-  assert.equal(link.label, 'the doc');
   assert.equal(link.href, 'https://e.com');
+  assert.ok(Array.isArray(link.spans), 'link carries `spans: InlineSpan[]`');
+  assert.equal(link.spans.length, 1);
+  assert.equal(link.spans[0].type, 'text');
+  assert.equal(link.spans[0].text, 'the doc');
 });
 
 test('inline: malformed / unmatched markup degrades to plain text (never throws)', () => {
@@ -284,12 +294,25 @@ test('ref-aware (D-I31-02): markdown still works alongside refs (heading + list 
   assert.equal(ref.refId, 'BEAAA-9');
 });
 
-test('ref-aware (D-I31-02): a ref INSIDE a link label stays a single link span (the link wins — no split)', () => {
+test('ref-aware (D-I31-02 + 250530): a ref INSIDE a link label stays inside the link — but is now a NESTED ref span (recursion)', () => {
+  // Plan 250530 — links now carry recursively-parsed children
+  // (`spans: InlineSpan[]`). The link still "wins" the leftmost-match contest
+  // (the ref isn't carved OUT of the link span), but the link's children are
+  // re-parsed so the embedded ref token becomes a nested ref span. The Reader
+  // renders the chip INSIDE the anchor — strictly better operator UX.
   const blocks = parseMarkdownBlocks('[BEAAA-1 details](https://e.com)', { prefix: 'BEAAA' });
   const links = allSpans(blocks).filter((s) => s.type === 'link');
-  assert.equal(links.length, 1, 'one link span');
-  assert.equal(links[0].label, 'BEAAA-1 details', 'the ref token stays inside the link label');
-  assert.equal(refSpans(blocks).length, 0, 'no ref span carved out of the link label');
+  assert.equal(links.length, 1, 'one link span — the wrapping anchor still wins');
+  assert.equal(links[0].href, 'https://e.com', 'the link href is preserved verbatim');
+  // The ref is NESTED inside the link's spans (not at the top level).
+  const topLevelRefs = allSpans(blocks).filter((s) => s.type === 'ref');
+  assert.equal(topLevelRefs.length, 0, 'no top-level ref carved out of the link');
+  const nestedRef = links[0].spans.find((s) => s.type === 'ref');
+  assert.ok(nestedRef, 'the ref token is a nested ref span inside the link');
+  assert.equal(nestedRef.refId, 'BEAAA-1');
+  // The trailing " details" survives as a text sibling inside the link.
+  const trailingText = links[0].spans.filter((s) => s.type === 'text').map((s) => s.text).join('');
+  assert.equal(trailingText.includes('details'), true, 'trailing label text survives');
 });
 
 test('ref-aware (D-I31-02): XSS STILL HOLDS with refOpts on — <script> is inert text, no js: href', () => {
@@ -420,19 +443,29 @@ test('canonical link → ref (250530): [BEAAA-933](/BEAAA/issues/BEAAA-933) beco
   // and no link span lingers (the explicit anchor was the agent's "fancy
   // version of a ref" — the chip is the better surface).
   assert.equal(
-    allSpans(blocks).some((s) => s.type === 'link' && s.label === 'BEAAA-933'),
+    allSpans(blocks).some((s) => s.type === 'link'),
     false,
-    'the canonical link was upgraded, not duplicated',
+    'the canonical link was upgraded to a ref, not duplicated',
   );
 });
 
 test('link stays link (250530): CUSTOM label is preserved — [BEAAA-933 — title](/BEAAA/issues/BEAAA-933)', () => {
-  // A label with extra content is an explicit author choice — keep it.
+  // A label with extra content is an explicit author choice — keep it. With
+  // 250530 recursion the label's PREFIX-NNN token inside the link is now a
+  // nested ref span (chip rendered inside the anchor) and the trailing
+  // " — title" stays as text.
   const blocks = parseMarkdownBlocks('[BEAAA-933 — title](/BEAAA/issues/BEAAA-933)', { prefix: 'BEAAA' });
   const links = allSpans(blocks).filter((s) => s.type === 'link');
   assert.equal(links.length, 1, 'link survives');
-  assert.equal(links[0].label, 'BEAAA-933 — title');
-  assert.equal(refSpans(blocks).length, 0, 'no ref upgrade for a custom-label link');
+  assert.equal(links[0].href, '/BEAAA/issues/BEAAA-933');
+  // Inside the link: a nested ref + a text span carrying the trailing " — title".
+  const nestedRef = links[0].spans.find((s) => s.type === 'ref');
+  assert.ok(nestedRef, 'the ref token inside the custom label is a nested ref span');
+  assert.equal(nestedRef.refId, 'BEAAA-933');
+  const labelText = links[0].spans.filter((s) => s.type === 'text').map((s) => s.text).join('');
+  assert.equal(labelText.includes('title'), true, 'the custom suffix survives as text');
+  // No TOP-LEVEL ref carved out — the link still wraps everything.
+  assert.equal(refSpans(blocks).length, 0, 'no top-level ref carved out of the custom-label link');
 });
 
 test('link stays link (250530): CROSS-INSTANCE — label prefix ≠ url prefix is NOT upgraded', () => {
@@ -490,5 +523,136 @@ test('SAFETY (250530): a `ref` span carries ONLY a validated id string — no hr
     const keys = Object.keys(r).sort();
     assert.deepEqual(keys, ['refId', 'type'], 'ref span carries only type + refId');
     assert.match(r.refId, /^[A-Z][A-Z0-9]{1,7}-\d+$/, 'refId is a validated token');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Plan 250530 — strong/em/link RECURSION. The pre-recursion parser produced
+// `strong/em/link` spans with a flat `text` (or `label`) STRING, which the
+// .tsx renderer mounted as a raw text node. So `**[BEAAA-933](/url)**` showed
+// the literal `[BEAAA-933](/url)` markdown SYNTAX inside the bold — the exact
+// "still reads like a mess" complaint on BEAAA-1047's TL;DR headline
+// (2026-05-30). Recursing into the children via parseInline produces a fully-
+// resolved tree so nested refs / links / code / em / bold render correctly.
+// ---------------------------------------------------------------------------
+
+function flattenAllSpans(spans) {
+  const out = [];
+  for (const s of spans ?? []) {
+    out.push(s);
+    if (s.type === 'strong' || s.type === 'em' || s.type === 'link') {
+      out.push(...flattenAllSpans(s.spans));
+    }
+  }
+  return out;
+}
+
+test('recursion (250530): **[BEAAA-933](/BEAAA/issues/BEAAA-933)** — the canonical-issue-link inside bold becomes a ref chip inside the strong', () => {
+  // The TL;DR's exact headline shape on BEAAA-1047.
+  const blocks = parseMarkdownBlocks(
+    '**BEAAA-1047 is blocked on countersigning [BEAAA-933](/BEAAA/issues/BEAAA-933)**',
+    { prefix: 'BEAAA' },
+  );
+  const strong = allSpans(blocks).find((s) => s.type === 'strong');
+  assert.ok(strong, 'a strong span exists');
+  const refs = strong.spans.filter((s) => s.type === 'ref').map((s) => s.refId);
+  // Both the plain-prose BEAAA-1047 and the canonical-link-upgraded BEAAA-933
+  // become ref spans nested inside the strong.
+  assert.deepEqual(refs.sort(), ['BEAAA-1047', 'BEAAA-933']);
+  // No literal markdown-link or markdown-text fragment survives as a link span
+  // inside the strong — the canonical link was upgraded all the way to a ref.
+  assert.equal(
+    strong.spans.some((s) => s.type === 'link'),
+    false,
+    'the canonical issue link inside bold is upgraded to a ref, not left as a link',
+  );
+  // No literal `[`/`]`/`(`/`)` markdown survives as text inside the strong
+  const stringy = strong.spans
+    .filter((s) => s.type === 'text')
+    .map((s) => s.text)
+    .join('');
+  assert.equal(/[[\]()]/.test(stringy), false, 'no literal markdown brackets/parens in the strong');
+});
+
+test('recursion (250530): *italic* with a ref inside chips up — *see BEAAA-141 today*', () => {
+  const blocks = parseMarkdownBlocks('*see BEAAA-141 today*', { prefix: 'BEAAA' });
+  const em = allSpans(blocks).find((s) => s.type === 'em');
+  assert.ok(em, 'an em span exists');
+  const ref = em.spans.find((s) => s.type === 'ref');
+  assert.ok(ref, 'the ref token inside italic is a nested ref span');
+  assert.equal(ref.refId, 'BEAAA-141');
+});
+
+test('recursion (250530): a non-canonical link label re-parses children — [hold **on** to BEAAA-141](https://e.com)', () => {
+  // The link is NOT canonical (href is external), so the label is recursively
+  // parsed and the bold + ref render inside the anchor.
+  const blocks = parseMarkdownBlocks('[hold **on** to BEAAA-141](https://e.com)', { prefix: 'BEAAA' });
+  const link = allSpans(blocks).find((s) => s.type === 'link');
+  assert.ok(link, 'the non-canonical link stays a link');
+  assert.equal(link.href, 'https://e.com');
+  const types = link.spans.map((s) => s.type);
+  assert.ok(types.includes('strong'), 'the **on** bold survives inside the link label');
+  assert.ok(types.includes('ref'), 'the BEAAA-141 ref renders inside the link label');
+});
+
+test('recursion (250530): triply-nested **outer _BEAAA-9 here_ end** — bold with em with ref, no literal markup leaks', () => {
+  // Different markers (** for strong, _ for em) so leftmost-match picks the
+  // outer strong first; parseInline then re-parses the inner content and the
+  // _em_ + ref token nest cleanly. The pre-recursion parser would have
+  // returned strong with `.text = "outer _BEAAA-9 here_ end"` and rendered the
+  // underscores as literal text.
+  const blocks = parseMarkdownBlocks('**outer _BEAAA-9 here_ end**', { prefix: 'BEAAA' });
+  const strong = allSpans(blocks).find((s) => s.type === 'strong');
+  assert.ok(strong, 'an outer strong exists');
+  const em = strong.spans.find((s) => s.type === 'em');
+  assert.ok(em, 'the _em_ is nested inside the strong');
+  const ref = em.spans.find((s) => s.type === 'ref');
+  assert.ok(ref, 'the ref leaks all the way to the em-inside-strong leaf');
+  assert.equal(ref.refId, 'BEAAA-9');
+  // No literal underscore should appear in the strong's children
+  const flat = flattenAllSpans(strong.spans);
+  const stringy = flat
+    .filter((s) => s.type === 'text')
+    .map((s) => s.text)
+    .join('');
+  assert.equal(/_/.test(stringy), false, 'no literal underscore syntax inside the strong');
+});
+
+test('recursion (250530): `code` does NOT recurse — backticks remain verbatim (code is a leaf)', () => {
+  // Even though `[BEAAA-9](/url)` looks like markdown, inside backticks it's
+  // verbatim by contract — the chip pipeline's bare-id upgrade only fires on a
+  // WHOLE-string match (see code → ref tests above), not on substrings.
+  const blocks = parseMarkdownBlocks('`[BEAAA-9](/x)`', { prefix: 'BEAAA' });
+  const code = allSpans(blocks).find((s) => s.type === 'code');
+  assert.ok(code, 'the code span survives');
+  assert.equal(code.text, '[BEAAA-9](/x)', 'inline code is verbatim — no recursion');
+  // No accidental refs/links carved out of the code content.
+  const all = allSpans(blocks);
+  assert.equal(all.filter((s) => s.type === 'ref').length, 0);
+  assert.equal(all.filter((s) => s.type === 'link').length, 0);
+});
+
+test('SAFETY (250530 recursion): XSS still holds — a javascript: href inside bold (**[x](js:)**) is downgraded to text', () => {
+  const blocks = parseMarkdownBlocks('**[x](javascript:alert(1))**', { prefix: 'BEAAA' });
+  // No span anywhere carries a javascript href, even nested.
+  const all = flattenAllSpans(allSpans(blocks));
+  assert.equal(
+    all.some((s) => s.href === 'javascript:alert(1)'),
+    false,
+    'no nested span carries the hostile href',
+  );
+});
+
+test('SAFETY (250530 recursion): no `text` field on strong/em/link spans (the old flat shape is GONE)', () => {
+  const blocks = parseMarkdownBlocks('**hello** and *world* and [x](/y)', { prefix: 'BEAAA' });
+  for (const s of allSpans(blocks)) {
+    if (s.type === 'strong' || s.type === 'em') {
+      assert.equal('text' in s, false, `${s.type} no longer carries a flat .text — only .spans`);
+      assert.ok(Array.isArray(s.spans), `${s.type} carries .spans`);
+    }
+    if (s.type === 'link') {
+      assert.equal('label' in s, false, 'link no longer carries a flat .label — only .spans');
+      assert.ok(Array.isArray(s.spans));
+    }
   }
 });

@@ -39,9 +39,15 @@ function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[]
     const key = `${keyPrefix}-${i}`;
     switch (span.type) {
       case 'strong':
-        return <strong key={key}>{span.text}</strong>;
+        // Plan 250530 — strong/em/link children are recursively parsed by the
+        // parser into `spans: InlineSpan[]`; render them via the same
+        // renderInline so nested refs / links / code / em / bold all render.
+        // The TL;DR's `**[BEAAA-933](/BEAAA/issues/BEAAA-933)**` headline now
+        // resolves the link to a titled chip INSIDE the bold (was: literal
+        // markdown text inside <strong>).
+        return <strong key={key}>{renderInline(span.spans, `${key}-s`)}</strong>;
       case 'em':
-        return <em key={key}>{span.text}</em>;
+        return <em key={key}>{renderInline(span.spans, `${key}-e`)}</em>;
       case 'code':
         return (
           <code key={key} className="clarity-md-code">
@@ -61,7 +67,7 @@ function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[]
             href={span.href}
             {...(isRelative ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
           >
-            {span.label}
+            {renderInline(span.spans, `${key}-l`)}
           </a>
         );
       }
