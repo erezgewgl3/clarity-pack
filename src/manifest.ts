@@ -335,6 +335,22 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.4 (Plan 250530 — chip visual identity, BEAAA-1000 follow-up):
+  //   v1.1.3 fixed the chip pipeline at the parser level, but the chip's CSS
+  //   (`font-family: 'Geist Mono', ui-monospace, …`) made every chip visually
+  //   indistinguishable from inline code spans — same monospace face, same
+  //   border-box. The operator's feedback ("It all says B-A-A. It doesn't
+  //   show the titles.") was about visual identity, not parsing. Fix:
+  //     - Drop monospace from the chip body. Title text inherits the
+  //       surface's sans font and reads as prose.
+  //     - Keep monospace on .clarity-ref-chip-id only so the id still reads
+  //       as an identifier.
+  //     - Add a 3px status-colored LEFT BAR (done = green, blocked = red,
+  //       default = neutral) — strongest "this is a labelled ref" affordance.
+  //     - Status badge upgraded from faint outline (opacity 0.7) to solid
+  //       filled pill with contrasting text — the at-a-glance status signal.
+  //   CSS-only change; no parser / worker / manifest shape changes.
+  //
   // 1.1.3 (Plan 250530 — leading-PREFIX-NNN code-span split, closes the
   // BEAAA-1000 / pervasive-agent-pattern mess):
   //   - The agent's pervasive pattern is `<id> <separator> <gloss>` wrapped in
@@ -396,7 +412,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.3',
+  version: '1.1.4',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

@@ -94,15 +94,23 @@
   background: var(--clarity-state-awaiting-peer-bg);
 }
 
+/* Plan 250530 v1.1.4 — the chip's monospace styling made it visually
+ * indistinguishable from inline code spans (BEAAA-1000 feedback 2026-05-30:
+ * "It all says B-A-A. It doesn't show the titles."). The id stays monospace
+ * because identifiers should look like identifiers; the surrounding chip body
+ * (the title text) now inherits the surface's sans font so it reads as prose.
+ * A 3px status-colored left bar makes the chip unmistakable as a label/link
+ * affordance from across the page, even when title text is long. */
 [data-clarity-surface] .clarity-ref-chip {
   display: inline-flex;
-  align-items: center;
-  gap: 0.25em;
-  padding: 0.1em 0.5em;
+  align-items: baseline;
+  gap: 0.4em;
+  padding: 0.1em 0.5em 0.1em 0.55em;
   border: 1px solid var(--clarity-border);
+  border-left: 3px solid var(--clarity-border);
   border-radius: 4px;
-  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
-  font-size: 0.85em;
+  /* font-family removed — inherit surface sans. Title text now reads as prose. */
+  font-size: 0.92em;
   color: var(--clarity-fg);
   background: transparent;
 }
@@ -117,7 +125,7 @@
 [data-clarity-surface] .clarity-ref-chip-label {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.3em;
+  gap: 0.35em;
   max-width: 32em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -125,35 +133,51 @@
 }
 
 [data-clarity-surface] .clarity-ref-chip-id {
+  /* Plan 250530 v1.1.4 — keep monospace on the id only so the operator can
+   * recognise the identifier shape at a glance; the title beside it reads as
+   * normal prose (chip font-family was removed above). */
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
   font-weight: 600;
   flex: 0 0 auto;
 }
 
 [data-clarity-surface] .clarity-ref-chip-status {
+  /* Plan 250530 v1.1.4 — solid pill instead of a faint outline. The status is
+   * the operator's at-a-glance signal; muted opacity hid it behind the title
+   * text. Now: filled background using the status color, contrasting text. */
   flex: 0 0 auto;
-  font-size: 0.75em;
+  font-size: 0.7em;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  opacity: 0.7;
-  padding: 0 0.35em;
-  border-radius: 3px;
+  letter-spacing: 0.04em;
+  padding: 0.1em 0.5em;
+  border-radius: 999px;
   border: 1px solid var(--clarity-border);
+  background: var(--clarity-border);
+  color: var(--clarity-fg);
+  opacity: 1;
 }
 
 [data-clarity-surface] .clarity-ref-chip-status[data-status='done'] {
+  background: var(--clarity-state-working-bg);
   border-color: var(--clarity-state-working-bg);
+  color: var(--clarity-bg);
 }
 
 [data-clarity-surface] .clarity-ref-chip-status[data-status='blocked'] {
+  background: var(--clarity-state-stuck-bg);
   border-color: var(--clarity-state-stuck-bg);
+  color: var(--clarity-bg);
 }
 
+/* The 3px status-colored left bar — the strongest "this is a labelled ref"
+ * affordance. Default chip = neutral border; done = green; blocked = red. */
 [data-clarity-surface] .clarity-ref-chip[data-status='done'] {
-  border-color: var(--clarity-state-working-bg);
+  border-left-color: var(--clarity-state-working-bg);
 }
 
 [data-clarity-surface] .clarity-ref-chip[data-status='blocked'] {
-  border-color: var(--clarity-state-stuck-bg);
+  border-left-color: var(--clarity-state-stuck-bg);
 }
 
 /* Plan 05-05 Task 2 (D-08 + D-09) — ref-chip hover peek popover. Sibling to
