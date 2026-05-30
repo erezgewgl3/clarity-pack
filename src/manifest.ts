@@ -335,6 +335,41 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.11 (Plan 250530 — KILL THE CTO HEARTBEAT LOOP + APPLY POLISH TO CHAT):
+  //   Eric's live BEAAA-1000 chat drill on 2026-05-30 surfaced two issues at
+  //   once: (1) the CTO repeatedly posted "No new operator comments. Still
+  //   awaiting reply. No action needed this heartbeat." once per minute —
+  //   identical agent self-talk treated as conversation; (2) the surviving
+  //   agent comments still read like the pre-v1.1.7 Reader TL;DRs (ISO
+  //   dates, restated parens, "operational sign-off" jargon) because the
+  //   chat handler bypassed the Reader's polish pipeline.
+  //
+  //   FIX 1 (kill-the-loop): src/worker/chat/comment-classify.ts —
+  //   RUNTIME_PHRASES grows from 5 → 9. New phrases: "this heartbeat",
+  //   "no new operator comments", "no pending comments", "conversation
+  //   container". Discriminator: operators don't speak agent-self-talk
+  //   (won't refer to themselves in the third person, won't call the
+  //   chat topic a "conversation container", won't reference a
+  //   "heartbeat"). All four are agent-internal jargon — high precision,
+  //   zero false positives on operator chat in 26/26 contract tests.
+  //   The PRIMARY (authorType='system') + SECONDARY (presentation.kind=
+  //   'system_notice') discriminators are unchanged — phrases 6-9 are
+  //   defense-in-depth for the heartbeat case where the agent's own
+  //   ctx.issues.createComment carried authorType='agent', not 'system'.
+  //
+  //   FIX 2 (Reader-voice in chat): src/worker/handlers/chat-messages.ts —
+  //   the polishTldr() pipeline (ISO→human dates, restated-paren strip,
+  //   lone-ref-paren strip, jargon glossary) now runs on each AGENT-
+  //   authored comment body at read time. Operator messages (the chat_
+  //   messages side-table row's sender_kind === 'user') bypass — operator
+  //   voice is byte-identical, sacred. The polish is read-time only, no
+  //   writes; bodies in the host DB are untouched. Pure side-effect-free
+  //   transform; cache key untouched.
+  //
+  //   Suite 2286 → 2289 (3 new tests in chat-messages.test.mjs +
+  //   classifier contract tests expanded). Pure worker tier — no
+  //   manifest shape, capability, schema, agent, job, or UI change.
+  //
   // 1.1.10 (Plan 250530 — strip agent parens around lone ref ids, layout fix):
   //   BEAAA-1000's v1.1.9 output shipped clean voice + good headline, but
   //   the agent wrote `Underwriter (BEAAA-1086) and Claims Architect
@@ -547,7 +582,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.10',
+  version: '1.1.11',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

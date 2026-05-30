@@ -62,6 +62,12 @@ import type {
 } from '../db/chat-topics-repo.ts';
 import { listChatMessageAttachmentsForTopic } from '../db/chat-topics-repo.ts';
 import { classifyComment } from '../chat/comment-classify.ts';
+// Plan 250530 v1.1.11 — apply the v1.1.9/v1.1.10 polish pipeline to AGENT-
+// authored chat comments on read so chat reads with the same voice as the
+// TL;DRs (ISO→human dates, restated-paren strip, lone-ref-paren strip,
+// jargon glossary). Operator-authored messages (meta.sender_kind === 'user')
+// bypass — operator's voice is sacred.
+import { polishTldr } from '../agents/compile-tldr.ts';
 import { ensureTopicWakeable, isTopicStuck } from '../chat/topic-watchdog.ts';
 
 /**
@@ -380,9 +386,19 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
           meta?.message_uuid
             ? (attachmentsByMessageUuid.get(meta.message_uuid) ?? [])
             : [];
+        // Plan 250530 v1.1.11 — polish agent-authored bodies only. Operator
+        // messages (sender_kind === 'user') skip polish so their literal
+        // voice is preserved. The host stamps every plugin-worker
+        // ctx.issues.createComment with authorType:'system' (per rc.8 Phase
+        // B), which makes the chat_messages side table the authoritative
+        // discriminator. Empty/null body short-circuits to '' (polishTldr
+        // contract).
+        const rawBody = c.body ?? '';
+        const isOperatorAuthored = meta?.sender_kind === 'user';
+        const body = isOperatorAuthored ? rawBody : polishTldr(rawBody);
         return {
           commentId: c.id as string,
-          body: c.body ?? '',
+          body,
           createdAt,
           authorUserId: c.authorUserId ?? null,
           authorAgentId: c.authorAgentId ?? null,

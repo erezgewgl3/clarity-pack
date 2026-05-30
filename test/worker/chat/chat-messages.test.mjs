@@ -893,3 +893,111 @@ test('chat.messages: agent-stamped runtime notice WITHOUT a chat_messages side-t
   const result = await ctx._handlers.get('chat.messages')(msgParams());
   assert.equal(result.messages.length, 0, 'recovery notice still filtered');
 });
+
+// ---------------------------------------------------------------------------
+// Plan 250530 v1.1.11 — POLISH AGENT BODIES on read. The polishTldr pipeline
+// (ISO→human dates, restated-paren strip, lone-ref-paren strip, jargon
+// glossary) applies to AGENT-authored chat comments at read time so chat
+// reads with the same voice as the Reader's TL;DRs. Operator messages
+// (sender_kind === 'user') bypass — their voice is sacred.
+// ---------------------------------------------------------------------------
+
+test('v1.1.11 POLISH: an AGENT-authored chat body is polished (ISO date / lone-ref paren / jargon glossary)', async () => {
+  // The agent's chat body contains all four polish-worthy patterns at once:
+  // ISO date, restated paren after ref, lone-ref paren, agent jargon.
+  const agentBody = 'Wed 2026-06-03 review with HoUW. Underwriter (BEAAA-1086) has the operational sign-off; binding ratification pending.';
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-agent-1',
+        body: agentBody,
+        createdAt: new Date('2026-05-30T14:00:00Z'),
+        // Host stamps authorType=system on every plugin-worker createComment
+        // (rc.8 Phase B). But the chat_messages side table doesn't carry a
+        // sender_kind row for this — so meta?.sender_kind !== 'user' and
+        // the body gets polished.
+        authorType: 'agent',
+        authorUserId: null,
+        authorAgentId: 'agent-cto',
+      },
+    ],
+    // No side-table row → sender_kind is null → polish fires (NOT operator).
+    chatMessages: [],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  assert.equal(result.messages.length, 1, 'one agent comment survives');
+  const polished = result.messages[0].body;
+  // ISO → human date.
+  assert.ok(polished.includes('Wed 6/3'), `Wed 6/3 in polished body: ${polished}`);
+  assert.equal(/2026-06-03/.test(polished), false, 'ISO date removed');
+  // Lone-ref paren stripped.
+  assert.equal(/\(BEAAA-1086\)/.test(polished), false, 'lone-ref paren stripped');
+  assert.ok(polished.includes('BEAAA-1086'), 'ref id survives bare');
+  // Jargon glossary applied.
+  assert.equal(/operational sign-off/.test(polished), false, 'jargon translated');
+  assert.ok(polished.includes('approval'), 'translated to "approval"');
+  assert.equal(/binding ratification/.test(polished), false, 'jargon translated');
+  assert.ok(polished.includes('final approval'), 'translated to "final approval"');
+});
+
+test('v1.1.11 POLISH: an OPERATOR-authored chat body (sender_kind=user) is BYTE-IDENTICAL — operator voice preserved', async () => {
+  // The OPERATOR writes the same shape — ISO date, lone-ref paren, jargon —
+  // and the polish MUST NOT touch it. Operator voice is sacred.
+  const operatorBody = 'Wed 2026-06-03 review with HoUW. Underwriter (BEAAA-1086) has the operational sign-off; binding ratification pending.';
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-user-1',
+        body: operatorBody,
+        createdAt: new Date('2026-05-30T14:00:00Z'),
+        // Host stamps system on operator sends too (per rc.8 Phase B); the
+        // chat_messages side-table sender_kind='user' is the authoritative
+        // discriminator that bypasses BOTH the noise filter and the polish.
+        authorType: 'system',
+        authorUserId: null,
+        authorAgentId: null,
+      },
+    ],
+    chatMessages: [
+      {
+        message_uuid: 'uuid-op-1',
+        company_id: 'co-1',
+        topic_issue_id: 'issue-topic-1',
+        comment_id: 'c-user-1',
+        sender_kind: 'user',
+        supersedes_uuid: null,
+        pinned: false,
+        sent_at: '2026-05-30T14:00:00.000Z',
+      },
+    ],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  assert.equal(result.messages.length, 1, 'operator comment passes the filter');
+  assert.equal(
+    result.messages[0].body,
+    operatorBody,
+    'operator body is BYTE-IDENTICAL after polish gate (operator voice sacred)',
+  );
+});
+
+test('v1.1.11 POLISH: a substantive agent reply with NO slop is byte-identical (zero false positives)', async () => {
+  const cleanAgentBody = 'Locked the rate at 12%. Will brief HoUW tomorrow.';
+  const ctx = makeCtx({
+    comments: [
+      {
+        id: 'c-agent-clean',
+        body: cleanAgentBody,
+        createdAt: new Date('2026-05-30T14:00:00Z'),
+        authorType: 'agent',
+        authorUserId: null,
+        authorAgentId: 'agent-cto',
+      },
+    ],
+    chatMessages: [],
+  });
+  registerChatMessages(ctx);
+  const result = await ctx._handlers.get('chat.messages')(msgParams());
+  assert.equal(result.messages[0].body, cleanAgentBody, 'clean agent body unchanged');
+});

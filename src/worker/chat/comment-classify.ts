@@ -76,6 +76,21 @@ export const RUNTIME_PHRASES: readonly string[] = Object.freeze([
   // 5th phrase — verbatim from the live Countermoves spike capture
   // (04.1-01-SPIKE-FINDINGS PROBE-D14-DISCRIM, comment fa25ef4d-...).
   'Paperclip needs a disposition before this issue can continue',
+  // Plan 250530 v1.1.11 — AGENT-AUTHORED heartbeat-noise. The first 5 phrases
+  // catch the HOST's recovery-service system notices; these 4 catch the
+  // AGENT's heartbeat self-talk that pollutes the chat with one no-op
+  // comment per minute. BEAAA-1000 CTO loop (2026-05-30) was three
+  // identical "No new operator comments. Still awaiting reply. No action
+  // needed this heartbeat." messages at 14:05/14:06/14:07.
+  //
+  // Discriminator: operators don't speak agent-self-talk. They wouldn't
+  // refer to themselves in the third person ("operator comments"), wouldn't
+  // call the chat topic a "conversation container", and wouldn't reference
+  // a "heartbeat" — those are all agent-internal terms.
+  'this heartbeat',
+  'no new operator comments',
+  'no pending comments',
+  'conversation container',
 ]);
 
 /**
