@@ -160,6 +160,104 @@ function validateLlmOutput(body: unknown): asserts body is string {
   }
 }
 
+/**
+ * Plan 250530 v1.1.7 — DETERMINISTIC META-PROSE STRIPPER.
+ *
+ * Layered on top of v1.1.6's prompt rules because LLM prompt-rule compliance
+ * is unreliable. BEAAA-1000 shipped a TL;DR that was literally a meta-narration
+ * of its own output ("The TL;DR leads with… notes both… points at the …
+ * kickoff path. 82 words, within the ~80-word envelope."). The prompt rules
+ * forbid this; the LLM ignored them. v1.1.7 enforces the contract at the
+ * worker tier with a sentence-level regex strip.
+ *
+ * A sentence is dropped when it matches ANY of these patterns (case-
+ * insensitive):
+ *   - the literal "TL;DR" used as a subject ("The TL;DR leads with…",
+ *     "TL;DR notes…", "TL;DR is stored…", "TL;DR opens with…",
+ *     "TL;DR summarizes…", "TL;DR describes…", "TL;DR points at…")
+ *   - "compile-result document" / "compile result"
+ *   - "operation issue is marked" (any tense)
+ *   - "stored as the … document"
+ *   - explicit word-count claims: "82 words, within the …", "~80-word envelope"
+ *
+ * Lines that become empty after strip are dropped. The function preserves
+ * markdown structure (bullets, headings, blank-line separators).
+ */
+export const META_PROSE_PATTERNS: RegExp[] = [
+  // Meta-narration: TL;DR used as a subject with a meta-verb. Requires the
+  // verb so legitimate prose like "the TL;DR body" doesn't match.
+  /\b(?:the\s+)?TL;?DR\s+(?:stored|leads|notes|points|opens|summarizes|summarises|describes|carries|reports|begins|is\s+(?:stored|about|marked))\b/i,
+  // Bookkeeping references unique to the Editor-Agent's own operation flow.
+  /\bcompile[-\s]?result\b/i,
+  /\boperation\s+issue\s+is\s+(?:marked|now)\b/i,
+  /\bstored\s+as\s+the\s+\S+\s+document\b/i,
+  // Word-count self-commentary ("82 words, within the ~80-word envelope.").
+  /\b\d+\s+words?\s*,?\s*within\s+the\b/i,
+  /\b~?\d+[-\s]?word\s+envelope\b/i,
+  /\bword\s+envelope\b/i,
+];
+
+/**
+ * Minimum body length AFTER stripping. The strip removes meta-noise but the
+ * remaining prose must be substantive enough to be useful. A body shorter than
+ * this is treated as a compile failure (recordFailure → next view-driven
+ * trigger retries). Picked at 50 chars because a useful headline + one short
+ * bullet is at least that long.
+ */
+export const MIN_USEFUL_TLDR_LEN = 50;
+
+/** Split a single line of prose into sentences. Naive split on `. ` (period +
+ *  space) — does not handle abbreviations, but the TL;DR is short prose where
+ *  edge cases are rare. The next-sentence start can be ANY non-whitespace char
+ *  (capital letter, digit, paren) so a sentence like "82 words, within the
+ *  ~80-word envelope." that follows substantive prose is correctly split off
+ *  and matched against the meta patterns (not glued to its predecessor).
+ *  Returns sentences with their trailing period reattached. */
+export function splitSentences(line: string): string[] {
+  if (typeof line !== 'string' || line.length === 0) return [];
+  const parts = line.split(/(?<=[.!?])\s+(?=\S)/);
+  return parts.map((p) => p.trim()).filter((p) => p.length > 0);
+}
+
+/** Pure: strip meta-prose sentences from a TL;DR body. Preserves markdown
+ *  structure (bullets / headings / paragraph breaks). Returns the cleaned
+ *  body (may be empty if every sentence was meta). Never throws. */
+export function stripMetaProse(body: string): string {
+  if (typeof body !== 'string' || body.length === 0) return '';
+  const lines = body.split('\n');
+  const cleaned: string[] = [];
+  for (const line of lines) {
+    if (line.trim().length === 0) {
+      cleaned.push(line);
+      continue;
+    }
+    // Preserve a leading markdown prefix (bullet / blockquote / heading) on
+    // the line so the sentence-level strip below only touches the prose.
+    const prefixMatch = /^(\s*(?:[-*]\s+|>\s+|#{1,6}\s+)?)(.*)$/.exec(line);
+    const prefix = prefixMatch?.[1] ?? '';
+    const content = prefixMatch?.[2] ?? line;
+    const sentences = splitSentences(content);
+    const kept = sentences.filter(
+      (s) => !META_PROSE_PATTERNS.some((p) => p.test(s)),
+    );
+    if (kept.length === 0) {
+      // The whole line was meta — drop it entirely.
+      continue;
+    }
+    cleaned.push(prefix + kept.join(' '));
+  }
+  // Collapse runs of blank lines to a single blank line, trim outer blanks.
+  const collapsed: string[] = [];
+  let prevBlank = false;
+  for (const line of cleaned) {
+    const isBlank = line.trim().length === 0;
+    if (isBlank && prevBlank) continue;
+    collapsed.push(line);
+    prevBlank = isBlank;
+  }
+  return collapsed.join('\n').trim();
+}
+
 export type LlmAdapter = {
   /**
    * Run the LLM completion. Production wires this to ctx.agents.invoke() via
@@ -367,6 +465,32 @@ export async function finalizeTldr(
     throw err;
   }
 
+  // Plan 250530 v1.1.7 — deterministic META-PROSE STRIP. Runs AFTER schema
+  // validation so a non-string / out-of-bounds input still throws the right
+  // error. Drops sentences that meta-narrate the TL;DR's own output structure
+  // ("The TL;DR leads with…", "82 words, within the ~80-word envelope") or
+  // describe the agent's own compile bookkeeping ("compile-result document
+  // on…", "operation issue is marked done"). The gate fires ONLY when the
+  // strip actually removed content AND the remainder is below the useful
+  // minimum — a short body that contains no meta patterns is left untouched
+  // (the schema validator already gates the absolute minimum). When the gate
+  // fires the compile is treated as a failure and the cache is NOT written —
+  // the next view-driven trigger will retry with the same prompt (the bias
+  // is to retry, not to cache garbage).
+  const stripped = stripMetaProse(args.body);
+  const meaningfullyStripped = stripped.length < args.body.length;
+  if (meaningfullyStripped && stripped.length < MIN_USEFUL_TLDR_LEN) {
+    await recordFailure(ctx, {
+      agentKey: args.agentKey,
+      agentId: args.agentId,
+      companyId: args.companyId,
+      reason: `tldr_meta_drift: body collapsed to ${stripped.length} chars after meta-strip (was ${args.body.length})`,
+    });
+    throw new Error(
+      `Editor-Agent TL;DR was almost entirely meta-prose after strip (kept ${stripped.length}/${args.body.length} chars). Next view-driven trigger will retry.`,
+    );
+  }
+
   recordSuccess(args.agentKey);
 
   const tags = [EDITOR_WRITE_TAG]; // D-04 self-loop filter tag
@@ -376,7 +500,7 @@ export async function finalizeTldr(
     surface: args.surface,
     scope_id: args.scopeId,
     content_hash: args.contentHash,
-    body: args.body,
+    body: stripped, // Plan 250530 v1.1.7 — cache the cleaned body, not the raw LLM output.
     generated_at: new Date().toISOString(),
     source_revisions: [args.contentHash],
     compiled_by_agent_id: EDITOR_AGENT_ID_TAG,

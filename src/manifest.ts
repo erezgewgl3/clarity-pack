@@ -335,6 +335,23 @@ const manifest: PaperclipPluginManifestV1 = {
   // issues.tags, issue_comments.author_role) that failed every verifyDraft
   // pass-2 ctx.db.query on the Plan 03-09 closure drill.
   //
+  // 1.1.7 (Plan 250530 — DETERMINISTIC META-PROSE STRIP, doesn't trust the LLM):
+  //   v1.1.6 added prompt rules forbidding meta-prose; the LLM ignored them on
+  //   BEAAA-1000 and shipped a TL;DR that was 100% meta-narration of its own
+  //   output ("The TL;DR leads with… 82 words, within the ~80-word envelope.").
+  //   v1.1.7 enforces the contract at the worker tier with a deterministic
+  //   regex strip — no LLM trust required.
+  //
+  //   New exports in compile-tldr.ts: META_PROSE_PATTERNS (8 narrow regexes
+  //   covering "TL;DR-as-subject + meta-verb", compile-result mentions,
+  //   operation-issue-marked, word-count claims, "stored as the <kind>
+  //   document"), MIN_USEFUL_TLDR_LEN (50 chars), stripMetaProse(body),
+  //   splitSentences(line). finalizeTldr now runs the strip after schema
+  //   validation; if the strip MEANINGFULLY removed content AND the remainder
+  //   is below the useful minimum, recordFailure fires and the cache is NOT
+  //   written (next view-driven trigger retries). Bodies that don't trip any
+  //   pattern (the common case) pass through unchanged.
+  //
   // 1.1.6 (Plan 250530 — Editor-Agent TL;DR content rule, BAD vs GOOD
   // examples):
   //   BEAAA-1000's TL;DR shipped: "TL;DR stored as the compile-result
@@ -449,7 +466,7 @@ const manifest: PaperclipPluginManifestV1 = {
   //   (3) LAUNCHERS — ui.launchers below surfaces Situation Room / Daily
   //       Bulletin / Employee Chat as left-nav (sidebar) entries; previously
   //       reachable only by direct URL. Adds the ui.sidebar.register capability.
-  version: '1.1.6',
+  version: '1.1.7',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
