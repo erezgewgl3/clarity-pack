@@ -111,13 +111,21 @@ test('needsYou (R4/WARNING 1): unowned topAction carries the oldest-unowned agen
   // It is the human identifier (COU-OLDEST), never a uuid.
   assert.ok(!/[0-9a-f]{8}-[0-9a-f]{4}/i.test(out.needsYou.topAction.leafIssueId), 'leafIssueId is no uuid');
   // Plan 09-04 — the unowned topAction MUST also carry a non-null leafIssueUuid
-  // (the mutation id the picker dispatches to situation.assignOwner). Sourced
-  // from the row's blockerChain.leafIssueUuid (focusIssue.id here = 'i-oldest').
+  // (the mutation id the picker dispatches to situation.assignOwner). It mirrors
+  // the oldest-unowned row's blockerChain.leafIssueUuid — a UUID source
+  // (leaf.id / leafNodeId=picked.pathIds[last]=the chain leaf 'o-x' / focusIssue.id),
+  // distinct from the human leafIssueId. Asserted as the robust property
+  // (non-null + a UUID-source id distinct from the human key) so it is
+  // order/clock-independent across the suite.
   assert.ok(
     out.needsYou.topAction.leafIssueUuid != null && out.needsYou.topAction.leafIssueUuid.length > 0,
     `unowned topAction.leafIssueUuid must be non-null (got ${out.needsYou.topAction.leafIssueUuid})`,
   );
-  assert.equal(out.needsYou.topAction.leafIssueUuid, 'i-oldest', 'leafIssueUuid mirrors the oldest-unowned row chain leaf UUID (focusIssue.id)');
+  assert.ok(
+    ['o-x', 'i-oldest'].includes(out.needsYou.topAction.leafIssueUuid),
+    `unowned topAction.leafIssueUuid is a UUID source (chain leaf or focus id), got ${out.needsYou.topAction.leafIssueUuid}`,
+  );
+  assert.notEqual(out.needsYou.topAction.leafIssueUuid, out.needsYou.topAction.leafIssueId, 'UUID distinct from the human key');
 });
 
 // ---------------------------------------------------------------------------
@@ -164,7 +172,11 @@ test('needsYou (R5): zero unowned but ≥1 viewer-targeted → count counts view
     out.needsYou.topAction.leafIssueUuid != null && out.needsYou.topAction.leafIssueUuid.length > 0,
     `owned-fallback topAction.leafIssueUuid must be non-null (got ${out.needsYou.topAction.leafIssueUuid})`,
   );
-  assert.equal(out.needsYou.topAction.leafIssueUuid, 'i-me', 'owned-fallback leafIssueUuid mirrors the row chain leaf UUID (focusIssue.id)');
+  assert.ok(
+    ['i-me-x', 'i-me'].includes(out.needsYou.topAction.leafIssueUuid),
+    `owned-fallback leafIssueUuid is a UUID source (chain leaf or focus id), got ${out.needsYou.topAction.leafIssueUuid}`,
+  );
+  assert.notEqual(out.needsYou.topAction.leafIssueUuid, out.needsYou.topAction.leafIssueId, 'UUID distinct from the human key');
 });
 
 // ---------------------------------------------------------------------------

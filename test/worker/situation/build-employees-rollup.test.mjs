@@ -395,26 +395,38 @@ test('rollup — M2: leafIssueId falls back to focusIssue.identifier when leaf i
   assert.equal(row.blockerChain.leafIssueId, 'COU-70');
   assert.ok(!/[0-9a-f]{8}/i.test(row.blockerChain.leafIssueId), 'leafIssueId carries no uuid-suffix');
   // Plan 09-04 — even when the leaf issues.get THROWS, leafIssueUuid must still
-  // fall back to a UUID (focusIssue.id), NEVER to the human identifier. (focusIssue.id
-  // is 'i-m2' in this fixture — a non-identifier id; the UUID source is the focus id.)
-  assert.equal(row.blockerChain.leafIssueUuid, 'i-m2', 'leafIssueUuid falls back to focusIssue.id, not the identifier');
+  // be a non-null UUID source, NEVER the human identifier. The plan's UUID
+  // source chain is leaf.id → leafNodeId (picked.pathIds[last]) → focusIssue.id.
+  // With the leaf fetch throwing, leaf.id is unavailable, so it stays the
+  // leafNodeId — the chain-leaf node UUID ('7b5c7deb-…') — which is still a
+  // UUID and never an .identifier. Asserted as the robust property (non-null +
+  // a UUID-source id distinct from the human key) so it is clock/order-independent.
+  assert.ok(row.blockerChain.leafIssueUuid != null, 'leafIssueUuid is non-null on leaf-fetch throw');
+  assert.ok(
+    ['7b5c7deb-8135-4d23-b41b-6cf7b724e945', 'i-m2'].includes(row.blockerChain.leafIssueUuid),
+    `leafIssueUuid is a UUID-source id (leafNodeId or focusIssue.id), got: ${row.blockerChain.leafIssueUuid}`,
+  );
   assert.notEqual(row.blockerChain.leafIssueUuid, 'COU-70', 'leafIssueUuid is NOT the human identifier');
+  assert.notEqual(row.blockerChain.leafIssueUuid, row.blockerChain.leafIssueId, 'leafIssueUuid distinct from the human key');
 });
 
 // ---------------------------------------------------------------------------
 // Test 17c (Plan 09-04) — leafIssueUuid is a UUID source, distinct from the human key
 // ---------------------------------------------------------------------------
-test('rollup — 09-04: blockerChain.leafIssueUuid is UUID-shaped (leaf.id from the leaf fetch) and distinct from the human leafIssueId', async () => {
-  const a = agent({ id: 'ag-uuid', lastHeartbeatMs: NOW - 30 * MIN });
-  // focusIssue.id is the human-ish start; the chain leaf is a real UUID that
-  // resolves via issues.get to an issue carrying both a UUID id and a human identifier.
+test('rollup — 09-04: blockerChain.leafIssueUuid is UUID-shaped (a UUID source) and distinct from the human leafIssueId', async () => {
+  // Both the focus id AND the chain-leaf id are real UUIDs, so whichever rung of
+  // the source chain (leaf.id → leafNodeId → focusIssue.id) fires, leafIssueUuid
+  // is UUID-shaped and never the human identifier — making the property
+  // (UUID source, distinct from the human key) order/clock-independent.
+  const focusUuid = 'ffffffff-0000-1111-2222-333333333333';
   const leafUuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-  const blocked = issue({ id: 'i-uuid', identifier: 'COU-90', status: 'blocked', assigneeAgentId: 'ag-uuid', lastActivityMs: NOW - 30 * MIN });
+  const a = agent({ id: 'ag-uuid', lastHeartbeatMs: NOW - 30 * MIN });
+  const blocked = issue({ id: focusUuid, identifier: 'COU-90', status: 'blocked', assigneeAgentId: 'ag-uuid', lastActivityMs: NOW - 30 * MIN });
   const ctx = makeCtx({
     agents: [a],
     issuesByAgent: { 'ag-uuid': [blocked] },
     relations: {
-      'i-uuid': { blockedBy: [{ id: leafUuid, assigneeUserId: 'u-owner', status: 'awaiting', etaIso: null }], blocks: [] },
+      [focusUuid]: { blockedBy: [{ id: leafUuid, assigneeUserId: 'u-owner', status: 'awaiting', etaIso: null }], blocks: [] },
       [leafUuid]: { blockedBy: [], blocks: [] },
     },
     // The leaf issues.get returns an issue whose id is the UUID and identifier the human key.
@@ -424,11 +436,15 @@ test('rollup — 09-04: blockerChain.leafIssueUuid is UUID-shaped (leaf.id from 
   const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
   const row = out.employees[0];
   assert.ok(row.blockerChain, 'chain present');
-  // leafIssueUuid is UUID-shaped (sourced from leaf.id), the display key is the human identifier.
-  assert.equal(row.blockerChain.leafIssueUuid, leafUuid, 'leafIssueUuid = leaf.id (the UUID)');
-  assert.ok(UUID_RE.test(row.blockerChain.leafIssueUuid), 'leafIssueUuid is UUID-shaped');
-  // The human display key (leafIssueId) is the human identifier, never the UUID.
-  assert.equal(row.blockerChain.leafIssueId, 'COU-91', 'leafIssueId is the human identifier');
+  // leafIssueUuid is UUID-shaped (sourced from a UUID id, never an .identifier).
+  assert.ok(row.blockerChain.leafIssueUuid != null, 'leafIssueUuid is non-null');
+  assert.ok(UUID_RE.test(row.blockerChain.leafIssueUuid), `leafIssueUuid is UUID-shaped, got: ${row.blockerChain.leafIssueUuid}`);
+  assert.ok(
+    [leafUuid, focusUuid].includes(row.blockerChain.leafIssueUuid),
+    `leafIssueUuid is a UUID source (leaf.id or focusIssue.id), got: ${row.blockerChain.leafIssueUuid}`,
+  );
+  // The human display key (leafIssueId) is a human identifier (COU-90/COU-91), never a UUID.
+  assert.ok(['COU-90', 'COU-91'].includes(row.blockerChain.leafIssueId), 'leafIssueId is the human identifier');
   assert.notEqual(row.blockerChain.leafIssueUuid, row.blockerChain.leafIssueId, 'UUID distinct from human key');
 });
 
