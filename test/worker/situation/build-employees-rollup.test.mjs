@@ -78,8 +78,17 @@ function makeCtx({
   };
 }
 
-function agent({ id, name = `Agent ${id}`, role = 'general', title = null, lastHeartbeatMs = null }) {
-  return { id, name, role, title, lastHeartbeatAt: lastHeartbeatMs != null ? iso(lastHeartbeatMs) : null };
+function agent({ id, name = `Agent ${id}`, role = 'general', title = null, lastHeartbeatMs = null, status = null, pausedAt = null }) {
+  return {
+    id,
+    name,
+    role,
+    title,
+    lastHeartbeatAt: lastHeartbeatMs != null ? iso(lastHeartbeatMs) : null,
+    // Plan 09-01 D-04 — host agent status drives the row's isPaused marker.
+    status,
+    pausedAt,
+  };
 }
 
 function issue({ id, identifier, title = `Title ${identifier}`, status, assigneeAgentId = null, lastActivityMs = null }) {
@@ -385,6 +394,51 @@ test('rollup — M2: leafIssueId falls back to focusIssue.identifier when leaf i
   assert.ok(row.blockerChain, 'chain present');
   assert.equal(row.blockerChain.leafIssueId, 'COU-70');
   assert.ok(!/[0-9a-f]{8}/i.test(row.blockerChain.leafIssueId), 'leafIssueId carries no uuid-suffix');
+});
+
+// ---------------------------------------------------------------------------
+// Test 18 (Plan 09-01 R2) — every row carries a worker-assigned group bucket
+// ---------------------------------------------------------------------------
+test('rollup — R2: each row carries group (blocked→needs_you; running→working; idle→idle)', async () => {
+  const agents = [
+    agent({ id: 'ag-running', lastHeartbeatMs: NOW - 60_000 }),
+    agent({ id: 'ag-idle', lastHeartbeatMs: NOW - 2 * HOUR }),
+    agent({ id: 'ag-blocked', lastHeartbeatMs: NOW - 30 * MIN }),
+    agent({ id: 'ag-reviewing', lastHeartbeatMs: NOW - 30 * MIN }),
+    agent({ id: 'ag-stale', lastHeartbeatMs: NOW - 48 * HOUR }),
+  ];
+  const issuesByAgent = {
+    'ag-running': [],
+    'ag-idle': [],
+    'ag-blocked': [issue({ id: 'i-b', identifier: 'COU-1', status: 'blocked', assigneeAgentId: 'ag-blocked', lastActivityMs: NOW - 30 * MIN })],
+    'ag-reviewing': [issue({ id: 'i-r', identifier: 'COU-2', status: 'in_review', assigneeAgentId: 'ag-reviewing', lastActivityMs: NOW - 30 * MIN })],
+    'ag-stale': [],
+  };
+  const ctx = makeCtx({ agents, issuesByAgent, relations: { 'i-b': { blockedBy: [{ id: 'i-b-x', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] } } });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
+  const byId = Object.fromEntries(out.employees.map((r) => [r.agentId, r]));
+  assert.equal(byId['ag-blocked'].group, 'needs_you');
+  assert.equal(byId['ag-running'].group, 'working');
+  assert.equal(byId['ag-reviewing'].group, 'working');
+  assert.equal(byId['ag-idle'].group, 'idle');
+  assert.equal(byId['ag-stale'].group, 'idle');
+});
+
+// ---------------------------------------------------------------------------
+// Test 19 (Plan 09-01 D-04) — paused agent: isPaused=true, group still 'idle'
+// ---------------------------------------------------------------------------
+test('rollup — D-04: paused agent has isPaused=true and group=idle (paused does NOT change the bucket)', async () => {
+  // A stood-down agent reports host status 'paused'. It still buckets as idle
+  // (paused is INDEPENDENT of group — no 6th group, no 6th state).
+  const paused = agent({ id: 'ag-paused', lastHeartbeatMs: NOW - 2 * HOUR, status: 'paused' });
+  const active = agent({ id: 'ag-active', lastHeartbeatMs: NOW - 2 * HOUR });
+  const ctx = makeCtx({ agents: [paused, active], issuesByAgent: { 'ag-paused': [], 'ag-active': [] } });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
+  const byId = Object.fromEntries(out.employees.map((r) => [r.agentId, r]));
+  assert.equal(byId['ag-paused'].isPaused, true, 'paused agent → isPaused true');
+  assert.equal(byId['ag-paused'].group, 'idle', 'paused agent still buckets idle');
+  assert.equal(byId['ag-active'].isPaused, false, 'non-paused agent → isPaused false');
+  assert.equal(byId['ag-active'].group, 'idle');
 });
 
 // ---------------------------------------------------------------------------

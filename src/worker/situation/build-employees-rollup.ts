@@ -30,6 +30,13 @@ import {
   classifyEmployeeState,
   type EmployeeState,
 } from './classify-employee-state.ts';
+// Plan 09-01 Task 1 — R2 worker-tier group bucket. The pure classifier maps
+// state → {needs_you|working|idle}; the UI groups BY this field and renders the
+// worker sort verbatim WITHIN each group (no client-side grouping/re-sort).
+import {
+  groupForState,
+  type EmployeeGroup,
+} from './group-employee-state.ts';
 import {
   buildEdges,
   type OrgBlockedBacklogCtx,
@@ -44,6 +51,15 @@ export type SituationEmployeeRow = {
   /** prefer Agent.title ?? Agent.role ?? 'agent'. */
   role: string;
   state: EmployeeState;
+  /** Plan 09-01 (R2) — worker-assigned display bucket. needs_you=blocked;
+   *  working=running|reviewing; idle=idle|stale|unknown. The UI groups BY this
+   *  and renders the worker sort verbatim within each group. */
+  group: EmployeeGroup;
+  /** Plan 09-01 D-04 — true when the agent's host status is 'paused' (stood
+   *  down). INDEPENDENT of `group` — a paused agent still buckets as 'idle';
+   *  this only drives the UI's paused marker + one-click Resume so no separate
+   *  per-row fetch is needed. Defaults false for degrade-safe rows. */
+  isPaused: boolean;
   /** Human identifier (e.g. BEAAA-1086), NOT uuid. */
   focusIssueId: string | null;
   /** Polished one-liner ≤80 chars; null for idle/stale (no work-in-flight). */
@@ -99,6 +115,11 @@ type AgentLike = {
   role?: string;
   title?: string | null;
   lastHeartbeatAt?: string | null;
+  // Plan 09-01 D-04 — host agent status (e.g. 'paused' when stood down).
+  // Mirrors editor-pause-status.ts's authoritative paused detection
+  // (a.status === 'paused' || a.pausedAt != null).
+  status?: string | null;
+  pausedAt?: string | null;
 };
 type IssueLike = {
   id?: string;
@@ -148,6 +169,13 @@ function ageBucketFrom(activityMs: number | null, nowMs: number): AgeBucket {
   return 'stale';
 }
 
+/** Plan 09-01 D-04 — authoritative paused detection. Mirrors
+ *  editor-pause-status.ts:168 (`a.status === 'paused' || a.pausedAt != null`)
+ *  so the worker-tier marker agrees with the pause-banner's own check. */
+function isAgentPaused(agent: AgentLike): boolean {
+  return agent.status === 'paused' || agent.pausedAt != null;
+}
+
 /** A degrade-safe row for an agent whose per-row compute threw. NEVER a UUID
  *  in name (falls back to the agent's name string or empty — never the id). */
 function degradeSafeRow(agent: AgentLike): InternalRow {
@@ -156,6 +184,11 @@ function degradeSafeRow(agent: AgentLike): InternalRow {
     name: typeof agent.name === 'string' && agent.name ? agent.name : 'Unknown',
     role: agent.title ?? agent.role ?? 'agent',
     state: 'unknown',
+    // Plan 09-01 R2 — degrade-safe rows bucket as 'idle' (group of 'unknown').
+    group: groupForState('unknown'),
+    // Plan 09-01 D-04 — paused marker survives a degraded row when the host
+    // status is still readable; default false otherwise (never block a render).
+    isPaused: isAgentPaused(agent),
     focusIssueId: null,
     focusLine: null,
     lastActivityAt: null,
@@ -318,6 +351,11 @@ async function buildOneEmployeeRow(
     name: typeof agent.name === 'string' && agent.name ? agent.name : 'Unknown',
     role: agent.title ?? agent.role ?? 'agent',
     state,
+    // Plan 09-01 R2 — worker-assigned group bucket (UI groups BY this verbatim).
+    group: groupForState(state),
+    // Plan 09-01 D-04 — paused marker from the EXISTING agents.list response;
+    // INDEPENDENT of `group` (a paused agent still buckets as 'idle').
+    isPaused: isAgentPaused(agent),
     focusIssueId: focusIssue?.identifier ?? null,
     focusLine,
     lastActivityAt: lastActivityMs != null ? new Date(lastActivityMs).toISOString() : null,
