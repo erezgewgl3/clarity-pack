@@ -394,37 +394,56 @@ function ReaderViewReady({
       <SectionErrorBoundary name="breadcrumb" resetKey={entityId}>
         <Breadcrumb ancestry={data.ancestry} />
       </SectionErrorBoundary>
+      {/* Quick 260531-b8w (003-B, sketch 003/index.html variant-b lines 237-274)
+          — TL;DR-first, no-rail single column. The TL;DR briefing leads
+          (already first after breadcrumb); the relocated LiveBlockerPanel
+          follows it as a full-width inline "on-you" banner; Acceptance +
+          Deliverable cards come next; the raw body + activity collapse behind a
+          "Show full task" disclosure. The plugin's own right rail (the old
+          .clarity-reader-body grid + .clarity-reader-rail aside) is GONE — host
+          Properties owns the right side. */}
       <SectionErrorBoundary name="tldr" resetKey={entityId}>
         <TldrStrip tldr={data.tldr} status={data.tldrStatus} truncated={data.tldrTruncated} />
       </SectionErrorBoundary>
-      <div className="clarity-reader-body">
-        <div className="clarity-reader-main">
+      {/* 003-C on-you banner (sketch 003 lines 81-88 + usage line 308). The
+          relocated LiveBlockerPanel renders full-width in the column directly
+          under the briefing. LiveBlockerPanel already returns null when there
+          is no live blocker, so the "only when it has a live blocker" rule is
+          satisfied by construction — the wrapper just gives the panel block-
+          level full-width placement when it IS present. */}
+      <div className="clarity-reader-onyou">
+        <SectionErrorBoundary name="live-blocker" resetKey={entityId}>
+          <LiveBlockerPanel issueId={entityId} />
+        </SectionErrorBoundary>
+      </div>
+      <div className="clarity-reader-column">
+        <SectionErrorBoundary name="anchored-to" resetKey={entityId}>
+          <AnchoredToCards cards={data.refCards} />
+        </SectionErrorBoundary>
+        <SectionErrorBoundary name="ac-checklist" resetKey={entityId}>
+          <AcChecklist issueId={entityId} items={data.acItems} userId={userId} autoStatus={acAutoStatus} onMutated={() => { void refresh(); void refreshAcAuto(); }} />
+        </SectionErrorBoundary>
+        <SectionErrorBoundary name="deliverable" resetKey={entityId}>
+          <DeliverablePreview
+            deliverable={data.deliverable}
+            companyId={companyId}
+            userId={userId}
+            issueId={entityId}
+          />
+        </SectionErrorBoundary>
+        {/* 003-B disclosure (sketch 003 lines 264-274) — the raw task body is no
+            longer always-visible; it collapses behind "Show full task" along
+            with the activity timeline. Both keep their own SectionErrorBoundary
+            wraps. The literal "Show full task" is pinned by must_haves.contains. */}
+        <details className="clarity-reader-disclosure">
+          <summary>Show full task</summary>
           <SectionErrorBoundary name="prose" resetKey={entityId}>
             <ProseWithRefChips body={data.issueBody} />
-          </SectionErrorBoundary>
-          <SectionErrorBoundary name="anchored-to" resetKey={entityId}>
-            <AnchoredToCards cards={data.refCards} />
-          </SectionErrorBoundary>
-          <SectionErrorBoundary name="deliverable" resetKey={entityId}>
-            <DeliverablePreview
-              deliverable={data.deliverable}
-              companyId={companyId}
-              userId={userId}
-              issueId={entityId}
-            />
-          </SectionErrorBoundary>
-          <SectionErrorBoundary name="ac-checklist" resetKey={entityId}>
-            <AcChecklist issueId={entityId} items={data.acItems} userId={userId} autoStatus={acAutoStatus} onMutated={() => { void refresh(); void refreshAcAuto(); }} />
           </SectionErrorBoundary>
           <SectionErrorBoundary name="activity" resetKey={entityId}>
             <ActivityTimeline events={data.activity} />
           </SectionErrorBoundary>
-        </div>
-        <aside className="clarity-reader-rail">
-          <SectionErrorBoundary name="live-blocker" resetKey={entityId}>
-            <LiveBlockerPanel issueId={entityId} />
-          </SectionErrorBoundary>
-        </aside>
+        </details>
       </div>
       <SectionErrorBoundary name="pause-banner" resetKey={entityId}>
         <PauseBanner />

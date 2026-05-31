@@ -224,24 +224,51 @@
   opacity: 0.95;
 }
 
-/* Reader view layout — Plan 02-03 Task 2 */
-[data-clarity-surface='reader'] .clarity-reader-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 1.5rem;
-  margin-top: 1rem;
+/* Reader view layout — Quick 260531-b8w (003-B, sketch 003/index.html
+ * variant-b). The plugin's own right rail is dropped (host Properties owns the
+ * right side); the Reader collapses to a SINGLE reading column constrained to
+ * 760px (003-B line 237's `max-width: 760px`). The old .clarity-reader-body
+ * grid (`minmax(0,1fr) 320px`) + .clarity-reader-main + .clarity-reader-rail
+ * are removed — no element references them after the index.tsx restructure. */
+[data-clarity-surface='reader'] {
+  max-width: 760px;
 }
 
-[data-clarity-surface='reader'] .clarity-reader-main {
+[data-clarity-surface='reader'] .clarity-reader-column {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  margin-top: 1rem;
 }
 
-[data-clarity-surface='reader'] .clarity-reader-rail {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+/* 003-C on-you banner wrapper (sketch 003 lines 81-88) — full-width block
+ * placement for the relocated LiveBlockerPanel. The panel keeps its own
+ * accented border/background (.clarity-blocker-panel); this wrapper just gives
+ * it block-level full-width spacing in the column. */
+[data-clarity-surface='reader'] .clarity-reader-onyou {
+  margin: 0 0 1rem 0;
+}
+
+/* 003-B "Show full task" disclosure (sketch 003 lines 97-103) — the raw task
+ * body + activity collapse behind a quiet summary. */
+[data-clarity-surface='reader'] .clarity-reader-disclosure {
+  margin: 0.25rem 0 0 0;
+}
+
+[data-clarity-surface='reader'] .clarity-reader-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--clarity-muted);
+  padding: 0.5rem 0;
+}
+
+[data-clarity-surface='reader'] .clarity-reader-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-clarity-surface='reader'] .clarity-reader-disclosure > summary:hover {
+  color: var(--clarity-fg);
 }
 
 [data-clarity-surface='reader'] .clarity-reader-loading {
