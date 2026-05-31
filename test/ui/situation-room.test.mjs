@@ -1,19 +1,15 @@
 // test/ui/situation-room.test.mjs
 //
-// Plan 02-04 Task 2 RED — Situation Room source contract. SOURCE-GREP test
-// (Node 24 doesn't load .tsx through the test runtime). Verifies:
-//   - file structure: situation-room/index.tsx + agent-card.tsx +
-//     critical-path-strip.tsx + artifact-chip-row.tsx (Plan 06.1-03;
-//     REPLACED artifacts-shipped-shelf.tsx per D-02) + awaiting-you-pill.tsx
-//     + sparkline.tsx
-//   - index.tsx wraps in <ClaritySurfaceRoot name="situation-room"> (SCAF-06)
-//   - calls usePollWithLeader for 'situation.snapshot' (ROOM-07)
-//   - reads situationRefreshIntervalMs via useInstanceConfig (D-03 config)
-//   - mounts <PauseBanner /> (D-07 reused from 02-03)
-//   - gates on useOptIn — opted-out renders <EnableClarityCta />
-//   - renders <CriticalPathStrip>, <AgentCard>, <AwaitingYouPill>
-//     (Plan 06.1-03: <ArtifactsShippedShelf> is DELETED per D-02; the
-//     per-agent inline ArtifactChipRow inside AgentCard supersedes it.)
+// Plan 09-02 Task 3 — REWRITE for the actionable cockpit (grid → groups).
+//
+// The Phase 2/6.1 Situation Room rendered a flat AgentCard grid + critical-path
+// strip + awaiting-you pill. Plan 09-02 replaces all of that with ONE
+// three-group people view (Needs you / Working / Idle, always all three per
+// D-03), fed solely by situation_employees + the worker `group` field (R2 — no
+// client re-sort). This source-grep contract asserts the new structure and the
+// absence of every deleted surface (R1).
+//
+// SOURCE-GREP test (Node doesn't load .tsx through the test runtime).
 
 import { strict as assert } from 'node:assert';
 import { existsSync, readFileSync } from 'node:fs';
@@ -28,14 +24,23 @@ function readSrc(rel) {
   return readFileSync(path.join(ROOM_DIR, rel), 'utf8');
 }
 
+function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+// ---------------------------------------------------------------------------
+// File structure — the new component set; the dead grid components are gone (R1)
+// ---------------------------------------------------------------------------
+
 const REQUIRED_FILES = [
   'index.tsx',
-  'agent-card.tsx',
-  'critical-path-strip.tsx',
-  // Plan 06.1-03 (D-02) — artifacts-shipped-shelf.tsx is DELETED.
-  // The per-agent inline ArtifactChipRow replaces it.
-  'artifact-chip-row.tsx',
-  'awaiting-you-pill.tsx',
+  'employee-row.tsx',
+  'employee-row-strip.tsx',
+  'needs-you-banner.tsx',
+  'owner-picker-popover.tsx',
+  'blocked-backlog-expander.tsx',
   'sparkline.tsx',
 ];
 
@@ -45,6 +50,24 @@ for (const f of REQUIRED_FILES) {
   });
 }
 
+const DELETED_FILES = [
+  'agent-card.tsx',
+  'artifact-chip-row.tsx',
+  'org-blocked-backlog-banner.tsx',
+  'critical-path-strip.tsx',
+  'awaiting-you-pill.tsx',
+];
+
+for (const f of DELETED_FILES) {
+  test(`Situation Room (R1): ${f} is DELETED`, () => {
+    assert.ok(!existsSync(path.join(ROOM_DIR, f)), `expected ${f} to be deleted`);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// index.tsx — surface scaffolding preserved
+// ---------------------------------------------------------------------------
+
 test('Situation Room: index.tsx exports SituationRoom + wraps in <ClaritySurfaceRoot name="situation-room"> (SCAF-06)', () => {
   const src = readSrc('index.tsx');
   assert.match(src, /export function SituationRoom/);
@@ -52,8 +75,7 @@ test('Situation Room: index.tsx exports SituationRoom + wraps in <ClaritySurface
 });
 
 test('Situation Room: index.tsx uses usePollWithLeader (ROOM-07 leader-elected polling)', () => {
-  const src = readSrc('index.tsx');
-  assert.match(src, /usePollWithLeader\b/);
+  assert.match(readSrc('index.tsx'), /usePollWithLeader\b/);
 });
 
 test('Situation Room: index.tsx reads situationRefreshIntervalMs from useInstanceConfig (D-03)', () => {
@@ -62,61 +84,81 @@ test('Situation Room: index.tsx reads situationRefreshIntervalMs from useInstanc
   assert.match(src, /situationRefreshIntervalMs/);
 });
 
-test('Situation Room: index.tsx mounts <PauseBanner /> (D-07 footer on every Clarity surface)', () => {
-  const src = readSrc('index.tsx');
-  assert.match(src, /PauseBanner\b/);
+test('Situation Room: index.tsx mounts <PauseBanner /> (D-07)', () => {
+  assert.match(readSrc('index.tsx'), /PauseBanner\b/);
 });
 
-test('Situation Room: index.tsx calls useOptIn() (OPTIN-02 gate)', () => {
+test('Situation Room: index.tsx calls useOptIn() + renders <EnableClarityCta /> when opted-out (OPTIN-02)', () => {
   const src = readSrc('index.tsx');
   assert.match(src, /useOptIn\b/);
-});
-
-test('Situation Room: index.tsx renders <EnableClarityCta /> when opted-out (OPTIN-02)', () => {
-  const src = readSrc('index.tsx');
   assert.match(src, /EnableClarityCta\b/);
 });
 
-test('Situation Room: index.tsx renders <CriticalPathStrip>, <AgentCard>, <AwaitingYouPill> (Plan 06.1-03: <ArtifactsShippedShelf> DELETED per D-02)', () => {
-  const rawSrc = readSrc('index.tsx');
-  for (const name of ['CriticalPathStrip', 'AgentCard', 'AwaitingYouPill']) {
-    assert.match(rawSrc, new RegExp(`<${name}\\b`), `renders <${name} />`);
-  }
-  // Negative assertion — the deleted shelf mount must NOT be re-introduced.
-  // Strip block + line comments first so the doc-comment that documents the
-  // deletion (mentions the literal `<ArtifactsShippedShelf />`) does not
-  // false-trip the assertion.
-  const codeOnly = rawSrc
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
-  assert.doesNotMatch(
-    codeOnly,
-    /<ArtifactsShippedShelf\b/,
-    'index.tsx must not mount <ArtifactsShippedShelf /> — file was deleted in Plan 06.1-03 per D-02',
-  );
-});
-
-test('Situation Room: index.tsx queries situation.snapshot via usePollWithLeader', () => {
+test('Situation Room: index.tsx queries situation.snapshot + pings active-viewer', () => {
   const src = readSrc('index.tsx');
   assert.match(src, /['"]situation\.snapshot['"]/);
-});
-
-test('Situation Room: index.tsx pings active-viewer (ROOM-05)', () => {
-  const src = readSrc('index.tsx');
   assert.match(src, /situation\.active-viewer-ping/);
 });
+
+// ---------------------------------------------------------------------------
+// R1 — the dead grid + dead pipelines are gone from index.tsx (code, not prose)
+// ---------------------------------------------------------------------------
+
+test('Situation Room (R1): index.tsx has NO clarity-agent-grid / AgentCard / situation.artifacts in code', () => {
+  const code = stripComments(readSrc('index.tsx'));
+  assert.doesNotMatch(code, /clarity-agent-grid/);
+  assert.doesNotMatch(code, /<AgentCard/);
+  assert.doesNotMatch(code, /AgentEmployee/);
+  assert.doesNotMatch(code, /usePluginData<[^>]*>\(\s*['"]situation\.artifacts['"]/);
+  assert.doesNotMatch(code, /['"]situation\.artifacts['"]/);
+});
+
+test('Situation Room (R6): index.tsx mounts NO standalone OrgBlockedBacklogBanner / CriticalPathStrip / AwaitingYouPill', () => {
+  const code = stripComments(readSrc('index.tsx'));
+  assert.doesNotMatch(code, /<OrgBlockedBacklogBanner/);
+  assert.doesNotMatch(code, /<CriticalPathStrip/);
+  assert.doesNotMatch(code, /<AwaitingYouPill/);
+});
+
+// ---------------------------------------------------------------------------
+// R2 / D-03 — three group sections, always all three, fed by worker group
+// ---------------------------------------------------------------------------
+
+test('Situation Room (D-03): the strip renders exactly three groups — needs_you / working / idle', () => {
+  const src = readSrc('employee-row-strip.tsx');
+  assert.match(src, /needs_you/);
+  assert.match(src, /working/);
+  assert.match(src, /idle/);
+  // GROUP_ORDER literal proves the three-section, fixed-order render.
+  assert.match(src, /GROUP_ORDER/);
+});
+
+test('Situation Room (D-03): an empty group still renders a "— none —" branch', () => {
+  assert.match(readSrc('employee-row-strip.tsx'), /— none —/);
+});
+
+test('Situation Room (R2): the strip partitions by the worker row.group — NO client-side .sort()', () => {
+  const src = readSrc('employee-row-strip.tsx');
+  assert.match(src, /row\.group/);
+  // No re-sort of the worker order.
+  assert.doesNotMatch(stripComments(src), /\.sort\(/);
+});
+
+test('Situation Room (R6): the BlockedBacklogExpander is mounted by the strip (end of Needs-you)', () => {
+  const src = readSrc('employee-row-strip.tsx');
+  assert.match(src, /<BlockedBacklogExpander/);
+  assert.match(src, /group === 'needs_you'/);
+});
+
+// ---------------------------------------------------------------------------
+// sparkline — pure SVG (regression; the component is retained)
+// ---------------------------------------------------------------------------
 
 test('Situation Room: sparkline.tsx is pure SVG (no charting library)', () => {
   const src = readSrc('sparkline.tsx');
   assert.match(src, /<svg\b/);
   assert.match(src, /<polyline\b|<path\b/);
-  // No external charting library imports
   assert.doesNotMatch(src, /from\s+['"](recharts|chart\.js|d3|victory|nivo)/);
-});
-
-test('Situation Room: awaiting-you-pill.tsx uses useHostNavigation (SCAF-09 no raw <a href>)', () => {
-  const src = readSrc('awaiting-you-pill.tsx');
-  assert.match(src, /useHostNavigation\b/);
 });
 
 // ---------------------------------------------------------------------------
@@ -141,7 +183,6 @@ test('useInstanceConfig: wraps usePluginData on clarity-pack/get-instance-config
   const src = readFileSync(USE_INSTANCE_CONFIG, 'utf8');
   assert.match(src, /usePluginData/);
   assert.match(src, /clarity-pack\/get-instance-config/);
-  // Must NOT import useInstanceConfig from the SDK (it doesn't exist at 2026.512.0)
   assert.doesNotMatch(src, /import\s*\{[^}]*useInstanceConfig[^}]*\}\s*from\s+['"]@paperclipai\/plugin-sdk/);
 });
 
@@ -158,11 +199,6 @@ test('Manifest: declares instanceConfigSchema with situationRefreshIntervalMs (D
 });
 
 test('Manifest (Plan 09-01): the recompute-situation cron job is REMOVED; jobs[] keeps compile-bulletin', () => {
-  // Plan 09-01 removed the dead recompute-situation 60s job (dead on
-  // paperclipai@2026.525.0 PR #6547; no synchronous UI caller). The jobs[]
-  // array still declares compile-bulletin (which uses jobs.schedule). We strip
-  // line comments before scanning so the removal-note comments (which mention
-  // the old key as breadcrumbs) do not trip the absence assertion.
   const raw = readFileSync(MANIFEST, 'utf8');
   const codeOnly = raw
     .split('\n')
@@ -171,17 +207,27 @@ test('Manifest (Plan 09-01): the recompute-situation cron job is REMOVED; jobs[]
   assert.match(codeOnly, /jobs:\s*\[/);
   assert.ok(
     !/recompute-situation/.test(codeOnly),
-    'recompute-situation job key must be absent from manifest code (Plan 09-01 removal)',
+    'recompute-situation job key must be absent from manifest code',
   );
   assert.match(codeOnly, /compile-bulletin/);
 });
 
 test('Manifest (Plan 09-01): capabilities[] includes issues.update (first core-issue mutation, R8)', () => {
-  const src = readFileSync(MANIFEST, 'utf8');
-  assert.match(src, /['"]issues\.update['"]/);
+  assert.match(readFileSync(MANIFEST, 'utf8'), /['"]issues\.update['"]/);
 });
 
 test('Manifest: declares jobs.schedule capability (PLUGIN_SPEC §17)', () => {
-  const src = readFileSync(MANIFEST, 'utf8');
-  assert.match(src, /['"]jobs\.schedule['"]/);
+  assert.match(readFileSync(MANIFEST, 'utf8'), /['"]jobs\.schedule['"]/);
+});
+
+test('Manifest (Plan 09-02 / R1): the dead situationArtifactsWindow config key is REMOVED', () => {
+  const raw = readFileSync(MANIFEST, 'utf8');
+  const codeOnly = raw
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  assert.ok(
+    !/situationArtifactsWindow\s*:/.test(codeOnly),
+    'situationArtifactsWindow config key must be gone with the deleted handler',
+  );
 });

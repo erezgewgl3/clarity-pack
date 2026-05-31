@@ -48,11 +48,15 @@ const REPO_ROOT = path.resolve(HERE, '..', '..');
 const FILES = [
   'src/ui/components/enable-clarity-cta.tsx',
   'src/ui/surfaces/situation-room/index.tsx',
-  'src/ui/surfaces/situation-room/critical-path-strip.tsx',
-  // Plan 06.1-03 (D-02) — `artifacts-shipped-shelf.tsx` is DELETED.
-  // The per-agent inline `artifact-chip-row.tsx` replaces it; that file's
-  // own React-key audit lives in `test/ui/artifact-chip-row.test.mjs`.
-  'src/ui/surfaces/situation-room/artifact-chip-row.tsx',
+  // Plan 09-02 — the dead AgentCard grid + critical-path-strip + artifact-chip-
+  // row are deleted (R1). The actionable cockpit's new map()-bearing components
+  // are audited here: the grouped strip, the per-state employee row, the owner-
+  // picker popover, and the merged blocked-backlog expander.
+  'src/ui/surfaces/situation-room/employee-row-strip.tsx',
+  'src/ui/surfaces/situation-room/employee-row.tsx',
+  'src/ui/surfaces/situation-room/owner-picker-popover.tsx',
+  'src/ui/surfaces/situation-room/blocked-backlog-expander.tsx',
+  'src/ui/surfaces/situation-room/needs-you-banner.tsx',
   // GAP 7 (Plan 04-05 round 3) — the live re-drill console flooded with
   // "Each child in a list should have a unique key" warnings attributed to
   // ChatPageBody / RosterRail / Composer / ContextRail / PersistedMessage.
@@ -135,8 +139,8 @@ test('EnableClarityCta source has no array-prop child render (single root only) 
   assert.doesNotMatch(src, /\{\s*\[[^[\]]*<[A-Z]/, 'EnableClarityCta should not render an array of JSX inline');
 });
 
-test('SituationRoom index.tsx has explicit key on AgentCard map (regression)', () => {
-  const src = readSrc('src/ui/surfaces/situation-room/index.tsx');
-  // Find the AgentCard rendering — confirm key= is present nearby.
-  assert.match(src, /<AgentCard\b[\s\S]{0,80}key=\{|key=\{[\s\S]{0,200}<AgentCard\b/);
+test('SituationRoom employee-row-strip.tsx has explicit key on the EmployeeRow map (regression)', () => {
+  const src = readSrc('src/ui/surfaces/situation-room/employee-row-strip.tsx');
+  // The grouped strip maps rows → <EmployeeRow key={row.agentId} …>.
+  assert.match(src, /<EmployeeRow\b[\s\S]{0,120}key=\{|key=\{[\s\S]{0,200}<EmployeeRow\b/);
 });

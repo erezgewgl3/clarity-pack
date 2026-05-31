@@ -26,38 +26,42 @@ import test from 'node:test';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
 const THEME_CSS = path.join(REPO_ROOT, 'src', 'ui', 'primitives', 'theme.css');
-const DIST_CSS = path.join(REPO_ROOT, 'dist', 'ui', 'index.css');
 
 export const AUDITED_CLASSNAMES = Object.freeze([
   // CTA (DEV-06 cluster A)
   'clarity-cta', 'clarity-cta-heading', 'clarity-cta-body',
   'clarity-cta-button', 'clarity-cta-fine',
   // Situation Room page chrome (DEV-06 cluster B)
-  'clarity-room-loading', 'clarity-room-error', 'clarity-room-header',
-  'clarity-agent-grid',
-  // Agent card (DEV-06 cluster C)
-  // Plan 06.1-03 (UI-SPEC §Visual Hierarchy Lock #5) — `.clarity-agent-artifact`
-  // latest-artifact placeholder is DEPRECATED + removed from agent-card.tsx;
-  // the new inline `.clarity-artifact-chip-row` supersedes it as the per-agent
-  // "what shipped" signal. Classname removed from audit set in the same plan.
-  'clarity-agent-card', 'clarity-agent-card-header', 'clarity-agent-role',
-  'clarity-now-doing', 'clarity-agent-terminal',
-  'clarity-agent-terminal-kind', 'clarity-agent-terminal-label',
-  // Critical Path strip (DEV-06 cluster D)
-  'clarity-critical-path', 'clarity-critical-path-heading',
-  'clarity-critical-path-list', 'clarity-critical-path-item',
-  'clarity-critical-path-index', 'clarity-critical-path-text',
-  'clarity-critical-path-narrative',
-  // Awaiting-You pill (DEV-06 cluster E)
-  'clarity-awaiting-you-pill', 'clarity-awaiting-you-label',
-  'clarity-awaiting-you-count', 'clarity-awaiting-you-age',
-  // Plan 06.1-03 (D-02) — the Phase 2 "Artifacts shipped today" bottom shelf
-  // (cluster F: clarity-artifacts-shelf / clarity-artifacts-heading /
-  // clarity-artifacts-list / clarity-artifact-item / clarity-artifact-title /
-  // clarity-artifact-author / clarity-artifact-preview) is DELETED. The
-  // per-agent inline `.clarity-artifact-chip-row` (added by Plan 06.1-03)
-  // replaces it. Classnames removed from audit set in the same plan.
-  // Sparkline
+  'clarity-room-loading', 'clarity-room-error',
+  // Plan 09-02 (R1) — the dead AgentCard grid (clarity-agent-grid /
+  // clarity-agent-card* / clarity-now-doing / clarity-agent-terminal*), the
+  // standalone critical-path strip (clarity-critical-path*), the awaiting-you
+  // pill (clarity-awaiting-you*), the org-backlog banner (clarity-blocked-*),
+  // and the per-agent artifact chip row (clarity-artifact-chip-row*) were all
+  // DELETED with their components + CSS. Removed from the audit set here.
+  //
+  // Plan 09-02 — the actionable cockpit's NEW classnames:
+  // three group sections (D-03)
+  'clarity-group-section', 'clarity-group-header', 'clarity-group-title',
+  'clarity-group-count', 'clarity-group-rule', 'clarity-group-meta',
+  'clarity-group-empty', 'clarity-group-rows',
+  // grouped employee row + per-state action clusters (R4)
+  'clarity-employee-row', 'clarity-employee-name', 'clarity-employee-role',
+  'clarity-employee-state-pill', 'clarity-employee-actions',
+  'clarity-employee-moving', 'clarity-employee-paused-marker',
+  'clarity-employee-confirm',
+  // shared button family (gold = ownership/chat; neutral chrome; danger)
+  'clarity-btn', 'clarity-btn-gold', 'clarity-btn-danger',
+  // owner-picker popover (D-01 / D-02)
+  'clarity-owner-pick', 'clarity-owner-pick-pop', 'clarity-owner-pick-head',
+  'clarity-owner-pick-item', 'clarity-owner-pick-self',
+  // merged blocked-backlog + critical-path expander (R6)
+  'clarity-orphans', 'clarity-orphan-toggle', 'clarity-orphan-list',
+  'clarity-orphan-row', 'clarity-orphan-id', 'clarity-orphan-title',
+  // un-frozen needs-you banner (R5)
+  'clarity-needs-you-banner', 'clarity-needs-you-urgent',
+  'clarity-needs-you-neutral', 'clarity-needs-you-action',
+  // Sparkline (retained)
   'clarity-sparkline',
 ]);
 
@@ -188,17 +192,29 @@ test('every audited classname rule is scope-prefixed with [data-clarity-surface]
   assert.equal(offenders.length, 0, `every rule for an audited classname must start with [data-clarity-surface]. Offenders:\n${offenders.join('\n')}`);
 });
 
-// Test 3 — agent-grid is grid OR flex (proves the rule isn't a no-op).
-test('.clarity-agent-grid rule uses display: grid or flex (proves substantive layout, not a color tweak)', () => {
+// Test 3 — the group rows container uses display: flex/grid (proves the layout
+// rule isn't a no-op color tweak). Plan 09-02 replaced the dead .clarity-agent-
+// grid layout assertion with the live group-rows column.
+test('.clarity-group-rows rule uses display: grid or flex (proves substantive layout)', () => {
   const css = readTheme();
   const rules = parseRules(css);
-  const grid = rules.filter((r) => /\.clarity-agent-grid(?![\w-])/.test(r.selector));
-  assert.ok(grid.length >= 1, 'expected at least one .clarity-agent-grid rule');
-  const someDisplaysGridOrFlex = grid.some((r) => /display\s*:\s*(grid|flex)/i.test(r.body));
+  const rows = rules.filter((r) => /\.clarity-group-rows(?![\w-])/.test(r.selector));
+  assert.ok(rows.length >= 1, 'expected at least one .clarity-group-rows rule');
+  const someDisplaysGridOrFlex = rows.some((r) => /display\s*:\s*(grid|flex)/i.test(r.body));
   assert.ok(
     someDisplaysGridOrFlex,
-    `expected at least one .clarity-agent-grid rule with display: grid or display: flex. Bodies:\n${grid.map((r) => r.body).join('\n---\n')}`,
+    `expected at least one .clarity-group-rows rule with display: grid or display: flex. Bodies:\n${rows.map((r) => r.body).join('\n---\n')}`,
   );
+});
+
+// Test 3b (R1) — the dead grid CSS is GONE.
+test('R1: .clarity-agent-grid / .clarity-agent-card / .clarity-artifact-chip-row CSS is removed', () => {
+  const css = readTheme();
+  const rules = parseRules(css);
+  for (const cls of ['clarity-agent-grid', 'clarity-agent-card', 'clarity-artifact-chip-row', 'clarity-critical-path', 'clarity-awaiting-you-pill', 'clarity-blocked-banner']) {
+    const matching = rules.filter((r) => new RegExp(`\\.${cls}(?![\\w-])`).test(r.selector));
+    assert.equal(matching.length, 0, `expected NO .${cls} rule after Plan 09-02 deletion; found ${matching.length}`);
+  }
 });
 
 // Test 4 — preserved state-pill variants (regression).
@@ -211,17 +227,25 @@ for (const cls of PRESERVED_STATE_PILL_CLASSES) {
   });
 }
 
-// Test 5 — dist/ui/index.css picks up the new rules after build.
+// Test 5 — the built bundle picks up the new rules after build.
 // Gated by RUN_BUILD_TESTS=1 because `pnpm build` is too heavy for default node --test.
 // In CI / pre-rehearsal verify, set RUN_BUILD_TESTS=1.
-test('dist/ui/index.css contains key audited classnames after build (gated on RUN_BUILD_TESTS=1)', { skip: process.env.RUN_BUILD_TESTS !== '1' }, () => {
-  let css;
+//
+// Plan 09-02 fix: the build INLINES theme.css into dist/ui/index.js as a text
+// import (DEV-14 — Paperclip's host does NOT auto-load a sibling .css; there is
+// no dist/ui/index.css sidecar). This test now reads the JS bundle where the
+// CSS actually lives (same contract as runtime-css-injection.test.mjs). The old
+// dist/ui/index.css reference was a stale sidecar that no build has emitted
+// since DEV-14 — it only surfaced because this test is RUN_BUILD_TESTS-gated.
+const DIST_JS = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
+test('dist/ui/index.js inlines key audited classnames after build (gated on RUN_BUILD_TESTS=1)', { skip: process.env.RUN_BUILD_TESTS !== '1' }, () => {
+  let js;
   try {
-    css = readFileSync(DIST_CSS, 'utf8');
+    js = readFileSync(DIST_JS, 'utf8');
   } catch (e) {
-    assert.fail(`expected ${DIST_CSS} to exist (run \`node scripts/build-ui.mjs\` first); got error: ${e.message}`);
+    assert.fail(`expected ${DIST_JS} to exist (run \`node scripts/build-ui.mjs\` first); got error: ${e.message}`);
   }
-  for (const cls of ['clarity-agent-grid', 'clarity-cta-button', 'clarity-critical-path', 'clarity-awaiting-you-pill', 'clarity-agent-card']) {
-    assert.ok(css.includes(cls), `dist/ui/index.css must contain ${cls}; got css of length ${css.length}`);
+  for (const cls of ['clarity-group-section', 'clarity-cta-button', 'clarity-owner-pick-pop', 'clarity-needs-you-banner', 'clarity-employee-row']) {
+    assert.ok(js.includes(cls), `dist/ui/index.js must inline ${cls}; got js of length ${js.length}`);
   }
 });

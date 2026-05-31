@@ -66,10 +66,11 @@ test('dist/ui/index.js contains the inlined CSS marker + at least one Clarity se
   // as a side-effect). We pick three high-confidence selectors, all prefixed
   // `clarity-` per the SCAF-06 / COEXIST-01 namespacing rule:
   //   - .clarity-cta-button (Plan 02-04 Task 1 — opt-in CTA)
-  //   - .clarity-agent-card (Plan 02-08 Task 1 — Situation Room agent grid)
+  //   - .clarity-group-section (Plan 09-02 — actionable cockpit group section;
+  //     supersedes the deleted .clarity-agent-card grid)
   //   - [data-clarity-surface] (Plan 02-02 Task 2 — surface scoping)
   // The bundle must contain all three.
-  for (const selector of ['.clarity-cta-button', '.clarity-agent-card', 'data-clarity-surface']) {
+  for (const selector of ['.clarity-cta-button', '.clarity-group-section', 'data-clarity-surface']) {
     assert.ok(
       js.includes(selector),
       `dist/ui/index.js must contain the inlined CSS selector "${selector}" — without this, Paperclip's page renders unstyled HTML`,

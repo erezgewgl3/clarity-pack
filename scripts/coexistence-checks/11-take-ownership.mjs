@@ -79,9 +79,13 @@ const TAKE_OWNERSHIP_TABLES = ['clarity_agent_owners'];
 // Phase 6.1 worker source files -- assert they exist so the check is
 // known to be scanning the current generation of files (defensive #6
 // in plan).
+//
+// Plan 09-02 (R1 / BLOCKER 1): situation-artifacts.ts was DELETED with the dead
+// AgentCard grid (its only consumer) — removed from this existence list. The
+// CTT-07 invariant for ROOM-10 is now vacuously satisfied (no handler, no
+// mutation); Assertion 3 below treats the absence as the expected state.
 const PHASE_6_1_SOURCES = [
   'src/worker/handlers/agent-take-ownership.ts',
-  'src/worker/handlers/situation-artifacts.ts',
   'src/worker/db/clarity-agent-owners-repo.ts',
 ];
 
@@ -232,10 +236,13 @@ if (existsSync(TAKE_OWNERSHIP_HANDLER_PATH)) {
 }
 
 // ============================================================================
-// Assertion 3: CTT-07 INVARIANT (ROOM-10 worker tier) -- situation-
-// artifacts.ts contains zero ctx.issues.update function calls. The
-// data handler is read-only by design; this is defense-in-depth on
-// top of Plan 06.1-02 Test 11 (runtime spy) + source-grep companion.
+// Assertion 3: ROOM-10 worker tier -- situation-artifacts.ts.
+//
+// Plan 09-02 (R1 / BLOCKER 1): the situation.artifacts handler was DELETED
+// atomically with its only UI consumer (the dead AgentCard grid). The CTT-07
+// "no ctx.issues.update" invariant for ROOM-10 is now vacuously satisfied — a
+// non-existent handler cannot mutate host issue state. The expected state is
+// ABSENCE; if the file ever reappears it must still honor CTT-07.
 // ============================================================================
 
 if (existsSync(SITUATION_ARTIFACTS_HANDLER_PATH)) {
@@ -248,7 +255,7 @@ if (existsSync(SITUATION_ARTIFACTS_HANDLER_PATH)) {
   }
   pass(`src/worker/handlers/situation-artifacts.ts honors the CTT-07 invariant (no ctx.issues.update)`);
 } else {
-  fail(`src/worker/handlers/situation-artifacts.ts not found -- Phase 6.1 ROOM-10 handler is missing`);
+  pass(`situation.artifacts handler removed (Plan 09-02 R1/BLOCKER 1) — CTT-07 vacuously satisfied for ROOM-10`);
 }
 
 // ============================================================================
