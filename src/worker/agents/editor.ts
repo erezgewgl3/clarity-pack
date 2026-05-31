@@ -412,6 +412,112 @@ export async function resolveEditorAgentId(
 }
 
 /**
+ * The recency window inside which a tldr-compile operation issue (in ANY
+ * status, including a recently-`done` one) is still trusted to carry a usable
+ * result for {@link consumeExistingTldrOpResult}. Matches the drainer's window
+ * so the view-driven path and the (latent) drainer agree on "too old to trust".
+ */
+const TLDR_CONSUME_RECENCY_MS = 2 * AGENT_TASK_DELIVERY_TIMEOUT;
+
+/**
+ * Debug reader-tldr-stuck-compiling (2026-05-30) — CONSUME-BEFORE-SPAWN.
+ *
+ * On a cache miss, look for the most-recent EXISTING tldr-compile operation
+ * issue for this scope (originId `tldr-<issueId>`) — INCLUDING a recently-`done`
+ * one within the recency window — and if it already carries a consumable
+ * `compile-result`, finalize that result into the cache and return the row.
+ *
+ * Why this is the fix: the Editor-Agent reliably compiles, files the result
+ * document, and marks its op issue `done` (~1m36s). But `startAgentTask`'s
+ * idempotency search EXCLUDES terminal (`done`/`cancelled`) ops, so without this
+ * step the view-driven driver would spawn a fresh EMPTY op and poll THAT
+ * (→ `compiling`), orphaning the completed op's result forever (the only other
+ * consumer, `drainTldrOperations`, is dead behind the scope-dead compile-bulletin
+ * job — PR #6547). This decouples "don't re-DRIVE a done op" from "DO read its
+ * result": the driver reads the done op's result here, and only spawns a NEW op
+ * when no existing op has a consumable result.
+ *
+ * Returns the freshly-cached {@link TldrRow} on a consumed result, or null when
+ * no existing op has a result to read (the caller then spawns a fresh compile).
+ * Best-effort and read-tolerant: any host-call failure → null (fall through to a
+ * fresh compile rather than hang).
+ */
+export async function consumeExistingTldrOpResult(
+  ctx: TldrViewDriverCtx,
+  args: {
+    issueId: string;
+    companyId: string;
+    editorAgentId: string;
+    contentHash: string;
+    truncated: boolean;
+  },
+): Promise<TldrRow | null> {
+  const { issueId, companyId, editorAgentId, contentHash, truncated } = args;
+  const operationId = `tldr-${issueId}`;
+
+  let ops: Array<{ id: string; status?: string | null; createdAt?: string | Date }> = [];
+  try {
+    ops = (await ctx.issues.list({
+      companyId,
+      originKindPrefix: operationOriginKind('tldr-compile'),
+      originId: operationId,
+      includePluginOperations: true,
+      limit: 10,
+    })) as Array<{ id: string; status?: string | null; createdAt?: string | Date }>;
+  } catch (e) {
+    ctx.logger?.warn?.(`tldr-view: consume-before-spawn list failed: ${(e as Error).message}`, {
+      issueId,
+      companyId,
+    });
+    return null;
+  }
+
+  // Newest first — the most-recent op is the one whose result we want. A
+  // recently-`done` op is INCLUDED (that is the orphaned-result case); only ops
+  // aged past the recency window are skipped.
+  const candidates = (ops ?? [])
+    .filter((op) => {
+      const createdMs = op.createdAt ? new Date(op.createdAt).getTime() : Date.now();
+      return Date.now() - createdMs <= TLDR_CONSUME_RECENCY_MS;
+    })
+    .sort((a, b) => {
+      const am = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bm = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bm - am;
+    });
+
+  for (const op of candidates) {
+    const poll = await pollAgentTaskResult(ctx, {
+      operationIssueId: op.id,
+      companyId,
+      operationKind: 'tldr-compile',
+      agentId: editorAgentId,
+    });
+    if (poll.status !== 'ready') continue;
+
+    const tldr = await finalizeTldr(ctx, {
+      surface: 'issue',
+      scopeId: issueId,
+      contentHash,
+      body: poll.body,
+      agentKey: EDITOR_AGENT_KEY,
+      agentId: editorAgentId,
+      companyId,
+      truncated,
+    });
+    ctx.logger?.info?.('tldr-view: consumed existing op result (consume-before-spawn)', {
+      issueId,
+      companyId,
+      operationIssueId: op.id,
+      status: (op as { status?: string | null }).status ?? null,
+    });
+    return tldr;
+  }
+
+  return null;
+}
+
+/**
  * View-driven rework (2026-05-28) — advance the TL;DR compile for ONE issue by
  * exactly one step, in the CALLER's (valid HTTP-request) invocation scope. This
  * replaces the dead scheduled-job/heartbeat driver: the `issue.reader` data
@@ -419,10 +525,13 @@ export async function resolveEditorAgentId(
  * compile trigger.
  *
  *   - cache hit (fresh TL;DR, task unchanged) → return it instantly, no compile.
- *   - cache miss → resolve the Editor-Agent, START (or reuse) the operation
- *     issue + ONE immediate poll. If the agent has already answered → finalize +
- *     cache now (and mark the op done so a later task EDIT starts a fresh
- *     compile rather than reusing the stale op). Otherwise → `compiling`.
+ *   - cache miss → resolve the Editor-Agent, then CONSUME-BEFORE-SPAWN: read the
+ *     most-recent existing op's result (including a recently-done one) and cache
+ *     it if present (debug reader-tldr-stuck-compiling). Only if no existing op
+ *     has a consumable result → START (or reuse) a fresh operation issue + ONE
+ *     immediate poll. If the agent has already answered → finalize + cache now
+ *     (and mark the op done so a later task EDIT starts a fresh compile rather
+ *     than reusing the stale op). Otherwise → `compiling`.
  *
  * Bounded host calls per request (a handful) — well within a request scope.
  */
@@ -485,6 +594,28 @@ export async function driveTldrCompileStep(
     }
   } catch {
     /* status unknown — fall through and attempt the compile */
+  }
+
+  // Debug reader-tldr-stuck-compiling (2026-05-30) — CONSUME-BEFORE-SPAWN.
+  //
+  // The Editor-Agent compiles successfully, files the `compile-result` document,
+  // and marks the operation issue `done` (~1m36s). But `startAgentTask`'s
+  // idempotency search EXCLUDES terminal (`done`/`cancelled`) ops, so on the next
+  // Reader poll it would spawn a BRAND-NEW empty op and poll THAT (→ `compiling`)
+  // — orphaning the just-completed op's result forever (the only other consumer,
+  // `drainTldrOperations`, is dead behind the scope-dead compile-bulletin job —
+  // PR #6547). The Reader sticks on "Compiling TL;DR…" indefinitely, respawning
+  // ops every poll. FIX: read the most-recent existing op's result (including a
+  // recently-done one) and cache it before spawning anything new.
+  const consumed = await consumeExistingTldrOpResult(ctx, {
+    issueId,
+    companyId,
+    editorAgentId,
+    contentHash: prep.contentHash,
+    truncated: prep.truncated,
+  });
+  if (consumed) {
+    return { tldr: consumed, status: 'cached', truncated: prep.truncated };
   }
 
   // START (or reuse the in-flight op via idempotency) + one immediate poll.
