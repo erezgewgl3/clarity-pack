@@ -4,7 +4,7 @@ milestone: v1.0.0
 milestone_name: v1-final-internal
 status: phase-complete
 stopped_at: Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30 (v1.2.0 shipped) — next milestone per /gsd:progress
-last_updated: "2026-05-30T16:01:13Z"
+last_updated: "2026-05-31T05:05:53Z"
 progress:
   total_phases: 9
   completed_phases: 8
@@ -1374,6 +1374,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | 260524-sm8 | Drill rc.6 on Countermoves — AC toggle → Reader refetch contract verified live (DevTools Network 3-call cluster, 2+ cycles, all 200); plugin-id UUID preserved; 7 defects filed (D-1..D-4 fixed in-flight; D-5/D-6/D-7 forward MemPalace) | 2026-05-25 | 90e760f | [260524-sm8-drill-clarity-pack-1-0-0-rc-6-tgz-on-cou](./quick/260524-sm8-drill-clarity-pack-1-0-0-rc-6-tgz-on-cou/) |
 | 260528-mn0 | Fix false "paused by operator" banner (#1): editor.pause-status now derives `paused` from real agent status (reconcile→get(uuid), self-clears on resume) not the stale failure-table heuristic; agentName via resolved UUID not the key; new `agents.resumeHeartbeat` action (was 502). v1.0.0, no migration. 23 tests | 2026-05-28 | 38c149c | [260528-mn0-fix-false-pause-banner-stale-read](./quick/260528-mn0-fix-false-pause-banner-stale-read/) |
 | 260528-nns | On-demand "Generate bulletin now" button + content dedupe: extracted shared `compileBulletinForCompany(force)` (cron force:false byte-identical, bulletin suite 212/212); force bypasses due-gate, leaves daily schedule untouched, dedupes on masthead-excluded substance hash vs last published draft_json; new `bulletin.compileNow` action + UI button (3 states). v1.0.0, no migration. 14 tests; UI ceiling 680→684 kB | 2026-05-28 | d15d19f | [260528-nns-on-demand-generate-bulletin-now-button-w](./quick/260528-nns-on-demand-generate-bulletin-now-button-w/) |
+| 260531-b8w | Reader redesign sketches 003-B + 004-B — TL;DR-first no-rail detail-tab layout (drop plugin right rail, single ~760px column, "Show full task" disclosure, LiveBlockerPanel relocated inline) + host-native type scoped to `[data-clarity-surface='reader']` (system-ui body / Newsreader BLUF real 400/600 / JetBrains Mono IDs — chat/bulletin/situation-room keep Geist+Instrument Serif) + two-weight ref-chips (new light inline `.clarity-ref-chip--inline` for mid-sentence refs, full bordered chip for standalone; hover-peek on both). v1.2.1→1.2.2. 3 commits; check-css-scope + tsc + build green; suite 2373 pass / 1 pre-existing unrelated `situation-artifacts` worker fail. All hard invariants preserved (4-tier resolver chain, 13 SectionErrorBoundary wraps, scroll-stability, footer PauseBanner). | 2026-05-31 | 019444b | [260531-b8w-implement-the-reader-redesign-from-sketc](./quick/260531-b8w-implement-the-reader-redesign-from-sketc/) |
 
 ### Phase History
 
