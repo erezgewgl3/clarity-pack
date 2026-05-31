@@ -664,8 +664,10 @@ const manifest: PaperclipPluginManifestV1 = {
     'agent.sessions.close',
     'events.subscribe',
     'companies.read',
-    // Plan 02-04 Task 2 — required for the recompute-situation 60s job
-    // declared in jobs[] below (PLUGIN_SPEC §17).
+    // Required for the cron jobs declared in jobs[] below (PLUGIN_SPEC §17).
+    // Plan 02-04 Task 2 added it for the situation-snapshot 60s job (removed in
+    // Plan 09-01); the compile-bulletin job still uses jobs.schedule, so the
+    // capability stays declared.
     'jobs.schedule',
     // 2026-05-27 BEAAA hotfix — paperclipai@2026.525.0 added explicit
     // capability enforcement for ctx.http.fetch (previously implicit /
@@ -695,11 +697,16 @@ const manifest: PaperclipPluginManifestV1 = {
     // (above); the stream bridge subscribes issue.comment.created via
     // events.subscribe (above); the roster handler reads the employee list via
     // agents.read (above); the + New topic flow creates the child topic issue
-    // via issues.create (above); D-06 auto-reopen calls ctx.issues.update,
-    // which Phase 3's bulletin-action-approve already exercises live with this
-    // exact capability set. Adding an unverified `issues.update` string would
-    // risk the host install validator — not added. Chat tables are in the
-    // plugin namespace so database.namespace.* (above) covers them.
+    // via issues.create (above); D-06 auto-reopen calls ctx.issues.update.
+    // Chat tables are in the plugin namespace so database.namespace.* (above)
+    // covers them.
+    // Plan 09-01 (SUPERSEDES the Phase-4 "not added" note above) —
+    // situation.assignOwner is the plugin's FIRST core-issue assignee mutation;
+    // ctx.issues.update now needs its capability string declared. The host
+    // install validator on 2026.525.0 accepts `issues.update` (R8). Phase 3's
+    // bulletin-action-approve has exercised ctx.issues.update live on
+    // Countermoves with this exact runtime, so the capability is proven safe.
+    'issues.update',
     // Plan 03-08 — the dead Option C `agent.tools.register` capability was
     // removed. The 2026-05-16 closure re-drill live-disproved Option C: a
     // `claude_local` managed agent's session never receives a plugin-declared
@@ -888,16 +895,18 @@ const manifest: PaperclipPluginManifestV1 = {
       },
     },
   },
-  // Plan 02-04 Task 2 — recompute-situation 60s cron job. The handler in
-  // src/worker/jobs/situation-snapshot.ts no-ops when no row in
-  // plugin_clarity_pack_cdd6bda4bd.active_viewers is < 90s old, so the
-  // expensive snapshot only runs when ≥1 user has the Situation Room open.
+  // Plan 09-01 — the situation-snapshot 60s cron job (Plan 02-04 Task 2; jobKey
+  // "recompute"+"-situation") was REMOVED here. Its host calls fail every tick
+  // on paperclipai@2026.525.0 (PR #6547 invocation-scope hardening rejects
+  // worker→host calls issued outside an active host→worker invocation), and it
+  // has NO synchronous UI caller — the live Situation Room renders from the
+  // FRESH situation.snapshot data-handler compute (a valid HTTP scope), never
+  // from the materialized situation_snapshots row this job used to write.
+  // Removing the dead job is safe mid-wave. The situation_snapshots TABLE is
+  // NOT dropped (R9 additive-only); it simply stops being written. The
+  // compile-bulletin job below STILL uses jobs.schedule, so that capability
+  // stays declared above.
   jobs: [
-    {
-      jobKey: 'recompute-situation',
-      schedule: '*/1 * * * *',
-      displayName: 'Recompute Situation Room snapshot',
-    },
     // Plan 03-01 — fires every minute; the handler in
     // src/worker/jobs/compile-bulletin.ts reads bulletins.next_due_at and
     // only compiles when `now >= next_due_at`. The cron string is a

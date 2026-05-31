@@ -157,11 +157,28 @@ test('Manifest: declares instanceConfigSchema with situationRefreshIntervalMs (D
   assert.match(src, /situationRefreshIntervalMs/);
 });
 
-test('Manifest: declares jobs[] with recompute-situation entry on cron */1 * * * *', () => {
+test('Manifest (Plan 09-01): the recompute-situation cron job is REMOVED; jobs[] keeps compile-bulletin', () => {
+  // Plan 09-01 removed the dead recompute-situation 60s job (dead on
+  // paperclipai@2026.525.0 PR #6547; no synchronous UI caller). The jobs[]
+  // array still declares compile-bulletin (which uses jobs.schedule). We strip
+  // line comments before scanning so the removal-note comments (which mention
+  // the old key as breadcrumbs) do not trip the absence assertion.
+  const raw = readFileSync(MANIFEST, 'utf8');
+  const codeOnly = raw
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  assert.match(codeOnly, /jobs:\s*\[/);
+  assert.ok(
+    !/recompute-situation/.test(codeOnly),
+    'recompute-situation job key must be absent from manifest code (Plan 09-01 removal)',
+  );
+  assert.match(codeOnly, /compile-bulletin/);
+});
+
+test('Manifest (Plan 09-01): capabilities[] includes issues.update (first core-issue mutation, R8)', () => {
   const src = readFileSync(MANIFEST, 'utf8');
-  assert.match(src, /jobs:\s*\[/);
-  assert.match(src, /recompute-situation/);
-  assert.match(src, /\*\/1\s*\*\s*\*\s*\*\s*\*/);
+  assert.match(src, /['"]issues\.update['"]/);
 });
 
 test('Manifest: declares jobs.schedule capability (PLUGIN_SPEC §17)', () => {

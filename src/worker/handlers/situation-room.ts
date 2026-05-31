@@ -1,25 +1,26 @@
 // src/worker/handlers/situation-room.ts
 //
-// Plan 02-04 Task 2 — situation.snapshot data handler. Returns the most-
-// recent materialized snapshot row for the caller's company. The 60s job
-// (situation-snapshot.ts) writes; this handler reads.
+// Plan 02-04 Task 2 — situation.snapshot data handler.
+//
+// Plan 09-01 (WARNING 5) — this handler now computes EVERYTHING FRESH on every
+// call and NO LONGER reads the materialized situation_snapshots row. The
+// recompute-situation cron writer was deleted in Plan 09-01 (dead on
+// paperclipai@2026.525.0 PR #6547; no synchronous UI caller), so a row is never
+// written post-Phase-9 — the old SELECT + row-exists spread were permanently
+// dead. The situation_snapshots TABLE is preserved (R9 additive-only; no
+// migration, no DROP) — it is simply no longer written or read.
 //
 // Wrapped with opt-in-guard so opted-out callers receive
 // {error:'OPT_IN_REQUIRED'} (OPTIN-04). companyId comes from params (the
 // UI passes via useHostContext or useResolvedCompanyId).
 //
-// Plan 07-03 Task 2 (Phase 7 ITEM 4) — the situation.snapshot DATA HANDLER is
-// a VALID HTTP-request scope (unlike the scope-dead recompute-situation job,
-// whose host calls fail every tick on paperclipai@2026.525.0 PR #6547). So the
-// ORG-LEVEL blocked-issue backlog is computed HERE, FRESH, on every call and
-// ATTACHED to whatever the handler returns (<compute_vs_cache_note>):
-//   - if a snapshot row exists → spread it + add org_blocked_backlog;
-//   - if NO row exists (the common case — the job is dead) → return a fresh
-//     { org_blocked_backlog, taken_at } so the banner renders even with an
-//     empty/stale grid.
-// The compute is degrade-safe (a thrown builder → an empty backlog, the rest
-// of the handler is intact) and viewer-scoped (need_you_count keys on
-// params.userId). The opt-in-guard wrap is unchanged.
+// Plan 07-03 Task 2 (Phase 7 ITEM 4) — the situation.snapshot DATA HANDLER is a
+// VALID HTTP-request scope (unlike the scope-dead recompute-situation job). The
+// ORG-LEVEL blocked-issue backlog + the per-employee rollup (Plan 08-01) are
+// computed HERE, FRESH, on every call. Both computes are degrade-safe (a thrown
+// builder → an empty backlog / empty rollup, the rest of the handler intact)
+// and viewer-scoped (needsYou keys on params.userId). The opt-in-guard wrap is
+// unchanged.
 
 import type {
   PluginAgentsClient,
@@ -52,14 +53,6 @@ export type SituationRoomCtx = OptInGuardDataCtx & {
   issues: Pick<PluginIssuesClient, 'list' | 'get' | 'relations'>;
   agents?: Pick<PluginAgentsClient, 'list' | 'get'>;
   logger?: PluginLogger;
-};
-
-type SnapshotRow = {
-  id: number;
-  taken_at: string;
-  computed_for_company_id: string;
-  payload: unknown;
-  content_hash: string;
 };
 
 /** The empty backlog shape — used when the builder throws so the rest of the
@@ -125,34 +118,18 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       });
     }
 
-    const rows = await ctx.db.query<SnapshotRow>(
-      'SELECT id, taken_at, computed_for_company_id, payload, content_hash FROM plugin_clarity_pack_cdd6bda4bd.situation_snapshots WHERE computed_for_company_id = $1 ORDER BY taken_at DESC LIMIT 1',
-      [companyId],
-    );
-    const row = rows[0];
-    if (!row) {
-      // <compute_vs_cache_note> — the dead-job path. No materialized row, but
-      // the backlog + employees still ride so the cockpit renders. Do NOT
-      // `return null` (that would swallow the freshly computed data).
-      return {
-        org_blocked_backlog,
-        situation_employees: employees,
-        needsYou,
-        taken_at: new Date().toISOString(),
-      };
-    }
-    const payload = row.payload as Record<string, unknown>;
-    // Plan 08-02 fix (Rule 1): the Phase 8 rollup rides under `situation_employees`
-    // — NOT `employees` — so it does not clobber the materialized snapshot's
-    // `employees` (AgentEmployee[]) that the ROOM-01..08 agent grid consumes. The
-    // earlier Plan 08-01 wiring spread `employees` into the same key, silently
-    // overwriting the agent-grid data (SituationEmployeeRow has no `userId`).
+    // Plan 09-01 (WARNING 5) — the materialized situation_snapshots read-path
+    // is REMOVED. The recompute-situation cron writer was deleted in this plan,
+    // so a row is never written post-Phase-9 — the SELECT + `if (row)` branch +
+    // the `...payload` spread were PERMANENTLY DEAD. The handler now ALWAYS
+    // returns the FRESHLY computed rollup (the no-row path became the only
+    // path). The situation_snapshots TABLE is NOT dropped and no migration is
+    // added — R9 additive-only leaves the empty table in place.
     return {
-      ...payload,
       org_blocked_backlog,
       situation_employees: employees,
       needsYou,
-      taken_at: row.taken_at,
+      taken_at: new Date().toISOString(),
     };
   });
 }

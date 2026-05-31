@@ -1,12 +1,14 @@
 // test/worker/situation-room-handler.test.mjs
 //
 // Plan 02-04 Task 2 RED — situation-room handlers.
-//   - 'situation.snapshot' reads the most-recent row for the caller's company
-//   - returns null when no row exists
+//   - 'situation.snapshot' computes the rollup FRESH on every call (Plan 09-01
+//     WARNING 5 removed the materialized situation_snapshots read-path — the
+//     recompute cron writer was deleted, so a row is never written and the
+//     handler no longer reads one). taken_at is a fresh ISO; the legacy
+//     `employees` (AgentEmployee[]) grid feed is gone; situation_employees rides.
 //   - is wrapped with opt-in-guard (returns OPT_IN_REQUIRED for opted-out)
 //   - 'situation.active-viewer-ping' upserts a row into active_viewers with
 //     the caller's userId, the surface 'situation-room', and the params.tabId
-//   - SQL targets the fully-qualified namespace (Finding #4)
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
@@ -98,21 +100,29 @@ function makeCtx({
 // situation.snapshot
 // ---------------------------------------------------------------------------
 
-test('situation.snapshot: returns most-recent row payload for the caller company', async () => {
+test('situation.snapshot (Plan 09-01): computes FRESH (no materialized-row read); taken_at is a fresh ISO, no legacy employees key', async () => {
+  // Plan 09-01 (WARNING 5) — the materialized situation_snapshots read-path was
+  // removed (the recompute cron writer is deleted). The handler now ALWAYS
+  // returns the freshly computed rollup; a pre-seeded snapshotRow is ignored.
   const snapshotRow = {
     id: 99,
     taken_at: '2026-05-14T10:00:00Z',
     computed_for_company_id: 'co-1',
-    payload: { employees: [], critical_path: [], artifacts_shipped_today: [] },
+    payload: { employees: [{ userId: 'STALE' }], critical_path: [], artifacts_shipped_today: [] },
     content_hash: 'abc',
   };
   const bag = makeCtx({ snapshotRow, optedIn: true });
   registerSituationRoomHandlers(bag.ctx);
   const handler = bag.dataRegistry.get('situation.snapshot');
+  const before = Date.now();
   const result = await handler({ userId: 'eric', companyId: 'co-1' });
-  // The handler returns the unpacked payload plus taken_at meta.
-  assert.equal(result.taken_at, '2026-05-14T10:00:00Z');
-  assert.deepEqual(result.employees, []);
+  // taken_at is a FRESH timestamp (not the stale 2026-05-14 row value).
+  assert.notEqual(result.taken_at, '2026-05-14T10:00:00Z', 'must NOT echo the stale materialized row');
+  assert.ok(Date.parse(result.taken_at) >= before, 'taken_at is computed fresh on this request');
+  // The legacy `employees` (AgentEmployee[]) grid feed is gone; the live rollup
+  // rides under situation_employees only.
+  assert.equal(result.employees, undefined, 'no legacy employees key (the materialized spread is removed)');
+  assert.ok(Array.isArray(result.situation_employees), 'situation_employees rides instead');
 });
 
 // Plan 07-03 Task 2 — the dead-job path. When no materialized snapshot row
@@ -140,14 +150,16 @@ test('situation.snapshot: opted-out caller returns {error:OPT_IN_REQUIRED} (wrap
   assert.deepEqual(result, { error: 'OPT_IN_REQUIRED' });
 });
 
-test('situation.snapshot: SQL targets fully-qualified namespace (Finding #4)', async () => {
+test('situation.snapshot (Plan 09-01, WARNING 5): NO situation_snapshots SELECT fires (the materialized read-path is removed)', async () => {
+  // The handler used to SELECT the most-recent situation_snapshots row. Plan
+  // 09-01 deleted that dead read-path, so the only db.query left is the
+  // opt-in-guard prefs lookup — never a situation_snapshots query.
   const bag = makeCtx({ snapshotRow: null, optedIn: true });
   registerSituationRoomHandlers(bag.ctx);
   const handler = bag.dataRegistry.get('situation.snapshot');
   await handler({ userId: 'eric', companyId: 'co-1' });
   const snapshotQuery = bag.dbCalls.find((c) => /situation_snapshots/.test(c.sql ?? ''));
-  assert.ok(snapshotQuery);
-  assert.match(snapshotQuery.sql, /plugin_clarity_pack_cdd6bda4bd\.situation_snapshots/);
+  assert.equal(snapshotQuery, undefined, 'no situation_snapshots query should be issued after the read-path removal');
 });
 
 // ---------------------------------------------------------------------------
@@ -155,7 +167,9 @@ test('situation.snapshot: SQL targets fully-qualified namespace (Finding #4)', a
 // (valid scope), NOT the dead recompute-situation job.
 // ---------------------------------------------------------------------------
 
-test('situation.snapshot: computes org_blocked_backlog from ctx.issues/ctx.agents and attaches it (with a snapshot row present)', async () => {
+test('situation.snapshot (Plan 09-01): computes org_blocked_backlog FRESH and ignores any pre-seeded materialized row', async () => {
+  // A stale snapshotRow is present but MUST be ignored post-Plan-09-01 (the
+  // read-path is removed). taken_at is computed fresh; the backlog rides.
   const snapshotRow = {
     id: 99,
     taken_at: '2026-05-14T10:00:00Z',
@@ -190,8 +204,8 @@ test('situation.snapshot: computes org_blocked_backlog from ctx.issues/ctx.agent
   const handler = bag.dataRegistry.get('situation.snapshot');
   const result = await handler({ userId: 'u-1', companyId: 'co-1' });
 
-  // Snapshot meta preserved.
-  assert.equal(result.taken_at, '2026-05-14T10:00:00Z');
+  // taken_at is FRESH — the stale materialized row's timestamp is ignored.
+  assert.notEqual(result.taken_at, '2026-05-14T10:00:00Z', 'stale materialized taken_at must NOT be echoed');
   // Backlog attached.
   assert.ok(result.org_blocked_backlog, 'org_blocked_backlog attached');
   assert.equal(result.org_blocked_backlog.blocked_count, 1);

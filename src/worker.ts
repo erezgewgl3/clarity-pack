@@ -6,7 +6,7 @@
 //   - opt-in-guard wrap around every 02-02/02-03 non-exempt handler
 // Plan 02-04 Task 2 adds:
 //   - situation.snapshot + situation.active-viewer-ping (wrapped)
-//   - recompute-situation 60s job
+//   - the situation-snapshot 60s cron job (REMOVED in Plan 09-01 — dead path)
 
 import { definePlugin, runWorker } from '@paperclipai/plugin-sdk';
 
@@ -51,10 +51,12 @@ import {
   registerActiveViewerPing,
   type ActiveViewerPingCtx,
 } from './worker/handlers/active-viewer-ping.ts';
-import {
-  registerSituationSnapshotJob,
-  type SituationSnapshotCtx,
-} from './worker/jobs/situation-snapshot.ts';
+// Plan 09-01 — the situation-snapshot 60s job (registerSituationSnapshotJob,
+// formerly src/worker/jobs/situation-snapshot.ts) was REMOVED. It was dead on
+// 2026.525.0 (PR #6547 invocation-scope) and had no synchronous UI caller; the
+// live Situation Room renders from the FRESH situation.snapshot data handler.
+// The jobs[] manifest entry + the orphaned file were deleted in this plan; the
+// situation_snapshots TABLE is preserved (R9 additive-only).
 // Plan 03-01 — Daily Bulletin compile job (Wave 1 skeleton).
 import {
   registerCompileBulletinJob,
@@ -260,7 +262,9 @@ const plugin = definePlugin({
     // ---- Plan 02-04 Task 2 — Situation Room handlers + job ------------------
     registerSituationRoomHandlers(ctx as unknown as SituationRoomCtx);
     registerActiveViewerPing(ctx as unknown as ActiveViewerPingCtx);
-    registerSituationSnapshotJob(ctx as unknown as SituationSnapshotCtx);
+    // Plan 09-01 — registerSituationSnapshotJob (the situation-snapshot cron)
+    // removed (dead on 2026.525.0; no synchronous UI caller). situation.snapshot
+    // DATA handler above is the sole live read path and computes fresh per request.
 
     // ---- Plan 03-01/03-02/03-05 — Daily Bulletin compile job ----------------
     // The compile-bulletin job runs the two-pass compile pipeline; Plan 03-05
