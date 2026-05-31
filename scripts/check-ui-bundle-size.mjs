@@ -162,7 +162,23 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // The 740 kB visual-regression baseline is the SANITY ceiling (operator
 // checkpoint required to breach it); 729 kB stays comfortably under it. The
 // LOCKED cockpit surface (ROOM-13..18) was NOT crippled to fit a tighter bump.
-const UI_BUNDLE_BYTES_CEILING = 729 * 1024; // 729 kB = 746,496 bytes
+// Bumped 2026-05-31 from 729 → 735 kB (quick 260531-b8w: Reader redesign 003-B +
+// 004-B, +5,712 bytes, no SheetJS): the new UI-bundle code is the 003-B no-rail
+// single-column restructure (index.tsx <details> disclosure + relocated
+// LiveBlockerPanel banner) and the 004-B two-weight ref-chip (RefChip gains the
+// variant prop + the light inline-label render; SafeMarkdown threads refVariant
+// through renderBlock/renderInline; ProseWithRefChips passes refVariant="inline")
+// plus the reader-scoped host-native font + light-chip CSS. The built bundle went
+// 742,840 → 748,552 bytes (+5,712 B over the prior 08-02 build; +2,056 B over the
+// prior 729 kB ceiling). Verified zero SheetJS sentinels (XLSX/SheetJS/!ref all 0
+// in the UI bundle), so the delta is the legitimate redesign code. Recalibrated
+// per the Phase 5/7/8 precedent (actual + 3 kB headroom rounded UP to the next kB;
+// NO synthetic per-task cap):
+//   ceil((748,552 + 3,072) / 1024) = 735 kB (752,640 bytes), ~4.0 kB headroom.
+// The 740 kB visual-regression baseline is the SANITY ceiling (operator
+// checkpoint required to breach it); 735 kB stays under it. The LOCKED redesign
+// surface (003-B layout + 004-B type/chips) was NOT crippled to fit a tighter bump.
+const UI_BUNDLE_BYTES_CEILING = 735 * 1024; // 735 kB = 752,640 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

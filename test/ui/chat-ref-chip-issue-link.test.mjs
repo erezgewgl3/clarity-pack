@@ -55,9 +55,18 @@ test('D3 — ref-chip.tsx falls back to a span when companyPrefix is unavailable
   const c = code(readChip());
   // The `if (!companyPrefix) { return <span ...>` branch guards against a
   // broken anchor target.
+  //
+  // Quick 260531-b8w (004-B two-weight chip) — the literal
+  // `className="clarity-ref-chip"` became `className={chipClassName}`, where
+  // chipClassName resolves to `'clarity-ref-chip'` for the default full variant
+  // and `'clarity-ref-chip clarity-ref-chip--inline'` for the light inline
+  // variant. The INTENT of this test (no-prefix branch returns a <span>, never
+  // a broken anchor) is unchanged — only the className literal moved to a
+  // variable. The regex now accepts either the old literal or the new
+  // {chipClassName} JSX expression on the fallback span.
   assert.match(
     c,
-    /if\s*\(\s*!companyPrefix\s*\)\s*\{[\s\S]{0,400}<span\s+className="clarity-ref-chip"/,
+    /if\s*\(\s*!companyPrefix\s*\)\s*\{[\s\S]{0,400}<span\s+className=(?:"clarity-ref-chip"|\{chipClassName\})/,
     'pre-prefix branch falls back to a span',
   );
 });
