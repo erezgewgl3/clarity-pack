@@ -372,12 +372,12 @@ Plans:
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 8
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md — Worker tier: situation.assignOwner (first core-issue mutation; ctx.issues.update + actor + viewer-authority gate) + worker-tier group classifier (R2) + un-frozen needsYou count (R5) + issues.update capability + remove recompute-situation job & situation.artifacts handler. Wave 1, autonomous, TDD. (R1, R2, R3, R5, R8)
+- [x] 09-01-PLAN.md — Worker tier: situation.assignOwner (first core-issue mutation; ctx.issues.update + actor + viewer-authority gate) + worker-tier group classifier (R2) + un-frozen needsYou count (R5) + issues.update capability + remove recompute-situation job & situation.artifacts handler. Wave 1, autonomous, TDD. (R1, R2, R3, R5, R8)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

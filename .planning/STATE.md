@@ -4,12 +4,12 @@ milestone: v1.0.0
 milestone_name: v1-final-internal
 status: executing
 stopped_at: Phase 9 context gathered
-last_updated: "2026-05-31T07:03:00.670Z"
+last_updated: "2026-05-31T08:49:01.944Z"
 progress:
   total_phases: 10
   completed_phases: 8
   total_plans: 66
-  completed_plans: 57
+  completed_plans: 58
   percent: 80
 ---
 
@@ -522,12 +522,17 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 08 — situation-room-people-first-cockpit
+**Current Focus:** Phase 09 — situation-room-actionable-cockpit
 
 ## Current Position
 
-Phase: 08 (situation-room-people-first-cockpit) — EXECUTING
-Plan: 3 of 3
+Phase: 09 (situation-room-actionable-cockpit) — EXECUTING
+Plan: 2 of 3
+
+**▶ Plan 09-01 (worker tier) CODE-COMPLETE 2026-05-31 (24 min, 3 tasks, commits `9aaa8a9`/`86a23d7`/`a612dc0`/`7beb8de`/`0fb9e56`).** Shipped: `situation.assignOwner` — the FIRST plugin core-issue mutation (`ctx.issues.update(leafIssueId, {assigneeAgentId|assigneeUserId}, companyId, {actorUserId})`; opt-in-guarded + company-scope `agents.get` gate; zero `ctx.db`); pure `groupForState` classifier + `group`/`isPaused` on every `SituationEmployeeRow` (R2/D-04); un-frozen `needsYou` count (counts unowned blockers; unowned `topAction` carries `agentId` + non-null `leafIssueId` so 09-02 `[Assign first ▾]` is never a dead button, R4); `issues.update` manifest capability declared; dead `recompute-situation` cron + materialized `situation_snapshots` read-path removed (handler returns fresh compute only; table preserved, R9). No version bump (1.2.2 — deferred to 09-03). Gates: tsc clean, build + css-scope + bundle-size PASS, suite 2384 pass / 1 pre-existing `situation.artifacts` fail. **Next: `/gsd:execute-phase 09` → Plan 09-02 (UI tier). BLOCKER 1 reminder: 09-02 deletes the still-intact `situation.artifacts` handler + registration atomically with its `usePluginData` UI caller.**
+
+---
+
 **▶ RESUME HERE (2026-05-28 PM — VIEW-DRIVEN COMPILE REWORK SHIPPED + LIVE-VERIFIED on BEAAA).**
 Read MemPalace `clarity_pack/decisions` drawer `drawer_clarity_pack_decisions_8f2f846b8ace835af1cc8c30` ("View-driven compile rework") FIRST. Bottom line:
 
@@ -1275,7 +1280,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 89%
+**Progress:** [█████████░] 88%
 
 ## Performance Metrics
 
@@ -1296,6 +1301,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 05-distribution-polish P05-07 | 19min | 2 tasks | 17 files |
 | Phase 08 P01 | 16 | 3 tasks | 9 files |
 | Phase 08 P02 | 16 | 3 tasks | 13 files |
+| Phase 09 P01 | 24 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -1387,7 +1393,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-05-31T05:40:35.149Z
+**Last session:** 2026-05-31T08:48:28.691Z
 
 **Stopped at:** Phase 9 context gathered
 
