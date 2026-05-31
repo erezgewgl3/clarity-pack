@@ -41,7 +41,19 @@ import { extractCompanyPrefixFromPathname } from './use-resolved-company-id.ts';
 
 const LONG_PRESS_MS = 500;
 
-export function RefChip({ refId }: { refId: string }): React.ReactElement {
+export function RefChip({
+  refId,
+  variant = 'full',
+}: {
+  refId: string;
+  // Quick 260531-b8w (004-B) — the TWO-weight chip. 'full' (default) keeps the
+  // bordered chip + status badge used by standalone / anchored-to refs and the
+  // TL;DR follow-on chips. 'inline' renders the LIGHT mid-sentence form (no
+  // border, a status DOT, underline-on-hover) so dense body ref-runs read as
+  // prose. The hover-peek wrap + click-to-navigate anchor are SHARED by both
+  // forms (the no-rabbit-hole mechanic stays on both — design contract).
+  variant?: 'full' | 'inline';
+}): React.ReactElement {
   // Plan 02-09 Task 2 — resolver sources the viewer id even when host bridge
   // is still null in detail-tab slots. While the resolver is in flight we
   // pass an empty params object — opt-in-guard's extractUserId returns null,
@@ -171,11 +183,28 @@ export function RefChip({ refId }: { refId: string }): React.ReactElement {
       </span>
     </span>
   );
+  // Quick 260531-b8w (004-B, sketch 004 .iref lines 70-78) — the light inline
+  // label: id (mono) + a small status-colored dot + plain title, NO bordered
+  // status badge. The dot replaces the badge; the underline (CSS) replaces the
+  // box border. Used when variant === 'inline' (mid-sentence body refs).
+  const inlineLabel = (
+    <span className="clarity-ref-chip-label">
+      <span className="clarity-ref-chip-id">{card.id}</span>
+      <span className="clarity-ref-chip-dot" data-status={card.status} />
+      {hasTitle ? <span className="clarity-ref-chip-ti"> {card.title}</span> : null}
+    </span>
+  );
+  // 'full' keeps the bordered chip; 'inline' adds the --inline modifier so the
+  // light CSS (border-none + underline-on-hover) wins. Both retain the wrap +
+  // peek + nav anchor.
+  const chipLabel = variant === 'inline' ? inlineLabel : label;
+  const chipClassName =
+    variant === 'inline' ? 'clarity-ref-chip clarity-ref-chip--inline' : 'clarity-ref-chip';
   if (!companyPrefix) {
     return (
       <span {...wrapProps}>
-        <span className="clarity-ref-chip" data-status={card.status}>
-          {label}
+        <span className={chipClassName} data-status={card.status}>
+          {chipLabel}
         </span>
         {peek}
       </span>
@@ -185,10 +214,10 @@ export function RefChip({ refId }: { refId: string }): React.ReactElement {
     <span {...wrapProps}>
       <a
         {...nav.linkProps(`/${companyPrefix}/issues/${card.id}`)}
-        className="clarity-ref-chip"
+        className={chipClassName}
         data-status={card.status}
       >
-        {label}
+        {chipLabel}
       </a>
       {peek}
     </span>

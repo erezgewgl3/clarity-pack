@@ -58,9 +58,13 @@ export function ProseWithRefChips({ body }: { body: string | null | undefined })
   const { pathname } = useHostLocation();
   const companyPrefix = extractCompanyPrefixFromPathname(pathname);
   if (!body) return null;
+  // Quick 260531-b8w (004-B) — the raw task body's mid-sentence refs render the
+  // LIGHT inline chip (refVariant="inline") so a dense ref-run reads as prose.
+  // Standalone anchored-to refs (ref-card.tsx) and the TL;DR follow-on refs keep
+  // the full bordered chip (default 'full'). Hover-peek + click navigate on both.
   return (
     <div className="clarity-reader-prose">
-      <SafeMarkdown text={body} linkRefs companyPrefix={companyPrefix} />
+      <SafeMarkdown text={body} linkRefs companyPrefix={companyPrefix} refVariant="inline" />
     </div>
   );
 }

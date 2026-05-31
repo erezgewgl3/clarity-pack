@@ -34,7 +34,16 @@ import {
 // nav.linkProps anchor it already used (no new XSS surface).
 import { RefChip } from './ref-chip.tsx';
 
-function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[] {
+// Quick 260531-b8w (004-B) — refVariant is threaded through renderBlock →
+// renderInline so a `ref` span renders the matching RefChip form. Defaults to
+// 'full' everywhere; ProseWithRefChips passes 'inline' for the Reader body so
+// mid-sentence refs render the light inline chip. All other callers (TL;DR
+// strip, chat message-thread) stay byte-unchanged (default 'full').
+function renderInline(
+  spans: InlineSpan[],
+  keyPrefix: string,
+  refVariant: 'full' | 'inline' = 'full',
+): React.ReactNode[] {
   return spans.map((span, i) => {
     const key = `${keyPrefix}-${i}`;
     switch (span.type) {
@@ -45,9 +54,9 @@ function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[]
         // The TL;DR's `**[BEAAA-933](/BEAAA/issues/BEAAA-933)**` headline now
         // resolves the link to a titled chip INSIDE the bold (was: literal
         // markdown text inside <strong>).
-        return <strong key={key}>{renderInline(span.spans, `${key}-s`)}</strong>;
+        return <strong key={key}>{renderInline(span.spans, `${key}-s`, refVariant)}</strong>;
       case 'em':
-        return <em key={key}>{renderInline(span.spans, `${key}-e`)}</em>;
+        return <em key={key}>{renderInline(span.spans, `${key}-e`, refVariant)}</em>;
       case 'code':
         return (
           <code key={key} className="clarity-md-code">
@@ -67,7 +76,7 @@ function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[]
             href={span.href}
             {...(isRelative ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
           >
-            {renderInline(span.spans, `${key}-l`)}
+            {renderInline(span.spans, `${key}-l`, refVariant)}
           </a>
         );
       }
@@ -75,7 +84,9 @@ function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[]
         // Plan 07-04 (D-I31-02) — render the validated PREFIX-NNN token as a
         // clickable titled chip. RefChip resolves {id,title,status} via the
         // 'resolve-refs' handler and renders `ID — title` (Task 1).
-        return <RefChip key={key} refId={span.refId} />;
+        // Quick 260531-b8w (004-B) — thread the variant so the Reader body's
+        // mid-sentence refs render the light inline chip.
+        return <RefChip key={key} refId={span.refId} variant={refVariant} />;
       case 'text':
       default:
         return <React.Fragment key={key}>{span.text}</React.Fragment>;
@@ -83,14 +94,18 @@ function renderInline(spans: InlineSpan[], keyPrefix: string): React.ReactNode[]
   });
 }
 
-function renderBlock(block: MarkdownBlock, idx: number): React.ReactElement {
+function renderBlock(
+  block: MarkdownBlock,
+  idx: number,
+  refVariant: 'full' | 'inline' = 'full',
+): React.ReactElement {
   const key = `b-${idx}`;
   switch (block.type) {
     case 'heading': {
       const Tag = (block.level === 3 ? 'h3' : 'h4') as 'h3' | 'h4';
       return (
         <Tag key={key} className="clarity-md-heading">
-          {renderInline(block.spans, `${key}-h`)}
+          {renderInline(block.spans, `${key}-h`, refVariant)}
         </Tag>
       );
     }
@@ -99,7 +114,7 @@ function renderBlock(block: MarkdownBlock, idx: number): React.ReactElement {
       return (
         <ListTag key={key} className="clarity-md-list">
           {block.items.map((item, j) => (
-            <li key={`${key}-li-${j}`}>{renderInline(item.spans, `${key}-li-${j}`)}</li>
+            <li key={`${key}-li-${j}`}>{renderInline(item.spans, `${key}-li-${j}`, refVariant)}</li>
           ))}
         </ListTag>
       );
@@ -108,7 +123,7 @@ function renderBlock(block: MarkdownBlock, idx: number): React.ReactElement {
     default:
       return (
         <p key={key} className="clarity-md-paragraph">
-          {renderInline(block.spans, `${key}-p`)}
+          {renderInline(block.spans, `${key}-p`, refVariant)}
         </p>
       );
   }
@@ -129,12 +144,17 @@ export function SafeMarkdown({
   text,
   linkRefs,
   companyPrefix,
+  refVariant = 'full',
 }: {
   text: string | null | undefined;
   linkRefs?: boolean;
   companyPrefix?: string | null;
+  // Quick 260531-b8w (004-B) — which RefChip form a `ref` span renders. Defaults
+  // to 'full' so existing callers (TL;DR strip, chat message-thread) are
+  // byte-unchanged; ProseWithRefChips passes 'inline' for the Reader body.
+  refVariant?: 'full' | 'inline';
 }): React.ReactElement | null {
   const blocks = parseMarkdownBlocks(text, linkRefs ? { prefix: companyPrefix ?? null } : undefined);
   if (blocks.length === 0) return null;
-  return <div className="clarity-md">{blocks.map((b, i) => renderBlock(b, i))}</div>;
+  return <div className="clarity-md">{blocks.map((b, i) => renderBlock(b, i, refVariant))}</div>;
 }

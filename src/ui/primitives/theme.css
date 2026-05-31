@@ -62,6 +62,20 @@
   color: var(--clarity-fg);
 }
 
+/* Quick 260531-b8w (004-B, sketch 004/index.html variant-b lines 45-47) —
+ * host-native editorial type, SCOPED to the Reader surface ONLY. Chat /
+ * bulletin / situation-room keep the base Geist + Geist Mono + Instrument
+ * Serif declarations above (the standalone chat mockup keeps its lock). The
+ * body switches to the host system-ui sans; the editorial voice (TL;DR / BLUF)
+ * uses Newsreader (real 400/600 weights, true bold not faked); IDs use
+ * JetBrains Mono. The two custom props keep the host-native fonts in one place
+ * — they resolve ONLY on [data-clarity-surface='reader']. */
+[data-clarity-surface='reader'] {
+  font-family: system-ui, -apple-system, sans-serif;
+  --clarity-reader-serif: Newsreader, Georgia, serif;
+  --clarity-reader-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
 [data-clarity-surface] .clarity-state-pill {
   display: inline-flex;
   align-items: center;
@@ -178,6 +192,46 @@
 
 [data-clarity-surface] .clarity-ref-chip[data-status='blocked'] {
   border-left-color: var(--clarity-state-stuck-bg);
+}
+
+/* Quick 260531-b8w (004-B, sketch 004 .iref lines 70-78) — the LIGHT inline
+ * ref form for mid-sentence body refs. No box border, no status badge — a
+ * status-colored DOT replaces the badge and an underline-on-hover replaces the
+ * frame, so a dense ref-run reads as prose (004 demo lines 168-176). The full
+ * bordered .clarity-ref-chip rules above are UNTOUCHED, so standalone /
+ * anchored-to refs + TL;DR follow-on chips keep the full chip. Reader-scoped:
+ * only the Reader body opts in (ProseWithRefChips passes refVariant="inline").
+ * Hover-peek + click-to-navigate are retained on the wrap (shared markup). */
+[data-clarity-surface='reader'] .clarity-ref-chip--inline {
+  display: inline;
+  border: none;
+  padding: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--clarity-line-bright);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+[data-clarity-surface='reader'] .clarity-ref-chip--inline:hover {
+  border-bottom-color: var(--clarity-ink-2);
+}
+
+[data-clarity-surface='reader'] .clarity-ref-chip-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin: 0 1px 1px 3px;
+  vertical-align: middle;
+  background: var(--clarity-line-bright);
+}
+
+[data-clarity-surface='reader'] .clarity-ref-chip-dot[data-status='done'] {
+  background: var(--clarity-state-working-bg);
+}
+
+[data-clarity-surface='reader'] .clarity-ref-chip-dot[data-status='blocked'] {
+  background: var(--clarity-state-stuck-bg);
 }
 
 /* Plan 05-05 Task 2 (D-08 + D-09) — ref-chip hover peek popover. Sibling to
@@ -313,17 +367,40 @@
   font-style: italic;
 }
 
+/* Quick 260531-b8w (004-B, sketch 004 line 47) — TL;DR body in Newsreader 400
+ * (~1.12rem, line-height 1.55), the host's own text serif so the editorial
+ * voice harmonizes with Paperclip instead of importing a foreign face. */
 [data-clarity-surface='reader'] .clarity-tldr-body {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 1.15rem;
-  line-height: 1.5;
+  font-family: var(--clarity-reader-serif);
+  font-weight: 400;
+  font-size: 1.12rem;
+  line-height: 1.55;
   margin: 0 0 0.5rem 0;
+}
+
+/* 004-B line 46 — the BLUF lead (SafeMarkdown's <strong>) is TRUE bold
+ * (Newsreader 600), a real weight, not faked. */
+[data-clarity-surface='reader'] .clarity-tldr-body strong {
+  font-weight: 600;
 }
 
 [data-clarity-surface='reader'] .clarity-tldr-stamp {
   font-size: 0.8rem;
   color: var(--clarity-muted);
   margin: 0;
+}
+
+/* Quick 260531-b8w (004-B) — IDs on the Reader surface read JetBrains Mono.
+ * The SHARED chip-id/card-id/activity-kind rules below use 'Geist Mono' and are
+ * scoped to the bare [data-clarity-surface] (every surface) — chat /
+ * situation-room MUST keep Geist Mono, so those shared rules are left untouched.
+ * These reader-scoped overrides win by being more specific (qualified attribute
+ * value) at the same selector depth; no !important is present on the base
+ * rules, so specificity alone carries the override. */
+[data-clarity-surface='reader'] .clarity-ref-chip-id,
+[data-clarity-surface='reader'] .clarity-ref-card-id,
+[data-clarity-surface='reader'] .clarity-activity-kind {
+  font-family: var(--clarity-reader-mono);
 }
 
 /* Prose with ref chips */
