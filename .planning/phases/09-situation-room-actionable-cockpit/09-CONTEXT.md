@@ -37,7 +37,7 @@ Read `09-SPEC.md` in full before planning.
 - **D-02:** Keep the "Take it myself" item, with **honest framing**. It assigns the issue to the operator (`assigneeUserId`), the row then **leaves the Needs-you group** and renders "with you — handling manually", and it **drops from the unowned/stuck count**. It MUST NOT imply an agent will act (assigning to a human does not trigger agent work on this host). This is the single place `assigneeUserId` (vs `assigneeAgentId`) is used.
 
 ### Empty-group display
-- **D-03:** **Hide empty Working/Idle groups.** When the **Needs-you group is empty**, render one reassuring win-line: "✓ Nothing needs you — N working · M idle". The board reads calm, never alarmingly blank. (Group headers with counts only render for non-empty groups, except the Needs-you win-line.)
+- **D-03:** **Always render all three group headers** (Needs you / Working / Idle), each with its count, even when empty. An empty group shows its header plus a muted "— none —" line. Consistent structure — the operator always sees all three buckets, so a zero in any bucket is itself a signal (e.g. "Working — none" is meaningful). No special win-line; an empty Needs-you simply reads "Needs you · 0 — none".
 
 ### Stand-down aftermath
 - **D-04:** A stood-down (paused) agent **stays visible in the Idle group** with a "paused" marker and a **one-click Resume** that reuses the existing `agents.resumeHeartbeat` action. Pausing is reversible in-place — no trip to classic UI to undo it.

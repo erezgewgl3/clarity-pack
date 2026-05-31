@@ -28,7 +28,7 @@ User selected all four offered gray areas.
 
 ### Empty-group display
 - **Options:** (a) Hide empties + win-line *(recommended)* · (b) Always show all three · (c) Hide all silently
-- **Selected:** (a) Hide empty Working/Idle; when Needs-you is empty show "✓ Nothing needs you — N working · M idle".
+- **Selected:** (b) Always render all three group headers with counts; empty groups show "— none —". (Operator overrode the recommendation — wants all three buckets always visible so a zero in any bucket is itself a signal.)
 
 ### Stand-down aftermath
 - **Options:** (a) Stay visible, paused + Resume *(recommended)* · (b) Vanish · (c) Collapsed "Stood down (N)" subsection
