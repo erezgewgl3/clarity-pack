@@ -929,6 +929,325 @@
   cursor: not-allowed;
 }
 
+/* ===========================================================================
+ * Plan 09-02 — actionable cockpit: three group sections, owner-picker popover,
+ * per-state action buttons, the merged blocked-backlog expander, the paused
+ * marker + Stand-down confirm. All scoped under
+ * [data-clarity-surface='situation-room'] (SCAF-06 / COEXIST-01).
+ * =========================================================================== */
+
+/* ---------- group section headers (Needs you / Working / Idle, D-03) ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-group-section {
+  margin: 1.25rem 0 0.5rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 0.6rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-title {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.45rem;
+  margin: 0;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-needs_you .clarity-group-title {
+  color: #f0c9c0;
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-count {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--clarity-ink-3, #8a8472);
+  border: 1px solid var(--clarity-line, rgba(255, 255, 255, 0.08));
+  border-radius: 2px;
+  padding: 0.1rem 0.45rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--clarity-line, rgba(255, 255, 255, 0.08));
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-needs_you .clarity-group-rule {
+  background: linear-gradient(90deg, color-mix(in oklch, var(--clarity-state-blocked), transparent 55%), transparent);
+}
+[data-clarity-surface='situation-room'] .clarity-group-working .clarity-group-rule {
+  background: linear-gradient(90deg, color-mix(in oklch, var(--clarity-state-running), transparent 60%), transparent);
+}
+[data-clarity-surface='situation-room'] .clarity-group-idle .clarity-group-rule {
+  background: linear-gradient(90deg, color-mix(in oklch, var(--clarity-state-idle), transparent 60%), transparent);
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-meta {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--clarity-ink-3, #8a8472);
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-empty {
+  color: var(--clarity-ink-4, #6b6657);
+  font-style: italic;
+  font-size: 0.88rem;
+  margin: 0.15rem 0 0 0.15rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-group-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ---------- shared button family (R4: gold = ownership/chat; neutral chrome) ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-btn {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.03em;
+  padding: 0.3rem 0.7rem;
+  border-radius: 2px;
+  border: 1px solid var(--clarity-line-bright, rgba(255, 255, 255, 0.2));
+  background: transparent;
+  color: var(--clarity-fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+[data-clarity-surface='situation-room'] .clarity-btn:hover {
+  border-color: var(--clarity-ink-3, #8a8472);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+[data-clarity-surface='situation-room'] .clarity-btn-gold {
+  border-color: var(--clarity-you, #e5c56f);
+  color: var(--clarity-you, #e5c56f);
+}
+
+[data-clarity-surface='situation-room'] .clarity-btn-gold:hover {
+  background: var(--clarity-you-soft, #3d3318);
+}
+
+[data-clarity-surface='situation-room'] .clarity-btn-danger:hover {
+  border-color: var(--clarity-state-blocked);
+  color: #f3b4b4;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-actions {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-moving {
+  flex-basis: 100%;
+  margin: 0.4rem 0 0;
+  color: var(--clarity-ink-3, #8a8472);
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-chain-owned {
+  border-left-color: var(--clarity-state-idle);
+}
+
+/* ---------- paused marker + stand-down confirm (D-04 / R7) ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-employee-paused-marker {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--clarity-state-stale);
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  padding: 0.05rem 0.4rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-confirm-text {
+  color: var(--clarity-fg);
+  font-size: 0.85rem;
+}
+
+/* ---------- owner-picker popover (D-01 / D-02) ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick {
+  position: relative;
+  display: inline-block;
+}
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 240px;
+  background: var(--clarity-bg-2, #15140f);
+  border: 1px solid var(--clarity-line-bright, rgba(255, 255, 255, 0.2));
+  border-radius: 6px;
+  padding: 5px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick-head {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--clarity-ink-3, #8a8472);
+  padding: 6px 9px 4px;
+}
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 9px;
+  color: var(--clarity-fg);
+  font: inherit;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick-item:hover {
+  background: var(--clarity-bg-3, #1b1a14);
+}
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--clarity-state-idle);
+  flex: 0 0 auto;
+}
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick-role {
+  margin-left: auto;
+  color: var(--clarity-ink-3, #8a8472);
+  font-size: 0.74rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick-self {
+  border-top: 1px solid var(--clarity-line, rgba(255, 255, 255, 0.08));
+  margin-top: 3px;
+  color: var(--clarity-you, #e5c56f);
+}
+
+[data-clarity-surface='situation-room'] .clarity-owner-pick-self .clarity-owner-pick-dot {
+  background: var(--clarity-you, #e5c56f);
+}
+
+/* ---------- merged blocked-backlog + critical-path expander (R6) ---------- */
+
+[data-clarity-surface='situation-room'] .clarity-orphans {
+  margin: 0.6rem 0 0;
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-toggle {
+  width: 100%;
+  text-align: left;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--clarity-ink-3, #8a8472);
+  background: transparent;
+  border: 1px dashed var(--clarity-line-bright, rgba(255, 255, 255, 0.2));
+  border-radius: 4px;
+  padding: 0.6rem 0.85rem;
+  cursor: pointer;
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-toggle:hover {
+  color: var(--clarity-ink-2, #b8b0a0);
+  border-color: var(--clarity-ink-4, #6b6657);
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-chev {
+  display: inline-block;
+  margin-right: 0.4rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-narrative {
+  margin: 0 0 0.35rem;
+  color: var(--clarity-ink-2, #b8b0a0);
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--clarity-line, rgba(255, 255, 255, 0.08));
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--clarity-bg), white 1.5%);
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-id {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--clarity-ink-3, #8a8472);
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-title {
+  flex: 1 1 200px;
+  color: var(--clarity-ink-2, #b8b0a0);
+  font-size: 0.88rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-action {
+  color: var(--clarity-fg);
+  font-size: 0.84rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-meta {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+  color: var(--clarity-ink-4, #6b6657);
+}
+
+[data-clarity-surface='situation-room'] .clarity-orphan-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* ---------- CTA cluster (every Clarity surface, opted-out state) ---------- */
 
 [data-clarity-surface] .clarity-cta {
