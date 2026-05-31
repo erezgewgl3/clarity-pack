@@ -40,6 +40,12 @@ import { useToast } from '../../primitives/toast.tsx';
 import { buildChatDeepLink } from '../chat/deep-link.mjs';
 import { OwnerPickerPopover } from './owner-picker-popover.tsx';
 
+/** DOM id stamped on the row root so the needs-you banner's [Assign first] can
+ *  scroll to the oldest-unowned row and open its picker (mockup parity / R5). */
+function rowDomId(agentId: string): string {
+  return `clarity-room-row-${agentId}`;
+}
+
 // Mirror of the worker builder's SituationEmployeeRow
 // (src/worker/situation/build-employees-rollup.ts — Plan 08-01 + 09-01). Kept
 // structural here so the UI bundle does not import worker types.
@@ -212,7 +218,11 @@ export function EmployeeRow({
   // ---- render --------------------------------------------------------------
 
   return (
-    <div className={`clarity-employee-row clarity-state-${row.state}`} data-state={row.state}>
+    <div
+      id={rowDomId(row.agentId)}
+      className={`clarity-employee-row clarity-state-${row.state}`}
+      data-state={row.state}
+    >
       <span className="clarity-employee-state-dot" aria-hidden="true" />
       <span className="clarity-employee-name">{row.name}</span>
       <span className="clarity-employee-role">{row.role}</span>

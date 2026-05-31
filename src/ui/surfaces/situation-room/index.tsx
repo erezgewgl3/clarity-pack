@@ -1,31 +1,24 @@
 // src/ui/surfaces/situation-room/index.tsx
 //
-// Plan 02-04 Task 2 — Situation Room page (ROOM-01..08).
+// Plan 09-02 — the actionable cockpit. ONE three-group people view (Needs you /
+// Working / Idle, always all three per D-03), fed solely by situation_employees
+// + the worker `group` field (R2). Every surfaced action performs or is absent
+// (R4). Assign owner / Stand down / Resume force-refetch the snapshot so the
+// row visibly re-groups (the mockup's live behavior).
 //
-// Renders the agent grid (one card per Paperclip employee), Critical Path
-// strip, and Awaiting-You inbox pill — all served from the 60s materialized
-// snapshot. Polling is leader-elected via BroadcastChannel (ROOM-07): only
-// one tab in the browser fetches; followers receive the leader's payload
-// via postMessage. Visibility-paused (ROOM-06).
+// REMOVED in this plan (R1 + BLOCKER 1):
+//   - the dead AgentCard grid (payload.employees, fed by the dead recompute job)
+//   - the usePluginData('situation.artifacts') fetch + artifactsByAgent map
+//   - the situation.artifacts WORKER handler (deleted ATOMICALLY in this same
+//     commit — see Task 2: src/worker/handlers/situation-artifacts.ts +
+//     src/worker.ts registration are removed alongside this UI caller, so no
+//     wave-gap exists where the UI calls a removed handler)
+//   - the standalone <OrgBlockedBacklogBanner>, <CriticalPathStrip>, and
+//     <AwaitingYouPill> mounts — org-backlog + critical-path are now ONE
+//     "+N more blocked issues" expander at the end of Needs-you (R6).
 //
-// Cadence is configurable via instanceConfigSchema.situationRefreshIntervalMs
-// (D-03), read by the useInstanceConfig FALLBACK wrapper (per 02-01 Check F).
-//
-// Opt-in gated (OPTIN-02) — opted-out users see <EnableClarityCta />.
-//
-// Plan 06.1-03 (ROOM-10) — the per-agent inline ArtifactChipRow REPLACES the
-// Phase 2 bottom <ArtifactsShippedShelf /> (D-02). artifacts-shipped-shelf.tsx
-// is deleted; the import + mount on this surface are removed. The per-agent
-// artifact union is fetched once at the surface root via
-// `usePluginData('situation.artifacts')` (Plan 06.1-02 worker handler) and
-// threaded into each AgentCard.
-//
-// Plan 06.1-03 (ROOM-09 / ROOM-11) — `viewerUserId` resolved via
-// useResolvedUserId (Plan 02-09) is threaded into CriticalPathStrip so the
-// per-row Take-Ownership button can disable + dispatch the
-// `agent.takeOwnership` action server-side.
-//
-// Visual fidelity target: sketches/paperclip-fix-situation-room.html.
+// Opt-in gated (OPTIN-02). Leader-elected polling preserved (ROOM-07). Cadence
+// configurable via instanceConfigSchema.situationRefreshIntervalMs (D-03).
 
 import * as React from 'react';
 import {
@@ -45,59 +38,31 @@ import { usePollWithLeader } from '../../primitives/use-poll-with-leader.ts';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
-import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { PauseBanner } from '../reader/pause-banner.tsx';
-import { CriticalPathStrip } from './critical-path-strip.tsx';
-import { AgentCard, type AgentEmployee } from './agent-card.tsx';
-import { AwaitingYouPill } from './awaiting-you-pill.tsx';
-import {
-  OrgBlockedBacklogBanner,
-  type OrgBlockedBacklog,
-} from './org-blocked-backlog-banner.tsx';
-// Phase 8 (Plan 08-02) — people-first cockpit: always-visible needs-you banner +
-// per-employee row strip, mounted ABOVE the repositioned org-backlog panel.
+// Phase 9 (Plan 09-02) — the people-first cockpit: un-frozen needs-you banner +
+// the grouped (Needs you / Working / Idle) row strip. The flat strip, the dead
+// AgentCard grid, the org-backlog banner, the critical-path strip, and the
+// awaiting-you pill are all gone (R1 / R6).
 import { NeedsYouBanner, type NeedsYou } from './needs-you-banner.tsx';
 import { EmployeeRowStrip } from './employee-row-strip.tsx';
 import type { SituationEmployeeRow } from './employee-row.tsx';
-import type { Artifact } from './artifact-chip-row.tsx';
+import type { OrgBlockedBacklog } from './org-blocked-backlog-banner-types.ts';
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
 
 type SituationData = {
-  employees: AgentEmployee[];
-  critical_path: BlockerChainResult[];
-  artifacts_shipped_today: unknown[];
-  awaiting_you_count: number;
-  awaiting_you_oldest_age: number | null;
-  narrative?: string | null;
-  taken_at?: string;
-  // Plan 07-03 (Phase 7 ITEM 4) — the org-level blocked backlog computed in the
-  // situation.snapshot DATA HANDLER and attached on every call (rides even when
-  // the materialized snapshot row is empty/stale — the recompute job is dead on
-  // this host).
-  org_blocked_backlog?: OrgBlockedBacklog | null;
-  // Plan 08-01 (Phase 8) — per-employee row strip + pre-computed needs-you banner
-  // payload, attached on every situation.snapshot call alongside org_blocked_backlog.
-  // NOTE (Plan 08-02 fix): this rides under `situation_employees`, NOT `employees`
-  // — the latter is the ROOM-01..08 agent-grid AgentEmployee[] and must stay
-  // byte-identical. The Phase 8 rollup is a DIFFERENT shape (SituationEmployeeRow).
+  // Plan 09-01 (Phase 8/9) — the per-employee rollup, each row carrying its
+  // worker-assigned `group` (R2) + `isPaused` (D-04). This is the SOLE feed for
+  // the three-group people view.
   situation_employees?: SituationEmployeeRow[];
   needsYou?: NeedsYou;
+  // Plan 07-03 — the org-level blocked backlog; folded into the Needs-you
+  // expander (R6). critical_path's narrative is folded into the same expander.
+  org_blocked_backlog?: OrgBlockedBacklog | null;
+  critical_path?: BlockerChainResult[];
+  narrative?: string | null;
+  taken_at?: string;
 };
-
-/**
- * Plan 06.1-03 — payload shape from Plan 06.1-02 `situation.artifacts`
- * handler. Empty per-agent buckets are OMITTED from the map (key-presence
- * ⇒ non-empty array contract documented in 06.1-02-SUMMARY).
- */
-type SituationArtifactsData =
-  | {
-      kind: 'situation-artifacts';
-      windowDuration: '24h' | '7d' | '30d';
-      artifacts: Record<string, Artifact[]>;
-    }
-  | { error: 'OPT_IN_REQUIRED' | string }
-  | null;
 
 function generateTabId(): string {
   try {
@@ -204,57 +169,31 @@ function SituationRoomBody({
   userId: string;
   intervalMs: number;
 }): React.ReactElement {
-  // Plan 06.1-03 — refreshKey is bumped by CriticalPathStrip's Take-Ownership
-  // success path. Bumping it forces both usePluginData('situation.snapshot')
-  // and usePluginData('situation.artifacts') to refetch (the SDK keys on
-  // params identity; injecting `_refreshKey` invalidates the cache the same
-  // way Chat's index.tsx does for chat.topics — Plan 05-08 D-20 pattern).
+  // Plan 09-02 — refreshKey is bumped by a successful situation.assignOwner /
+  // stand-down / resume (onAssignSuccess). Bumping it forces
+  // usePluginData('situation.snapshot') to refetch so the row re-groups (the
+  // mockup's "jumps into Working" live behavior). Same force-refetch idiom as
+  // Chat's index.tsx (Plan 05-08 D-20).
   const [refreshKey, setRefreshKey] = React.useState(0);
   const forceRefetch = React.useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  // Plan 06.1-03 — viewerUserId for Take-Ownership. The detail-tab-slot
-  // host-bridge gap (Plan 02-09) means useHostContext().userId may be null
-  // at first paint; useResolvedUserId falls back to a same-origin
-  // /api/auth/get-session fetch. Disabled-button gating in CriticalPathStrip.
-  const resolved = useResolvedUserId();
-  const viewerUserId: string | null = resolved.userId;
-
-  // Plan 08-02 (Phase 8) — companyPrefix + navigate for the NeedsYouBanner +
-  // EmployeeRowStrip open-chat deep links (reuses the ROOM-09 buildChatDeepLink
-  // employee-only carrier, same pattern as OrgBlockedBacklogBanner).
+  // Plan 08-02 — companyPrefix + navigate for the grouped strip + banner
+  // (open-chat / open-issue / assign-work deep links reuse the employee-only
+  // buildChatDeepLink carrier).
   const { pathname } = useHostLocation();
   const { navigate } = useHostNavigation();
   const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
 
-  // The actual snapshot fetch is via usePluginData (SDK-blessed bridge call).
-  // usePluginData re-fetches when params change; we let it own the network
-  // round-trip + cache key. The leader-election guard lives in
-  // usePollWithLeader, which we use below as a coordination side-channel so
-  // followers receive the leader's payload via BroadcastChannel postMessage
-  // (ROOM-07). This composition means:
-  //   - Every tab calls usePluginData → host bridge dedupes per (key, params)
-  //   - usePollWithLeader's leader.broadcast() echoes the leader's data to
-  //     followers, so a follower's UI updates immediately without waiting for
-  //     its own usePluginData refetch.
-  // The redundancy is intentional belt-and-suspenders; future v2 may switch
-  // to a single-source via usePoll once the SDK exposes a non-hook fetcher.
+  // The snapshot fetch (SDK-blessed bridge call). usePollWithLeader is the
+  // leader-election + follower-broadcast side-channel (ROOM-07); usePluginData
+  // owns the network round-trip + cache key.
   const { data: snapshotData } = usePluginData<SituationData | { error: 'OPT_IN_REQUIRED' } | null>(
     'situation.snapshot',
     { userId, companyId, _refreshKey: refreshKey },
   );
 
-  // Plan 06.1-03 (ROOM-10) — per-agent artifact union. Empty per-agent
-  // buckets are omitted from the map; consumers use `artifacts[agentId] ?? []`.
-  const { data: artifactsData } = usePluginData<SituationArtifactsData>(
-    'situation.artifacts',
-    { userId, companyId, _refreshKey: refreshKey },
-  );
-
-  // usePollWithLeader is referenced primarily for its leader-election +
-  // follower-broadcast bridge — its fetcher is a thin pass-through that
-  // mirrors snapshotData so followers also receive the data via the channel.
   const followerBridge = usePollWithLeader<SituationData | null>({
     key: 'situation.snapshot',
     fetcher: async () => (snapshotData as SituationData | null) ?? null,
@@ -284,68 +223,33 @@ function SituationRoomBody({
     return <p className="clarity-room-loading">Recomputing…</p>;
   }
 
-  // Plan 06.1-03 — extract the per-agent artifact map. Error-shape payloads
-  // (OPT_IN_REQUIRED) degrade silently to an empty map; the agent grid still
-  // renders with no per-card chip rows.
-  const artifactsByAgent: Record<string, Artifact[]> =
-    artifactsData &&
-    typeof artifactsData === 'object' &&
-    'kind' in artifactsData &&
-    artifactsData.kind === 'situation-artifacts'
-      ? artifactsData.artifacts
-      : {};
+  const employees = payload.situation_employees ?? [];
 
   return (
     <>
-      {/* Plan 08-02 (Phase 8) — LOCKED mount order: the always-visible needs-you
-       *  banner carries urgency, the per-employee row strip is the people-first
-       *  cockpit, and the Plan 07-03 org-backlog banner is repositioned BELOW
-       *  them as a secondary collapsed panel (defaultExpanded={false}). The
-       *  ROOM-01..08 agent grid below stays byte-identical. */}
+      {/* Plan 09-02 — un-frozen banner (R5): urgent + Assign-first picker for the
+       *  unowned case, chat deep-link for the all-owned case, neutral only when
+       *  count is genuinely 0. */}
       <NeedsYouBanner
         needsYou={payload.needsYou ?? { count: 0, topAction: null }}
-        employees={payload.situation_employees ?? []}
+        employees={employees}
         companyPrefix={companyPrefix}
         navigate={navigate}
       />
+      {/* Plan 09-02 — the ONE three-group people view (D-03). The org-backlog +
+       *  critical-path expander (R6) lives at the end of Needs-you, rendered by
+       *  the strip. onAssignSuccess threads forceRefetch so a row re-groups
+       *  live after an assign/stand-down/resume. */}
       <EmployeeRowStrip
-        employees={payload.situation_employees ?? []}
+        employees={employees}
         companyPrefix={companyPrefix}
+        companyId={companyId}
+        userId={userId}
         navigate={navigate}
+        onAssignSuccess={forceRefetch}
+        orgBacklog={payload.org_blocked_backlog ?? null}
+        criticalPathNarrative={payload.narrative ?? null}
       />
-      {/* Plan 07-03 (Phase 7 ITEM 4 / D-I4-01) — org-truth banner, repositioned
-       *  BELOW the Phase 8 strip and pinned collapsed (defaultExpanded={false})
-       *  since the NeedsYouBanner now carries urgency. Renders nothing when
-       *  there are zero blocked issues. */}
-      <OrgBlockedBacklogBanner
-        backlog={payload.org_blocked_backlog ?? null}
-        companyId={companyId}
-        defaultExpanded={false}
-      />
-      <header className="clarity-room-header">
-        <AwaitingYouPill
-          count={payload.awaiting_you_count ?? 0}
-          oldestAge={payload.awaiting_you_oldest_age ?? null}
-        />
-      </header>
-      <CriticalPathStrip
-        chains={payload.critical_path ?? []}
-        narrative={payload.narrative ?? null}
-        viewerUserId={viewerUserId}
-        companyId={companyId}
-        onTakeOwnershipSuccess={forceRefetch}
-      />
-      <div className="clarity-agent-grid">
-        {(payload.employees ?? []).map((emp) => (
-          <AgentCard
-            key={emp.userId}
-            employee={emp}
-            artifacts={artifactsByAgent[emp.userId] ?? []}
-            companyId={companyId}
-            userId={userId}
-          />
-        ))}
-      </div>
     </>
   );
 }

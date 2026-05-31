@@ -1,23 +1,23 @@
 // src/ui/surfaces/situation-room/needs-you-banner.tsx
 //
-// Plan 08-02 Task 2 (Phase 8 people-first cockpit) — ROOM-18.
+// Plan 09-02 Task 2 (R5 / R4 / WARNING 1) — the un-frozen needs-you banner.
 //
-// The ALWAYS-VISIBLE top strip of the Situation Room. Two variants:
-//   - URGENT (needsYou.count > 0): "⚠ N thing(s) need(s) you → <action>" plus an
-//     action button that opens chat with the chain OWNER.
-//   - NEUTRAL (count === 0): "✓ 0 need you — N moving · M idle · K stuck" with the
-//     counts derived from the employees prop.
+// Three variants, driven by the un-frozen 09-01 needsYou (which now counts
+// UNOWNED blockers, not just viewer-owned ones):
+//   - URGENT + UNOWNED (≥1 unowned blocker): "⚠ N stuck · M unowned → assign
+//     owners" + [Assign first ▾]. The button scrolls the oldest-unowned row
+//     into view and OPENS ITS OWNER PICKER (it does NOT build a chat deep-link —
+//     there is no owner to chat with; that was the old dead-button seam).
+//   - URGENT + ALL-OWNED (stuck>0, 0 unowned): "⚠ N stuck, all owned → chase
+//     <owner>" + [Open chat] with the owner (Phase 8 deep-link behavior).
+//   - NEUTRAL (count === 0): "✓ 0 need you — N working · M idle".
 //
-// B1 (namespace correctness): the worker emits topAction.agentId = the AGENT id
-// of the ROW whose chain targets the viewer — NOT the chain owner's id. To open
-// chat with the chain owner we look up that row in `employees` and read its
-// blockerChain.ownerAgentId (an AGENT uuid = focusIssue.assigneeAgentId at the
-// worker tier). We NEVER thread topAction.agentId directly, and NEVER a USER uuid
-// (terminal.userId / viewerUserId) — those are different namespaces.
+// WARNING 1 / R4: [Assign first] is NEVER rendered disabled when count > 0.
+// The old `disabled={!deepLink}` pattern is GONE — when count > 0 the button
+// always performs (picker for unowned, chat for owned).
 //
-// SECURITY (T-08-UI-01 / T-08-UI-02): React text nodes only (no innerHTML);
-// agentId values are consumed only as lookup keys / deep-link args, never as
-// visible text. No expand/collapse state — the banner is a static visible strip.
+// SECURITY (T-09-05): React text nodes only; no dangerouslySetInnerHTML. Agent
+// ids are consumed only as lookup keys / deep-link args, never rendered as text.
 
 import * as React from 'react';
 
@@ -40,50 +40,91 @@ type NeedsYouBannerProps = {
   navigate: (to: string) => void;
 };
 
+/** The locked sentinel an unowned blocker-chain leaf carries as ownerName. */
+const UNASSIGNED = 'Unassigned';
+
+/** DOM id stamped on each EmployeeRow so the banner can scroll to + open the
+ *  oldest-unowned row's picker (mirrors the mockup's #assign-first handler). */
+export function rowDomId(agentId: string): string {
+  return `clarity-room-row-${agentId}`;
+}
+
 export function NeedsYouBanner({
   needsYou,
   employees,
   companyPrefix,
   navigate,
 }: NeedsYouBannerProps): React.ReactElement {
-  return (
-    <header
-      className={`clarity-needs-you-banner ${
-        needsYou.count > 0
-          ? 'clarity-needs-you-urgent'
-          : 'clarity-needs-you-neutral'
-      }`}
-    >
-      {needsYou.count > 0 ? (
-        <NeedsYouUrgent
-          needsYou={needsYou}
-          employees={employees}
-          companyPrefix={companyPrefix}
-          navigate={navigate}
-        />
-      ) : (
-        <NeedsYouNeutral employees={employees} />
-      )}
-    </header>
-  );
-}
-
-function NeedsYouUrgent({
-  needsYou,
-  employees,
-  companyPrefix,
-  navigate,
-}: NeedsYouBannerProps): React.ReactElement {
   const count = needsYou.count;
-  const topAction = needsYou.topAction;
 
-  // B1: resolve the chain OWNER's AGENT uuid by looking up the row that matches
-  // topAction.agentId, then reading ownerRow.blockerChain.ownerAgentId. This is
-  // an AGENT uuid (focusIssue.assigneeAgentId at the worker tier) — never
-  // topAction.agentId (the row's own id), never a USER uuid.
-  const ownerRow = topAction
-    ? employees.find((e) => e.agentId === topAction.agentId)
-    : undefined;
+  // Partition the blocked rows the banner reasons about.
+  const unownedBlocked = employees.filter(
+    (e) => e.group === 'needs_you' && e.blockerChain?.ownerName === UNASSIGNED,
+  );
+  const ownedBlocked = employees.filter(
+    (e) => e.group === 'needs_you' && e.blockerChain && e.blockerChain.ownerName !== UNASSIGNED,
+  );
+  const stuck = unownedBlocked.length + ownedBlocked.length;
+
+  // ---- NEUTRAL (genuinely 0 need you) -------------------------------------
+  if (count === 0) {
+    const moving = employees.filter((e) => e.group === 'working').length;
+    const idle = employees.filter((e) => e.group === 'idle').length;
+    return (
+      <header className="clarity-needs-you-banner clarity-needs-you-neutral">
+        <span className="clarity-needs-you-text">
+          {`✓ 0 need you — ${moving} working · ${idle} idle`}
+        </span>
+      </header>
+    );
+  }
+
+  // ---- URGENT + UNOWNED — [Assign first] opens the oldest-unowned picker ----
+  if (unownedBlocked.length > 0) {
+    // Oldest unowned = the worker already sorted needs_you blocked→…; the
+    // topAction (09-01) prefers the oldest unowned row. Fall back to the first
+    // unowned row in worker order.
+    const target =
+      (needsYou.topAction &&
+        unownedBlocked.find((e) => e.agentId === needsYou.topAction?.agentId)) ||
+      unownedBlocked[0];
+
+    const onAssignFirst = (): void => {
+      if (typeof document === 'undefined' || !target) return;
+      const node = document.getElementById(rowDomId(target.agentId));
+      if (!node) return;
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Open the row's owner picker after the scroll settles (mockup parity).
+      window.setTimeout(() => {
+        const trigger = node.querySelector<HTMLButtonElement>('.clarity-owner-pick-trigger');
+        if (trigger) trigger.click();
+      }, 350);
+    };
+
+    return (
+      <header className="clarity-needs-you-banner clarity-needs-you-urgent">
+        <div className="clarity-needs-you-urgent-body">
+          <span className="clarity-needs-you-text">
+            {`⚠ ${stuck} stuck · ${unownedBlocked.length} unowned → assign owners to clear the board`}
+          </span>
+          <button
+            type="button"
+            className="clarity-needs-you-action clarity-needs-you-assign-first"
+            onClick={onAssignFirst}
+          >
+            Assign first ▾
+          </button>
+        </div>
+      </header>
+    );
+  }
+
+  // ---- URGENT + ALL-OWNED — [Open chat] with the owner (Phase 8 behavior) ---
+  const ownerRow =
+    (needsYou.topAction &&
+      ownedBlocked.find((e) => e.agentId === needsYou.topAction?.agentId)) ||
+    ownedBlocked[0];
+  const ownerName = ownerRow?.blockerChain?.ownerName ?? '';
   const ownerAgentId = ownerRow?.blockerChain?.ownerAgentId ?? null;
   const deepLink = ownerAgentId
     ? buildChatDeepLink({
@@ -93,48 +134,28 @@ function NeedsYouUrgent({
       })
     : null;
 
-  const noun = count === 1 ? 'thing' : 'things';
-  const verb = count === 1 ? 'needs' : 'need';
-  const actionText = topAction ? topAction.humanAction : '';
+  const onChaseOwner = (): void => {
+    if (deepLink) navigate(deepLink.to);
+  };
 
   return (
-    <div className="clarity-needs-you-urgent-body">
-      <span className="clarity-needs-you-text">
-        {`⚠ ${count} ${noun} ${verb} you → ${actionText}`}
-      </span>
-      <button
-        type="button"
-        className="clarity-needs-you-action"
-        disabled={!deepLink}
-        onClick={() => {
-          if (deepLink) navigate(deepLink.to);
-        }}
-      >
-        Open chat
-      </button>
-    </div>
-  );
-}
-
-function NeedsYouNeutral({
-  employees,
-}: {
-  employees: SituationEmployeeRow[];
-}): React.ReactElement {
-  // Operator-friendly grouping for the calm message:
-  //   moving = running | reviewing · idle = idle | stale · stuck = blocked
-  let moving = 0;
-  let idle = 0;
-  let stuck = 0;
-  for (const e of employees) {
-    if (e.state === 'running' || e.state === 'reviewing') moving += 1;
-    else if (e.state === 'idle' || e.state === 'stale') idle += 1;
-    else if (e.state === 'blocked') stuck += 1;
-  }
-
-  return (
-    <span className="clarity-needs-you-text">
-      {`✓ 0 need you — ${moving} moving · ${idle} idle · ${stuck} stuck`}
-    </span>
+    <header className="clarity-needs-you-banner clarity-needs-you-urgent">
+      <div className="clarity-needs-you-urgent-body">
+        <span className="clarity-needs-you-text">
+          {ownerName
+            ? `⚠ ${stuck} stuck, all owned → chase ${ownerName}`
+            : `⚠ ${stuck} stuck, all owned`}
+        </span>
+        {deepLink ? (
+          <button
+            type="button"
+            className="clarity-needs-you-action clarity-needs-you-chase"
+            onClick={onChaseOwner}
+          >
+            Open chat
+          </button>
+        ) : null}
+      </div>
+    </header>
   );
 }

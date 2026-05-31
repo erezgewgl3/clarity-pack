@@ -880,19 +880,10 @@ const manifest: PaperclipPluginManifestV1 = {
         description:
           'BULL-01: IANA timezone for the 06:30 daily bulletin compile. Default Asia/Jerusalem (2026-05-28 — both founders work in Israel). Now wired through computeNextDueAt(now, tz); change this value (any IANA zone, e.g. America/New_York) and the next compile-bulletin tick recomputes next_due_at in the new zone.',
       },
-      // Phase 6.1 ROOM-10 (D-05) — Situation Room per-agent artifact chip row
-      // window. Mirrors the Phase 2 D-03 situationRefreshIntervalMs shape. The
-      // situation.artifacts data handler reads this at dispatch time; unknown
-      // / out-of-enum values coerce to '24h' at handler entry (T-06.1-10
-      // mitigation -- never trust the raw config string in SQL). 24h matches
-      // the Surface 2 mockup's verbatim "Artifacts shipped today" copy.
-      situationArtifactsWindow: {
-        type: 'string',
-        enum: ['24h', '7d', '30d'],
-        default: '24h',
-        description:
-          'Window for the Situation Room per-agent artifact chip row (ROOM-10). Default 24h matches the Surface 2 verbatim copy.',
-      },
+      // Plan 09-02 (R1 / BLOCKER 1) — the situationArtifactsWindow key was
+      // REMOVED here. It only fed the deleted situation.artifacts data handler
+      // (the dead AgentCard grid's per-agent artifact chip row). The handler +
+      // its UI caller are gone in this plan, so the config key is dead too.
     },
   },
   // Plan 09-01 — the situation-snapshot 60s cron job (Plan 02-04 Task 2; jobKey

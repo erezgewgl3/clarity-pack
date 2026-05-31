@@ -200,18 +200,19 @@ import {
   registerSituationAssignOwner,
   type SituationAssignOwnerCtx,
 } from './worker/handlers/situation-assign-owner.ts';
-// Phase 6.1 ROOM-10 -- situation.artifacts: per-agent union of deliverables
-// (host ctx.issues.documents.list per agent) + chat-attachments (ONE bulk
-// SQL JOIN of plugin_clarity_pack_cdd6bda4bd.chat_message_attachments to
-// chat_topics; PRIM-01 by construction). 24h-sliding window by default,
-// configurable via instanceConfigSchema.situationArtifactsWindow (allowed:
-// 24h / 7d / 30d). Powers the new per-agent inline <ArtifactChipRow> in
-// the Situation Room. CTT-07 invariant by construction -- pinned by
-// runtime spy (Test 11) AND source-grep companion test.
+// Plan 09-02 (R4 / R7) — agents.pauseHeartbeat (Stand down) + issues.requestWakeup
+// (Wake): the two real write paths the actionable cockpit's idle/stale + blocked-
+// owned rows dispatch. No new capability (agents.pause + issues.wakeup already
+// declared); no version bump. Mirror agents.resumeHeartbeat's THROW-on-failure
+// contract so the UI callers degrade gracefully.
 import {
-  registerSituationArtifacts,
-  type SituationArtifactsCtx,
-} from './worker/handlers/situation-artifacts.ts';
+  registerAgentPauseHeartbeat,
+  type AgentPauseHeartbeatCtx,
+} from './worker/handlers/agent-pause-heartbeat.ts';
+import {
+  registerIssueRequestWakeup,
+  type IssueRequestWakeupCtx,
+} from './worker/handlers/issue-request-wakeup.ts';
 // Quick task 260528-mn0 -- agents.resumeHeartbeat action handler. Both the
 // paused-agent banner (Reader + chat header) and the chat Quick Action row
 // call usePluginAction('agents.resumeHeartbeat'); the key was never registered
@@ -373,16 +374,19 @@ const plugin = definePlugin({
     // clients as agent.takeOwnership (issues, agents, db for opt-in-guard).
     registerSituationAssignOwner(ctx as unknown as SituationAssignOwnerCtx);
 
-    // ---- Phase 6.1 ROOM-10 -- situation.artifacts data handler -------------
-    // Per-agent union of deliverables (ctx.issues.documents.list per agent;
-    // bounded by N agents per company) + chat-attachments (ONE bulk JOIN
-    // of chat_message_attachments to chat_topics; PRIM-01 by construction).
-    // 24h-sliding window default; configurable via the new
-    // instanceConfigSchema.situationArtifactsWindow key (24h / 7d / 30d).
-    // Powers the inline <ArtifactChipRow> on each AgentCard (replaces the
-    // bottom artifact shelf per D-02). CTT-07 invariant by construction --
-    // pinned by runtime spy (Test 11) and source-grep companion test.
-    registerSituationArtifacts(ctx as unknown as SituationArtifactsCtx);
+    // ---- Plan 09-02 (R1 / BLOCKER 1) — situation.artifacts handler REMOVED ---
+    // The dead AgentCard grid was situation.artifacts' only consumer; both the
+    // UI fetch and this worker handler are deleted ATOMICALLY in this same plan
+    // (no wave-gap where the UI calls a removed handler). The 24h artifact-chip
+    // window + its instanceConfigSchema key are gone with it.
+
+    // ---- Plan 09-02 (R4 / R7) — Stand down + Wake action handlers -----------
+    // agents.pauseHeartbeat backs the idle/stale row's "Stand down" (behind a
+    // confirm dialog); issues.requestWakeup backs the blocked-owned row's
+    // "Wake". Both make the cockpit's buttons real actions (R4 — no dead
+    // buttons). Opt-in-guard wrapped; THROW-on-failure so the UI degrades.
+    registerAgentPauseHeartbeat(ctx as unknown as AgentPauseHeartbeatCtx);
+    registerIssueRequestWakeup(ctx as unknown as IssueRequestWakeupCtx);
 
     // ---- Quick task 260528-mn0 -- agents.resumeHeartbeat action handler -----
     // Resolves the Editor-Agent UUID (pause-banner caller) or honors an
