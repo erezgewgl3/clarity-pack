@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
-status: phase-complete
-stopped_at: Phase 8 CLOSED & VERIFIED LIVE on BEAAA 2026-05-30 (v1.2.0 shipped) — next milestone per /gsd:progress
-last_updated: "2026-05-31T05:05:53Z"
+status: executing
+stopped_at: Phase 9 context gathered
+last_updated: "2026-05-31T05:40:35.224Z"
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 8
   total_plans: 63
   completed_plans: 57
-  percent: 89
+  percent: 80
 ---
 
 # State: Clarity Pack
@@ -24,6 +24,7 @@ Phase 8 shipped end-to-end. v1.2.0 deployed to BEAAA via DEPLOY-RUNBOOK Path A (
 **Shipped:** per-employee row strip (18 rows, idle-loud sort blocked→stale→idle→reviewing→running) + always-visible needs-you banner, mounted ABOVE the Phase 7 ROOM-12 org-blocked-backlog (pinned collapsed). ROOM-13..18 → Implemented.
 
 **Live findings (recorded in 08-VERIFICATION.md):**
+
 - The people-first strip is computed FRESH per request, so the full cockpit renders even though the materialized-snapshot job is dead. The legacy ROOM-01..08 agent grid renders empty on cold-start (dead-job path) — **pre-existing, byte-identical to the v1.1.11 path (proven at `d526987`), NOT a Phase 8 regression**.
 - M3 disabled-degrade case N/A — every blocked chain had a non-null `ownerAgentId` (= focusIssue.assigneeAgentId per B1), so open-chat buttons are correctly ENABLED; click deep-links to `/BEAAA/chat#h=<base64 {employee:agentId}>`, chat opens scoped.
 - NO_UUID_LEAK + scoped CSS + zero new migrations + zero dependency changes all confirmed live.
@@ -43,6 +44,7 @@ Phase 8 Plan 02 executed on master (sequential, 3 tasks, 5 commits `4ff8f95`→`
 **Covers:** ROOM-13/14/15/16/17/18 at UI tier.
 
 **Key decisions:**
+
 - **[Rule 1 fix]** Plan 08-01 clobbered the ROOM-01..08 agent-grid `employees` (`AgentEmployee[]`) with its rollup (`SituationEmployeeRow[]`); resolved by riding the rollup under a distinct `situation_employees` key in `situation.snapshot`. Agent grid stays byte-identical.
 - **B1 namespace correctness held at UI tier:** AGENT uuid (`blockerChain.ownerAgentId`) threaded into `buildChatDeepLink`, never a USER uuid / `topAction.agentId`.
 - **Bundle ceiling:** actual 742,840 B → recalibrated to 729 kB (746,496 B); under 740 kB sanity ceiling; no synthetic 724 kB cap. Version stays **1.1.11** (bump is Plan 08-03's job).
@@ -1385,9 +1387,9 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-05-30T15:04:41.903Z
+**Last session:** 2026-05-31T05:40:35.149Z
 
-**Stopped at:** Phase 6.1 UI-SPEC approved
+**Stopped at:** Phase 9 context gathered
 
 **Last session (prior):** 2026-05-19T21:35:31.176Z
 
