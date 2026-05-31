@@ -590,7 +590,16 @@ const manifest: PaperclipPluginManifestV1 = {
   // focusLine voice = Reader voice (polishTldr). NO_UUID_LEAK preserved via the
   // extracted scrubHumanAction (shared module). See:
   //   .planning/phases/08-situation-room-people-first-cockpit/08-VERIFICATION.md
-  version: '1.2.0',
+  //
+  // 1.2.1 (hotfix — Reader TL;DR stuck "Compiling…"). The Editor-Agent compiles
+  // TL;DRs fine and files the compile-result document, but driveTldrCompileStep
+  // never consumed a recently-DONE op's result before spawning a new op
+  // (startAgentTask excludes terminal ops from reuse; the drainTldrOperations
+  // safety-net is dead behind the scope-dead compile-bulletin job — PR #6547).
+  // Result orphaned → "Compiling…" forever. Fix: consume-before-spawn in
+  // driveTldrCompileStep (consumeExistingTldrOpResult). No schema, no dep change.
+  // See: .planning/debug/reader-tldr-stuck-compiling.md
+  version: '1.2.1',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
