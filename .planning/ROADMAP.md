@@ -372,7 +372,7 @@ Plans:
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 8
-**Plans:** 1/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -381,11 +381,11 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-02-PLAN.md — UI tier: three grouped sections (D-03) + per-state action clusters with NO dead buttons (R4) + owner-picker popover (D-01) + Take it myself (D-02) + un-frozen banner with Assign first (R5) + org-backlog/critical-path merged into one expander (R6) + Stand-down confirm & Resume (R7, D-04) + force-refetch re-group + delete dead grid/components/CSS (R1) + rewrite 7 dead-grid tests + no-dead-buttons gate (R9). Wave 2, autonomous. (R1, R2, R4, R5, R6, R7, R9)
+- [x] 09-02-PLAN.md — UI tier: three grouped sections (D-03) + per-state action clusters with NO dead buttons (R4) + owner-picker popover (D-01) + Take it myself (D-02) + un-frozen banner with Assign first (R5) + org-backlog/critical-path merged into one expander (R6) + Stand-down confirm & Resume (R7, D-04) + force-refetch re-group + delete dead grid/components/CSS (R1) + rewrite 7 dead-grid tests + no-dead-buttons gate (R9). Wave 2, autonomous. (R1, R2, R4, R5, R6, R7, R9)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 09-03-PLAN.md — v1.3.0 ship: two-source version bump + full gates + snapshot-bookended BEAAA Path A deploy + Playwright live drill of the 11 acceptance checks (R3 real reassignment operator-attributed, R4 every button performs, R1 no grid, R5 non-zero banner) + VERIFICATION.md + closure. Wave 3, mixed (auto bump/gates + blocking-human drill). (R1-R9; R8 deploy + R4 live)
+- [ ] 09-03-PLAN.md — v1.3.0 ship: two-source version bump + full gates + snapshot-bookended BEAAA Path A deploy + Playwright live drill of the 11 acceptance checks (R3 real reassignment operator-attributed, R4 every button performs, R1 no grid, R5 non-zero banner) + VERIFICATION.md + closure. Wave 3, mixed (auto bump/gates + blocking-human drill). (R1-R9; R8 deploy + R4 live) — **PARTIAL 2026-05-31: Task 1 ✓ + v1.3.0 deployed live (Path B) + drill 10/11 + Reader rider PASS; R3 (hero assign-owner) FAILS (human-key vs UUID) → 09-04 gap-closure. Phase OPEN.**
 
 ---
 *Roadmap defined: 2026-05-07*

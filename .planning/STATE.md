@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
 status: executing
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-05-31T09:36:54.310Z"
+stopped_at: Phase 9 drill found R3 gap — v1.3.0 live on BEAAA, phase OPEN pending 09-04
+last_updated: "2026-05-31T16:20:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 8
@@ -16,6 +16,24 @@ progress:
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
+
+## ⚠ Phase 9 — v1.3.0 LIVE on BEAAA, but R3 GAP found in live drill — 2026-05-31 (phase OPEN)
+
+Phase 9 (Situation Room actionable cockpit) executed 09-01 (worker) + 09-02 (UI) + 09-03 Task 1 (ship). **v1.3.0 is deployed and live on BEAAA** via DEPLOY-RUNBOOK **Path B** (Path A was fail2ban-blocked) — `clarity-pack-1.3.0.tgz` sha256 `10ae75c3829398fd70d0b383cdea2efa725ab60d6c6a3e32a2257765409288aa`; `status=ready version=1.3.0 id=a763176a` (UUID preserved); host accepted `issues.update`.
+
+**Live drill: 10/11 acceptance checks + the Reader no-rail rider PASS; R3 (hero) FAILS.**
+- PASS: R1 (no agent grid; 3 groups Needs you/Working/Idle) · R2 · R5 (un-frozen banner, 9 unowned) · R6 (single expander) · R7 (stand-down confirm) · R8 (DO-backup bookend) · R9 (no UUID leaks) · D-01 owner picker · D-02 "Take it myself" present · WARNING-2 (Editor-Agent excluded) · **Reader rider** (v1.2.2 no-rail 760px column + Show-full-task + inline ref-chips, first live appearance).
+- **R3 FAIL (blocking):** `situation.assignOwner` passes the human issue key `"BEAAA-43"` to `ctx.issues.update`, which needs the issue **UUID** → host `issues.update` error → `ASSIGN_FAILED`. `leafIssueId` is human-readable by design (M2/NO_UUID_LEAK in `build-employees-rollup.ts`); display-id and mutation-id were conflated. First live core-issue mutation. R4 PARTIAL (gated by R3). Full root cause + fix design in `09-VERIFICATION.md`.
+
+**v1.3.0 left live** — net improvement (cockpit + Reader + stand-down all work); the assign button fails SAFELY (host rejects; no bad write; BEAAA-43 still unowned). No throwaway issues seeded; stand-down cancelled.
+
+**BEAAA bookend note (durable):** BEAAA has NO clarity-pack safety-CLI checkout (`~/clarity-pack` absent; no `/etc/paperclip/db.env`). The bookend is the operator's DigitalOcean droplet backup + plugin-reinstall rollback (additive schema; v1.2.1 rollback target) per `autonomous-deploy-authorization`. The 09-03 plan's safety-CLI snapshot steps were a Countermoves inheritance, not applicable to BEAAA.
+
+**Next action:** `/gsd:plan-phase 09 --gaps` → creates 09-04 gap-closure (TDD the leaf-UUID fix: carry `leafIssueUuid` separately from the display key across `build-employees-rollup.ts` + `employee-row.tsx` + `needs-you-banner.tsx` + `situation-assign-owner.ts` + tests) → `/gsd:execute-phase 09 --gaps-only` → re-deploy + re-drill R3. Phase 9 requirements NOT yet flipped to Implemented.
+
+VERIFICATION: `.planning/phases/09-situation-room-actionable-cockpit/09-VERIFICATION.md` (status: gaps_found).
+
+---
 
 ## ✅ Phase 8 CLOSED & VERIFIED LIVE on BEAAA — 2026-05-30 (v1.2.0 — Situation Room people-first cockpit)
 
