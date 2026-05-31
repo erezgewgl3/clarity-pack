@@ -370,10 +370,12 @@ Plans:
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 8
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 9 to break down)
+- [ ] 09-01-PLAN.md — Worker tier: situation.assignOwner (first core-issue mutation; ctx.issues.update + actor + viewer-authority gate) + worker-tier group classifier (R2) + un-frozen needsYou count (R5) + issues.update capability + remove recompute-situation job & situation.artifacts handler. Wave 1, autonomous, TDD. (R1, R2, R3, R5, R8)
+- [ ] 09-02-PLAN.md — UI tier: three grouped sections (D-03) + per-state action clusters with NO dead buttons (R4) + owner-picker popover (D-01) + Take it myself (D-02) + un-frozen banner with Assign first (R5) + org-backlog/critical-path merged into one expander (R6) + Stand-down confirm & Resume (R7, D-04) + force-refetch re-group + delete dead grid/components/CSS (R1) + rewrite 7 dead-grid tests + no-dead-buttons gate (R9). Wave 2, autonomous. (R1, R2, R4, R5, R6, R7, R9)
+- [ ] 09-03-PLAN.md — v1.3.0 ship: two-source version bump + full gates + snapshot-bookended BEAAA Path A deploy + Playwright live drill of the 11 acceptance checks (R3 real reassignment operator-attributed, R4 every button performs, R1 no grid, R5 non-zero banner) + VERIFICATION.md + closure. Wave 3, mixed (auto bump/gates + blocking-human drill). (R1-R9; R8 deploy + R4 live)
 
 ---
 *Roadmap defined: 2026-05-07*
