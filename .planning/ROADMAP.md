@@ -369,10 +369,10 @@ Plans:
 
 ### Phase 9: Situation Room actionable cockpit
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Turn the Situation Room from a read-only status board into an actionable cockpit (one people view in three groups; every stuck/idle agent ends in a functional button) where the hero Assign-owner path mutates the real Paperclip issue. Ships as v1.3.0.
+**Requirements**: R1-R9 (SPEC-locked; see 09-SPEC.md)
 **Depends on:** Phase 8
-**Plans:** 3/3 plans complete
+**Plans:** 4 plans (09-04 gap-closure added 2026-05-31: R3 leaf-UUID fix)
 
 Plans:
 **Wave 1**
@@ -386,6 +386,10 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 09-03-PLAN.md — v1.3.0 ship: two-source version bump + full gates + snapshot-bookended BEAAA Path A deploy + Playwright live drill of the 11 acceptance checks (R3 real reassignment operator-attributed, R4 every button performs, R1 no grid, R5 non-zero banner) + VERIFICATION.md + closure. Wave 3, mixed (auto bump/gates + blocking-human drill). (R1-R9; R8 deploy + R4 live) — **PARTIAL 2026-05-31: Task 1 ✓ + v1.3.0 deployed live (Path B) + drill 10/11 + Reader rider PASS; R3 (hero assign-owner) FAILS (human-key vs UUID) → 09-04 gap-closure. Phase OPEN.**
+
+**Wave 4** *(gap-closure — operates on shipped v1.3.0 source; no pending-plan dependency)*
+
+- [ ] 09-04-PLAN.md — Gap-closure (R3 + R4): carry leafIssueUuid separately from the human display key so situation.assignOwner mutates via the issue UUID (not the BEAAA-NN key) — add leafIssueUuid to build-employees-rollup blockerChain + NeedsYou.topAction (source: leaf.id / picked.pathIds[last] / focusIssue.id), thread through employee-row + needs-you-banner as the action's mutation id (human key stays display-only), handler calls ctx.issues.update with the UUID for BOTH assign branches (agent + Take-it-myself). RED test reproduces the live ASSIGN_FAILED (fake throws on a non-UUID id). Re-deploy corrected v1.3.0 + re-drill R3/R4. Wave 1 (gap-closure), mixed (TDD worker/UI + blocking-human re-drill), TDD. (R3, R4)
 
 ---
 *Roadmap defined: 2026-05-07*
