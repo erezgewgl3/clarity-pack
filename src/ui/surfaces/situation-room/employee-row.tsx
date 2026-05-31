@@ -82,7 +82,12 @@ export type SituationEmployeeRow = {
   ageBucket: AgeBucket;
   blockerChain: {
     rootIssueId: string;
+    // Human display key (BEAAA-NN) — the ONLY rendered identifier.
     leafIssueId: string | null;
+    // Plan 09-04 (R3) — the leaf issue UUID (the mutation id). Fed to the
+    // OwnerPickerPopover's leafIssueUuid prop; consumed only as a dispatch arg
+    // (NO_UUID_LEAK / T-08-UI), never rendered as text.
+    leafIssueUuid: string | null;
     humanAction: string;
     ownerName: string;
     // AGENT uuid (focusIssue.assigneeAgentId), NOT a USER uuid (B1).
@@ -261,6 +266,7 @@ export function EmployeeRow({
                 {chain.leafIssueId && (
                   <OwnerPickerPopover
                     leafIssueId={chain.leafIssueId}
+                    leafIssueUuid={chain.leafIssueUuid ?? undefined}
                     companyId={companyId}
                     userId={userId}
                     onAssigned={() => onAssignSuccess()}

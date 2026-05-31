@@ -29,7 +29,13 @@ export type NeedsYou = {
   topAction: {
     agentId: string;
     humanAction: string;
+    // Human display key — DISPLAY ONLY.
     leafIssueId: string | null;
+    // Plan 09-04 (R3) — the leaf issue UUID (mutation id), kept in sync with the
+    // worker shape. The banner's [Assign first ▾] is DOM-driven (it opens the
+    // target row's picker), so it never dispatches this itself; the row's
+    // OwnerPickerPopover owns the dispatch.
+    leafIssueUuid: string | null;
   } | null;
 };
 

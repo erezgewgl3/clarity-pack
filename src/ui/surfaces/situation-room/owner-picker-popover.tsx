@@ -53,8 +53,15 @@ type AssignResult =
 
 export type OwnerPickerPopoverProps = {
   /** The blocker-chain leaf issue to reassign (09-01 guarantees non-null for
-   *  the unowned case the picker is rendered for). */
+   *  the unowned case the picker is rendered for). HUMAN display key + the
+   *  log/echo identifier — NOT the mutation id. */
   leafIssueId: string;
+  /** Plan 09-04 (R3) — the leaf issue UUID (the mutation id dispatched to
+   *  situation.assignOwner → ctx.issues.update). OPTIONAL: the org-backlog
+   *  mount passes only leafIssueId (already a UUID), so the dispatch falls back
+   *  to leafIssueUuid ?? leafIssueId. Consumed ONLY as a dispatch arg
+   *  (NO_UUID_LEAK / T-08-UI) — never rendered as text. */
+  leafIssueUuid?: string;
   companyId: string;
   userId: string;
   /** Trigger label. Defaults to the row affordance "Assign owner ▾"; the
@@ -67,6 +74,7 @@ export type OwnerPickerPopoverProps = {
 
 export function OwnerPickerPopover({
   leafIssueId,
+  leafIssueUuid,
   companyId,
   userId,
   triggerLabel = 'Assign owner ▾',
@@ -125,9 +133,16 @@ export function OwnerPickerPopover({
       if (assigning) return;
       setAssigning(true);
       try {
+        // Plan 09-04 (R3) — ALWAYS dispatch BOTH keys: the human leafIssueId
+        // (log/echo) AND the UUID leafIssueUuid (the mutation id the handler
+        // reads via reqStr(params,'leafIssueUuid')). The ?? leafIssueId fallback
+        // is load-bearing: the org-backlog mount passes only leafIssueId (already
+        // a UUID via row.issueId), so it sends that same UUID as leafIssueUuid
+        // with NO change to that mount.
         const result = (await assignOwner({
           companyId,
           leafIssueId,
+          leafIssueUuid: leafIssueUuid ?? leafIssueId,
           userId,
           ...params,
         })) as AssignResult;
@@ -143,7 +158,7 @@ export function OwnerPickerPopover({
         setAssigning(false);
       }
     },
-    [assigning, assignOwner, companyId, leafIssueId, userId, onAssigned],
+    [assigning, assignOwner, companyId, leafIssueId, leafIssueUuid, userId, onAssigned],
   );
 
   return (

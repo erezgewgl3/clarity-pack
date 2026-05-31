@@ -19,6 +19,15 @@ const ROW = readFileSync(
   path.join(REPO_ROOT, 'src/ui/surfaces/situation-room/employee-row.tsx'),
   'utf8',
 );
+// Plan 09-04 — the SHARED dispatch site + the handler read (cross-file wiring tie).
+const POPOVER = readFileSync(
+  path.join(REPO_ROOT, 'src/ui/surfaces/situation-room/owner-picker-popover.tsx'),
+  'utf8',
+);
+const HANDLER = readFileSync(
+  path.join(REPO_ROOT, 'src/worker/handlers/situation-assign-owner.ts'),
+  'utf8',
+);
 
 test('row type carries the worker group + isPaused fields (R2 / D-04)', () => {
   assert.match(ROW, /group:\s*EmployeeGroup/);
@@ -72,4 +81,90 @@ test('D-04 — a non-paused idle row shows Assign work, NOT Resume/paused marker
 test('NO_UUID_LEAK — ownerAgentId / agentId consumed as deep-link/dispatch args, never rendered as text', () => {
   // No JSX text node directly rendering an *AgentId value.
   assert.equal((ROW.match(/>\s*\{[^}]*ownerAgentId[^}]*\}\s*</g) || []).length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Plan 09-04 — the popover→action→handler wiring (the checker's blocker)
+// ---------------------------------------------------------------------------
+
+test('09-04 — the SHARED popover dispatches leafIssueUuid with the ?? leafIssueId fallback', () => {
+  // The dispatch object MUST carry leafIssueUuid so the handler's
+  // reqStr(params,'leafIssueUuid') can never be undefined at runtime.
+  assert.match(
+    POPOVER,
+    /leafIssueUuid:\s*leafIssueUuid\s*\?\?\s*leafIssueId/,
+    'popover must dispatch leafIssueUuid: leafIssueUuid ?? leafIssueId',
+  );
+  // The optional prop must exist on the props type + be in the useCallback deps.
+  assert.match(POPOVER, /leafIssueUuid\?:\s*string/, 'optional leafIssueUuid?: string prop');
+});
+
+test('09-04 — leafIssueUuid is in the dispatchAssign useCallback dependency array', () => {
+  // The deps array (closes over leafIssueUuid) must list it so the dispatch
+  // does not capture a stale value.
+  assert.match(
+    POPOVER,
+    /\[\s*assigning,\s*assignOwner,\s*companyId,\s*leafIssueId,\s*leafIssueUuid,\s*userId,\s*onAssigned\s*\]/,
+    'dispatchAssign deps must include leafIssueUuid',
+  );
+});
+
+test('09-04 WIRING TIE — popover dispatches leafIssueUuid AND handler reads reqStr(params,leafIssueUuid)', () => {
+  // The dispatch key and the handler read must both be present so they cannot
+  // silently diverge (cross-file assertion).
+  assert.match(POPOVER, /leafIssueUuid/, 'popover references leafIssueUuid');
+  assert.match(
+    HANDLER,
+    /reqStr\(\s*params\s*,\s*'leafIssueUuid'\s*\)/,
+    'handler reads reqStr(params, leafIssueUuid)',
+  );
+});
+
+test('09-04 — employee-row feeds BOTH props to the OwnerPickerPopover (display + mutation)', () => {
+  // The picker mount must receive the human key (display + log/echo) AND the
+  // UUID (the mutation id). chain.leafIssueUuid is string|null; the prop is
+  // string|undefined, so a ?? undefined coercion is type-safe and expected.
+  assert.match(ROW, /leafIssueId=\{chain\.leafIssueId\}/, 'leafIssueId={chain.leafIssueId}');
+  assert.match(
+    ROW,
+    /leafIssueUuid=\{chain\.leafIssueUuid(\s*\?\?\s*undefined)?\}/,
+    'leafIssueUuid={chain.leafIssueUuid ?? undefined}',
+  );
+});
+
+test('09-04 — employee-row blockerChain type mirror carries leafIssueUuid', () => {
+  assert.match(ROW, /leafIssueUuid:\s*string\s*\|\s*null/, 'blockerChain type carries leafIssueUuid');
+});
+
+test('09-04 — the backlog-style single-prop mount still sends the UUID via the fallback', () => {
+  // The backlog expander passes ONLY leafIssueId={row.issueId} (already a UUID).
+  // The popover's ?? leafIssueId fallback feeds that same UUID as leafIssueUuid
+  // WITHOUT any change to the backlog mount. Proven at the popover level: the
+  // dispatch uses leafIssueUuid ?? leafIssueId, so a missing leafIssueUuid prop
+  // falls back to the leafIssueId (the UUID the backlog passes).
+  const EXPANDER = readFileSync(
+    path.join(REPO_ROOT, 'src/ui/surfaces/situation-room/blocked-backlog-expander.tsx'),
+    'utf8',
+  );
+  // The backlog mount is UNCHANGED — single leafIssueId prop, no leafIssueUuid.
+  assert.match(EXPANDER, /leafIssueId=\{row\.issueId\}/, 'backlog passes leafIssueId={row.issueId}');
+  assert.doesNotMatch(EXPANDER, /leafIssueUuid=/, 'backlog mount is NOT given a leafIssueUuid prop');
+  // And the popover fallback covers it.
+  assert.match(POPOVER, /leafIssueUuid\s*\?\?\s*leafIssueId/, 'fallback feeds the backlog UUID');
+});
+
+test('09-04 NO_UUID_LEAK — leafIssueUuid never rendered as a JSX text node (row + popover)', () => {
+  // leafIssueUuid is an action arg / prop only — never a visible string.
+  assert.equal(
+    (ROW.match(/>\s*\{[^}]*leafIssueUuid[^}]*\}\s*</g) || []).length,
+    0,
+    'employee-row renders no leafIssueUuid text node',
+  );
+  assert.equal(
+    (POPOVER.match(/>\s*\{[^}]*leafIssueUuid[^}]*\}\s*</g) || []).length,
+    0,
+    'popover renders no leafIssueUuid text node',
+  );
+  // The human display key remains the only displayed identifier.
+  assert.match(ROW, /Open \$\{chain\.leafIssueId\} ↗/, 'human leafIssueId still the display id');
 });

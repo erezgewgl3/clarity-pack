@@ -138,6 +138,29 @@ test('banner contains NO dangerouslySetInnerHTML', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Plan 09-04 — topAction type carries leafIssueUuid; no human key dispatched
+// ---------------------------------------------------------------------------
+
+test('09-04 — NeedsYou.topAction type mirror carries leafIssueUuid (in sync with the worker shape)', () => {
+  assert.match(
+    BANNER,
+    /leafIssueUuid:\s*string\s*\|\s*null/,
+    'topAction type carries leafIssueUuid: string | null',
+  );
+});
+
+test('09-04 — the banner [Assign first] stays DOM-driven; it never dispatches a human key as a mutation id', () => {
+  // The banner does NOT itself dispatch situation.assignOwner — it opens the
+  // target row's picker via scrollIntoView + a .clarity-owner-pick-trigger click.
+  assert.match(BANNER_CODE, /scrollIntoView/);
+  assert.match(BANNER_CODE, /clarity-owner-pick-trigger/);
+  // No assignOwner dispatch in the banner (the row's popover owns the dispatch).
+  assert.doesNotMatch(BANNER_CODE, /usePluginAction\(\s*'situation\.assignOwner'\s*\)/);
+  // The banner never passes leafIssueId as an action/mutation arg.
+  assert.doesNotMatch(BANNER_CODE, /assignOwner\(/);
+});
+
+// ---------------------------------------------------------------------------
 // index.tsx mount — NeedsYouBanner + EmployeeRowStrip, NO standalone org banner
 // ---------------------------------------------------------------------------
 
