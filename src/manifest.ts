@@ -591,6 +591,17 @@ const manifest: PaperclipPluginManifestV1 = {
   // extracted scrubHumanAction (shared module). See:
   //   .planning/phases/08-situation-room-people-first-cockpit/08-VERIFICATION.md
   //
+  // 1.3.0 (Phase 9 — Situation Room actionable cockpit). The three-group
+  // people view (Needs you / Working / Idle) REPLACES the dead AgentCard grid;
+  // situation.assignOwner is the FIRST plugin core-issue mutation (ctx.issues.update,
+  // operator actor-attributed for audit); the issues.update capability is added;
+  // the dead recompute-situation cron job + the situation.artifacts data handler
+  // are removed; the needs-you banner is un-frozen (counts unowned blockers); the
+  // org-backlog + critical-path narratives are merged into one "+N more blocked
+  // issues" expander; every surfaced button performs a real action — no dead
+  // buttons (R4). situation_snapshots TABLE preserved (R9 additive-only). See:
+  //   .planning/phases/09-situation-room-actionable-cockpit/09-VERIFICATION.md
+  //
   // 1.2.1 (hotfix — Reader TL;DR stuck "Compiling…"). The Editor-Agent compiles
   // TL;DRs fine and files the compile-result document, but driveTldrCompileStep
   // never consumed a recently-DONE op's result before spawning a new op
@@ -599,7 +610,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // Result orphaned → "Compiling…" forever. Fix: consume-before-spawn in
   // driveTldrCompileStep (consumeExistingTldrOpResult). No schema, no dep change.
   // See: .planning/debug/reader-tldr-stuck-compiling.md
-  version: '1.2.2',
+  version: '1.3.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
