@@ -70,8 +70,14 @@ export type SituationEmployeeRow = {
   blockerChain: {
     rootIssueId: string;
     /** Human identifier; root identifier on leaf-fetch failure; null only when
-     *  BOTH lookups fail. NEVER a uuid-suffix string (M2). */
+     *  BOTH lookups fail. NEVER a uuid-suffix string (M2). DISPLAY ONLY. */
     leafIssueId: string | null;
+    /** Plan 09-04 (R3) — the leaf issue UUID, the MUTATION id for
+     *  situation.assignOwner → ctx.issues.update. Sourced from a UUID
+     *  (leaf.id / leafNodeId / focusIssue.id), NEVER from any .identifier.
+     *  Consumed ONLY as an action arg / prop (NO_UUID_LEAK / T-08-UI) — the
+     *  human leafIssueId stays the only displayed identifier. */
+    leafIssueUuid: string | null;
     /** Scrubbed via shared scrubHumanAction — NO_UUID_LEAK. */
     humanAction: string;
     /** "Unassigned" when __unowned__ — NO_UUID_LEAK. */
@@ -86,7 +92,16 @@ export type SituationEmployeeRow = {
 
 export type NeedsYou = {
   count: number;
-  topAction: { agentId: string; humanAction: string; leafIssueId: string | null } | null;
+  topAction: {
+    agentId: string;
+    humanAction: string;
+    /** Human identifier — DISPLAY ONLY. */
+    leafIssueId: string | null;
+    /** Plan 09-04 (R3) — the leaf issue UUID (the mutation id the picker
+     *  dispatches to situation.assignOwner). Mirrors the source row's
+     *  blockerChain.leafIssueUuid; UUID source, never an .identifier. */
+    leafIssueUuid: string | null;
+  } | null;
 };
 
 /** The structural ctx the builder accepts — a superset of OrgBlockedBacklogCtx
@@ -311,19 +326,31 @@ async function buildOneEmployeeRow(
         // i.7. M2 — leafIssueId fallback chain = leaf identifier → focusIssue.identifier → null.
         //      NEVER a uuid-suffix.
         let leafIssueId: string | null = focusIssue.identifier ?? null;
+        // i.7b. Plan 09-04 (R3) — leafIssueUuid is the MUTATION id (the issue
+        //       UUID), carried alongside the human leafIssueId. UUID candidate
+        //       chain: leaf.id (the line-317 leaf fetch) → leafNodeId
+        //       (picked.pathIds[last]) → focusIssue.id. NEVER an .identifier.
         const leafNodeId = picked.pathIds[picked.pathIds.length - 1];
+        let leafIssueUuid: string | null =
+          (typeof leafNodeId === 'string' && leafNodeId.length > 0 ? leafNodeId : null) ??
+          (typeof focusIssue.id === 'string' && focusIssue.id.length > 0 ? focusIssue.id : null);
         if (leafNodeId && leafNodeId !== focusIssue.id) {
           try {
             const leaf = (await ctx.issues.get(leafNodeId, companyId)) as IssueLike | null;
             if (leaf && typeof leaf.identifier === 'string' && leaf.identifier.length > 0) {
               leafIssueId = leaf.identifier;
             }
+            // Prefer the resolved leaf.id (a UUID) when present — same fetch.
+            if (leaf && typeof leaf.id === 'string' && leaf.id.length > 0) {
+              leafIssueUuid = leaf.id;
+            }
           } catch {
             // Fall back to focusIssue.identifier (already set above). NEVER emit
-            // a uuid-suffix string.
+            // a uuid-suffix string. leafIssueUuid stays the leafNodeId/focusIssue.id
+            // UUID (never the .identifier).
           }
         }
-        blockerChain = { rootIssueId, leafIssueId, humanAction, ownerName, ownerAgentId };
+        blockerChain = { rootIssueId, leafIssueId, leafIssueUuid, humanAction, ownerName, ownerAgentId };
 
         // needsYou viewer-match — keys on terminal.userId (USER uuid), the
         // LEGITIMATE use of terminal.userId (mirrors org-blocked-backlog.ts:419-425).
@@ -465,6 +492,8 @@ export async function buildEmployeesRollup(
       agentId: oldestUnowned.agentId,
       humanAction: oldestUnowned.blockerChain!.humanAction,
       leafIssueId: oldestUnowned.blockerChain!.leafIssueId,
+      // Plan 09-04 (R3) — the mutation id (UUID) for the [Assign first ▾] picker.
+      leafIssueUuid: oldestUnowned.blockerChain!.leafIssueUuid,
     };
   } else if (oldestTargeting) {
     // OWNED-needs-you case (zero unowned, ≥1 viewer-targeted) — unchanged from
@@ -473,6 +502,8 @@ export async function buildEmployeesRollup(
       agentId: oldestTargeting.agentId,
       humanAction: oldestTargeting.blockerChain!.humanAction,
       leafIssueId: oldestTargeting.blockerChain!.leafIssueId,
+      // Plan 09-04 (R3) — carry the UUID on the owned fallback too (shape parity).
+      leafIssueUuid: oldestTargeting.blockerChain!.leafIssueUuid,
     };
   }
 

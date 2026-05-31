@@ -20,10 +20,18 @@
 // plugin worker. Asserted by the success-path tests.
 //
 // BRANCHES (exactly one required):
-//   - assigneeAgentId present  → ctx.issues.update(leafIssueId,{assigneeAgentId},companyId,actor)
-//   - takeItMyself === true    → ctx.issues.update(leafIssueId,{assigneeUserId:userId},companyId,actor)
+//   - assigneeAgentId present  → ctx.issues.update(leafIssueUuid,{assigneeAgentId},companyId,actor)
+//   - takeItMyself === true    → ctx.issues.update(leafIssueUuid,{assigneeUserId:userId},companyId,actor)
 //                                (D-02 — the SINGLE assigneeUserId path)
 //   - neither / both           → { error: 'BAD_REQUEST' }
+//
+// Plan 09-04 (R3) — MUTATION ID FIX. v1.3.0 passed the HUMAN issue key
+// (BEAAA-43) to ctx.issues.update; the host needs the issue UUID → ASSIGN_FAILED.
+// The handler now reads `leafIssueUuid` (the UUID, dispatched by the shared
+// owner-picker-popover) and passes THAT to ctx.issues.update. The human
+// `leafIssueId` is still read but used ONLY for log lines + the echoed
+// { ok, leafIssueId, assignedTo } result (the UI toast). Mirror editor.ts:663
+// (UUID first-arg).
 //
 // CLAUDE.md HARD RULE — a core-issue mutation MUST go through the typed
 // ctx.issues.* client with actor attribution. NEVER ctx.db (plugin-namespace
@@ -53,7 +61,13 @@ function reqStr(params: Record<string, unknown> | undefined, key: string): strin
 export function registerSituationAssignOwner(ctx: SituationAssignOwnerCtx): void {
   wrapActionHandler(ctx, 'situation.assignOwner', async (params) => {
     const companyId = reqStr(params, 'companyId');
+    // Human display key (BEAAA-43) — logged + echoed, NEVER the mutation id.
     const leafIssueId = reqStr(params, 'leafIssueId');
+    // Plan 09-04 (R3) — the issue UUID, the MUTATION id passed to
+    // ctx.issues.update. REQUIRED: the shared owner-picker-popover always
+    // dispatches it (leafIssueUuid: leafIssueUuid ?? leafIssueId), so reqStr
+    // never throws in the wired path; a missing key is a programming error.
+    const leafIssueUuid = reqStr(params, 'leafIssueUuid');
     const userId = reqStr(params, 'userId');
 
     // Branch selection — exactly one of {assigneeAgentId, takeItMyself}.
@@ -104,13 +118,16 @@ export function registerSituationAssignOwner(ctx: SituationAssignOwnerCtx): void
     }
 
     try {
+      // Plan 09-04 (R3) — mutate via the issue UUID (leafIssueUuid), NOT the
+      // human display key. Mirrors editor.ts:663 (UUID first-arg).
       await ctx.issues.update(
-        leafIssueId,
+        leafIssueUuid,
         patch as Parameters<PluginIssuesClient['update']>[1],
         companyId,
         actor,
       );
     } catch (e) {
+      // Log the HUMAN key for operator-readable diagnostics (never the UUID).
       ctx.logger?.warn?.('situation.assignOwner: issues.update failed', {
         leafIssueId,
         err: (e as Error).message,
@@ -118,6 +135,8 @@ export function registerSituationAssignOwner(ctx: SituationAssignOwnerCtx): void
       return { error: 'ASSIGN_FAILED' as const };
     }
 
+    // Echo the HUMAN key for the UI toast — the mutation id (UUID) is never
+    // surfaced to the operator.
     return { ok: true as const, leafIssueId, assignedTo };
   });
 }
