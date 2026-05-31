@@ -422,20 +422,63 @@ export async function buildEmployeesRollup(
     return bT - aT; // most-recent-first
   });
 
-  // needsYou — filter rows whose terminal targeted the viewer; topAction is the
-  // OLDEST blocker (smallest __activityMs first).
+  // needsYou — Plan 09-01 R5 (UN-FROZEN). Phase 8 counted ONLY viewer-owned
+  // blocked chains, so an all-unowned org showed a permanent "✓ 0 need you".
+  // R5: count = (unowned blocked rows) ∪ (viewer-targeted blocked rows),
+  // de-duplicated by agentId (a row can satisfy at most one of the two
+  // predicates today — ownerName 'Unassigned' ⇔ unowned ⇔ not viewer-targeted —
+  // but we Set-dedupe defensively).
+  //
+  // UNOWNED predicate: the row is in the needs_you bucket, has a blocker chain,
+  // and its chain owner scrubbed to 'Unassigned' (NO_UUID_LEAK — ownerName is
+  // already the scrubbed sentinel for __unowned__; no raw UUID enters this path,
+  // T-09-04).
+  const unowned = rows.filter(
+    (r) => r.group === 'needs_you' && r.blockerChain && r.blockerChain.ownerName === 'Unassigned',
+  );
   const targeting = rows.filter((r) => r.__targetsViewer && r.blockerChain);
-  targeting.sort((a, b) => (a.__activityMs ?? 0) - (b.__activityMs ?? 0));
-  const top = targeting[0];
+
+  // De-dupe by agentId for the count (Set so a row never double-counts).
+  const countedAgentIds = new Set<string>();
+  for (const r of unowned) countedAgentIds.add(r.agentId);
+  for (const r of targeting) countedAgentIds.add(r.agentId);
+
+  // topAction — oldest UNOWNED row (smallest __activityMs) when ANY unowned
+  // exists; else fall back to the oldest viewer-targeted row (preserve the
+  // Phase 8 deep-link behavior when there are zero unowned).
+  const byOldest = (a: InternalRow, b: InternalRow) => (a.__activityMs ?? 0) - (b.__activityMs ?? 0);
+  const oldestUnowned = [...unowned].sort(byOldest)[0];
+  const oldestTargeting = [...targeting].sort(byOldest)[0];
+
+  let topAction: NeedsYou['topAction'] = null;
+  if (oldestUnowned) {
+    // WARNING 1 / R4 — the UNOWNED case MUST carry agentId + a NON-NULL
+    // leafIssueId so 09-02's [Assign first ▾] can scroll to that row and open
+    // its owner picker (the leaf is what the picker assigns). A null leafIssueId
+    // here would force a disabled button — an R4 dead-button violation. The
+    // builder already guarantees leafIssueId is non-null for a row with a
+    // blockerChain (M2 fallback chain: leaf identifier → focusIssue.identifier;
+    // null only when BOTH lookups fail, which cannot happen alongside a present
+    // chain on a blocked row). NOT a chat deep-link — there is no ownerAgentId
+    // to chat with for an unowned chain.
+    topAction = {
+      agentId: oldestUnowned.agentId,
+      humanAction: oldestUnowned.blockerChain!.humanAction,
+      leafIssueId: oldestUnowned.blockerChain!.leafIssueId,
+    };
+  } else if (oldestTargeting) {
+    // OWNED-needs-you case (zero unowned, ≥1 viewer-targeted) — unchanged from
+    // Phase 8: the UI resolves ownerAgentId from that row for the chat deep-link.
+    topAction = {
+      agentId: oldestTargeting.agentId,
+      humanAction: oldestTargeting.blockerChain!.humanAction,
+      leafIssueId: oldestTargeting.blockerChain!.leafIssueId,
+    };
+  }
+
   const needsYou: NeedsYou = {
-    count: targeting.length,
-    topAction: top
-      ? {
-          agentId: top.agentId,
-          humanAction: top.blockerChain!.humanAction,
-          leafIssueId: top.blockerChain!.leafIssueId,
-        }
-      : null,
+    count: countedAgentIds.size,
+    topAction,
   };
 
   // Strip transient fields before returning the public shape.

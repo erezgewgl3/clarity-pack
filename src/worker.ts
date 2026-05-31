@@ -188,6 +188,16 @@ import {
   registerAgentTakeOwnership,
   type AgentTakeOwnershipCtx,
 } from './worker/handlers/agent-take-ownership.ts';
+// Plan 09-01 ROOM/R3 -- situation.assignOwner: the FIRST plugin core-issue
+// mutation. The operator assigns an owner to an unowned blocking issue from a
+// Situation Room row via ctx.issues.update (NOT the plugin-namespace side
+// table). Company-scope authority gate mirrors agent.takeOwnership; the update's
+// actor arg carries the operator userId for audit attribution. Requires the new
+// issues.update manifest capability (added in Task 3).
+import {
+  registerSituationAssignOwner,
+  type SituationAssignOwnerCtx,
+} from './worker/handlers/situation-assign-owner.ts';
 // Phase 6.1 ROOM-10 -- situation.artifacts: per-agent union of deliverables
 // (host ctx.issues.documents.list per agent) + chat-attachments (ONE bulk
 // SQL JOIN of plugin_clarity_pack_cdd6bda4bd.chat_message_attachments to
@@ -351,6 +361,13 @@ const plugin = definePlugin({
     // authority re-check: ctx.agents.get gates by company. CTT-07
     // invariant by construction -- pinned by runtime spy + source-grep.
     registerAgentTakeOwnership(ctx as unknown as AgentTakeOwnershipCtx);
+
+    // ---- Plan 09-01 R3 -- situation.assignOwner action handler -------------
+    // The first plugin core-issue mutation. Reassigns the blocker-chain leaf's
+    // assignee (agentId, or assigneeUserId for the D-02 "Take it myself" path)
+    // via ctx.issues.update with the operator as the audit actor. Same ctx
+    // clients as agent.takeOwnership (issues, agents, db for opt-in-guard).
+    registerSituationAssignOwner(ctx as unknown as SituationAssignOwnerCtx);
 
     // ---- Phase 6.1 ROOM-10 -- situation.artifacts data handler -------------
     // Per-agent union of deliverables (ctx.issues.documents.list per agent;
