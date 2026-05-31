@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 004 — TL;DR type &amp; ref-chips</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0c0b09; color: var(--ink); font-family: var(--font-sans); padding: 70px 24px 60px; }
+
+  #variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9998; background: #111; border-bottom: 1px solid var(--line);
+    padding: 7px 14px; display: flex; gap: 8px; align-items: center; font-family: var(--font-mono); }
+  #variant-nav .lbl { color: var(--ink-3); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-right: 6px; }
+  .variant-tab { background: transparent; color: var(--ink-2); border: 1px solid var(--line-bright); border-radius: 6px;
+    padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer; transition: all .15s ease; }
+  .variant-tab:hover { background: var(--bg-3); color: var(--ink); }
+  .variant-tab.active { background: var(--you-soft); color: var(--you); border-color: var(--you); }
+  .variant { display: none; }
+  .variant.active { display: block; }
+
+  .stage { max-width: 760px; margin: 0 auto; }
+  .specline { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); letter-spacing: .04em;
+    margin: 0 0 16px; padding: 8px 12px; background: #141310; border: 1px dashed var(--line-bright); border-radius: 7px; line-height: 1.6; }
+  .specline b { color: var(--you); }
+
+  /* ---- briefing card (shared) ---- */
+  .tldr { position: relative; background: var(--panel,#1B1A14); border: 1px solid var(--line); border-left: 3px solid var(--you);
+    border-radius: var(--radius); padding: 20px 24px 16px; margin: 0 0 26px; }
+  .kicker { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--you);
+    margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .bluf { margin: 0 0 12px; }
+  .tldr .body { color: var(--ink-2); margin: 0; }
+  .tldr .body p { margin: 0 0 8px; }
+  .meta { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--line);
+    font-size: var(--t-meta); color: var(--ink-3); font-family: var(--font-mono); }
+
+  /* ===== Variant A — Instrument Serif, BLUF line only ===== */
+  .va .bluf { font-family: var(--font-serif); font-size: 1.62rem; line-height: 1.18; color: var(--ink); }
+  .va .body { font-family: var(--font-sans); font-size: 1.06rem; line-height: 1.55; }
+
+  /* ===== Variant B — Newsreader (host text serif, real weights) ===== */
+  .vb .bluf { font-family: var(--font-serif-text); font-weight: 600; font-size: 1.5rem; line-height: 1.22; color: var(--ink); }
+  .vb .body { font-family: var(--font-serif-text); font-weight: 400; font-size: 1.12rem; line-height: 1.55; color: var(--ink-2); }
+
+  /* ===== Variant C — all-sans, hierarchy by size+weight+color ===== */
+  .vc .bluf { font-family: var(--font-host-sans); font-weight: 600; font-size: 1.34rem; line-height: 1.3; color: var(--ink); letter-spacing: -0.01em; }
+  .vc .body { font-family: var(--font-host-sans); font-size: 1.04rem; line-height: 1.55; }
+  .vc .kicker { color: var(--you); }
+
+  /* ---- ref chips — TWO weights ---- */
+  /* full chip — standalone */
+  .chip { display: inline-flex; align-items: baseline; gap: 7px; border: 1px solid var(--line-bright); border-left-width: 3px;
+    border-radius: 6px; padding: 1px 8px 2px 9px; font-size: .92em; line-height: 1.5; max-width: 100%; cursor: pointer; transition: background .15s ease; }
+  .chip:hover { background: var(--bg-4); }
+  .chip[data-st="done"] { border-left-color: var(--live); }
+  .chip[data-st="review"] { border-left-color: var(--warn); }
+  .chip[data-st="blocked"] { border-left-color: var(--alert); }
+  .chip .id { font-family: var(--font-mono); font-weight: 600; color: var(--ink); flex: 0 0 auto; }
+  .chip .ti { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34ch; }
+  .chip .bdg { font-family: var(--font-mono); font-size: .64em; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px;
+    border-radius: 999px; flex: 0 0 auto; align-self: center; }
+  .chip[data-st="done"] .bdg { background: var(--live); color: #10210f; }
+  .chip[data-st="review"] .bdg { background: var(--warn); color: #332512; }
+  .chip[data-st="blocked"] .bdg { background: var(--alert); color: #3a1208; }
+
+  /* light inline ref — mid-sentence, reads as prose */
+  .iref { white-space: nowrap; cursor: pointer; border-bottom: 1px solid var(--line-bright); padding-bottom: 1px; }
+  .iref:hover { border-bottom-color: var(--ink-2); }
+  .iref .id { font-family: var(--font-mono); font-weight: 600; color: var(--ink); }
+  .iref .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin: 0 1px 1px 3px; vertical-align: middle; }
+  .iref[data-st="done"] .dot { background: var(--live); }
+  .iref[data-st="review"] .dot { background: var(--warn); }
+  .iref[data-st="blocked"] .dot { background: var(--alert); }
+  .iref .ti { color: var(--ink-2); }
+
+  .sub { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3);
+    margin: 26px 0 10px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+  .prose { font-size: 15px; line-height: 1.66; color: var(--ink-2); }
+
+  .chips-demo { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 8px; }
+  .chips-demo .lab { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
+  .chips-demo .box { background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+
+  #tools { position: fixed; bottom: 12px; right: 12px; z-index: 9999; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,.78);
+    color: #fff; padding: 8px 12px; border-radius: 8px; opacity: .4; transition: opacity .2s; }
+  #tools:hover { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="variant-nav">
+  <span class="lbl">Sketch 004 · TL;DR type &amp; chips</span>
+  <button class="variant-tab active" onclick="showV('a',event)">A · Instrument Serif (BLUF only)</button>
+  <button class="variant-tab" onclick="showV('b',event)">B · Newsreader (host serif) ★</button>
+  <button class="variant-tab" onclick="showV('c',event)">C · All-sans</button>
+</div>
+
+<!-- the same briefing content, three type treatments -->
+<!-- VARIANT A -->
+<div id="variant-a" class="variant active va">
+  <div class="stage">
+    <div class="specline">Type stack — BLUF: <b>Instrument Serif</b> (display, 1 weight) · body: <b>Geist</b> sans · IDs: <b>JetBrains Mono</b> (host). Keeps the "Editorial Desk" display serif, but only on the ONE lead line so its single weight never has to fake bold.</div>
+    <div class="tldr">
+      <div class="kicker">◆ Your briefing</div>
+      <div class="bluf">The EU regulatory claims-protocol stress test is wrapped — gap list shipped, nothing left for you.</div>
+      <div class="body">
+        <p>Both the Head of Underwriting and Head of Compliance reviewed and signed off; all corrections are incorporated. Two follow-ons are live:</p>
+        <p><span class="chip" data-st="review"><span class="id">BEAAA-1075</span><span class="ti">Claims protocol v0.2 §10 EU + AI Act + MDR appendix</span><span class="bdg">review</span></span>&nbsp; and &nbsp;<span class="chip" data-st="done"><span class="id">BEAAA-260</span><span class="ti">State-licensing strategy memo — NY, CA, TX, MA</span><span class="bdg">done</span></span></p>
+        <p>No action from you — Claims Architect closes this out in Friday's 6/5 CEO update.</p>
+      </div>
+      <div class="meta"><span>Summarized from a long task — trimmed to fit</span><span>Generated 2026-05-31 07:23</span></div>
+    </div>
+    <div class="chip-section"></div>
+  </div>
+</div>
+
+<!-- VARIANT B -->
+<div id="variant-b" class="variant vb">
+  <div class="stage">
+    <div class="specline">Type stack — BLUF + body: <b>Newsreader</b> (the host's own text serif — real 400/600 weights, so bold is true not faked) · IDs: <b>JetBrains Mono</b>. Editorial voice that HARMONIZES with Paperclip instead of importing a foreign face.</div>
+    <div class="tldr">
+      <div class="kicker">◆ Your briefing</div>
+      <div class="bluf">The EU regulatory claims-protocol stress test is wrapped — gap list shipped, nothing left for you.</div>
+      <div class="body">
+        <p>Both the Head of Underwriting and Head of Compliance reviewed and signed off; all corrections are incorporated. Two follow-ons are live:</p>
+        <p><span class="chip" data-st="review"><span class="id">BEAAA-1075</span><span class="ti">Claims protocol v0.2 §10 EU + AI Act + MDR appendix</span><span class="bdg">review</span></span>&nbsp; and &nbsp;<span class="chip" data-st="done"><span class="id">BEAAA-260</span><span class="ti">State-licensing strategy memo — NY, CA, TX, MA</span><span class="bdg">done</span></span></p>
+        <p>No action from you — Claims Architect closes this out in Friday's 6/5 CEO update.</p>
+      </div>
+      <div class="meta"><span>Summarized from a long task — trimmed to fit</span><span>Generated 2026-05-31 07:23</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- VARIANT C -->
+<div id="variant-c" class="variant vc">
+  <div class="stage">
+    <div class="specline">Type stack — ALL sans (<b>host system-ui</b>) · hierarchy carried by size + weight + the gold rule + color. No serif at all · IDs: <b>JetBrains Mono</b>. Maximally native — the Reader becomes indistinguishable from host-grade UI, at the cost of the "editorial" character.</div>
+    <div class="tldr">
+      <div class="kicker">◆ Your briefing</div>
+      <div class="bluf">The EU regulatory claims-protocol stress test is wrapped — gap list shipped, nothing left for you.</div>
+      <div class="body">
+        <p>Both the Head of Underwriting and Head of Compliance reviewed and signed off; all corrections are incorporated. Two follow-ons are live:</p>
+        <p><span class="chip" data-st="review"><span class="id">BEAAA-1075</span><span class="ti">Claims protocol v0.2 §10 EU + AI Act + MDR appendix</span><span class="bdg">review</span></span>&nbsp; and &nbsp;<span class="chip" data-st="done"><span class="id">BEAAA-260</span><span class="ti">State-licensing strategy memo — NY, CA, TX, MA</span><span class="bdg">done</span></span></p>
+        <p>No action from you — Claims Architect closes this out in Friday's 6/5 CEO update.</p>
+      </div>
+      <div class="meta"><span>Summarized from a long task — trimmed to fit</span><span>Generated 2026-05-31 07:23</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- SHARED: ref-chip two-weights demo (same in every variant — chips are font-agnostic) -->
+<div class="stage" style="margin-top:8px">
+  <div class="sub">Ref-chips — two weights (shared across A/B/C)</div>
+  <div class="chips-demo">
+    <div>
+      <div class="lab">Full chip — standalone / starts a line (border + status badge)</div>
+      <div class="box">
+        <span class="chip" data-st="done"><span class="id">BEAAA-258</span><span class="ti">TPA vs. in-house claims options memo + claims protocol design v0</span><span class="bdg">done</span></span>
+      </div>
+    </div>
+    <div>
+      <div class="lab">Light inline ref — mid-sentence (no border, reads as prose, status = a dot)</div>
+      <div class="box">
+        <p class="prose" style="margin:0">Third tabletop exercise in the
+          <span class="iref" data-st="done"><span class="id">BEAAA-258</span><span class="dot"></span> <span class="ti">TPA vs. in-house claims options memo</span></span>
+          series. Exercises the protocol surface the Tier-2 §1.4
+          (<span class="iref" data-st="done"><span class="id">BEAAA-629</span><span class="dot"></span> <span class="ti">Claims tabletop #1</span></span>)
+          and Tier-3 §1.5
+          (<span class="iref" data-st="done"><span class="id">BEAAA-966</span><span class="dot"></span> <span class="ti">Claims tabletop #2</span></span>)
+          did not, plus a ≤72h reserve set by Actuary
+          (<span class="iref" data-st="blocked"><span class="id">BEAAA-654</span><span class="dot"></span> <span class="ti">Ratify per-tier claims SLA</span></span>).</p>
+        <p class="prose" style="margin:8px 0 0; color:var(--ink-3); font-family:var(--font-mono); font-size:12px">Compare: the same sentence with the FULL chips would fragment into four boxed blocks (today's bug). The light inline form keeps the sentence reading like a sentence — the rabbit-hole is still one hover away.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tools">A/B/C swap the editorial voice · chips are identical across all three</div>
+
+<script>
+function showV(id, e){
+  document.querySelectorAll('.variant').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.variant-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('variant-'+id).classList.add('active');
+  e.target.classList.add('active');
+}
+document.addEventListener('click', e=>{ const c=e.target.closest('.chip,.iref'); if(c){ const o=c.style.background; c.style.background='var(--you-soft)'; setTimeout(()=>c.style.background=o,450); }});
+</script>
+</body>
+</html>

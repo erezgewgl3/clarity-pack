@@ -31,8 +31,19 @@
   --eric-bubble:#22201A;
   --agent-bubble:#16140F;
 
-  /* Type */
+  /* Type — plugin faces (today) */
   --font-sans:"Geist","Helvetica Neue",sans-serif;
   --font-mono:"Geist Mono",monospace;
   --font-serif:"Instrument Serif",serif;
+
+  /* Host-native faces — the Reader is EMBEDDED in Paperclip; these are what the
+     host actually loads (captured live from BEAAA 2026-05-31). Added for the
+     Reader redesign sketches 003/004 to test "feel native". Non-destructive. */
+  --font-host-sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-serif-text:"Newsreader",Georgia,serif;   /* host text serif — has real weights */
+  --font-mono-host:"JetBrains Mono",ui-monospace,monospace;
+
+  /* Reader rhythm */
+  --measure:70ch;
+  --radius:8px;
 }

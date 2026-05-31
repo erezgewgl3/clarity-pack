@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 003 — Reader layout &amp; hierarchy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Newsreader:ital,opt@0,7..72;1,7..72&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #08080a; color: var(--ink); font-family: var(--font-sans); padding-top: 46px; }
+
+  /* ---- variant tab bar ---- */
+  #variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9998; background: #111; border-bottom: 1px solid var(--line);
+    padding: 7px 14px; display: flex; gap: 8px; align-items: center; font-family: var(--font-mono); }
+  #variant-nav .lbl { color: var(--ink-3); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-right: 6px; }
+  .variant-tab { background: transparent; color: var(--ink-2); border: 1px solid var(--line-bright); border-radius: 6px;
+    padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer; transition: all .15s ease; }
+  .variant-tab:hover { background: var(--bg-3); color: var(--ink); }
+  .variant-tab.active { background: var(--you-soft); color: var(--you); border-color: var(--you); }
+  .variant { display: none; }
+  .variant.active { display: block; }
+
+  /* ============ MOCK PAPERCLIP HOST SHELL ============ */
+  .host { display: grid; grid-template-columns: 184px minmax(0,1fr) 300px; min-height: calc(100vh - 46px);
+    background: var(--bg-host, #0d0d0f); }
+  /* host chrome uses HOST sans (system-ui) on purpose — to expose the foreign-island problem */
+  .host-nav, .host-props, .host-topbar { font-family: var(--font-host-sans); }
+
+  .host-nav { background: #0b0b0d; border-right: 1px solid #1c1c20; padding: 14px 10px; font-size: 13px; }
+  .host-brand { display: flex; align-items: center; gap: 8px; color: #d8d4c8; font-weight: 600; margin-bottom: 16px; padding: 0 4px; }
+  .host-brand .logo { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg,#E5C56F,#E0744A); }
+  .host-nav a { display: flex; align-items: center; gap: 9px; color: #9b988f; text-decoration: none; padding: 6px 8px;
+    border-radius: 6px; margin-bottom: 1px; }
+  .host-nav a .ico { width: 15px; height: 15px; border-radius: 3px; border: 1.5px solid currentColor; opacity: .8; flex: 0 0 auto; }
+  .host-nav a:hover { background: #17171a; color: #cfccc2; }
+  .host-nav a.on { background: #1a1a1e; color: #e6e2d6; }
+  .host-nav .sec { color: #5c5a52; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; margin: 14px 6px 6px; }
+
+  .host-main { display: flex; flex-direction: column; min-width: 0; }
+  .host-topbar { border-bottom: 1px solid #1c1c20; padding: 11px 22px; display: flex; align-items: center; gap: 8px;
+    color: #8a877e; font-size: 13px; }
+  .host-topbar b { color: #d8d4c8; font-weight: 500; }
+  .host-tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid #1c1c20; font-size: 13.5px; }
+  .host-tab { padding: 11px 14px; color: #8a877e; cursor: pointer; border-bottom: 2px solid transparent; }
+  .host-tab:hover { color: #cfccc2; }
+  .host-tab.on { color: #e6e2d6; border-bottom-color: #e6e2d6; font-weight: 500; }
+
+  .host-props { border-left: 1px solid #1c1c20; padding: 16px 18px; font-size: 13px; background: #0b0b0d; }
+  .host-props h4 { margin: 0 0 14px; color: #d8d4c8; font-size: 13px; font-weight: 600; display:flex; justify-content:space-between; }
+  .pp-row { display: grid; grid-template-columns: 84px 1fr; gap: 8px; padding: 7px 0; align-items: start; }
+  .pp-row .k { color: #6f6d64; }
+  .pp-row .v { color: #c9c5ba; }
+  .pp-chip { display:inline-flex; align-items:center; gap:6px; }
+  .pp-dot { width: 8px; height: 8px; border-radius: 50%; display:inline-block; }
+  .pp-sub { display:flex; flex-wrap:wrap; gap:5px; }
+  .pp-sub span { font-family: var(--font-mono-host); font-size: 11px; color: #b7b3a8; border:1px solid #26262b; border-radius: 4px; padding: 1px 5px; }
+
+  /* ============ PLUGIN READER SURFACE ============ */
+  /* the plugin content carrier — switches to plugin sans (Geist) */
+  .reader { font-family: var(--font-sans); color: var(--ink); padding: 22px 26px; min-width: 0; }
+  .reader-scroll { overflow: visible; }
+
+  .r-title { font-size: var(--t-title); font-weight: 600; line-height: 1.25; margin: 0 0 4px; color: var(--ink); letter-spacing: -0.01em; }
+  .r-crumb { font-family: var(--font-mono); font-size: 11px; letter-spacing: .05em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 18px; }
+
+  /* TL;DR briefing block */
+  .tldr { position: relative; background: var(--panel, #1B1A14); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px 14px 22px; margin: 0 0 20px; }
+  .tldr.brief { border-left: 3px solid var(--you); }
+  .tldr .kicker { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--you); margin: 0 0 8px; display:flex; align-items:center; gap:8px; }
+  .tldr .bluf { font-family: var(--font-serif-display); font-size: var(--t-bluf); line-height: 1.22; color: var(--ink); margin: 0 0 10px; }
+  .tldr .body { font-size: var(--t-tldr); line-height: 1.5; color: var(--ink-2); margin: 0; }
+  .tldr .body p { margin: 0 0 7px; }
+  .tldr .meta { display:flex; gap:14px; flex-wrap:wrap; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+    font-size: var(--t-meta); color: var(--ink-3); font-family: var(--font-mono); }
+
+  /* on-you banner */
+  .onyou { display:flex; align-items:center; gap:12px; background: var(--you-soft); border:1px solid color-mix(in oklab, var(--you), transparent 55%);
+    border-radius: var(--radius); padding: 11px 16px; margin: 0 0 18px; font-size: 14px; }
+  .onyou.clear { background: var(--live-soft); border-color: color-mix(in oklab, var(--live), transparent 60%); }
+  .onyou .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; padding: 2px 7px;
+    border-radius: 4px; background: var(--you); color: #2a230d; font-weight: 600; }
+  .onyou.clear .tag { background: var(--live); color: #10210f; }
+  .onyou .act { margin-left:auto; }
+
+  /* subheads in the body */
+  .sub { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3);
+    margin: 20px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+  .prose { font-size: 15px; line-height: 1.62; color: var(--ink-2); max-width: var(--measure); }
+  .prose p { margin: 0 0 10px; }
+
+  /* collapsible raw body */
+  .disc { margin: 6px 0 0; }
+  .disc summary { cursor: pointer; font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); list-style: none;
+    display:inline-flex; align-items:center; gap:7px; padding: 7px 0; }
+  .disc summary::-webkit-details-marker { display:none; }
+  .disc summary .chev { transition: transform .15s ease; }
+  .disc[open] summary .chev { transform: rotate(90deg); }
+  .disc summary:hover { color: var(--ink); }
+
+  /* inline cards (AC, deliverable) */
+  .card { background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin: 12px 0; }
+  .card h5 { margin: 0 0 10px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .ac { display:flex; align-items:flex-start; gap:9px; padding: 5px 0; font-size: 14px; color: var(--ink-2); }
+  .ac .box { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--ink-4); flex: 0 0 auto; margin-top: 1px; }
+  .ac.done .box { background: var(--live); border-color: var(--live); position: relative; }
+  .ac.done .box::after { content:"✓"; color:#10210f; font-size: 11px; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .ac.done { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--ink-4); }
+  .deliv { display:flex; align-items:center; gap:12px; }
+  .deliv .file { width: 34px; height: 40px; border-radius: 5px; background: var(--bg-4); border:1px solid var(--line-bright);
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:9px; color:var(--ink-3); }
+
+  /* plugin's OWN rail (variant A only) */
+  .p-rail { display:flex; flex-direction:column; gap:12px; }
+  .reader.has-rail .reader-grid { display:grid; grid-template-columns: minmax(0,1fr) 320px; gap: 24px; align-items:start; }
+  .panel { background: var(--bg-3); border:1px solid var(--line); border-radius: var(--radius); padding: 13px 15px; }
+  .panel h5 { margin:0 0 9px; font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); }
+
+  /* ref chips */
+  .chip { display:inline-flex; align-items:baseline; gap:7px; border:1px solid var(--line-bright); border-left-width:3px; border-radius:6px;
+    padding:1px 8px 2px 9px; font-size:.94em; line-height:1.5; max-width:100%; vertical-align:baseline; transition: background .15s ease; cursor:pointer; }
+  .chip:hover { background: var(--bg-4); }
+  .chip[data-st="done"] { border-left-color: var(--live); }
+  .chip[data-st="review"] { border-left-color: var(--warn); }
+  .chip[data-st="blocked"] { border-left-color: var(--alert); }
+  .chip .id { font-family: var(--font-mono); font-weight:600; color: var(--ink); flex:0 0 auto; }
+  .chip .ti { color: var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:34ch; }
+  .chip .bdg { font-family:var(--font-mono); font-size:.66em; letter-spacing:.05em; text-transform:uppercase; padding:1px 6px;
+    border-radius:999px; flex:0 0 auto; align-self:center; }
+  .chip[data-st="done"] .bdg { background: var(--live); color:#10210f; }
+  .chip[data-st="review"] .bdg { background: var(--warn); color:#332512; }
+  .chip[data-st="blocked"] .bdg { background: var(--alert); color:#3a1208; }
+
+  .note { background:#141414; border:1px dashed var(--line-bright); border-radius:8px; padding:10px 14px; margin:14px 0;
+    font-size:12.5px; color: var(--ink-3); font-family: var(--font-mono); line-height:1.5; }
+  .note b { color: var(--you); }
+
+  /* sketch toolbar */
+  #tools { position:fixed; bottom:12px; right:12px; z-index:9999; font-family:system-ui; font-size:12px; background:rgba(0,0,0,.78);
+    color:#fff; padding:8px 12px; border-radius:8px; opacity:.4; transition:opacity .2s; display:flex; gap:10px; align-items:center; }
+  #tools:hover { opacity:1; }
+  #tools button { background:#2a2a2a; color:#eee; border:1px solid #444; border-radius:5px; padding:3px 8px; cursor:pointer; font:inherit; }
+  #tools button:hover { background:#3a3a3a; }
+</style>
+</head>
+<body>
+
+<div id="variant-nav">
+  <span class="lbl">Sketch 003 · Reader layout</span>
+  <button class="variant-tab active" onclick="showV('a',event)">A · Rail kept (baseline)</button>
+  <button class="variant-tab" onclick="showV('b',event)">B · TL;DR-first, no rail ★</button>
+  <button class="variant-tab" onclick="showV('c',event)">C · Hybrid + on-you banner</button>
+</div>
+
+<!-- ============================ VARIANT A ============================ -->
+<div id="variant-a" class="variant active">
+  <div class="host">
+    <!-- host left nav -->
+    <nav class="host-nav">
+      <div class="host-brand"><span class="logo"></span> IFA</div>
+      <a><span class="ico"></span> New Issue</a>
+      <a><span class="ico"></span> Dashboard</a>
+      <a><span class="ico"></span> Inbox</a>
+      <div class="sec">Work</div>
+      <a class="on"><span class="ico"></span> Issues</a>
+      <a><span class="ico"></span> Situation Room</a>
+      <a><span class="ico"></span> Daily Bulletin</a>
+      <a><span class="ico"></span> Employee Chat</a>
+    </nav>
+    <!-- host main -->
+    <div class="host-main">
+      <div class="host-topbar">Issues <span>›</span> <b>Claims tabletop #3 — synthetic Tier-4 §1.6 regulatory FNOL…</b></div>
+      <div class="host-tabs">
+        <div class="host-tab">Chat</div><div class="host-tab">Activity</div>
+        <div class="host-tab">Related work</div><div class="host-tab on">Reader</div>
+      </div>
+      <!-- PLUGIN reader, WITH its own rail -->
+      <div class="reader has-rail" data-clarity-surface="reader">
+        <div class="note">Baseline of today's live build. Note the <b>two right-hand panels</b> (plugin rail + host Properties), the <b>424px main column</b> that overflows wide chips, and the plugin sans (Geist) sitting beside the host chrome (system-ui).</div>
+        <h1 class="r-title">Claims tabletop #3 — synthetic Tier-4 §1.6 regulatory FNOL (EU GDPR + EU AI Act) — target Fri 2026-06-05</h1>
+        <div class="r-crumb">Onboarding · in review</div>
+        <div class="reader-grid">
+          <div class="reader-main">
+            <p class="prose" style="color:var(--ink-3)">IFA rates and insures AI agents so the Agent Economy can leave pilot mode. We are building AI Agent Insurance: a US-based MGA / underwriting platform for AI vendors… <span style="opacity:.6">[generic company boilerplate, repeats on every issue]</span></p>
+            <div class="tldr">
+              <div class="bluf"><b>The EU regulatory claims-protocol stress test is wrapped — gap list shipped, nothing left for you.</b> Both the Head of Underwriting and Head of Compliance reviewed and signed off; all corrections are incorporated.</div>
+              <div class="body"><p>Two follow-ons are live:
+                <span class="chip" data-st="review"><span class="id">BEAAA-1075</span><span class="ti">Claims protocol v0.2 §10 EU + AI Act + MDR appendix</span><span class="bdg">review</span></span> and
+                <span class="chip" data-st="done"><span class="id">BEAAA-260</span><span class="ti">State-licensing strategy options memo — NY, CA, TX, MA</span><span class="bdg">done</span></span>.
+                No action from you — Claims Architect closes this out in Friday's 6/5 CEO update.</p></div>
+              <div class="meta"><span>Summarized from a long task — trimmed to fit</span><span>Generated 2026-05-31 07:23</span></div>
+            </div>
+            <div class="sub">Goal</div>
+            <p class="prose">Third tabletop exercise in the <span class="chip" data-st="done"><span class="id">BEAAA-258</span><span class="ti">TPA vs. in-house claims options memo</span><span class="bdg">done</span></span> series. Exercises the protocol surface area the Tier-2 §1.4 (<span class="chip" data-st="done"><span class="id">BEAAA-629</span><span class="ti">Claims tabletop #1 — synthetic Tier-2 FNOL</span><span class="bdg">done</span></span>) and Tier-3 §1.5 (<span class="chip" data-st="done"><span class="id">BEAAA-966</span><span class="ti">Claims tabletop #2 — Tier-3 prompt-inject</span><span class="bdg">done</span></span>) did not.</p>
+          </div>
+          <!-- plugin rail -->
+          <div class="p-rail">
+            <div class="panel"><h5>On you</h5><div style="font-size:13px;color:var(--ink-2)">EXTERNAL<br><span style="color:var(--ink-3)">No active blockers</span></div></div>
+            <div class="panel"><h5>Acceptance</h5><div class="ac done"><span class="box"></span>HoUW sign-off</div><div class="ac done"><span class="box"></span>HoC sign-off</div><div class="ac"><span class="box"></span>CEO update 6/5</div></div>
+            <div class="panel"><h5>Deliverable</h5><div class="deliv"><span class="file">PDF</span><span style="font-size:12.5px;color:var(--ink-2)">tabletop-3-report.pdf</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- host properties -->
+    <aside class="host-props">
+      <h4>Properties <span style="color:#6f6d64;cursor:pointer">✕</span></h4>
+      <div class="pp-row"><span class="k">Status</span><span class="v pp-chip"><span class="pp-dot" style="background:var(--warn)"></span>In Review</span></div>
+      <div class="pp-row"><span class="k">Priority</span><span class="v">— Medium</span></div>
+      <div class="pp-row"><span class="k">Assignee</span><span class="v pp-chip"><span class="pp-dot" style="background:#7c6cd0"></span>Claims Architect</span></div>
+      <div class="pp-row"><span class="k">Project</span><span class="v pp-chip"><span class="pp-dot" style="background:#5b8def"></span>Onboarding</span></div>
+      <div class="pp-row"><span class="k">Parent</span><span class="v">BEAAA-258 TPA vs. in-house claims options memo</span></div>
+      <div class="pp-row"><span class="k">Sub-issues</span><span class="v pp-sub"><span>BEAAA-1075</span><span>BEAAA-1088</span><span>BEAAA-1101</span></span></div>
+      <div class="pp-row"><span class="k">Related</span><span class="v pp-sub"><span>BEAAA-260</span><span>BEAAA-629</span><span>BEAAA-966</span><span>BEAAA-654</span></span></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ============================ VARIANT B ============================ -->
+<div id="variant-b" class="variant">
+  <div class="host">
+    <nav class="host-nav">
+      <div class="host-brand"><span class="logo"></span> IFA</div>
+      <a><span class="ico"></span> New Issue</a><a><span class="ico"></span> Dashboard</a><a><span class="ico"></span> Inbox</a>
+      <div class="sec">Work</div>
+      <a class="on"><span class="ico"></span> Issues</a><a><span class="ico"></span> Situation Room</a>
+      <a><span class="ico"></span> Daily Bulletin</a><a><span class="ico"></span> Employee Chat</a>
+    </nav>
+    <div class="host-main">
+      <div class="host-topbar">Issues <span>›</span> <b>Claims tabletop #3 — synthetic Tier-4 §1.6 regulatory FNOL…</b></div>
+      <div class="host-tabs"><div class="host-tab">Chat</div><div class="host-tab">Activity</div><div class="host-tab">Related work</div><div class="host-tab on">Reader</div></div>
+      <!-- single column, no plugin rail, TL;DR first -->
+      <div class="reader" data-clarity-surface="reader" style="max-width: 760px;">
+        <div class="note">No plugin rail (host Properties owns the right). <b>TL;DR is the first thing</b> under the title; raw body collapses behind "Show full task"; AC + deliverable inline below. One reading column at a comfortable measure.</div>
+        <h1 class="r-title">Claims tabletop #3 — synthetic Tier-4 §1.6 regulatory FNOL (EU GDPR + EU AI Act) — target Fri 2026-06-05</h1>
+        <div class="r-crumb">Onboarding · in review · Claims Architect</div>
+
+        <div class="tldr brief">
+          <div class="kicker">◆ Your briefing</div>
+          <div class="bluf">The EU regulatory claims-protocol stress test is wrapped — gap list shipped, nothing left for you.</div>
+          <div class="body">
+            <p>Both the Head of Underwriting and Head of Compliance reviewed and signed off; all corrections are incorporated. Two follow-ons are live:</p>
+            <p>
+              <span class="chip" data-st="review"><span class="id">BEAAA-1075</span><span class="ti">Claims protocol v0.2 §10 EU + AI Act + MDR appendix</span><span class="bdg">review</span></span>
+              &nbsp;and&nbsp;
+              <span class="chip" data-st="done"><span class="id">BEAAA-260</span><span class="ti">State-licensing strategy memo — NY, CA, TX, MA</span><span class="bdg">done</span></span>
+            </p>
+            <p>No action from you — Claims Architect closes this out in Friday's 6/5 CEO update.</p>
+          </div>
+          <div class="meta"><span>Summarized from a long task — trimmed to fit</span><span>Generated 2026-05-31 07:23</span></div>
+        </div>
+
+        <div class="card"><h5>Acceptance · 2 of 3</h5>
+          <div class="ac done"><span class="box"></span>Head of Underwriting sign-off</div>
+          <div class="ac done"><span class="box"></span>Head of Compliance sign-off</div>
+          <div class="ac"><span class="box"></span>Surfaced in Friday's 6/5 CEO update</div>
+        </div>
+        <div class="card"><h5>Deliverable</h5><div class="deliv"><span class="file">PDF</span><div><div style="font-size:13.5px;color:var(--ink)">tabletop-3-report.pdf</div><div style="font-size:11.5px;color:var(--ink-3);font-family:var(--font-mono)">last write 2026-05-30 16:04 · 41 kB</div></div></div></div>
+
+        <details class="disc">
+          <summary><span class="chev">▸</span> Show full task</summary>
+          <div class="sub">Goal</div>
+          <p class="prose">Third tabletop exercise in the
+            <span class="chip" data-st="done"><span class="id">BEAAA-258</span><span class="ti">TPA vs. in-house claims options memo</span><span class="bdg">done</span></span> series. Exercises the protocol surface area the Tier-2 §1.4
+            (<span class="chip" data-st="done"><span class="id">BEAAA-629</span><span class="ti">Claims tabletop #1</span><span class="bdg">done</span></span>)
+            and Tier-3 §1.5 (<span class="chip" data-st="done"><span class="id">BEAAA-966</span><span class="ti">Claims tabletop #2</span><span class="bdg">done</span></span>) did not: §10 regulatory-reporting matrix on a deliberately substantive EU fact pattern, plus T4 same-day Founder notification + ≤72h initial reserve set by Actuary
+            (<span class="chip" data-st="done"><span class="id">BEAAA-654</span><span class="ti">Ratify per-tier claims SLA into protocol §6</span><span class="bdg">done</span></span>).</p>
+          <div class="sub">Scope</div>
+          <p class="prose">Founder-ratified per-tier reserve thresholds; counsel-cycle §12 cross-regime allocation; MDR appendix alignment. Out of scope: state-licensing execution (tracked separately in BEAAA-260).</p>
+        </details>
+      </div>
+    </div>
+    <aside class="host-props">
+      <h4>Properties <span style="color:#6f6d64;cursor:pointer">✕</span></h4>
+      <div class="pp-row"><span class="k">Status</span><span class="v pp-chip"><span class="pp-dot" style="background:var(--warn)"></span>In Review</span></div>
+      <div class="pp-row"><span class="k">Priority</span><span class="v">— Medium</span></div>
+      <div class="pp-row"><span class="k">Assignee</span><span class="v pp-chip"><span class="pp-dot" style="background:#7c6cd0"></span>Claims Architect</span></div>
+      <div class="pp-row"><span class="k">Project</span><span class="v pp-chip"><span class="pp-dot" style="background:#5b8def"></span>Onboarding</span></div>
+      <div class="pp-row"><span class="k">Parent</span><span class="v">BEAAA-258 TPA vs. in-house claims options memo</span></div>
+      <div class="pp-row"><span class="k">Sub-issues</span><span class="v pp-sub"><span>BEAAA-1075</span><span>BEAAA-1088</span><span>BEAAA-1101</span></span></div>
+      <div class="pp-row"><span class="k">Related</span><span class="v pp-sub"><span>BEAAA-260</span><span>BEAAA-629</span><span>BEAAA-966</span><span>BEAAA-654</span></span></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ============================ VARIANT C ============================ -->
+<div id="variant-c" class="variant">
+  <div class="host">
+    <nav class="host-nav">
+      <div class="host-brand"><span class="logo"></span> IFA</div>
+      <a><span class="ico"></span> New Issue</a><a><span class="ico"></span> Dashboard</a><a><span class="ico"></span> Inbox</a>
+      <div class="sec">Work</div>
+      <a class="on"><span class="ico"></span> Issues</a><a><span class="ico"></span> Situation Room</a>
+      <a><span class="ico"></span> Daily Bulletin</a><a><span class="ico"></span> Employee Chat</a>
+    </nav>
+    <div class="host-main">
+      <div class="host-topbar">Issues <span>›</span> <b>Claims tabletop #3 — synthetic Tier-4 §1.6 regulatory FNOL…</b></div>
+      <div class="host-tabs"><div class="host-tab">Chat</div><div class="host-tab">Activity</div><div class="host-tab">Related work</div><div class="host-tab on">Reader</div></div>
+      <div class="reader" data-clarity-surface="reader" style="max-width: 760px;">
+        <div class="note">Same single-column spine as B, but the <b>"on you" action is a full-width banner at the very top</b> (the most-urgent thing, impossible to miss) — here in its healthy "nothing needs you" state. Use this when the on-you signal must dominate.</div>
+        <h1 class="r-title">Claims tabletop #3 — synthetic Tier-4 §1.6 regulatory FNOL (EU GDPR + EU AI Act) — target Fri 2026-06-05</h1>
+        <div class="r-crumb">Onboarding · in review · Claims Architect</div>
+
+        <div class="onyou clear"><span class="tag">on you</span><span>Nothing needs you — Claims Architect carries this to Friday's CEO update.</span><span class="act"><span class="chip" data-st="review" style="cursor:pointer"><span class="id">6/5</span><span class="ti">tripwire</span></span></span></div>
+
+        <div class="tldr brief">
+          <div class="kicker">◆ Your briefing</div>
+          <div class="bluf">The EU regulatory claims-protocol stress test is wrapped — gap list shipped, nothing left for you.</div>
+          <div class="body">
+            <p>Both the Head of Underwriting and Head of Compliance reviewed and signed off; all corrections are incorporated. Two follow-ons are live:</p>
+            <p>
+              <span class="chip" data-st="review"><span class="id">BEAAA-1075</span><span class="ti">Claims protocol v0.2 §10 EU + AI Act + MDR appendix</span><span class="bdg">review</span></span>
+              &nbsp;and&nbsp;
+              <span class="chip" data-st="done"><span class="id">BEAAA-260</span><span class="ti">State-licensing strategy memo — NY, CA, TX, MA</span><span class="bdg">done</span></span>
+            </p>
+          </div>
+          <div class="meta"><span>Summarized from a long task — trimmed to fit</span><span>Generated 2026-05-31 07:23</span></div>
+        </div>
+
+        <details class="disc"><summary><span class="chev">▸</span> Show full task · acceptance · deliverable</summary>
+          <div class="card" style="margin-top:12px"><h5>Acceptance · 2 of 3</h5>
+            <div class="ac done"><span class="box"></span>Head of Underwriting sign-off</div>
+            <div class="ac done"><span class="box"></span>Head of Compliance sign-off</div>
+            <div class="ac"><span class="box"></span>Surfaced in Friday's 6/5 CEO update</div></div>
+          <div class="sub">Goal</div>
+          <p class="prose">Third tabletop exercise in the <span class="chip" data-st="done"><span class="id">BEAAA-258</span><span class="ti">TPA vs. in-house claims options memo</span><span class="bdg">done</span></span> series — §10 regulatory-reporting matrix on a substantive EU fact pattern, T4 same-day Founder notification + ≤72h reserve.</p>
+        </details>
+      </div>
+    </div>
+    <aside class="host-props">
+      <h4>Properties <span style="color:#6f6d64;cursor:pointer">✕</span></h4>
+      <div class="pp-row"><span class="k">Status</span><span class="v pp-chip"><span class="pp-dot" style="background:var(--warn)"></span>In Review</span></div>
+      <div class="pp-row"><span class="k">Priority</span><span class="v">— Medium</span></div>
+      <div class="pp-row"><span class="k">Assignee</span><span class="v pp-chip"><span class="pp-dot" style="background:#7c6cd0"></span>Claims Architect</span></div>
+      <div class="pp-row"><span class="k">Project</span><span class="v pp-chip"><span class="pp-dot" style="background:#5b8def"></span>Onboarding</span></div>
+      <div class="pp-row"><span class="k">Parent</span><span class="v">BEAAA-258 TPA vs. in-house claims options memo</span></div>
+      <div class="pp-row"><span class="k">Sub-issues</span><span class="v pp-sub"><span>BEAAA-1075</span><span>BEAAA-1088</span><span>BEAAA-1101</span></span></div>
+    </aside>
+  </div>
+</div>
+
+<!-- sketch toolbar -->
+<div id="tools">
+  <span style="opacity:.7">view:</span>
+  <button onclick="setW('1366px')">desktop</button>
+  <button onclick="setW('1100px')">narrow</button>
+  <button onclick="setW('100%')">full</button>
+</div>
+
+<script>
+function showV(id, e){
+  document.querySelectorAll('.variant').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.variant-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('variant-'+id).classList.add('active');
+  e.target.classList.add('active');
+}
+function setW(w){ document.querySelectorAll('.host').forEach(h=>{ h.style.maxWidth=w; h.style.margin='0 auto'; }); }
+// chip click = fake "peek" feedback (the core no-navigate mechanic)
+document.addEventListener('click', e=>{ const c=e.target.closest('.chip'); if(c){ c.style.background='var(--you-soft)'; setTimeout(()=>c.style.background='',500); }});
+</script>
+</body>
+</html>
