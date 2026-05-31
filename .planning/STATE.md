@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
 status: executing
-stopped_at: Phase 9 drill found R3 gap — v1.3.0 live on BEAAA, phase OPEN pending 09-04
-last_updated: "2026-05-31T16:20:00.000Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-05-31T18:09:25.850Z"
 progress:
   total_phases: 10
   completed_phases: 8
-  total_plans: 66
-  completed_plans: 58
+  total_plans: 67
+  completed_plans: 60
   percent: 80
 ---
 
@@ -22,6 +22,7 @@ progress:
 Phase 9 (Situation Room actionable cockpit) executed 09-01 (worker) + 09-02 (UI) + 09-03 Task 1 (ship). **v1.3.0 is deployed and live on BEAAA** via DEPLOY-RUNBOOK **Path B** (Path A was fail2ban-blocked) — `clarity-pack-1.3.0.tgz` sha256 `10ae75c3829398fd70d0b383cdea2efa725ab60d6c6a3e32a2257765409288aa`; `status=ready version=1.3.0 id=a763176a` (UUID preserved); host accepted `issues.update`.
 
 **Live drill: 10/11 acceptance checks + the Reader no-rail rider PASS; R3 (hero) FAILS.**
+
 - PASS: R1 (no agent grid; 3 groups Needs you/Working/Idle) · R2 · R5 (un-frozen banner, 9 unowned) · R6 (single expander) · R7 (stand-down confirm) · R8 (DO-backup bookend) · R9 (no UUID leaks) · D-01 owner picker · D-02 "Take it myself" present · WARNING-2 (Editor-Agent excluded) · **Reader rider** (v1.2.2 no-rail 760px column + Show-full-task + inline ref-chips, first live appearance).
 - **R3 FAIL (blocking):** `situation.assignOwner` passes the human issue key `"BEAAA-43"` to `ctx.issues.update`, which needs the issue **UUID** → host `issues.update` error → `ASSIGN_FAILED`. `leafIssueId` is human-readable by design (M2/NO_UUID_LEAK in `build-employees-rollup.ts`); display-id and mutation-id were conflated. First live core-issue mutation. R4 PARTIAL (gated by R3). Full root cause + fix design in `09-VERIFICATION.md`.
 
