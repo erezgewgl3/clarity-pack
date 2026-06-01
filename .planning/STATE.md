@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
-status: executing
-stopped_at: Completed 09-04-PLAN.md (Phase 9 CLOSED & VERIFIED LIVE on BEAAA)
-last_updated: "2026-06-01T10:05:00.000Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 09 was final phase)
+last_updated: 2026-06-01T09:59:50.679Z
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 67
-  completed_plans: 62
-  percent: 93
+  completed_plans: 69
+  percent: 90
 ---
 
 # State: Clarity Pack
@@ -547,12 +547,12 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 09 — situation-room-actionable-cockpit
+**Current Focus:** Milestone complete
 
 ## Current Position
 
-Phase: 09 (situation-room-actionable-cockpit) — EXECUTING
-Plan: 1 of 4
+Phase: 09
+Plan: Not started
 
 **▶ Plan 09-01 (worker tier) CODE-COMPLETE 2026-05-31 (24 min, 3 tasks, commits `9aaa8a9`/`86a23d7`/`a612dc0`/`7beb8de`/`0fb9e56`).** Shipped: `situation.assignOwner` — the FIRST plugin core-issue mutation (`ctx.issues.update(leafIssueId, {assigneeAgentId|assigneeUserId}, companyId, {actorUserId})`; opt-in-guarded + company-scope `agents.get` gate; zero `ctx.db`); pure `groupForState` classifier + `group`/`isPaused` on every `SituationEmployeeRow` (R2/D-04); un-frozen `needsYou` count (counts unowned blockers; unowned `topAction` carries `agentId` + non-null `leafIssueId` so 09-02 `[Assign first ▾]` is never a dead button, R4); `issues.update` manifest capability declared; dead `recompute-situation` cron + materialized `situation_snapshots` read-path removed (handler returns fresh compute only; table preserved, R9). No version bump (1.2.2 — deferred to 09-03). Gates: tsc clean, build + css-scope + bundle-size PASS, suite 2384 pass / 1 pre-existing `situation.artifacts` fail. **Next: `/gsd:execute-phase 09` → Plan 09-02 (UI tier). BLOCKER 1 reminder: 09-02 deletes the still-intact `situation.artifacts` handler + registration atomically with its `usePluginData` UI caller.**
 
@@ -1304,7 +1304,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Executing Phase 09
+**Status:** Milestone complete
 **Progress:** [█████████░] 88%
 
 ## Performance Metrics
