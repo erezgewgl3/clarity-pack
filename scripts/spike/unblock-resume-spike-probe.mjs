@@ -756,24 +756,309 @@ async function observeRealBlockedItems(state) {
 // signals (behavioral / consumption / state) within the bounded window. Extends
 // the proven 04.1-01 PASS-NATIVE result to the awaiting-answer condition.
 
+// ---------------------------------------------------------------------------
+// Shared three-signal helpers (used by probeShapeA / B / C). Each shape judges
+// resume by the D-07 triad: behavioral (a NEW agent comment), consumption (a
+// FRESH createdByRunId on that comment, distinct from the run(s) that produced
+// the question), and state (issue status off blocked/awaiting). Signal 3 alone
+// is necessary-but-not-sufficient (Pitfall 2 — disposition-recovery false-pass).
+// ---------------------------------------------------------------------------
+
+/** True when a comment row was authored by the probe agent (not system/human). */
+function isAgentComment(c, probeAgentId) {
+  if (!c) return false;
+  if (c.authorType === 'agent') return true;
+  const a = c.authorAgentId ?? c.author_agent_id ?? null;
+  return !!(probeAgentId && a && a === probeAgentId);
+}
+
+/** True when a comment row is a host system_notice (disposition-recovery). */
+function isSystemNotice(c) {
+  if (!c) return false;
+  if (c.authorType === 'system') return true;
+  const kind = c.presentation?.kind ?? c.presentation_kind ?? null;
+  return kind === 'system_notice';
+}
+
+/** Pull createdByRunId off a comment row across the snake/camel variants. */
+function runIdOf(c) {
+  return (c && (c.createdByRunId ?? c.created_by_run_id)) || null;
+}
+
+/** Read the agent's status via the company-scoped roster (Pitfall 6 / A6). */
+async function getAgentStatus(probeAgentId) {
+  if (!probeAgentId) return null;
+  try {
+    const res = await listAgents();
+    if (!ok(res.status)) return null;
+    const a = asArray(res.body).find((x) => x && x.id === probeAgentId);
+    return a ? a.status ?? null : null;
+  } catch (err) {
+    log('getAgentStatus threw', { err: err.message });
+    return null;
+  }
+}
+
+/**
+ * Poll issue status across a window, recording the full transition list (04.1
+ * OQ1 pattern). Returns { transitions:[{at,status}], finalStatus }. READ-ONLY.
+ */
+async function pollIssueStatus(issueId, baselineStatus, windowMs) {
+  const transitions = [];
+  let last = baselineStatus ?? null;
+  if (last != null) transitions.push({ at: now(), status: last });
+  const deadline = Date.now() + windowMs;
+  while (Date.now() < deadline) {
+    await sleep(POLL_INTERVAL_MS);
+    let res;
+    try {
+      res = await getIssue(issueId);
+    } catch (err) {
+      log('pollIssueStatus: getIssue threw', { err: err.message });
+      continue;
+    }
+    if (!ok(res.status)) continue;
+    const s = res.body?.status ?? null;
+    if (s !== last) {
+      transitions.push({ at: now(), status: s });
+      last = s;
+    }
+  }
+  return { transitions, finalStatus: last };
+}
+
+/**
+ * The core three-signal observation. Posts no comment itself — the caller has
+ * already taken the resume action (comment / transition). Concurrently polls
+ * for a NEW non-system agent comment (behavioral + consumption) and the issue
+ * status transition (state) within `windowMs`. `knownRunIds` are the run ids
+ * already seen BEFORE the resume action — a reply whose createdByRunId is in
+ * that set is NOT fresh consumption.
+ *
+ * Returns { behavioral, consumption, state, evidence } where evidence carries
+ * the commentId, createdByRunId, status transition list, and any system_notice
+ * seen (the disposition-recovery false-pass marker, Pitfall 2).
+ */
+async function observeThreeSignals(issueId, {
+  seenIds,
+  knownRunIds,
+  probeAgentId,
+  baselineStatus,
+  blockedStatuses,
+  windowMs,
+}) {
+  const evidence = {
+    behavioralCommentId: null,
+    behavioralAuthorType: null,
+    consumptionRunId: null,
+    statusTransitions: [],
+    finalStatus: null,
+    systemNoticeSeen: null,
+  };
+
+  // Run both observations concurrently so neither starves the window.
+  const [commentResult, statusResult] = await Promise.all([
+    pollForNewComment(issueId, seenIds, windowMs),
+    pollIssueStatus(issueId, baselineStatus, windowMs),
+  ]);
+
+  evidence.statusTransitions = statusResult.transitions;
+  evidence.finalStatus = statusResult.finalStatus;
+
+  let behavioral = false;
+  let consumption = false;
+  if (commentResult && commentResult.fresh) {
+    const fresh = commentResult.fresh;
+    if (isSystemNotice(fresh)) {
+      // Host disposition-recovery — NOT an agent resume (Pitfall 2 marker).
+      evidence.systemNoticeSeen = {
+        commentId: fresh.id ?? null,
+        body: truncBody(fresh.body ?? '', 160),
+        runId: runIdOf(fresh),
+      };
+    }
+    if (isAgentComment(fresh, probeAgentId)) {
+      behavioral = true;
+      evidence.behavioralCommentId = fresh.id ?? null;
+      evidence.behavioralAuthorType = fresh.authorType ?? null;
+      const rid = runIdOf(fresh);
+      evidence.consumptionRunId = rid;
+      // Consumption = the reply rode a FRESH run id (A2 — distinct from the
+      // run(s) that produced the question / any pre-existing run).
+      consumption = !!rid && !(knownRunIds && knownRunIds.has(rid));
+    } else if (!evidence.systemNoticeSeen) {
+      // A fresh non-agent, non-system comment — still record it for audit.
+      evidence.behavioralCommentId = fresh.id ?? null;
+      evidence.behavioralAuthorType = fresh.authorType ?? null;
+    }
+  }
+
+  // State = the issue moved off the blocked/awaiting set across the window.
+  const blocked = blockedStatuses || new Set(['blocked']);
+  const finalOffBlocked =
+    evidence.finalStatus != null && !blocked.has(evidence.finalStatus);
+  const everOffBlocked = evidence.statusTransitions.some(
+    (t) => t.status != null && !blocked.has(t.status),
+  );
+  // Shape A starts at in_progress (not in blocked set); "state" there means the
+  // status stayed non-blocked through a fresh agent run. For B/C it means the
+  // terminal status was actually shed.
+  const state = finalOffBlocked || everOffBlocked;
+
+  return { behavioral, consumption, state, evidence };
+}
+
+/** Combine the three signals into PASS / PARTIAL / FAIL (D-07). */
+function verdictFromSignals(behavioral, consumption, state) {
+  if (behavioral && consumption && state) return 'PASS';
+  // State flipped but no fresh agent run = host disposition-recovery, not a
+  // resume (Pitfall 2). Any partial corroboration short of all-three is PARTIAL.
+  if (state || behavioral || consumption) return 'PARTIAL';
+  return 'FAIL';
+}
+
+/**
+ * Seed the set of run ids already present on an issue's comments BEFORE the
+ * resume action, so a later reply's createdByRunId can be judged "fresh".
+ * Also seeds `seenIds` with the existing comment ids. READ-ONLY.
+ */
+async function seedSeenAndRuns(issueId, seenIds, knownRunIds) {
+  try {
+    const res = await listComments(issueId);
+    if (ok(res.status)) {
+      for (const c of asArray(res.body)) {
+        if (c && c.id) seenIds.add(c.id);
+        const rid = runIdOf(c);
+        if (rid) knownRunIds.add(rid);
+      }
+    }
+  } catch (err) {
+    log('seedSeenAndRuns threw', { err: err.message });
+  }
+}
+
 async function probeShapeA(state) {
   const finding = {
     probe: 'PROBE-SHAPE-A',
     question:
       'Shape A (awaiting reply): does a comment alone resume an agent that asked a question and parked?',
     steps: [],
+    construction: [],
     probeIssueId: null,
     signals: { behavioral: null, consumption: null, state: null },
+    evidence: null,
     ladderRungsTried: [],
     minimalRecipe: null,
     verdictHint: 'STUB — filled by Plan 10-02',
   };
-  finding.steps.push('STUB — probeShapeA not yet implemented (Plan 10-02)');
-  void state;
-  void createComment;
-  void pollForNewComment;
-  void requestWakeup;
-  void REPLY_CHANNEL_INSTRUCTION;
+
+  if (!SPIKE_PROBE_AGENT_ID) {
+    finding.verdictHint =
+      'SKIPPED — SPIKE_PROBE_AGENT_ID not set; the three-shape run is gated behind the pinned sacrificial agent (D-02).';
+    finding.steps.push('Shape A skipped — no SPIKE_PROBE_AGENT_ID');
+    return finding;
+  }
+
+  try {
+    // ----------------------------------------------------------------------
+    // CONSTRUCT — create an in_progress issue assigned to the probe agent and
+    // post a question + the reply-channel instruction. Let the agent run, ask,
+    // and park (awaiting an answer — the primary DO-03 case).
+    // ----------------------------------------------------------------------
+    const create = await createIssue({
+      title: `Shape A awaiting-reply probe ${SPIKE_TAG}`,
+      description: `Spike 10 Shape A — agent asks a question then parks awaiting a human answer. ${REPLY_CHANNEL_INSTRUCTION} Safe to delete after the spike.`,
+      status: 'in_progress',
+      assigneeAgentId: SPIKE_PROBE_AGENT_ID,
+      originKind: 'plugin:clarity-pack',
+      originId: `spike-shapeA:${Date.now()}`,
+    });
+    finding.construction.push(`createIssue (in_progress, assigned to probe): HTTP ${create.status}`);
+    if (!ok(create.status) || !create.body?.id) {
+      finding.verdictHint = 'FAIL — could not create the Shape A probe issue';
+      finding.steps.push(`Shape A: create failed HTTP ${create.status}`);
+      return finding;
+    }
+    const issueId = create.body.id;
+    finding.probeIssueId = issueId;
+    state.shapeAProbeIssueId = issueId;
+    finding.steps.push(`created Shape A probe issue ${issueId}`);
+
+    // Post the question comment that asks the agent to pose a decision and park.
+    const seen = new Set();
+    const knownRuns = new Set();
+    const q = await createComment(
+      issueId,
+      `Spike 10 Shape A: in one sentence, ask me the single question you most need answered to proceed, then stop and wait. ${REPLY_CHANNEL_INSTRUCTION}`,
+    );
+    finding.construction.push(`createComment (question): HTTP ${q.status}`);
+    if (q.body?.id) seen.add(q.body.id);
+
+    // Let the agent run + ask its question (behavioral turn 1). Bounded wait so
+    // the agent genuinely parks awaiting-answer before we post the resume reply.
+    finding.steps.push('awaiting the agent question turn (parks awaiting-answer)');
+    const askedQuestion = await pollForNewComment(issueId, seen, FIRST_REPLY_WINDOW_MS);
+    if (askedQuestion && askedQuestion.fresh) {
+      const qc = askedQuestion.fresh;
+      if (qc.id) seen.add(qc.id);
+      const qRun = runIdOf(qc);
+      if (qRun) knownRuns.add(qRun); // the question run is NOT fresh consumption
+      finding.steps.push(
+        `agent question turn observed (comment ${qc.id}, runId ${qRun ?? '(none)'})`,
+      );
+    } else {
+      // Pitfall 5 — if the agent never ran, check for a budget/invocation block
+      // before treating this as a resume FAIL.
+      const agentStatus = await getAgentStatus(SPIKE_PROBE_AGENT_ID);
+      finding.steps.push(
+        `agent never produced a question turn in ${FIRST_REPLY_WINDOW_MS / 60000}min — agent status=${agentStatus ?? '(unknown)'}; check for a budget/invocation-block incident before declaring FAIL`,
+      );
+    }
+    // Seed any other pre-existing runs so the resume reply's run id is judged fresh.
+    await seedSeenAndRuns(issueId, seen, knownRuns);
+
+    // ----------------------------------------------------------------------
+    // RESUME — Rung 0: comment alone (the proven Shape-A baseline). Post the
+    // answer, then run the three-signal observation.
+    // ----------------------------------------------------------------------
+    finding.ladderRungsTried.push('rung0:comment-alone');
+    const baseline = await getIssue(issueId);
+    const baselineStatus = ok(baseline.status) ? baseline.body?.status ?? null : null;
+    const answer = await createComment(
+      issueId,
+      'Spike 10 Shape A: here is your answer — proceed. Reply with your next concrete step as a COMMENT on this issue.',
+    );
+    finding.steps.push(`posted answer comment (rung 0): HTTP ${answer.status}`);
+    if (answer.body?.id) seen.add(answer.body.id);
+
+    const obs = await observeThreeSignals(issueId, {
+      seenIds: seen,
+      knownRunIds: knownRuns,
+      probeAgentId: SPIKE_PROBE_AGENT_ID,
+      baselineStatus,
+      blockedStatuses: new Set(['blocked']), // Shape A: in_progress is "off-blocked"
+      windowMs: FIRST_REPLY_WINDOW_MS,
+    });
+    finding.signals = {
+      behavioral: obs.behavioral,
+      consumption: obs.consumption,
+      state: obs.state,
+    };
+    finding.evidence = obs.evidence;
+
+    let verdict = verdictFromSignals(obs.behavioral, obs.consumption, obs.state);
+    if (verdict === 'PASS') {
+      finding.minimalRecipe = 'comment-alone (rung 0) — native wake resumes an awaiting-answer agent';
+    } else if (obs.evidence.systemNoticeSeen && !obs.behavioral) {
+      finding.steps.push(
+        'state moved via host disposition-recovery (system_notice), no fresh agent run — PARTIAL not PASS (Pitfall 2)',
+      );
+    }
+    finding.verdictHint = `${verdict} — behavioral=${obs.behavioral} consumption=${obs.consumption} state=${obs.state}`;
+  } catch (err) {
+    finding.steps.push(`Shape A threw: ${err.message}`);
+    finding.verdictHint = `FAIL — Shape A threw: ${err.message}`;
+  }
   return finding;
 }
 
@@ -791,19 +1076,339 @@ async function probeShapeB(state) {
   const finding = {
     probe: 'PROBE-SHAPE-B',
     question:
-      'Shape B (status=blocked): does a comment alone resume a terminal-blocked issue, or is an un-terminal status flip required?',
+      'Shape B (status=blocked): does a comment alone resume a terminal-blocked issue, or is an un-terminal status flip required (and in which order)?',
     steps: [],
+    construction: [],
     probeIssueId: null,
+    blockedVia: null, // 'bare-status-flip' | 'blockedByIssueIds-edge' (runtime-determined)
+    shapeBMergesIntoC: null,
     signals: { behavioral: null, consumption: null, state: null },
     ladderRungsTried: [],
+    ladderResults: [], // { rung, ordering, signals, verdict }
     minimalRecipe: null,
+    requestWakeupHttpStatus: null,
+    agentStatusAtBlock: null,
     verdictHint: 'STUB — filled by Plan 10-02',
   };
-  finding.steps.push('STUB — probeShapeB not yet implemented (Plan 10-02)');
-  void state;
-  void createComment;
-  void updateIssue;
-  void pollForNewComment;
+
+  if (!SPIKE_PROBE_AGENT_ID) {
+    finding.verdictHint =
+      'SKIPPED — SPIKE_PROBE_AGENT_ID not set; the three-shape run is gated behind the pinned sacrificial agent (D-02).';
+    finding.steps.push('Shape B skipped — no SPIKE_PROBE_AGENT_ID');
+    return finding;
+  }
+
+  // The blocked-status set for the "state" signal: B must shed BOTH the
+  // terminal 'blocked' AND stay off it for a real resume.
+  const BLOCKED = new Set(['blocked']);
+
+  try {
+    // ----------------------------------------------------------------------
+    // CONSTRUCT — create + assign, then drive into status:'blocked'. The A1
+    // result (whether the BARE flip sticks) is UNKNOWN at code time (Plan 10-01
+    // not closed), so probeShapeB is SELF-DETERMINING at runtime: attempt the
+    // bare flip, re-GET to see if it stuck, and branch.
+    // ----------------------------------------------------------------------
+    const create = await createIssue({
+      title: `Shape B blocked-status probe ${SPIKE_TAG}`,
+      description: `Spike 10 Shape B — terminal status='blocked'. ${REPLY_CHANNEL_INSTRUCTION} Safe to delete after the spike.`,
+      status: 'in_progress',
+      assigneeAgentId: SPIKE_PROBE_AGENT_ID,
+      originKind: 'plugin:clarity-pack',
+      originId: `spike-shapeB:${Date.now()}`,
+    });
+    finding.construction.push(`createIssue (in_progress, assigned): HTTP ${create.status}`);
+    if (!ok(create.status) || !create.body?.id) {
+      finding.verdictHint = 'FAIL — could not create the Shape B probe issue';
+      finding.steps.push(`Shape B: create failed HTTP ${create.status}`);
+      return finding;
+    }
+    const issueId = create.body.id;
+    finding.probeIssueId = issueId;
+    state.shapeBProbeIssueId = issueId;
+    finding.steps.push(`created Shape B probe issue ${issueId}`);
+
+    // CAS guard (Pitfall 4) — re-GET before the flip; never compute from a stale read.
+    const pre = await getIssue(issueId);
+    const preStatus = ok(pre.status) ? pre.body?.status ?? null : null;
+    finding.construction.push(`pre-flip re-GET: HTTP ${pre.status}, status=${preStatus ?? '(unknown)'}`);
+
+    // Attempt the BARE flip to 'blocked' (declared issues.update).
+    const flip = await updateIssue(issueId, { status: 'blocked' });
+    finding.construction.push(`PATCH {status:'blocked'} (bare): HTTP ${flip.status}`);
+    // Read-back (Pitfall 4) — a PATCH may 200 yet CAS-lose the flip.
+    const postFlip = await getIssue(issueId);
+    const postFlipStatus = ok(postFlip.status) ? postFlip.body?.status ?? null : null;
+    finding.construction.push(`post-flip re-GET: HTTP ${postFlip.status}, status=${postFlipStatus ?? '(unknown)'}`);
+
+    if (postFlipStatus === 'blocked') {
+      finding.blockedVia = 'bare-status-flip';
+      finding.shapeBMergesIntoC = false;
+      finding.steps.push("bare status:'blocked' flip STUCK — Shape B is independent of Shape C");
+    } else {
+      // The bare flip did NOT stick — blocked likely requires a non-empty
+      // blockedByIssueIds. Establish a blocker edge at create on a fresh issue
+      // (legal via issues.create, NO relations.write) and record the merge.
+      finding.shapeBMergesIntoC = true;
+      finding.steps.push(
+        `bare flip did not stick (read back '${postFlipStatus ?? 'unknown'}') — establishing a blocker edge at create (Shape B merges into Shape C)`,
+      );
+      // Create a throwaway blocker, then a fresh blocked issue with the edge set.
+      const blocker = await createIssue({
+        title: `Shape B blocker (edge) ${SPIKE_TAG}`,
+        status: 'in_progress',
+        assigneeAgentId: SPIKE_PROBE_AGENT_ID,
+        originKind: 'plugin:clarity-pack',
+        originId: `spike-shapeB-blocker:${Date.now()}`,
+      });
+      finding.construction.push(`createIssue blocker (for edge): HTTP ${blocker.status}`);
+      if (ok(blocker.status) && blocker.body?.id) {
+        state.shapeBBlockerIssueId = blocker.body.id;
+        const blockedEdge = await createIssue({
+          title: `Shape B blocked-via-edge probe ${SPIKE_TAG}`,
+          description: `Spike 10 Shape B (merged into C). ${REPLY_CHANNEL_INSTRUCTION} Safe to delete.`,
+          status: 'in_progress',
+          assigneeAgentId: SPIKE_PROBE_AGENT_ID,
+          blockedByIssueIds: [blocker.body.id],
+          originKind: 'plugin:clarity-pack',
+          originId: `spike-shapeB-edge:${Date.now()}`,
+        });
+        finding.construction.push(
+          `createIssue blocked-via-edge (blockedByIssueIds set at create): HTTP ${blockedEdge.status}`,
+        );
+        if (ok(blockedEdge.status) && blockedEdge.body?.id) {
+          // Re-point the probe at the edge-blocked issue and try to flip status too.
+          finding.probeIssueId = blockedEdge.body.id;
+          state.shapeBProbeIssueId = blockedEdge.body.id;
+          finding.blockedVia = 'blockedByIssueIds-edge';
+          const edgeFlip = await updateIssue(blockedEdge.body.id, { status: 'blocked' });
+          finding.construction.push(`PATCH {status:'blocked'} on edge issue: HTTP ${edgeFlip.status}`);
+          const edgePost = await getIssue(blockedEdge.body.id);
+          finding.construction.push(
+            `edge issue re-GET: HTTP ${edgePost.status}, status=${ok(edgePost.status) ? edgePost.body?.status ?? '(unknown)' : '(unknown)'}`,
+          );
+        }
+      }
+    }
+
+    const probeIssueId = finding.probeIssueId;
+
+    // Distinguish "issue blocked" from "agent paused" (Pitfall 6 / A6) — record
+    // the agent status while the issue is blocked; rung 3 is only relevant if paused.
+    finding.agentStatusAtBlock = await getAgentStatus(SPIKE_PROBE_AGENT_ID);
+    finding.steps.push(`agent status while issue blocked: ${finding.agentStatusAtBlock ?? '(unknown)'}`);
+
+    // ----------------------------------------------------------------------
+    // D-08 LADDER — climb minimal-first; lock the FIRST rung where all three
+    // signals fire. Re-observe after each rung. FAIL only after the full window.
+    // ----------------------------------------------------------------------
+    let locked = null;
+
+    // Run one ladder attempt: set up seen/run baselines, take the rung action,
+    // observe three signals, record the result.
+    async function attemptRung(label, ordering, action) {
+      finding.ladderRungsTried.push(label);
+      const seen = new Set();
+      const knownRuns = new Set();
+      await seedSeenAndRuns(probeIssueId, seen, knownRuns);
+      const baseRead = await getIssue(probeIssueId);
+      const baseStatus = ok(baseRead.status) ? baseRead.body?.status ?? null : null;
+      await action(seen, knownRuns, baseStatus);
+      const obs = await observeThreeSignals(probeIssueId, {
+        seenIds: seen,
+        knownRunIds: knownRuns,
+        probeAgentId: SPIKE_PROBE_AGENT_ID,
+        baselineStatus: baseStatus,
+        blockedStatuses: BLOCKED,
+        windowMs: RE_WAKE_WINDOW_MS,
+      });
+      const verdict = verdictFromSignals(obs.behavioral, obs.consumption, obs.state);
+      finding.ladderResults.push({
+        rung: label,
+        ordering,
+        signals: {
+          behavioral: obs.behavioral,
+          consumption: obs.consumption,
+          state: obs.state,
+        },
+        evidence: obs.evidence,
+        verdict,
+      });
+      finding.steps.push(`${label} [${ordering}]: ${verdict} (b=${obs.behavioral} c=${obs.consumption} s=${obs.state})`);
+      if (obs.evidence.systemNoticeSeen && !obs.behavioral) {
+        finding.steps.push(`${label}: state moved via host disposition-recovery only — PARTIAL not PASS (Pitfall 2)`);
+      }
+      return { obs, verdict };
+    }
+
+    // Rung 0 — comment alone on the blocked issue (the resume trigger under test).
+    {
+      const { obs, verdict } = await attemptRung(
+        'rung0:comment-alone',
+        'comment-only',
+        async (seen) => {
+          const c = await createComment(
+            probeIssueId,
+            'Spike 10 Shape B (rung 0): here is your answer — proceed. Reply with your next step as a COMMENT.',
+          );
+          if (c.body?.id) seen.add(c.body.id);
+        },
+      );
+      if (verdict === 'PASS') {
+        locked = { rung: 'rung0:comment-alone', ordering: 'comment-only', signals: obs };
+      }
+    }
+
+    // Rung 1 — + issues.update({status:'in_progress'}) to un-terminal. Test BOTH
+    // orderings (flip-before-comment AND flip-after) and record which works.
+    if (!locked) {
+      // Ordering A: flip-BEFORE-comment.
+      const a = await attemptRung(
+        'rung1:flip-before-comment',
+        'flip-before-comment',
+        async (seen) => {
+          // CAS guard — re-GET immediately before the flip.
+          const fresh = await getIssue(probeIssueId);
+          finding.steps.push(
+            `rung1A pre-flip re-GET: status=${ok(fresh.status) ? fresh.body?.status ?? '(unknown)' : '(unknown)'}`,
+          );
+          const up = await updateIssue(probeIssueId, { status: 'in_progress' });
+          finding.steps.push(`rung1A PATCH {status:'in_progress'}: HTTP ${up.status}`);
+          const c = await createComment(
+            probeIssueId,
+            'Spike 10 Shape B (rung 1, flip-before): un-terminalled then answering — proceed. Reply as a COMMENT.',
+          );
+          if (c.body?.id) seen.add(c.body.id);
+        },
+      );
+      if (a.verdict === 'PASS') {
+        locked = { rung: 'rung1:flip-before-comment', ordering: 'flip-before-comment', signals: a.obs };
+      } else {
+        // Re-block before testing the other ordering, if it can be re-blocked.
+        if (finding.blockedVia === 'bare-status-flip') {
+          const reblockFresh = await getIssue(probeIssueId);
+          void reblockFresh;
+          const reblock = await updateIssue(probeIssueId, { status: 'blocked' });
+          finding.steps.push(`re-block before rung1B: PATCH {status:'blocked'} HTTP ${reblock.status}`);
+        }
+        // Ordering B: flip-AFTER-comment.
+        const b = await attemptRung(
+          'rung1:flip-after-comment',
+          'flip-after-comment',
+          async (seen) => {
+            const c = await createComment(
+              probeIssueId,
+              'Spike 10 Shape B (rung 1, flip-after): answering, then un-terminalling — proceed. Reply as a COMMENT.',
+            );
+            if (c.body?.id) seen.add(c.body.id);
+            const fresh = await getIssue(probeIssueId);
+            finding.steps.push(
+              `rung1B pre-flip re-GET: status=${ok(fresh.status) ? fresh.body?.status ?? '(unknown)' : '(unknown)'}`,
+            );
+            const up = await updateIssue(probeIssueId, { status: 'in_progress' });
+            finding.steps.push(`rung1B PATCH {status:'in_progress'}: HTTP ${up.status}`);
+          },
+        );
+        if (b.verdict === 'PASS') {
+          locked = { rung: 'rung1:flip-after-comment', ordering: 'flip-after-comment', signals: b.obs };
+        }
+      }
+    }
+
+    // Rung 2 — + requestWakeup. EXPECTED 404 from REST (Pitfall 3); fire-and-forget,
+    // NOT a FAIL. Record the HTTP status verbatim.
+    if (!locked) {
+      const b2 = await attemptRung(
+        'rung2:requestWakeup',
+        'comment+requestWakeup',
+        async (seen) => {
+          // Un-terminal first (best-effort) so the host can dispatch.
+          if (finding.blockedVia === 'bare-status-flip') {
+            await updateIssue(probeIssueId, { status: 'in_progress' });
+          }
+          const c = await createComment(
+            probeIssueId,
+            'Spike 10 Shape B (rung 2): answering + nudging via requestWakeup — proceed. Reply as a COMMENT.',
+          );
+          if (c.body?.id) seen.add(c.body.id);
+          const wake = await requestWakeup(probeIssueId, {
+            reason: 'issue_commented',
+            idempotencyKey: `spike10-shapeB-${Date.now()}`,
+          });
+          finding.requestWakeupHttpStatus = wake.status;
+          finding.steps.push(
+            `rung2 requestWakeup: HTTP ${wake.status}${wake.status === 404 ? ' (EXPECTED 404 — REST surface unavailable, fire-and-forget, NOT a FAIL — Pitfall 3)' : ''}`,
+          );
+        },
+      );
+      if (b2.verdict === 'PASS') {
+        locked = { rung: 'rung2:requestWakeup', ordering: 'comment+requestWakeup', signals: b2.obs };
+      }
+    }
+
+    // Rung 3 — agents.resume / resumeHeartbeat — ONLY if the AGENT itself is
+    // paused (Pitfall 6 / A6). Check first; an issue being blocked != agent paused.
+    if (!locked) {
+      const agentStatus = await getAgentStatus(SPIKE_PROBE_AGENT_ID);
+      if (agentStatus === 'paused') {
+        const b3 = await attemptRung(
+          'rung3:agents.resume',
+          'comment+agent-resume',
+          async (seen) => {
+            const resume = await call(
+              'POST',
+              `/api/companies/${C()}/agents/${encodeURIComponent(SPIKE_PROBE_AGENT_ID)}/resume`,
+            );
+            finding.steps.push(`rung3 agents.resume: HTTP ${resume.status}`);
+            const c = await createComment(
+              probeIssueId,
+              'Spike 10 Shape B (rung 3): agent resumed + answering — proceed. Reply as a COMMENT.',
+            );
+            if (c.body?.id) seen.add(c.body.id);
+          },
+        );
+        if (b3.verdict === 'PASS') {
+          locked = { rung: 'rung3:agents.resume', ordering: 'comment+agent-resume', signals: b3.obs };
+        }
+      } else {
+        finding.ladderRungsTried.push('rung3:agents.resume(N/A)');
+        finding.steps.push(
+          `rung3 NOT-APPLICABLE — agent status='${agentStatus ?? 'unknown'}' (not 'paused'); an issue being blocked != agent paused (Pitfall 6/A6)`,
+        );
+      }
+    }
+
+    // Lock the minimal recipe and surface the signals from the locked rung.
+    if (locked) {
+      finding.minimalRecipe = `${locked.rung} (${locked.ordering})`;
+      finding.signals = {
+        behavioral: locked.signals.behavioral,
+        consumption: locked.signals.consumption,
+        state: locked.signals.state,
+      };
+      finding.verdictHint = `PASS — minimal recipe locked: ${finding.minimalRecipe}; ladder=${finding.ladderRungsTried.join(' → ')}`;
+    } else {
+      // No rung passed. If the agent never ran at all, flag the budget/invocation
+      // block check (Pitfall 5) before treating this as a hard FAIL.
+      const anyBehavioral = finding.ladderResults.some((r) => r.signals.behavioral);
+      const lastVerdict = finding.ladderResults.length
+        ? finding.ladderResults[finding.ladderResults.length - 1].verdict
+        : 'FAIL';
+      finding.signals = finding.ladderResults.length
+        ? finding.ladderResults[finding.ladderResults.length - 1].signals
+        : { behavioral: false, consumption: false, state: false };
+      if (!anyBehavioral) {
+        const agentStatus = await getAgentStatus(SPIKE_PROBE_AGENT_ID);
+        finding.steps.push(
+          `no rung produced an agent run — agent status=${agentStatus ?? '(unknown)'}; inspect for a budget/invocation-block incident before final FAIL (Pitfall 5)`,
+        );
+      }
+      finding.verdictHint = `${lastVerdict} — no rung locked through the full window; ladder=${finding.ladderRungsTried.join(' → ')}`;
+    }
+  } catch (err) {
+    finding.steps.push(`Shape B threw: ${err.message}`);
+    finding.verdictHint = `FAIL — Shape B threw: ${err.message}`;
+  }
   return finding;
 }
 
