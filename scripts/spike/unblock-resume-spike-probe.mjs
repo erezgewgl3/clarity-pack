@@ -1604,6 +1604,7 @@ async function teardown(state) {
   };
 
   const issueIds = [
+    state.a1ProbeIssueId, // belt-and-suspenders: swept here too if A1's inline delete failed
     state.shapeAProbeIssueId,
     state.shapeBProbeIssueId,
     state.shapeBBlockerIssueId,
