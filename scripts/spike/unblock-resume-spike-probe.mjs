@@ -354,28 +354,34 @@ async function dryConfirmA1A3(state) {
   try {
     // BEAAA's POST /api/companies/{C}/issues validator REQUIRES assigneeAgentId
     // (the proven chat-true-task analog always assigns at create; omitting it
-    // returns HTTP 422). Prefer the operator-pinned sacrificial agent; otherwise
-    // auto-pick one — the A1 throwaway is flipped to 'blocked' and DELETED within
-    // seconds (same pattern the analog runs on this live board), so the brief
-    // assignment to a real agent is torn down before any heartbeat acts on it.
-    let a1Assignee = SPIKE_PROBE_AGENT_ID || null;
-    let a1AssigneeSource = a1Assignee ? 'SPIKE_PROBE_AGENT_ID' : null;
-    if (!a1Assignee) {
-      const agentsRes = await listAgents();
-      const picked = asArray(agentsRes.body).find((a) => a?.id) || null;
-      a1Assignee = picked?.id ?? null;
-      a1AssigneeSource = a1Assignee ? `auto-picked ${picked?.name ?? a1Assignee}` : null;
-    }
+    // returns HTTP 422). Per A3 (agent-create is NOT reachable via bearer REST)
+    // AND the D-02 / T-10-04 boundary (NEVER assign a throwaway to a real
+    // in-flight production agent — sacrificial agent only), we assign ONLY to the
+    // operator-minted sacrificial agent pinned via SPIKE_PROBE_AGENT_ID. We do
+    // NOT auto-pick a real agent. With no pin, A1 stays inconclusive until the
+    // operator mints ONE sacrificial agent and re-runs with the pin set.
+    const a1Assignee = SPIKE_PROBE_AGENT_ID || null;
     finding.steps.push(
-      `A1: assignee = ${a1Assignee ?? '(none available)'}${a1AssigneeSource ? ` [${a1AssigneeSource}]` : ''}`,
+      `A1: assignee = ${a1Assignee ? `${a1Assignee} [SPIKE_PROBE_AGENT_ID]` : '(none — set SPIKE_PROBE_AGENT_ID to the manually-minted sacrificial agent)'}`,
     );
 
-    const createRes = await createIssue({
-      title: `A1 blocked-status dry-confirm ${SPIKE_TAG}`,
-      description: `Spike 10 Wave-0 A1 dry-confirm — is status:'blocked' settable via PATCH? ${REPLY_CHANNEL_INSTRUCTION} Safe to delete after the spike.`,
-      status: 'in_progress',
-      ...(a1Assignee ? { assigneeAgentId: a1Assignee } : {}),
-    });
+    let createRes;
+    if (!a1Assignee) {
+      createRes = {
+        status: 0,
+        body: {
+          message:
+            'skipped — no SPIKE_PROBE_AGENT_ID. BEAAA create requires assigneeAgentId; per D-02 the probe will NOT assign a throwaway to a real agent, and per A3 agents cannot be minted via REST. Operator mints ONE sacrificial agent and re-runs with SPIKE_PROBE_AGENT_ID set.',
+        },
+      };
+    } else {
+      createRes = await createIssue({
+        title: `A1 blocked-status dry-confirm ${SPIKE_TAG}`,
+        description: `Spike 10 Wave-0 A1 dry-confirm — is status:'blocked' settable via PATCH? ${REPLY_CHANNEL_INSTRUCTION} Safe to delete after the spike.`,
+        status: 'in_progress',
+        assigneeAgentId: a1Assignee,
+      });
+    }
     a1.createHttpStatus = createRes.status;
     finding.steps.push(`A1: create throwaway issue: HTTP ${createRes.status}`);
     if (!ok(createRes.status) || !createRes.body?.id) {
