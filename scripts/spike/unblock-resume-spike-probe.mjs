@@ -352,18 +352,41 @@ async function dryConfirmA1A3(state) {
     shapeBMergesIntoC: null,
   };
   try {
+    // BEAAA's POST /api/companies/{C}/issues validator REQUIRES assigneeAgentId
+    // (the proven chat-true-task analog always assigns at create; omitting it
+    // returns HTTP 422). Prefer the operator-pinned sacrificial agent; otherwise
+    // auto-pick one — the A1 throwaway is flipped to 'blocked' and DELETED within
+    // seconds (same pattern the analog runs on this live board), so the brief
+    // assignment to a real agent is torn down before any heartbeat acts on it.
+    let a1Assignee = SPIKE_PROBE_AGENT_ID || null;
+    let a1AssigneeSource = a1Assignee ? 'SPIKE_PROBE_AGENT_ID' : null;
+    if (!a1Assignee) {
+      const agentsRes = await listAgents();
+      const picked = asArray(agentsRes.body).find((a) => a?.id) || null;
+      a1Assignee = picked?.id ?? null;
+      a1AssigneeSource = a1Assignee ? `auto-picked ${picked?.name ?? a1Assignee}` : null;
+    }
+    finding.steps.push(
+      `A1: assignee = ${a1Assignee ?? '(none available)'}${a1AssigneeSource ? ` [${a1AssigneeSource}]` : ''}`,
+    );
+
     const createRes = await createIssue({
       title: `A1 blocked-status dry-confirm ${SPIKE_TAG}`,
       description: `Spike 10 Wave-0 A1 dry-confirm — is status:'blocked' settable via PATCH? ${REPLY_CHANNEL_INSTRUCTION} Safe to delete after the spike.`,
       status: 'in_progress',
-      originKind: 'plugin:clarity-pack',
-      originId: `spike-a1:${Date.now()}`,
+      ...(a1Assignee ? { assigneeAgentId: a1Assignee } : {}),
     });
     a1.createHttpStatus = createRes.status;
     finding.steps.push(`A1: create throwaway issue: HTTP ${createRes.status}`);
     if (!ok(createRes.status) || !createRes.body?.id) {
-      a1.hostRule = `issue create failed: HTTP ${createRes.status}`;
-      finding.steps.push('A1: could not create the throwaway issue — A1 inconclusive');
+      const createErr =
+        createRes.body && typeof createRes.body === 'object'
+          ? createRes.body.error ?? createRes.body.message ?? truncBody(JSON.stringify(createRes.body), 300)
+          : truncBody(createRes.body, 300);
+      a1.hostRule = `issue create failed: HTTP ${createRes.status}${createErr ? ` (${createErr})` : ''}`;
+      finding.steps.push(
+        `A1: could not create the throwaway issue — A1 inconclusive${createErr ? `: ${createErr}` : ''}`,
+      );
     } else {
       const issueId = createRes.body.id;
       state.a1ProbeIssueId = issueId;
