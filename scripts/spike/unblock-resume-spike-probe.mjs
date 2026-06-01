@@ -324,16 +324,209 @@ async function dryConfirmA1A3(state) {
     question:
       'A1: is status:\'blocked\' settable via PATCH /api/issues/{id}? A3: can the probe mint+delete a sacrificial agent via REST?',
     steps: [],
-    a1: null, // { httpStatus, reReadStatus, accepted, hostRule, shapeBMergesIntoC }
-    a3: null, // { createHttpStatus, agentId, deleteHttpStatus, restCapable, fallback }
-    verdictHint: 'STUB — filled by Plan 10-02',
+    a1: null, // { createHttpStatus, preFlipStatus, patchHttpStatus, reReadStatus, accepted, hostRule, shapeBMergesIntoC }
+    a3: null, // { createHttpStatus, agentId, deleteHttpStatus, restCapable, fallback, pinnedAgentId }
+    teardown: { issueDeleteHttpStatus: null, agentDeleteHttpStatus: null, residue: [] },
+    verdictHint: null,
   };
-  finding.steps.push('STUB — dryConfirmA1A3 not yet implemented (Plan 10-02)');
-  void state;
-  void createIssue;
-  void getIssue;
-  void updateIssue;
-  void listAgents;
+
+  // -------------------------------------------------------------------------
+  // A1 — is status:'blocked' settable via the declared issues.update cap?
+  //
+  // 1. Create one [SPIKE 10]-tagged throwaway issue at status:'in_progress'.
+  // 2. Re-GET it (CAS guard — Pitfall 4 — read the freshly-observed status,
+  //    never trust the PATCH/POST response body alone).
+  // 3. PATCH status:'blocked' via updateIssue, then re-GET to confirm whether
+  //    the host accepted the BARE status flip (read-back, not the PATCH echo).
+  // 4. If rejected because blocked requires a non-empty blockedByIssueIds,
+  //    record that the host rule merges Shape B into Shape C (A1 mitigation).
+  // -------------------------------------------------------------------------
+  const a1 = {
+    createHttpStatus: null,
+    preFlipStatus: null,
+    patchHttpStatus: null,
+    patchBodyError: null,
+    reReadStatus: null,
+    accepted: null,
+    hostRule: null,
+    shapeBMergesIntoC: null,
+  };
+  try {
+    const createRes = await createIssue({
+      title: `A1 blocked-status dry-confirm ${SPIKE_TAG}`,
+      description: `Spike 10 Wave-0 A1 dry-confirm — is status:'blocked' settable via PATCH? ${REPLY_CHANNEL_INSTRUCTION} Safe to delete after the spike.`,
+      status: 'in_progress',
+      originKind: 'plugin:clarity-pack',
+      originId: `spike-a1:${Date.now()}`,
+    });
+    a1.createHttpStatus = createRes.status;
+    finding.steps.push(`A1: create throwaway issue: HTTP ${createRes.status}`);
+    if (!ok(createRes.status) || !createRes.body?.id) {
+      a1.hostRule = `issue create failed: HTTP ${createRes.status}`;
+      finding.steps.push('A1: could not create the throwaway issue — A1 inconclusive');
+    } else {
+      const issueId = createRes.body.id;
+      state.a1ProbeIssueId = issueId;
+      finding.steps.push(`A1: created throwaway issue ${issueId}`);
+
+      // CAS guard (Pitfall 4) — re-read the issue and capture the fresh status
+      // BEFORE the flip; never compute the flip from a stale read.
+      const pre = await getIssue(issueId);
+      a1.preFlipStatus = ok(pre.status) ? pre.body?.status ?? null : null;
+      finding.steps.push(
+        `A1: pre-flip re-GET: HTTP ${pre.status}, status=${a1.preFlipStatus ?? '(unknown)'}`,
+      );
+
+      // Attempt the BARE status flip to 'blocked' (declared issues.update).
+      const patch = await updateIssue(issueId, { status: 'blocked' });
+      a1.patchHttpStatus = patch.status;
+      if (!ok(patch.status)) {
+        // Capture the host's rejection verbatim — it may state the exact rule
+        // (e.g. "blocked requires non-empty blockedByIssueIds").
+        a1.patchBodyError =
+          patch.body && typeof patch.body === 'object'
+            ? patch.body.error ?? patch.body.message ?? truncBody(JSON.stringify(patch.body), 300)
+            : truncBody(patch.body, 300);
+      }
+      finding.steps.push(
+        `A1: PATCH {status:'blocked'}: HTTP ${patch.status}${a1.patchBodyError ? ` (${a1.patchBodyError})` : ''}`,
+      );
+
+      // Re-read to confirm what actually stuck (read-back — Pitfall 4: a PATCH
+      // may return 200 yet the CAS guard silently no-op the flip).
+      const post = await getIssue(issueId);
+      a1.reReadStatus = ok(post.status) ? post.body?.status ?? null : null;
+      finding.steps.push(
+        `A1: post-flip re-GET: HTTP ${post.status}, status=${a1.reReadStatus ?? '(unknown)'}`,
+      );
+
+      a1.accepted = a1.reReadStatus === 'blocked';
+
+      if (a1.accepted) {
+        a1.hostRule = 'bare status flip to blocked accepted (no blocker edge required)';
+        a1.shapeBMergesIntoC = false;
+      } else {
+        // The bare flip did not stick. Record the host rule from the rejection
+        // body if present; otherwise note that blocked likely requires a
+        // non-empty blockedByIssueIds (Shape B merges into Shape C — A1 mitigation).
+        a1.hostRule =
+          a1.patchBodyError ||
+          `bare flip did not stick (read back '${a1.reReadStatus ?? 'unknown'}'); blocked likely requires a non-empty blockedByIssueIds`;
+        a1.shapeBMergesIntoC = true;
+        finding.steps.push(
+          'A1: bare status:blocked flip NOT accepted — Shape B may merge into Shape C (set blockedByIssueIds at create instead)',
+        );
+      }
+
+      // Teardown the A1 throwaway issue (delete by id, or note for the bookend
+      // rollback if no REST delete route exists).
+      const del = await call('DELETE', `/api/issues/${I(issueId)}`);
+      finding.teardown.issueDeleteHttpStatus = del.status;
+      finding.steps.push(`A1: teardown DELETE /api/issues/{id}: HTTP ${del.status}`);
+      if (ok(del.status)) {
+        state.a1ProbeIssueId = null;
+      } else {
+        finding.teardown.residue.push(
+          `issue ${issueId} (${SPIKE_TAG}) — DELETE returned HTTP ${del.status}; remove via DO-backup rollback or manual delete`,
+        );
+      }
+    }
+  } catch (err) {
+    a1.hostRule = `A1 probe threw: ${err.message}`;
+    finding.steps.push(`A1: threw: ${err.message}`);
+  }
+  finding.a1 = a1;
+
+  // -------------------------------------------------------------------------
+  // A3 — can the probe mint AND delete a sacrificial agent via bearer REST?
+  //
+  // Attempt to create an agent via the company-scoped agent-create route, then
+  // delete it. If create OR delete is unreachable via REST, record the
+  // manual-mint fallback: the operator mints one agent manually before the run
+  // and pins it via SPIKE_PROBE_AGENT_ID (NOT the Editor-Agent, NOT a real hire).
+  // -------------------------------------------------------------------------
+  const a3 = {
+    createHttpStatus: null,
+    createBodyError: null,
+    agentId: null,
+    deleteHttpStatus: null,
+    restCapable: null,
+    fallback: null,
+    pinnedAgentId: SPIKE_PROBE_AGENT_ID || null,
+  };
+  try {
+    const agentCreate = await call('POST', `/api/companies/${C()}/agents`, {
+      name: `Spike10 Sacrificial Probe Agent ${SPIKE_TAG}`,
+      role: 'individual_contributor',
+      description: `Spike 10 sacrificial probe agent — created to test REST mint/delete (A3). Standard hire, no special privileges. Safe to terminate/delete after the spike.`,
+    });
+    a3.createHttpStatus = agentCreate.status;
+    if (!ok(agentCreate.status)) {
+      a3.createBodyError =
+        agentCreate.body && typeof agentCreate.body === 'object'
+          ? agentCreate.body.error ?? agentCreate.body.message ?? truncBody(JSON.stringify(agentCreate.body), 300)
+          : truncBody(agentCreate.body, 300);
+    }
+    finding.steps.push(
+      `A3: POST /api/companies/{C}/agents: HTTP ${agentCreate.status}${a3.createBodyError ? ` (${a3.createBodyError})` : ''}`,
+    );
+
+    if (ok(agentCreate.status) && agentCreate.body?.id) {
+      a3.agentId = agentCreate.body.id;
+      state.a3ProbeAgentId = a3.agentId;
+      finding.steps.push(`A3: minted sacrificial agent ${a3.agentId}`);
+
+      // Attempt to delete it again (the teardown half of A3).
+      const agentDel = await call('DELETE', `/api/companies/${C()}/agents/${encodeURIComponent(a3.agentId)}`);
+      a3.deleteHttpStatus = agentDel.status;
+      finding.steps.push(
+        `A3: DELETE /api/companies/{C}/agents/{id}: HTTP ${agentDel.status}`,
+      );
+      finding.teardown.agentDeleteHttpStatus = agentDel.status;
+
+      if (ok(agentDel.status)) {
+        a3.restCapable = true;
+        a3.fallback = null;
+        state.a3ProbeAgentId = null;
+        finding.steps.push('A3: REST create+delete BOTH succeeded — probe can mint a sacrificial agent in Plan 10-02');
+      } else {
+        a3.restCapable = false;
+        a3.fallback =
+          'REST create succeeded but DELETE did not — operator must terminate/delete the minted agent manually (or DO-backup rollback). For Plan 10-02, prefer the manual-mint + SPIKE_PROBE_AGENT_ID pin path to avoid undeletable residue.';
+        finding.teardown.residue.push(
+          `agent ${a3.agentId} (${SPIKE_TAG}) — DELETE returned HTTP ${agentDel.status}; terminate/delete manually or via DO-backup rollback`,
+        );
+        finding.steps.push('A3: create OK but delete FAILED — see fallback');
+      }
+    } else {
+      // Create is not reachable via the bearer REST surface.
+      a3.restCapable = false;
+      a3.fallback =
+        'Agent create is NOT reachable via bearer REST. The operator must mint ONE sacrificial agent manually before the Plan 10-02 run (NOT the Editor-Agent, NOT a real hire) and pin it via SPIKE_PROBE_AGENT_ID; teardown is operator-side (pause then terminate/delete), with the DO-backup rollback as the safety net.';
+      finding.steps.push('A3: agent create NOT reachable via REST — manual-mint fallback documented');
+    }
+  } catch (err) {
+    a3.restCapable = false;
+    a3.fallback = `A3 probe threw (${err.message}); treat as REST-incapable — operator mints manually and pins SPIKE_PROBE_AGENT_ID.`;
+    finding.steps.push(`A3: threw: ${err.message}`);
+  }
+  finding.a3 = a3;
+
+  // Verdict hint — summarize both answers for the findings doc.
+  const a1Verdict =
+    a1.accepted === true
+      ? "A1=SETTABLE (bare PATCH {status:'blocked'} sticks — Shape B is independent of Shape C)"
+      : a1.accepted === false
+        ? 'A1=NOT-SETTABLE (Shape B merges into Shape C — set blockedByIssueIds at create)'
+        : 'A1=INCONCLUSIVE';
+  const a3Verdict =
+    a3.restCapable === true
+      ? 'A3=REST-CAPABLE (probe mints+deletes its own sacrificial agent)'
+      : a3.restCapable === false
+        ? 'A3=MANUAL-MINT (operator mints + pins SPIKE_PROBE_AGENT_ID)'
+        : 'A3=INCONCLUSIVE';
+  finding.verdictHint = `${a1Verdict}; ${a3Verdict}`;
+
   return finding;
 }
 
@@ -354,18 +547,173 @@ async function observeRealBlockedItems(state) {
     question:
       'D-02: does the probe construction per shape match what real BEAAA blocked items look like (status string + relation shape)?',
     steps: [],
+    scanned: 0,
+    statusHistogram: {}, // status string -> count, across the scanned sample
     shapeA: null, // awaiting-answer real example, or { present: false }
     shapeB: null, // status='blocked' real example, or { present: false }
     shapeC: null, // blockedByIssueIds relation real example, or { present: false }
-    verdictHint: 'STUB — filled by Plan 10-02',
+    verdictHint: null,
   };
-  finding.steps.push(
-    'STUB — observeRealBlockedItems not yet implemented (Plan 10-02)',
-  );
+
+  // READ-ONLY (D-02 absolute): scan the live board via listIssues and classify
+  // real items by shape. NEVER write to any real item here — only listIssues +
+  // getIssue reads. Bound the scan so the probe never hammers the host.
+  //
+  //   Shape A — awaiting-answer: status='in_progress' (04.1-01 OQ1: agents leave
+  //             topics at in_progress; "awaiting" is semantic, not a status).
+  //   Shape B — status='blocked' (the terminal status in TERMINAL_OR_BLOCKED_STATUSES).
+  //   Shape C — a non-empty blockedByIssueIds relation (dependency edge).
+  const SCAN_CAP = 200; // bound the read-only scan
+
+  /** Summarize one real item READ-ONLY into a shape-evidence record. */
+  function realItemEvidence(it) {
+    const blockedBy =
+      (Array.isArray(it?.blockedByIssueIds) && it.blockedByIssueIds) ||
+      (Array.isArray(it?.blocked_by_issue_ids) && it.blocked_by_issue_ids) ||
+      [];
+    return {
+      present: true,
+      issueId: it?.id ?? null,
+      identifier: it?.identifier ?? null,
+      status: it?.status ?? null,
+      assigneeAgentId: it?.assigneeAgentId ?? it?.assignee_agent_id ?? null,
+      blockedByIssueIds: blockedBy,
+      titleExcerpt: truncBody(it?.title ?? '', 120),
+    };
+  }
+
+  try {
+    // Pull a bounded sample of the company's issues. The REST origin filters are
+    // known-broken (04.1-01 OQ2 WEAK-REST-LIMIT), so we scan unfiltered and
+    // classify client-side — read-only, no mutation.
+    let sample = [];
+    try {
+      const res = await listIssues({ limit: SCAN_CAP });
+      if (ok(res.status)) {
+        sample = asArray(res.body).slice(0, SCAN_CAP);
+        finding.steps.push(
+          `listIssues (read-only) returned ${asArray(res.body).length} rows; scanning up to ${SCAN_CAP}`,
+        );
+      } else {
+        finding.steps.push(`listIssues non-2xx: ${res.status}; D-02 scan limited`);
+      }
+    } catch (err) {
+      finding.steps.push(`listIssues threw: ${err.message}`);
+    }
+    finding.scanned = sample.length;
+
+    // Build a status histogram (answers Open Question 2: does BEAAA produce
+    // status='blocked' at all, or are real blocks all in_progress-awaiting?).
+    for (const it of sample) {
+      const s = it?.status ?? '(none)';
+      finding.statusHistogram[s] = (finding.statusHistogram[s] || 0) + 1;
+    }
+
+    // Shape B — first real item with status === 'blocked'.
+    const realBlocked = sample.find((it) => it?.status === 'blocked');
+    if (realBlocked) {
+      finding.shapeB = realItemEvidence(realBlocked);
+      finding.steps.push(
+        `Shape B: found real status='blocked' item ${finding.shapeB.identifier ?? finding.shapeB.issueId}`,
+      );
+    } else {
+      finding.shapeB = {
+        present: false,
+        note:
+          "no real status='blocked' item in the scanned sample — on BEAAA real blocks may all be in_progress-awaiting (Shape B academic; Shape A carries DO-03 — Open Question 2)",
+      };
+      finding.steps.push("Shape B: NO real status='blocked' item observed in the sample");
+    }
+
+    // Shape C — first real item with a non-empty blockedByIssueIds relation.
+    const realRelation = sample.find((it) => {
+      const b =
+        (Array.isArray(it?.blockedByIssueIds) && it.blockedByIssueIds) ||
+        (Array.isArray(it?.blocked_by_issue_ids) && it.blocked_by_issue_ids) ||
+        [];
+      return b.length > 0;
+    });
+    if (realRelation) {
+      finding.shapeC = realItemEvidence(realRelation);
+      finding.steps.push(
+        `Shape C: found real blockedByIssueIds relation on ${finding.shapeC.identifier ?? finding.shapeC.issueId} (${finding.shapeC.blockedByIssueIds.length} blocker(s))`,
+      );
+    } else {
+      // The list payload may not include the relation; do one read-only getIssue
+      // on a candidate to confirm the relation field is simply absent from list,
+      // not absent from the data model.
+      let confirmed = false;
+      const candidate = sample.find((it) => it?.id);
+      if (candidate?.id) {
+        try {
+          const full = await getIssue(candidate.id);
+          if (ok(full.status)) {
+            const b =
+              (Array.isArray(full.body?.blockedByIssueIds) && full.body.blockedByIssueIds) ||
+              (Array.isArray(full.body?.blocked_by_issue_ids) && full.body.blocked_by_issue_ids) ||
+              [];
+            confirmed = true;
+            finding.steps.push(
+              `Shape C: read-only getIssue on ${candidate.id} — blockedByIssueIds present in detail body: ${b.length > 0 ? 'yes' : 'empty'}`,
+            );
+            if (b.length > 0) {
+              finding.shapeC = realItemEvidence(full.body);
+            }
+          }
+        } catch (err) {
+          finding.steps.push(`Shape C: getIssue probe threw: ${err.message}`);
+        }
+      }
+      if (!finding.shapeC) {
+        finding.shapeC = {
+          present: false,
+          note: confirmed
+            ? 'no real blockedByIssueIds relation in the scanned sample (detail body confirms the field exists but is empty on the candidate) — construct Shape C synthetically at create time (Open Question 3)'
+            : 'no real blockedByIssueIds relation observed in the scanned sample; the list payload may omit the relation field — Plan 10-02 should re-confirm via getIssue on a known dependency edge if one exists',
+        };
+        finding.steps.push('Shape C: NO real blockedByIssueIds relation observed in the sample');
+      }
+    }
+
+    // Shape A — first real in_progress item (awaiting-answer is semantic, so an
+    // in_progress assigned item is the closest real-shape match). Prefer one
+    // assigned to an agent (the awaiting-an-answer condition needs an assignee).
+    const realInProgress =
+      sample.find(
+        (it) =>
+          it?.status === 'in_progress' &&
+          (it?.assigneeAgentId || it?.assignee_agent_id),
+      ) || sample.find((it) => it?.status === 'in_progress');
+    if (realInProgress) {
+      finding.shapeA = realItemEvidence(realInProgress);
+      finding.shapeA.note =
+        '"awaiting reply" is semantic (agent asked a question, parked at in_progress); status stays in_progress (04.1-01 OQ1). This real in_progress item is the closest shape match.';
+      finding.steps.push(
+        `Shape A: found real in_progress item ${finding.shapeA.identifier ?? finding.shapeA.issueId}`,
+      );
+    } else {
+      finding.shapeA = {
+        present: false,
+        note: 'no real in_progress item in the scanned sample — unexpected; widen the scan or re-confirm at run time',
+      };
+      finding.steps.push('Shape A: NO real in_progress item observed in the sample');
+    }
+
+    // Verdict hint — does the probe construction per shape match real BEAAA?
+    const aMatch = finding.shapeA?.present ? 'A=matches(in_progress-awaiting)' : 'A=absent';
+    const bMatch = finding.shapeB?.present
+      ? 'B=matches(real status=blocked exists)'
+      : 'B=academic(no real status=blocked on BEAAA)';
+    const cMatch = finding.shapeC?.present
+      ? 'C=matches(real blockedByIssueIds relation exists)'
+      : 'C=construct-synthetically(no real relation in sample)';
+    finding.verdictHint = `D-02 read-only fidelity: ${aMatch}; ${bMatch}; ${cMatch}. READ-ONLY — zero writes to real items.`;
+  } catch (err) {
+    finding.steps.push(`observeRealBlockedItems threw: ${err.message}`);
+    finding.verdictHint = 'INCONCLUSIVE — D-02 scan error';
+  }
+
   void state;
-  void listIssues;
-  void getIssue;
-  void asArray;
   return finding;
 }
 
