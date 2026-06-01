@@ -2,7 +2,7 @@
 name: on-demand-generate-bulletin-now-button-w
 quick_id: 260528-nns
 date: 2026-05-28
-status: in-progress
+status: complete
 ---
 
 # Quick Task 260528-nns — On-demand "Generate bulletin now" button (+ dedupe)

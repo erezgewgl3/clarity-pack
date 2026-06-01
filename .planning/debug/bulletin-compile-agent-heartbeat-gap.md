@@ -1,3 +1,10 @@
+---
+status: resolved
+status_note: "RESOLVED 2026-05-18 (Phase 3 closed on v0.6.6 drill). Kept at this path on purpose — ROADMAP.md cites it as the authoritative source for Plans 03-08/03-09; do NOT move to debug/resolved/."
+surfaced: 2026-05-16
+phase: 3
+---
+
 # Debug — Bulletin compile: Editor-Agent runs heartbeat logic, never processes the compile prompt
 
 **Status:** RESOLVED 2026-05-18 — the Option B/C agent-invocation saga this doc tracked (Plans 03-06 through 03-10) concluded; Phase 3 closed on the v0.6.6 closure drill (see `.planning/debug/resolved/bulletin-compile-cadence-runaway.md`). Deliberately kept at this path (NOT moved to `debug/resolved/`) because ROADMAP.md cites this path as an authoritative source for Plans 03-08/03-09.

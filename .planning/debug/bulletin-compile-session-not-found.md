@@ -1,5 +1,6 @@
 ---
-status: RESOLVED — confirmed on the 2026-05-16 Countermoves re-drill
+status: resolved
+status_note: confirmed on the 2026-05-16 Countermoves re-drill
 surfaced: 2026-05-15
 fix-implemented: 2026-05-16
 root-cause: host taskKey namespace contract (plugin-host-services.ts agentSessions)

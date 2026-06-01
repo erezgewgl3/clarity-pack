@@ -1,6 +1,7 @@
 ---
 quick: 260531-b8w
 plan: 01
+status: complete
 subsystem: ui/reader
 tags: [reader, redesign, sketch-003, sketch-004, ref-chips, typography, v1.2.2]
 requires:
