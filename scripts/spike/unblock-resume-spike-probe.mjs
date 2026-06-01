@@ -1429,20 +1429,229 @@ async function probeShapeC(state) {
     question:
       'Shape C (blockedByIssueIds): does answering the blocker cascade-resume the blocked issue within the declared capability boundary?',
     steps: [],
+    construction: [],
     blockerIssueId: null,
     blockedIssueId: null,
+    edgeEstablishedAtCreate: null,
     signals: { behavioral: null, consumption: null, state: null },
+    evidence: null,
     cascadeObserved: null,
     edgeClearPathSpecdNotProven: null, // D-10 — relations.write path, documented not exercised
     verdictHint: 'STUB — filled by Plan 10-02',
   };
-  finding.steps.push('STUB — probeShapeC not yet implemented (Plan 10-02)');
-  void state;
-  void createIssue;
-  void createComment;
-  void updateIssue;
-  void pollForNewComment;
+
+  if (!SPIKE_PROBE_AGENT_ID) {
+    finding.verdictHint =
+      'SKIPPED — SPIKE_PROBE_AGENT_ID not set; the three-shape run is gated behind the pinned sacrificial agent (D-02).';
+    finding.steps.push('Shape C skipped — no SPIKE_PROBE_AGENT_ID');
+    return finding;
+  }
+
+  const BLOCKED = new Set(['blocked']);
+
+  try {
+    // ----------------------------------------------------------------------
+    // CONSTRUCT — blocker X and blocked Y with Y.blockedByIssueIds:[X] set AT
+    // CREATE (legal via issues.create — NO issue.relations.write). Assign Y to
+    // the probe agent.
+    // ----------------------------------------------------------------------
+    const blockerX = await createIssue({
+      title: `Shape C blocker X ${SPIKE_TAG}`,
+      description: `Spike 10 Shape C blocker X — resolving this should cascade-resume Y. Safe to delete.`,
+      status: 'in_progress',
+      assigneeAgentId: SPIKE_PROBE_AGENT_ID,
+      originKind: 'plugin:clarity-pack',
+      originId: `spike-shapeC-X:${Date.now()}`,
+    });
+    finding.construction.push(`createIssue blocker X: HTTP ${blockerX.status}`);
+    if (!ok(blockerX.status) || !blockerX.body?.id) {
+      finding.verdictHint = 'FAIL — could not create Shape C blocker X';
+      finding.steps.push(`Shape C: blocker X create failed HTTP ${blockerX.status}`);
+      return finding;
+    }
+    finding.blockerIssueId = blockerX.body.id;
+    state.shapeCBlockerIssueId = blockerX.body.id;
+    finding.steps.push(`created blocker X ${blockerX.body.id}`);
+
+    const blockedY = await createIssue({
+      title: `Shape C blocked Y ${SPIKE_TAG}`,
+      description: `Spike 10 Shape C blocked Y — blockedByIssueIds:[X] set at create. ${REPLY_CHANNEL_INSTRUCTION} Safe to delete.`,
+      status: 'in_progress',
+      assigneeAgentId: SPIKE_PROBE_AGENT_ID,
+      blockedByIssueIds: [blockerX.body.id], // legal at create — NO relations.write (D-10)
+      originKind: 'plugin:clarity-pack',
+      originId: `spike-shapeC-Y:${Date.now()}`,
+    });
+    finding.construction.push(`createIssue blocked Y (blockedByIssueIds:[X] at create): HTTP ${blockedY.status}`);
+    if (!ok(blockedY.status) || !blockedY.body?.id) {
+      finding.verdictHint = 'FAIL — could not create Shape C blocked Y';
+      finding.steps.push(`Shape C: blocked Y create failed HTTP ${blockedY.status}`);
+      return finding;
+    }
+    finding.blockedIssueId = blockedY.body.id;
+    state.shapeCBlockedIssueId = blockedY.body.id;
+    finding.steps.push(`created blocked Y ${blockedY.body.id}`);
+
+    // Confirm the edge actually landed (read-only — issue.relations.read declared).
+    const yRead = await getIssue(blockedY.body.id);
+    const yBlockedBy =
+      (Array.isArray(yRead.body?.blockedByIssueIds) && yRead.body.blockedByIssueIds) ||
+      (Array.isArray(yRead.body?.blocked_by_issue_ids) && yRead.body.blocked_by_issue_ids) ||
+      [];
+    finding.edgeEstablishedAtCreate = yBlockedBy.includes(blockerX.body.id);
+    finding.construction.push(
+      `Y re-GET: blockedByIssueIds=${JSON.stringify(yBlockedBy)} (edge established at create: ${finding.edgeEstablishedAtCreate})`,
+    );
+
+    // ----------------------------------------------------------------------
+    // TEST CASCADE-ON-ANSWER (D-10, Open Question 3) — answer/resolve X WITHOUT
+    // touching Y's relation, then observe Y's three signals. Post a resolving
+    // comment on X and flip X to 'done' (declared issues.update). Never call any
+    // relations-write route.
+    // ----------------------------------------------------------------------
+    const seenY = new Set();
+    const knownRunsY = new Set();
+    await seedSeenAndRuns(blockedY.body.id, seenY, knownRunsY);
+    const yBaseRead = await getIssue(blockedY.body.id);
+    const yBaseStatus = ok(yBaseRead.status) ? yBaseRead.body?.status ?? null : null;
+
+    const resolveComment = await createComment(
+      blockerX.body.id,
+      'Spike 10 Shape C: blocker X is resolved — proceed. (Cascade test: Y should resume without touching its relation.)',
+    );
+    finding.steps.push(`posted resolving comment on X: HTTP ${resolveComment.status}`);
+    // CAS guard — re-GET X immediately before flipping it to done.
+    const xFresh = await getIssue(blockerX.body.id);
+    finding.steps.push(
+      `X pre-flip re-GET: status=${ok(xFresh.status) ? xFresh.body?.status ?? '(unknown)' : '(unknown)'}`,
+    );
+    const xDone = await updateIssue(blockerX.body.id, { status: 'done' });
+    finding.steps.push(`flipped X to 'done': HTTP ${xDone.status}`);
+    const xPost = await getIssue(blockerX.body.id);
+    finding.steps.push(
+      `X post-flip re-GET: status=${ok(xPost.status) ? xPost.body?.status ?? '(unknown)' : '(unknown)'}`,
+    );
+
+    // Observe Y WITHOUT touching its relation.
+    const obs = await observeThreeSignals(blockedY.body.id, {
+      seenIds: seenY,
+      knownRunIds: knownRunsY,
+      probeAgentId: SPIKE_PROBE_AGENT_ID,
+      baselineStatus: yBaseStatus,
+      blockedStatuses: BLOCKED,
+      windowMs: FIRST_REPLY_WINDOW_MS,
+    });
+    finding.signals = {
+      behavioral: obs.behavioral,
+      consumption: obs.consumption,
+      state: obs.state,
+    };
+    finding.evidence = obs.evidence;
+
+    // Re-read Y's relation read-only to see if the host auto-cleared the edge.
+    const yAfter = await getIssue(blockedY.body.id);
+    const yBlockedByAfter =
+      (Array.isArray(yAfter.body?.blockedByIssueIds) && yAfter.body.blockedByIssueIds) ||
+      (Array.isArray(yAfter.body?.blocked_by_issue_ids) && yAfter.body.blocked_by_issue_ids) ||
+      [];
+    finding.steps.push(
+      `Y relation after resolving X (read-only): blockedByIssueIds=${JSON.stringify(yBlockedByAfter)}`,
+    );
+
+    const verdict = verdictFromSignals(obs.behavioral, obs.consumption, obs.state);
+    finding.cascadeObserved = verdict === 'PASS';
+
+    if (finding.cascadeObserved) {
+      finding.verdictHint = `PASS — answering/resolving blocker X cascade-resumes Y within declared caps (no relations.write). Recipe: resolve blocker (comment + status:'done'); Y resumes natively.`;
+    } else {
+      // Y stayed blocked. Record the edge-clear path as SPEC'D-NOT-PROVEN (D-10):
+      // the exact transition, the capability it needs (NOT declared), and the
+      // governance cost. NEVER call any relations-write route.
+      finding.edgeClearPathSpecdNotProven = {
+        status: 'SPECD-NOT-PROVEN',
+        observation: `Y did not resume after resolving X (behavioral=${obs.behavioral} consumption=${obs.consumption} state=${obs.state}); the blockedByIssueIds edge appears load-bearing for dispatch.`,
+        requiredTransition:
+          "clear the dependency edge — ctx.issues.relations.removeBlockers(Y, [X]) or ctx.issues.relations.setBlockedBy(Y, []) (PluginIssueRelationsClient)",
+        requiredCapability:
+          "issue.relations.write — NOT declared in src/manifest.ts (only issue.relations.read is). Adding it + redeploying is OUT OF SCOPE (D-10).",
+        governanceCost:
+          "CTT-07 invariant: the plugin avoids mutating public.issues relations and leans on host disposition-recovery; clearing the edge is a deliberate exception Phase 14 must own (audit-logged, operator-attributed). NOT exercised here.",
+        exercised: false,
+      };
+      finding.verdictHint = `PARTIAL/FAIL (${verdict}) — cascade-on-answer did NOT resume Y within declared caps; edge-clear path documented SPEC'D-NOT-PROVEN (D-10, issue.relations.write — never called).`;
+    }
+  } catch (err) {
+    finding.steps.push(`Shape C threw: ${err.message}`);
+    finding.verdictHint = `FAIL — Shape C threw: ${err.message}`;
+  }
   return finding;
+}
+
+// ===========================================================================
+// teardown — delete every [SPIKE 10] probe issue + the sacrificial agent
+// ===========================================================================
+//
+// Per D-02 / T-10-12 — zero [SPIKE 10] residue after the run. Deletes each
+// probe issue created by the three shapes (X, Y, Shape A/B issues) and any
+// blocker edge issue, then terminates/deletes the sacrificial agent (REST
+// delete). Anything unreachable is listed for the operator / DO-backup rollback.
+
+async function teardown(state) {
+  const result = {
+    issuesDeleted: [],
+    agentDeleted: null,
+    residue: [],
+  };
+
+  const issueIds = [
+    state.shapeAProbeIssueId,
+    state.shapeBProbeIssueId,
+    state.shapeBBlockerIssueId,
+    state.shapeCBlockerIssueId,
+    state.shapeCBlockedIssueId,
+  ].filter(Boolean);
+
+  for (const id of issueIds) {
+    try {
+      const del = await call('DELETE', `/api/issues/${I(id)}`);
+      result.issuesDeleted.push({ issueId: id, httpStatus: del.status });
+      log('teardown: DELETE issue', { issueId: id, status: del.status });
+      if (!ok(del.status)) {
+        result.residue.push(
+          `issue ${id} (${SPIKE_TAG}) — DELETE returned HTTP ${del.status}; remove via manual delete or DO-backup rollback`,
+        );
+      }
+    } catch (err) {
+      result.residue.push(`issue ${id} (${SPIKE_TAG}) — DELETE threw: ${err.message}`);
+    }
+  }
+
+  // Terminate/delete the sacrificial agent ONLY if the probe minted it via REST
+  // (state.a3ProbeAgentId). An operator-pinned SPIKE_PROBE_AGENT_ID is the
+  // operator's to tear down (the manual-mint path from A3); list it for them.
+  if (state.a3ProbeAgentId) {
+    try {
+      const del = await call(
+        'DELETE',
+        `/api/companies/${C()}/agents/${encodeURIComponent(state.a3ProbeAgentId)}`,
+      );
+      result.agentDeleted = { agentId: state.a3ProbeAgentId, httpStatus: del.status };
+      log('teardown: DELETE agent', { agentId: state.a3ProbeAgentId, status: del.status });
+      if (!ok(del.status)) {
+        result.residue.push(
+          `agent ${state.a3ProbeAgentId} (${SPIKE_TAG}) — DELETE returned HTTP ${del.status}; terminate/delete manually or via DO-backup rollback`,
+        );
+      }
+    } catch (err) {
+      result.residue.push(`agent ${state.a3ProbeAgentId} — DELETE threw: ${err.message}`);
+    }
+  } else if (SPIKE_PROBE_AGENT_ID) {
+    result.residue.push(
+      `sacrificial agent ${SPIKE_PROBE_AGENT_ID} was operator-minted (SPIKE_PROBE_AGENT_ID pin, A3 manual-mint path) — operator pauses then terminates/deletes it after the run; DO-backup rollback is the safety net.`,
+    );
+  }
+
+  return result;
 }
 
 // ===========================================================================
@@ -1462,7 +1671,7 @@ async function main() {
   const summary = {
     probe: 'unblock-resume-spike-probe',
     phase: '10-unblock-resume-spike',
-    plan: '10-01',
+    plan: '10-02',
     startedAt: now(),
     apiUrl: API_URL || '(unset)',
     companyId: COMPANY_ID || '(unset)',
@@ -1470,6 +1679,7 @@ async function main() {
     configErrors,
     findings: {},
     spikeIssues: {},
+    teardown: null,
     finishedAt: null,
   };
 
@@ -1490,6 +1700,7 @@ async function main() {
     a3ProbeAgentId: null,
     shapeAProbeIssueId: null,
     shapeBProbeIssueId: null,
+    shapeBBlockerIssueId: null,
     shapeCBlockerIssueId: null,
     shapeCBlockedIssueId: null,
   };
@@ -1500,18 +1711,37 @@ async function main() {
   log('OBSERVE-REAL-BLOCKED-ITEMS — D-02 read-only per-shape fidelity scan');
   summary.findings.observeRealBlockedItems = await observeRealBlockedItems(state);
 
-  // NOTE: probeShapeA / probeShapeB / probeShapeC are STUBS in this plan; Plan
-  // 10-02 wires them into main() for the full three-shape run. Referenced here
-  // so the linter sees them as used and the harness lands intact.
-  void probeShapeA;
-  void probeShapeB;
-  void probeShapeC;
+  // The three-shape live run is GATED behind the pinned sacrificial agent
+  // (D-02 — never assign a throwaway to a real agent). Run only when
+  // SPIKE_PROBE_AGENT_ID is set; the dry-confirm + read-only observe above
+  // always run regardless.
+  if (SPIKE_PROBE_AGENT_ID) {
+    log('PROBE-SHAPE-A — awaiting-reply resume (comment-alone baseline)');
+    summary.findings.shapeA = await probeShapeA(state);
+
+    log('PROBE-SHAPE-B — status=blocked resume (D-08 ladder, minimal-first)');
+    summary.findings.shapeB = await probeShapeB(state);
+
+    log('PROBE-SHAPE-C — blockedByIssueIds cascade-on-answer (D-10 bounded)');
+    summary.findings.shapeC = await probeShapeC(state);
+  } else {
+    log('THREE-SHAPE RUN SKIPPED — SPIKE_PROBE_AGENT_ID not set (D-02 gate)');
+    summary.findings.shapeA = { probe: 'PROBE-SHAPE-A', skipped: true, reason: 'SPIKE_PROBE_AGENT_ID not set' };
+    summary.findings.shapeB = { probe: 'PROBE-SHAPE-B', skipped: true, reason: 'SPIKE_PROBE_AGENT_ID not set' };
+    summary.findings.shapeC = { probe: 'PROBE-SHAPE-C', skipped: true, reason: 'SPIKE_PROBE_AGENT_ID not set' };
+  }
+
+  // TEARDOWN — delete every [SPIKE 10] probe issue + the sacrificial agent
+  // (REST delete; residue listed for the operator / DO-backup rollback).
+  log('TEARDOWN — deleting [SPIKE 10] probe issues + sacrificial agent');
+  summary.teardown = await teardown(state);
 
   summary.spikeIssues = {
     a1ProbeIssueId: state.a1ProbeIssueId,
     a3ProbeAgentId: state.a3ProbeAgentId,
     shapeAProbeIssueId: state.shapeAProbeIssueId,
     shapeBProbeIssueId: state.shapeBProbeIssueId,
+    shapeBBlockerIssueId: state.shapeBBlockerIssueId,
     shapeCBlockerIssueId: state.shapeCBlockerIssueId,
     shapeCBlockedIssueId: state.shapeCBlockedIssueId,
     note: `Spike issues are tagged ${SPIKE_TAG} in their titles — greppable + deletable, or rollback to the DO-droplet backup bookend.`,
@@ -1521,7 +1751,7 @@ async function main() {
   process.stdout.write('\n=== UNBLOCK-RESUME SPIKE PROBE SUMMARY ===\n');
   process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
   process.stdout.write(
-    '\nPaste the JSON block above back into the GSD session so the 10-01 dry-confirm result can be recorded.\n',
+    '\nPaste the JSON block above back into the GSD session so the 10-02 three-shape result can be recorded for Plan 10-03.\n',
   );
   return 0;
 }
