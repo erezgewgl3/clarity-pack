@@ -51,7 +51,10 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
   2. The verified unblock-resume recipe (comment-write path + any required state transition + when the agent consumes it on heartbeat) is captured as a written contract the action loop (Phase 14) will implement against.
   3. The spike confirms the path works without violating Editor-Agent / agent governance parity (standard caps, pause/terminate, audit) and touches no non-additive schema.
   4. A negative or partial result is recorded honestly with its implication for DO-03 scope, so the action loop is not built on an unproven assumption.
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 10-01-PLAN.md — Build the unblock-resume probe harness + Wave-0 dry-confirm (A1 blocked-settable / A3 agent-mint) + D-02 read-only fidelity, bookended by DO-droplet backup
+- [ ] 10-02-PLAN.md — Three-shape live run (A awaiting-answer / B status=blocked / C blockedByIssueIds) with the D-08 ladder + three-signal PASS judging
+- [ ] 10-03-PLAN.md — Write the 10-03-SPIKE-FINDINGS unblock-resume contract (DO-03 gate) + commit the probe
 
 ### Phase 11: Honest Blocker Taxonomy (engine)
 **Goal**: Replace the binary owned-vs-unowned classification with a deterministic, agent-aware terminal taxonomy that is the single source of truth every surface reads from.
@@ -124,7 +127,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Unblock-Resume Spike | 0/0 | Not started | - |
+| 10. Unblock-Resume Spike | 0/3 | Planned | - |
 | 11. Honest Blocker Taxonomy | 0/0 | Not started | - |
 | 12. Needs-You Triage | 0/0 | Not started | - |
 | 13. Editor-Agent Named Action | 0/0 | Not started | - |
