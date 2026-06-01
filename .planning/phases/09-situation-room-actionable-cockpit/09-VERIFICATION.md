@@ -1,15 +1,24 @@
 ---
-status: gaps_found
+status: verified
 phase: 09-situation-room-actionable-cockpit
 ships_as: v1.3.0
 requirements: [R1, R2, R3, R4, R5, R6, R7, R8, R9]
 verified: 2026-05-31
+reverified: 2026-06-01
 gaps:
   - id: R3
-    status: failed
+    status: resolved
     title: "situation.assignOwner passes the human issue key to ctx.issues.update; host needs the UUID → ASSIGN_FAILED"
     severity: blocking
     surfaced_by: live BEAAA drill 2026-05-31
+    resolved_by: 09-04 gap-closure (leafIssueUuid carried end-to-end); re-drill 2026-06-01 agent-assign PASS + persisted
+follow_on_gaps:
+  - id: R3-self-assign-one-assignee
+    status: open
+    title: "'Take it myself' trips host 'Issue can only have one assignee' on already-agent-owned rows; handler does not displace the existing assigneeAgentId before setting assigneeUserId"
+    severity: minor
+    surfaced_by: live BEAAA re-drill 2026-06-01
+    note: "NOT the 09-04 leafIssueUuid bug — the UUID reaches the host correctly; this is a host business-rule interaction the self-assign branch does not pre-clear. Every BEAAA Needs-you issue already carries an assigneeAgentId, so no clean live self-assign target exists. Candidate follow-on: clear-then-assign, or surface 'already owned by <agent>' instead of generic ASSIGN_FAILED."
 ---
 
 # Phase 9 VERIFICATION — Situation Room actionable cockpit
@@ -30,19 +39,21 @@ gaps:
 |---|-------|---------|----------|
 | R1 | One people view, three groups; no agent grid | **PASS** | DOM probe: `.clarity-agent-grid`=0, `.clarity-agent-card`=0; exactly 3 group `<h2>`s: **Needs you / Working / Idle**. Screenshot `09-drill-1-cockpit-three-groups.png` |
 | R2 | Worker-tier grouping rendered verbatim | **PASS** | Needs you (9 blocked) · Working (6 running/reviewing) · Idle (3 idle/stale); UI renders worker order, no client re-sort |
-| R3 | **Assign owner mutates the real issue (HERO)** | **FAIL** | `situation.assignOwner` action POST → 200 envelope but body `{"data":{"error":"ASSIGN_FAILED"}}`. Worker log: `situation.assignOwner: issues.update failed {leafIssueId:"BEAAA-43"}` + host log `ERROR host handler error {method:"issues.update"}`. Re-read: BEAAA-43 still unowned (no mutation landed). See Root Cause below. |
-| R4 | No dead buttons; every surfaced action performs | **PARTIAL** | No *disabled/no-op* buttons anywhere (Needs-you rows: `Assign owner ▾`+`Open ↗`; Idle: `Assign work ▾`+`Stand down`; Working: "moving · no action needed"). BUT the hero Assign-owner action errors at the mutation (R3) — so a surfaced button does not complete its effect. R4 cannot pass while R3 fails. |
+| R3 | **Assign owner mutates the real issue (HERO)** | **PASS** (agent-assign) | **Re-drill 2026-06-01 (v1.3.0 corrected build):** `Assign owner ▾` on CFO/BEAAA-43 (the exact issue that failed on 2026-05-31) → pick CFO agent → `POST /actions/situation.assignOwner` → **200 `{"data":{"ok":true,"leafIssueId":"BEAAA-43","assignedTo":"301c968a-…"}}`** — NO ASSIGN_FAILED. Independent core-API re-read `GET /api/issues/BEAAA-43` → `assigneeAgentId:"301c968a-5ddf-4cdb-b1db-331ebae8ff81"` (the picked CFO agent), **persisted** (re-confirmed minutes later). The leafIssueUuid (`4290fb32-…`) reached `ctx.issues.update` as the mutation id; human key `BEAAA-43` echoed in the result only. See Re-drill section. *(Self-assign branch: separate follow-on gap — see below.)* |
+| R4 | No dead buttons; every surfaced action performs | **PASS** | No disabled/no-op buttons anywhere; the hero Assign-owner button now COMPLETES its effect (R3 agent-assign lands the write). R4 un-gated by the R3 fix. |
 | R5 | Un-frozen banner, non-zero unowned count | **PASS** | Banner "⚠ 9 stuck · 9 unowned → assign owners to clear the board" + `[Assign first ▾]` (urgent, non-zero). Previously frozen at "0 need you". |
 | R6 | org-backlog + critical-path merged into one expander | **PASS** | Single `+ 29 more blocked issues across the org (no active agent)` expander at end of Needs-you; no standalone org-backlog banner, no critical-path strip |
 | R7 | Stand-down confirm + Resume | **PASS** | `[Stand down]` on CSO → confirm dialog "Stand down CSO? · Confirm · Cancel"; Cancel = no pause (verified, no real effect) |
 | R8 | Snapshot bookend + verified restore before deploy | **PASS** | See Bookend note above (DO backup + plugin-reinstall rollback, BEAAA model) |
 | R9 | No raw-UUID leaks in human-facing strings | **PASS** | Surface-text UUID regex → 0 matches across cockpit + owner picker |
 | D-01 | Owner-picker popover with roster | **PASS** | Popover lists full agent roster (Head of Compliance, Auditor, Scanner Engineers, CEO, CSO, CFO, CTO, Designer, Actuary, Underwriter, CMO, CBDO …). Screenshot `09-drill-2-owner-picker-roster.png` |
-| D-02 | "Take it myself" | **PASS** (renders) / **blocked-by-R3** (effect) | "Take it myself" item present at picker bottom. Its effect path uses the SAME `ctx.issues.update` call → would fail identically to R3 (not separately exercised to avoid a second failed mutation). |
+| D-02 | "Take it myself" | **PASS** (renders) / **follow-on gap** (effect on owned rows) | "Take it myself" item present at picker bottom. Re-drill 2026-06-01: exercised on BEAAA-617 → host rejected with `"Issue can only have one assignee"` (the issue already had an `assigneeAgentId`). This is the SAME UUID `ctx.issues.update` path as the now-passing agent-assign (the UUID reached the host) — the failure is a host business-rule interaction, NOT the leafIssueUuid bug. Every BEAAA Needs-you issue is already agent-owned, so no clean live self-assign target exists. Logged as follow-on gap `R3-self-assign-one-assignee`. |
 | WARNING 2 | Editor-Agent excluded from picker | **PASS** | Editor-Agent absent from the owner-picker roster (uses `chat.roster`, not `ctx.agents.list`) |
 | Reader rider (operator add) | v1.2.2 no-rail Reader, first live appearance | **PASS** | `[data-clarity-surface="reader"]` width **760px**; "Show full task" disclosure present; **35** `.clarity-ref-chip--inline`; **0** rail elements inside the surface. Screenshot `09-drill-4-reader-norail-760col.png` |
 
-**Tally: 10 of 11 acceptance checks PASS + Reader rider PASS; R3 (hero) FAILS; R4 PARTIAL (gated by R3).**
+**Tally (2026-05-31 original drill): 10 of 11 acceptance checks PASS + Reader rider PASS; R3 (hero) FAILS; R4 PARTIAL (gated by R3).**
+
+**Tally (2026-06-01 re-drill, v1.3.0 corrected): R3 hero (agent-assign) PASS + persisted; R4 PASS (un-gated). All 9 requirements Implemented. One follow-on gap logged (`R3-self-assign-one-assignee`, minor — host one-assignee rule on already-owned rows).**
 
 ---
 
@@ -52,8 +63,8 @@ gaps:
 |-----|--------|------|
 | R1 one-view-three-groups | Implemented | live PASS |
 | R2 worker grouping | Implemented | live PASS |
-| R3 assign-owner real mutation | **NOT IMPLEMENTED (gap)** | code exists + unit-tested, but fails live: human-key vs UUID |
-| R4 no dead buttons | Partial | no disabled buttons; hero action errors (gated by R3) |
+| R3 assign-owner real mutation | **Implemented** | 09-04 fix (leafIssueUuid end-to-end); re-drill 2026-06-01 agent-assign PASS + persisted server-side. Self-assign on owned rows → follow-on gap (host one-assignee rule), not the UUID bug |
+| R4 no dead buttons | Implemented | hero Assign-owner completes its effect; un-gated by R3 fix |
 | R5 un-frozen banner | Implemented | live PASS |
 | R6 single expander | Implemented | live PASS |
 | R7 stand-down confirm | Implemented | live PASS |
@@ -79,10 +90,38 @@ gaps:
 
 ---
 
-## Disposition
+## Disposition (updated 2026-06-01 after 09-04 re-drill)
 
-**Phase 9 is NOT complete.** v1.3.0 is deployed and live on BEAAA — a net improvement (3-group cockpit, un-frozen banner, single expander, stand-down, and the v1.2.2 Reader no-rail redesign all verified live) — but the **hero R3 acceptance fails**, so the phase stays OPEN. The failed assign is rejected by the host (no bad write; BEAAA-43 still unowned), so v1.3.0 is safe to leave live while R3 is fixed.
+**Phase 9 is COMPLETE.** The 09-04 gap-closure fix (carry `leafIssueUuid` end-to-end; mutate via the UUID; human key display/log-only) is live on BEAAA in the corrected v1.3.0 build, and the hero R3 acceptance — **agent-assign mutates the real issue, operator-attributed, persisted** — PASSES on the exact issue (BEAAA-43) that failed on 2026-05-31. R4 un-gates. All 9 requirements are Implemented.
 
-**Next:** `/gsd:plan-phase 09 --gaps` → creates the 09-04 gap-closure plan (TDD per the fix design above) → `/gsd:execute-phase 09 --gaps-only` → re-deploy + re-drill R3.
+**One follow-on gap logged (minor):** `R3-self-assign-one-assignee` — "Take it myself" trips the host `"Issue can only have one assignee"` rule on issues that already carry an `assigneeAgentId`. On the live BEAAA board **every** Needs-you issue is already agent-owned, so the self-assign branch cannot be exercised cleanly there. This is a host business-rule interaction (the UUID reaches `ctx.issues.update` correctly — the same path the now-passing agent-assign uses), NOT the leafIssueUuid bug 09-04 fixed. Candidate follow-on: clear-then-assign (displace the existing assignee), or surface "already owned by `<agent>`" instead of generic ASSIGN_FAILED. Tracked in frontmatter `follow_on_gaps`.
 
-**No cleanup owed on BEAAA:** no throwaway issues seeded (9 real unowned blockers already present); the one attempted assign FAILED (no mutation); the stand-down was cancelled (no pause).
+**BEAAA state after re-drill:** BEAAA-43 is now assigned to the CFO agent (`assigneeAgentId 301c968a-…`) — a real, intended reassignment of an unowned blocker (the drill's purpose). Operator may reassign/clear if desired. No throwaway issues seeded. The BEAAA-617 self-assign attempt was host-rejected (no write landed).
+
+---
+
+## Re-drill evidence — 09-04 gap closure (2026-06-01)
+
+**Build:** corrected v1.3.0, local tarball `clarity-pack-1.3.0.tgz` sha256 `a36565e9b18debc9f4d64e5985055db1d61100b95bacb1bce9c838de268ca455` / 738,150 B. `paperclipInvocation` count `5` (SDK inlined). Master source through commit `34fff78` (09-04 Tasks 1–3).
+**Deploy path:** DEPLOY-RUNBOOK **Path A** (scp tarball + here-string install as `beai-agent` + `pm2 restart paperclip`). SSH reachable this session (the earlier "hang" was sshd MaxStartups connection-burst throttling, not a fail2ban ban — operator's IP was never in the ban list). Confirmed pre-deploy `status=ready version=1.3.0 id=a763176a`; post-install `✓ Installed clarity-pack v1.3.0 (ready)`, pm2 `paperclip` online (restart #11).
+**Bookend (R8):** DO droplet backup (operator-confirmed current) + plugin-reinstall rollback to v1.2.1 (additive-only schema), per `autonomous-deploy-authorization`. Plugin UUID `a763176a` preserved across the re-deploy (COEXIST #6).
+**Drill:** Playwright MCP against `http://127.0.0.1:3100/BEAAA/situation-room` (persistent SSH tunnel localhost:3100 → ariclaw:3100), logged in as Board.
+
+**Live-worker confirmation (the 09-04 marker reached production):** `POST /data/situation.snapshot` → 200; `needsYou.topAction` carries BOTH `leafIssueId:"BEAAA-43"` (human) AND `leafIssueUuid:"4290fb32-1e8a-4633-a72f-304cd31bb66e"` (UUID) — the `leafIssueUuid` field did not exist in the buggy v1.3.0.
+
+**R3 agent-assign (HERO) — PASS:**
+- Action: clicked `Assign owner ▾` on CFO/BEAAA-43 → picked **CFO** agent.
+- Captured response: `POST /api/plugins/a763176a-…/actions/situation.assignOwner` → **200** `{"data":{"ok":true,"leafIssueId":"BEAAA-43","assignedTo":"301c968a-5ddf-4cdb-b1db-331ebae8ff81"}}` — **no ASSIGN_FAILED**, no error text on page.
+- Independent re-read (core API, not the plugin): `GET /api/issues/BEAAA-43` → `assigneeAgentId:"301c968a-5ddf-4cdb-b1db-331ebae8ff81"`, `assigneeUserId:null`. Re-confirmed persisted minutes later.
+- This is the precise issue + flow that returned `ASSIGN_FAILED` on 2026-05-31. The leafIssueUuid fix closes it.
+
+**R3 "Take it myself" (assigneeUserId) — follow-on gap, not the 09-04 bug:**
+- Exercised on Actuary/BEAAA-617 → "Take it myself".
+- Host log (line 515778, `paperclip-out.log`): `host handler error {method:"issues.update"}` → `err: "Issue can only have one assignee"`.
+- Issue-state probe: BEAAA-617 already had `assigneeAgentId:"89868c9a-…"` (so adding `assigneeUserId` violates the one-assignee rule). Probe of all six remaining Needs-you issues (802/814/817/794/933/1101) → **all already carry an `assigneeAgentId`** — zero clean self-assign targets on the live board.
+- Disposition: logged as `R3-self-assign-one-assignee` (follow-on). The UUID plumbing is proven correct (host got far enough to evaluate a business rule on the right row); the agent-assign branch — same `ctx.issues.update(leafIssueUuid, …)` call — passes. Task 1 unit tests cover both branches' UUID-arg behavior with a UUID-strict fake.
+
+**R4 — PASS:** the hero Assign-owner button completes its effect (agent-assign lands the write). The 2026-05-31 PARTIAL was solely the R3 mutation error; un-gated.
+**R9 — PASS:** the displayed identifier stayed the human `BEAAA-NN` key throughout; the UUID (`4290fb32-…`) only ever traveled as an action arg / snapshot field, never rendered as text.
+
+**Screenshots:** `09-04-redrill-1-before-banner8.png`, `redrill-show-1-board.png`, `redrill-show-2-picker-open.png`, `redrill-show-3-take-it-myself.png`.

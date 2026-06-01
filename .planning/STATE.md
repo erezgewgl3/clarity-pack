@@ -3,36 +3,42 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
 status: executing
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-05-31T18:09:25.850Z"
+stopped_at: Completed 09-04-PLAN.md (Phase 9 CLOSED & VERIFIED LIVE on BEAAA)
+last_updated: "2026-06-01T10:05:00.000Z"
 progress:
   total_phases: 10
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 67
-  completed_plans: 60
-  percent: 80
+  completed_plans: 62
+  percent: 93
 ---
 
 # State: Clarity Pack
 
 **Initialized:** 2026-05-07
 
-## ⚠ Phase 9 — v1.3.0 LIVE on BEAAA, but R3 GAP found in live drill — 2026-05-31 (phase OPEN)
+## ✅ Phase 9 CLOSED & VERIFIED LIVE on BEAAA — 2026-06-01 (v1.3.0 corrected — Situation Room actionable cockpit / R3 leaf-UUID fix)
 
-Phase 9 (Situation Room actionable cockpit) executed 09-01 (worker) + 09-02 (UI) + 09-03 Task 1 (ship). **v1.3.0 is deployed and live on BEAAA** via DEPLOY-RUNBOOK **Path B** (Path A was fail2ban-blocked) — `clarity-pack-1.3.0.tgz` sha256 `10ae75c3829398fd70d0b383cdea2efa725ab60d6c6a3e32a2257765409288aa`; `status=ready version=1.3.0 id=a763176a` (UUID preserved); host accepted `issues.update`.
+Phase 9 (Situation Room actionable cockpit) shipped end-to-end across 09-01 (worker) + 09-02 (UI) + 09-03 (v1.3.0 ship) + **09-04 (R3 gap-closure)**. The 2026-05-31 drill hit a blocking R3 gap; 09-04 fixed it and the corrected v1.3.0 re-drill on 2026-06-01 PASSED.
 
-**Live drill: 10/11 acceptance checks + the Reader no-rail rider PASS; R3 (hero) FAILS.**
+**The R3 root cause (2026-05-31):** `situation.assignOwner` passed the human issue key `"BEAAA-43"` to `ctx.issues.update`, which needs the issue **UUID** → host rejected → `ASSIGN_FAILED`. `leafIssueId` is human-readable by design (M2/NO_UUID_LEAK); display-id and mutation-id were conflated. First live core-issue mutation.
 
-- PASS: R1 (no agent grid; 3 groups Needs you/Working/Idle) · R2 · R5 (un-frozen banner, 9 unowned) · R6 (single expander) · R7 (stand-down confirm) · R8 (DO-backup bookend) · R9 (no UUID leaks) · D-01 owner picker · D-02 "Take it myself" present · WARNING-2 (Editor-Agent excluded) · **Reader rider** (v1.2.2 no-rail 760px column + Show-full-task + inline ref-chips, first live appearance).
-- **R3 FAIL (blocking):** `situation.assignOwner` passes the human issue key `"BEAAA-43"` to `ctx.issues.update`, which needs the issue **UUID** → host `issues.update` error → `ASSIGN_FAILED`. `leafIssueId` is human-readable by design (M2/NO_UUID_LEAK in `build-employees-rollup.ts`); display-id and mutation-id were conflated. First live core-issue mutation. R4 PARTIAL (gated by R3). Full root cause + fix design in `09-VERIFICATION.md`.
+**The 09-04 fix (leafIssueUuid carried end-to-end):** `build-employees-rollup.ts` emits `leafIssueUuid` (UUID, distinct from the human key) on `blockerChain` + `NeedsYou.topAction` (source: `leaf.id` / `leafNodeId` / `focusIssue.id`, never `.identifier`); the **shared** `owner-picker-popover.tsx` always dispatches `leafIssueUuid: leafIssueUuid ?? leafIssueId` (the `?? leafIssueId` fallback keeps the unchanged org-backlog mount working); `employee-row.tsx` + `needs-you-banner.tsx` thread both props; `situation-assign-owner.ts` reads `reqStr(params,'leafIssueUuid')` and mutates via the UUID for BOTH branches (human key now log/echo-only). RED-first tests reproduce the live ASSIGN_FAILED with a UUID-strict fake. 4 commits `fbe3d00..34fff78`; no version bump (corrected v1.3.0), no schema/capability change.
 
-**v1.3.0 left live** — net improvement (cockpit + Reader + stand-down all work); the assign button fails SAFELY (host rejects; no bad write; BEAAA-43 still unowned). No throwaway issues seeded; stand-down cancelled.
+**Re-drill 2026-06-01 (corrected v1.3.0, Path A deploy):** `clarity-pack-1.3.0.tgz` sha256 `a36565e9b18debc9f4d64e5985055db1d61100b95bacb1bce9c838de268ca455` / 738,150 B; `paperclipInvocation`×5; `status=ready version=1.3.0 id=a763176a` (UUID preserved). Live Playwright drill at `/BEAAA/situation-room`:
+- **R3 agent-assign (HERO) PASS + persisted:** `Assign owner ▾` on CFO/BEAAA-43 (the exact 2026-05-31 failure) → pick CFO agent → action `200 {"ok":true,"leafIssueId":"BEAAA-43","assignedTo":"301c968a-…"}` (no ASSIGN_FAILED). Independent core-API re-read `GET /api/issues/BEAAA-43` → `assigneeAgentId:"301c968a-…"`, operator-attributed, re-confirmed persisted.
+- **R4 PASS** (hero completes; un-gated). **R9 PASS** (display stayed `BEAAA-NN`; UUID only an action arg). R1/R2/R5/R6/R7/R8 carried from 2026-05-31.
+- **R3/R4 flipped to Implemented. All 9 Phase 9 requirements Implemented.**
 
-**BEAAA bookend note (durable):** BEAAA has NO clarity-pack safety-CLI checkout (`~/clarity-pack` absent; no `/etc/paperclip/db.env`). The bookend is the operator's DigitalOcean droplet backup + plugin-reinstall rollback (additive schema; v1.2.1 rollback target) per `autonomous-deploy-authorization`. The 09-03 plan's safety-CLI snapshot steps were a Countermoves inheritance, not applicable to BEAAA.
+**Follow-on gap logged (minor, `R3-self-assign-one-assignee`):** "Take it myself" (`assigneeUserId`) trips the host rule `"Issue can only have one assignee"` on issues that already carry an `assigneeAgentId`. Every BEAAA Needs-you issue is already agent-owned, so there is no clean live self-assign target. This is a host business-rule interaction (the UUID reaches `ctx.issues.update` correctly — same path the passing agent-assign uses), NOT the leafIssueUuid bug. Candidate follow-on: clear-then-assign, or surface "already owned by `<agent>`" instead of generic ASSIGN_FAILED. Does NOT block Phase 9 closure (the hero path — the original gap — is closed). Tracked in `09-VERIFICATION.md` frontmatter `follow_on_gaps`.
 
-**Next action:** `/gsd:plan-phase 09 --gaps` → creates 09-04 gap-closure (TDD the leaf-UUID fix: carry `leafIssueUuid` separately from the display key across `build-employees-rollup.ts` + `employee-row.tsx` + `needs-you-banner.tsx` + `situation-assign-owner.ts` + tests) → `/gsd:execute-phase 09 --gaps-only` → re-deploy + re-drill R3. Phase 9 requirements NOT yet flipped to Implemented.
+**BEAAA state after re-drill:** BEAAA-43 is now assigned to the CFO agent (a real, intended reassignment — BEAAA-43 is a CFO financial-model issue). Operator may clear/reassign if desired. No throwaway issues seeded; the BEAAA-617 self-assign attempt was host-rejected (no write landed).
 
-VERIFICATION: `.planning/phases/09-situation-room-actionable-cockpit/09-VERIFICATION.md` (status: gaps_found).
+**BEAAA bookend note (durable):** BEAAA has NO clarity-pack safety-CLI checkout. Bookend = operator's DigitalOcean droplet backup + plugin-reinstall rollback (additive schema; v1.2.1 rollback target) per `autonomous-deploy-authorization`.
+
+**Next action:** Phase 9 (the last cockpit phase) is closed. Run `/gsd:progress` to route remaining v1.0.0 milestone work (Plan 05-10 lineage — npm publish is internal-only per `feedback_clarity-pack-internal-only-no-npm`).
+
+VERIFICATION: `.planning/phases/09-situation-room-actionable-cockpit/09-VERIFICATION.md` (status: verified). SUMMARY: `09-04-SUMMARY.md`.
 
 ---
 
@@ -546,7 +552,7 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 ## Current Position
 
 Phase: 09 (situation-room-actionable-cockpit) — EXECUTING
-Plan: 3 of 3
+Plan: 1 of 4
 
 **▶ Plan 09-01 (worker tier) CODE-COMPLETE 2026-05-31 (24 min, 3 tasks, commits `9aaa8a9`/`86a23d7`/`a612dc0`/`7beb8de`/`0fb9e56`).** Shipped: `situation.assignOwner` — the FIRST plugin core-issue mutation (`ctx.issues.update(leafIssueId, {assigneeAgentId|assigneeUserId}, companyId, {actorUserId})`; opt-in-guarded + company-scope `agents.get` gate; zero `ctx.db`); pure `groupForState` classifier + `group`/`isPaused` on every `SituationEmployeeRow` (R2/D-04); un-frozen `needsYou` count (counts unowned blockers; unowned `topAction` carries `agentId` + non-null `leafIssueId` so 09-02 `[Assign first ▾]` is never a dead button, R4); `issues.update` manifest capability declared; dead `recompute-situation` cron + materialized `situation_snapshots` read-path removed (handler returns fresh compute only; table preserved, R9). No version bump (1.2.2 — deferred to 09-03). Gates: tsc clean, build + css-scope + bundle-size PASS, suite 2384 pass / 1 pre-existing `situation.artifacts` fail. **Next: `/gsd:execute-phase 09` → Plan 09-02 (UI tier). BLOCKER 1 reminder: 09-02 deletes the still-intact `situation.artifacts` handler + registration atomically with its `usePluginData` UI caller.**
 
@@ -1298,7 +1304,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to execute
+**Status:** Executing Phase 09
 **Progress:** [█████████░] 88%
 
 ## Performance Metrics
