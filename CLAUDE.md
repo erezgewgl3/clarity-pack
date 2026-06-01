@@ -301,6 +301,15 @@ Useful queries:
 - Phase decisions → `mempalace_search query="phase 1 closure" wing="clarity_pack"`
 <!-- MemPalace:protocol-end -->
 
+## MemPalace — Operational Rules
+
+> Full usage guide: [docs/MEMPALACE-USAGE.md](docs/MEMPALACE-USAGE.md). Repair/operator runbook: `~/.mempalace/MEMPALACE-RUNBOOK.md`.
+
+- **Filing hygiene:** `mempalace_check_duplicate` before every `add_drawer`; file verbatim into the right wing/room; **never store secret values** — only facts about them (where it lives, how to rotate).
+- **KG hygiene:** when a fact changes, `mempalace_kg_invalidate` the old one then `mempalace_kg_add` the new — supersede, don't just file a contradiction; keep KG objects short (< ~128 chars).
+- **Multi-window safety:** safe on MemPalace **≥ 3.3.6** (automatic cross-process write lock). Keep every window/agent on 3.3.6 (`mempalace --version`) and on the `minilm` (384-dim) embedding model; **only ever write through MemPalace** — never a raw `chromadb`/SQLite client (bypasses the lock).
+- **If MemPalace looks broken** (`vector_disabled`, scoped search `Error finding id`, "malformed inverted index"): run `mempalace repair-status` (read-only) + `mempalace_reconnect`, fall back to unscoped/BM25 search, and **escalate to Eric — do NOT self-repair.** Rebuilds have segfault + quarantine traps; the rehearsed procedure lives in the runbook.
+
 <!-- GSD:workflow-start source:GSD defaults -->
 ## GSD Workflow Enforcement
 
