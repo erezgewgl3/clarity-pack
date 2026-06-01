@@ -2,18 +2,36 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: v1-final-internal
-status: milestone_complete
-stopped_at: Milestone complete (Phase 09 was final phase)
-last_updated: 2026-06-01T09:59:50.679Z
+status: completed
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-06-01T10:52:15.362Z"
+last_activity: 2026-06-01 — Milestone v1.0.0 completed and archived
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 67
-  completed_plans: 69
+  completed_plans: 61
   percent: 90
 ---
 
 # State: Clarity Pack
+
+## Deferred Items
+
+Items acknowledged and deferred at v1.0.0 milestone close on 2026-06-01:
+
+| Category | Item | Status |
+|----------|------|--------|
+| quick_task | 260516-gx4-compile-path-host-faithful-test-hardening | complete (audit false-positive — root-caused to a requireSafePath long-Windows-path bug in the GSD audit tool; the SUMMARY parses status:complete on a direct read) |
+| quick_task | 260524-s2y-fix-ac-toggle-invalidates-manifest-gap | complete (audit false-positive — same tool bug) |
+| quick_task | 260524-sm8-drill-clarity-pack-1-0-0-rc-6-tgz-on-cou | complete (audit false-positive — same tool bug) |
+| quick_task | 260528-mn0-fix-false-pause-banner-stale-read | complete (audit false-positive — same tool bug) |
+| quick_task | 260528-nns-on-demand-generate-bulletin-now-button | complete (audit false-positive — same tool bug) |
+| quick_task | 260531-b8w-implement-the-reader-redesign-from-sketch | complete (audit false-positive — same tool bug; shipped as v1.2.2 Reader no-rail redesign, live on BEAAA) |
+
+All six quick-tasks are genuinely complete (each carries a `status: complete` SUMMARY; work shipped + the owning phases are closed & live-verified). The open-artifact audit's quick-task scanner reports them as `missing` only because its `requireSafePath` wrapper fails on the long Windows directory paths — proven false: a direct Node read matches the `-SUMMARY.md` glob and parses `status: complete`. The 2 Phase-3 debug sessions flagged by the same audit were genuinely stale-formatted and were fixed (normalized to YAML `status: resolved`, commit `8789190`).
+
+---
 
 **Initialized:** 2026-05-07
 
@@ -26,6 +44,7 @@ Phase 9 (Situation Room actionable cockpit) shipped end-to-end across 09-01 (wor
 **The 09-04 fix (leafIssueUuid carried end-to-end):** `build-employees-rollup.ts` emits `leafIssueUuid` (UUID, distinct from the human key) on `blockerChain` + `NeedsYou.topAction` (source: `leaf.id` / `leafNodeId` / `focusIssue.id`, never `.identifier`); the **shared** `owner-picker-popover.tsx` always dispatches `leafIssueUuid: leafIssueUuid ?? leafIssueId` (the `?? leafIssueId` fallback keeps the unchanged org-backlog mount working); `employee-row.tsx` + `needs-you-banner.tsx` thread both props; `situation-assign-owner.ts` reads `reqStr(params,'leafIssueUuid')` and mutates via the UUID for BOTH branches (human key now log/echo-only). RED-first tests reproduce the live ASSIGN_FAILED with a UUID-strict fake. 4 commits `fbe3d00..34fff78`; no version bump (corrected v1.3.0), no schema/capability change.
 
 **Re-drill 2026-06-01 (corrected v1.3.0, Path A deploy):** `clarity-pack-1.3.0.tgz` sha256 `a36565e9b18debc9f4d64e5985055db1d61100b95bacb1bce9c838de268ca455` / 738,150 B; `paperclipInvocation`×5; `status=ready version=1.3.0 id=a763176a` (UUID preserved). Live Playwright drill at `/BEAAA/situation-room`:
+
 - **R3 agent-assign (HERO) PASS + persisted:** `Assign owner ▾` on CFO/BEAAA-43 (the exact 2026-05-31 failure) → pick CFO agent → action `200 {"ok":true,"leafIssueId":"BEAAA-43","assignedTo":"301c968a-…"}` (no ASSIGN_FAILED). Independent core-API re-read `GET /api/issues/BEAAA-43` → `assigneeAgentId:"301c968a-…"`, operator-attributed, re-confirmed persisted.
 - **R4 PASS** (hero completes; un-gated). **R9 PASS** (display stayed `BEAAA-NN`; UUID only an action arg). R1/R2/R5/R6/R7/R8 carried from 2026-05-31.
 - **R3/R4 flipped to Implemented. All 9 Phase 9 requirements Implemented.**
@@ -551,46 +570,10 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 ## Current Position
 
-Phase: 09
-Plan: Not started
-
-**▶ Plan 09-01 (worker tier) CODE-COMPLETE 2026-05-31 (24 min, 3 tasks, commits `9aaa8a9`/`86a23d7`/`a612dc0`/`7beb8de`/`0fb9e56`).** Shipped: `situation.assignOwner` — the FIRST plugin core-issue mutation (`ctx.issues.update(leafIssueId, {assigneeAgentId|assigneeUserId}, companyId, {actorUserId})`; opt-in-guarded + company-scope `agents.get` gate; zero `ctx.db`); pure `groupForState` classifier + `group`/`isPaused` on every `SituationEmployeeRow` (R2/D-04); un-frozen `needsYou` count (counts unowned blockers; unowned `topAction` carries `agentId` + non-null `leafIssueId` so 09-02 `[Assign first ▾]` is never a dead button, R4); `issues.update` manifest capability declared; dead `recompute-situation` cron + materialized `situation_snapshots` read-path removed (handler returns fresh compute only; table preserved, R9). No version bump (1.2.2 — deferred to 09-03). Gates: tsc clean, build + css-scope + bundle-size PASS, suite 2384 pass / 1 pre-existing `situation.artifacts` fail. **Next: `/gsd:execute-phase 09` → Plan 09-02 (UI tier). BLOCKER 1 reminder: 09-02 deletes the still-intact `situation.artifacts` handler + registration atomically with its `usePluginData` UI caller.**
-
----
-
-**▶ RESUME HERE (2026-05-28 PM — VIEW-DRIVEN COMPILE REWORK SHIPPED + LIVE-VERIFIED on BEAAA).**
-Read MemPalace `clarity_pack/decisions` drawer `drawer_clarity_pack_decisions_8f2f846b8ace835af1cc8c30` ("View-driven compile rework") FIRST. Bottom line:
-
-- **Root cause (live-confirmed):** on paperclipai@2026.525.0 (PR #6547) the SCHEDULED-JOB invocation scope is DEAD for host calls — `compile-bulletin`'s `companies.list`/`state.*`/`agents.reconcile`/`issues.*` ALL fail every tick with "missing, expired, or unknown invocation scope". So the job-driven §9 cross-tick rework (commits 03612ae/bf2b358/cc45451 — on master, kept as a harmless best-effort fallback) could NOT publish on BEAAA. DATA HANDLERS + ACTIONS + agent runs have VALID scopes.
-- **Fix = VIEW-DRIVEN (commits 97c4565 / 32ef55d / c051d4f / 4aab297 + ceiling bumps d724bce/701ffa8, all pushed):** TL;DR driven by the `issue.reader` data handler (`driveTldrCompileStep`) — opening a task's Reader compiles its TL;DR in a valid scope; cache hit = instant (no recompile); agent id resolved from an existing op issue (no reconcile). Bulletin: `compileNow` ACTION does the START + `byCycle` data handler consumes/publishes (`resumePendingCompile`, RESUME-only). MAX_TOKENS 4000→16000 + truncation backstop. Reader shows Compiling…/paused/truncated honestly. TL;DR driver does NOT auto-resume a paused agent (Eric: explicit resume only; agent status persists across restarts).
-- **LIVE-VERIFIED via Playwright (clarity-pack-1.0.0.tgz sha 2d2fc091…e0e8 installed, status=ready, caps accepted):** Bulletin No. 1 published + rendered; BEAAA-702 TL;DR compiled + displayed + persisted (instant cache hit on reopen across a restart); BEAAA-704 second task compiling. Full suite 2012 pass / 1 known situation.artifacts fail.
-- **Next (operator-gated):** npm publish v1.0.0 + Plan 05-10 close. Daily 06:30 cron is best-effort only now (job scope dead) — bulletin reliably compiles when the operator opens the Bulletin page + clicks "Generate now". Report the job-scope bug upstream to Paperclip.
-
----
-
-(SUPERSEDED — kept for history) Prior block: Delivery-layer rework was MID-FLIGHT (job-driven §9 plan in `.planning/DELIVERY-LAYER-REWORK-PLAN.md`). The job-driven approach is replaced by the view-driven fix above. Original session summary:
-
-- **Shipped + verified live on BEAAA:** pause-banner stale-read fix (`38c149c` — editor.pause-status reads real agent status + new `agents.resumeHeartbeat` action) and the "06:30 ET"→"06:30 Israel time" copy fix (`48f8c05`, committed, NOT yet deployed — bundles with the rework).
-- **Shipped to BEAAA but NON-FUNCTIONAL:** the on-demand "Generate bulletin now" button (Quick `260528-nns`, `d15d19f`). A synchronous UI action can't run the ~50s agent compile — paperclipai@2026.525.0 kills the cross-invocation result poll with "expired invocation scope" (PR #6547). The SAME flaw intermittently breaks the daily bulletin + every TL;DR (BEAAA has never published a bulletin).
-- **Rework FOUNDATION committed (behavior-neutral, green, NOT deployed):** delivery split `startAgentTask`/`pollAgentTaskResult` + `plugin.state.*` caps (`74c9ec6`); compile-pass-1 split `buildBulletinPrompt`/`finalizeBulletinDraft` (`ad87033`).
-- **Decisions locked (Eric):** fix TL;DR in this phase; keep v1.0.0; job deadline 5 min + UI window ~90s; `plugin.state.read`/`write` caps added (verify install accepts them on BEAAA).
-- **NOT done (the core rework):** compile-bulletin start/resume state machine (ctx.state pending per company; start does 1 immediate poll; advance only on terminal; force dedupe), the TL;DR drainer (driven off operation issues), the `bulletin.compileNow` enqueue rework, the UI poll, test rework, deploy. Full step-by-step in §9. Production is UNCHANGED until this lands; nothing half-applied.
-
-**Phase 6.1 (Situation Room spec-complete) CLOSED & VERIFIED 2026-05-27.** Operator drill on Countermoves at `clarity-pack-1.0.0-rc.8.tgz` sha256 `23181e4a5dd054226465edb932382c42969b46fd4500f925f380d930f731763a` passed across all six paths: install/upgrade (uninstall + helper-equivalent reinstall; all historical CHT-* topics + TL;DRs survived ⇒ COEXIST #6 observed live), ROOM-09 (Open-chat engagement entry navigates to URL_HASH carrier decoding to `{"employee":"<uuid>"}`, auto-selects agent + populates topic strip, no forced New Topic dialog), ROOM-10 (artifact chips render inline on CEO card within 24h window; empty windows render no placeholder), ROOM-11 (idle agents read `No blockers`; engagement entry on every card; standalone `+ Create task` opens correctly-styled Cold Task dialog), and Plan 06.1-12 v2 parser hotfix (parseChatDeepLink accepts employee-only payloads — round-trip test GREEN + live click verified).
-
-**ROOM-09 + ROOM-10 + ROOM-11 flipped to Implemented in REQUIREMENTS.md.** ROADMAP.md Phase 6.1 row marked `[x] CLOSED & VERIFIED 2026-05-27`. v1 requirement coverage: 97/97 Implemented (all phases except Plan 05-10's rc → 1.0.0 transition + npm publish + BEAAA install). COEXIST #3 + #6 preserved by construction (additive plugin-namespace migration 0013; Phase 4.1 disable/enable rowcount drill 2026-05-22 covers by precedent). VERIFICATION: `phases/06.1-situation-room-spec-complete/06.1-VERIFICATION.md`.
-
-**User manual shipped** (`docs/user-manual.md` + 7 canonical screenshots in `docs/images/`, commits `fb3dc83` + `1fdef4d`). Targeted at existing Paperclip operators; covers all four surfaces (Reader, Situation Room, Daily Bulletin, Employee Chat), the Editor-Agent, the two cross-surface workflows (Open-chat engagement + Cold Task dialog), data persistence in the plugin-namespaced Postgres schema, and a troubleshooting table.
-
-**Lessons filed** (MemPalace `clarity_pack/runbook` + auto-memory):
-
-- `phase-6.1-closure-coexist11-skip` — when a phase's only schema delta is additive plugin-namespace AND a prior phase already passed the COEXIST drill AND the operator just performed an uninstall/install cycle whose data survival is observable in the UI, the COEXIST drill is preserved-by-construction and the psql/sudo rowcount block is wasteful. Cite "preserved by construction" in VERIFICATION.md.
-- `feedback_coexist-drill-skip-by-construction` — auto-memory rule for future phase closures.
-- Reinforced: `feedback_mempalace-before-vps-commands` — query MemPalace BEFORE recommending VPS commands, every time. Two near-misses caught this session.
-
-**Next:** Plan 05-10 (rc → 1.0.0 + npm publish + ALL-paths drill + Hostinger wipe-and-rebuild + BEAAA install).
-
----
+Phase: Milestone v1.0.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-01 — Milestone v1.0.0 completed and archived
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1304,7 +1287,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Milestone complete
+**Status:** v1.0.0 milestone complete
 **Progress:** [█████████░] 88%
 
 ## Performance Metrics
@@ -1485,3 +1468,7 @@ Then **Defect B** (compilePass1 `LLM output was not valid JSON` — almost certa
 
 ---
 *State initialized: 2026-05-07*
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

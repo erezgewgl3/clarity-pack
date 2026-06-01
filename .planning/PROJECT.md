@@ -21,21 +21,24 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 
 ### Validated
 
-(None yet — ship to validate)
+<!-- All v1 scope shipped and live-verified on BEAAA across Phases 1–9. Final shipped version v1.3.0. -->
+
+- ✓ **Surface 1 — Task Detail Reader view** — v1.0 (Phase 2), evolved through v1.2.2 no-rail redesign (Phase 9 rider). Additional tab on issue pages; inline ref-resolution, plain-English TL;DR, deliverable preview, goal ancestry, AC auto-status. Instance-agnostic ref-resolver landed Phase 7.
+- ✓ **Surface 2 — Situation Room** — v1.0 (Phase 2) → spec-complete owner-resolution (Phase 6.1) → people-first cockpit v1.2.0 (Phase 8) → actionable cockpit v1.3.0 (Phase 9, hero Assign-owner mutates the real issue). Live agent state, transitively-flattened blocker chains ending in a named human action.
+- ✓ **Surface 3 — Daily Bulletin** — v1.0 (Phase 3). DST-safe 06:30-ET two-pass compile (SQL-grounded facts → LLM pass-1 → deterministic verifier), Requires-Your-Decision inbox, lineage threads, errata first-class. Bulletin lineage filter + gloss landed Phase 7.
+- ✓ **Surface 4 — Employee Chat** — v1.0 (Phase 4) + true-task (Phase 4.1) + Reader↔Chat bridge (Phase 4.2). Messages persist as ordinary `public.issue_comments`; optimistic send; attachments as work-products. 907 chat comments survived a plugin-disable coexistence drill.
+- ✓ **Editor-Agent** — v1.0 (Phase 2). Managed Paperclip org-chart hire under standard governance (self-loop filter, token cap, circuit breaker, pause/terminate). Compiles TL;DRs, critical-path narratives, daily bulletin.
+- ✓ **Per-user opt-in** — v1.0 (Phase 2). Profile toggle, default OFF; server-side opt-in check in every data/action handler; classic dashboard stays the default landing.
+- ✓ **Schema is additive-only** — v1.0 (all phases). Plugin-namespace migrations only; disable/uninstall leaves data intact; `--purge` opt-in only. Verified at the DB layer (row counts byte-identical across disable/enable).
+- ✓ **Plugin distribution** — v1.0. Installable via `paperclipai plugin install`. *Adjusted:* distribution is internal-only (local-tarball install); npm publish was dropped by decision — v1 audience is Eric on BEAAA.
+- ✓ **Pre-install backup, snapshot, and rollback discipline** — v1.0 (Phase 1). Snapshot/restore/smoke-test CLI + rehearsed restore drill (Countermoves 2026-05-13 PASS). For BEAAA, the bookend is the DigitalOcean droplet backup + plugin-reinstall rollback (safety-CLI not installed on that box).
 
 ### Active
 
-<!-- v1 scope. Roadmap will decompose these across phases. -->
+(None — v1.0.0 milestone complete. Next milestone's requirements defined via `/gsd:new-milestone`.)
 
-- [ ] **Surface 1 — Task Detail Reader view** added as an additional tab on issue pages (does not replace classic UI). Inline reference resolution, plain-English TL;DR, deliverable preview inline, goal ancestry breadcrumb, acceptance criteria auto-status.
-- [ ] **Surface 2 — Situation Room** route renders live agent state for every Paperclip employee; transitively-resolved blocker chain panel; critical-path strip; artifact shelf. Auto-recompute every 60s on view.
-- [ ] **Surface 3 — Daily Bulletin** auto-compiled at 06:30 ET each morning; editorial digest of yesterday's operations + today's awaiting-you items; "Requires Your Decision" inbox.
-- [ ] **Surface 4 — Employee Chat** hybrid surface: real-time UI; messages persist as ordinary issue comments on per-topic private issues; attachments stored as work-products; per-employee linear timeline + global search.
-- [ ] **Editor-Agent** ships as a regular Paperclip org-chart hire under standard agent governance (same budget caps, pause/terminate, audit log). Heartbeat-driven; produces TL;DRs, critical-path narratives, and the daily bulletin.
-- [ ] **Per-user opt-in** via Paperclip profile toggle; default OFF for existing users; classic Paperclip dashboard remains the default landing surface.
-- [ ] **Schema is additive-only**; plugin disable leaves data intact; clean uninstall preserves data; `--purge` flag is opt-in only.
-- [ ] **Plugin distribution** as an npm package installable via `pnpm paperclipai plugin install clarity-pack`; v1 audience is Eric on BEAAA only (Clipmart submission is deferred).
-- [ ] **Pre-install backup, snapshot, and rollback discipline** is a hard prerequisite to any clarity-pack action against the live BEAAA Paperclip instance. Before any install, upgrade, migration, or agent registration runs in production, a one-command snapshot must capture the live Postgres database (pg_dump or filesystem snapshot of the data dir), Paperclip's filesystem-persistent state (work-products, artifact paths, plugin install dir), the current Paperclip version, and the list of currently installed plugins. A matching one-command rollback must restore that snapshot byte-for-byte. A smoke test (start Paperclip → list issues → fetch a heartbeat → list employees) must verify a restored snapshot is functionally equivalent to the pre-snapshot environment. The discipline ships as a runbook plus scripts that live in this repo, NOT as plugin code — so they work even when clarity-pack itself is broken or uninstalled.
+Candidate follow-on for a future milestone:
+- [ ] **`R3-self-assign-one-assignee`** (minor) — "Take it myself" in the Situation Room trips the host "one assignee" rule on already-agent-owned rows. Candidate fix: clear-then-assign, or "already owned by <agent>" messaging. Tracked in `phases/09-.../09-VERIFICATION.md`.
 
 ### Out of Scope
 
@@ -46,9 +49,12 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 - **Special privileges for Editor-Agent** — must obey same budget caps, pause/terminate, audit log as any other employee. *Why:* coexistence guarantee #4 (governance parity).
 - **Real-time chat protocol that does NOT persist to issue comments** — chat must be durable as ordinary threaded comments. *Why:* hybrid model decision (Decisions #1, #5); guarantees data survives plugin disable.
 - **Clipmart submission criteria for v1** — accessibility audit, theming portability, multi-tenant safety, and public support story are deferred. *Why:* user picked "Just me on BEAAA" as v1 audience; Clipmart-readiness becomes its own milestone.
+- **npm public-registry publish** — *invalidated during v1.0.0.* Distribution is internal-only via local-tarball install; the package is never published to npm and there is no public repo. *Why:* v1 audience is Eric on BEAAA only; a public package adds supply-chain and support surface with zero v1 benefit (see decision in `MEMORY.md` / `feedback_clarity-pack-internal-only-no-npm`).
 - **Plugin UI sandboxing posture beyond Paperclip's default** — PLUGIN_SPEC.md states plugin UI bundles run as same-origin trusted JavaScript. Clarity Pack inherits that posture. *Why:* matches PLUGIN_SPEC.md; tighter sandboxing is a Paperclip-core change, not a plugin choice.
 
 ## Context
+
+**Current state (after v1.0.0, 2026-06-01).** All four surfaces + the Editor-Agent are built, shipped, and live-verified on BEAAA (AriClaw DO droplet) at version **v1.3.0** — plugin UUID `a763176a-2f4d-4986-b190-b5151e42cc00`, additive-only plugin-namespace schema, coexistence proven (disable/uninstall preserves data). ~31,300 LOC TypeScript/TSX, 219 test files (~2,320 passing), 750 commits over ~25 days across 11 phases. Distribution is internal-only (local tarball; no npm). The Situation Room is the most-iterated surface (read-only board → owner-resolution → people-first → actionable cockpit where Assign-owner writes the real Paperclip issue). Known minor follow-on: self-assign on already-owned rows (`R3-self-assign-one-assignee`).
 
 **Why this exists, in operational terms.** Paperclip's public roadmap explicitly lists five surfaces as ⚪ unbuilt: Artifacts & Work Products, Enforced Outcomes, Deep Planning, CEO Chat, Memory / Knowledge. Eric runs Paperclip on the BEAAA insurance project today and finds:
 
@@ -113,14 +119,15 @@ The mockups establish a consistent dark editorial aesthetic (Geist + Geist Mono 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Plugin form factor (no Paperclip fork) | Enables clean uninstall, Clipmart shipping later, zero merge debt against upstream. | — Pending |
-| Hybrid chat (real-time UI, durable as issue comments) | Captures both the immediacy of chat and Paperclip's auditability of issue comments without doubling storage. | — Pending |
-| Editor-Agent as regular org-chart hire | Reuses existing agent governance; avoids special-case code paths and unaudited privilege. | — Pending |
-| Default landing = Paperclip classic dashboard | Coexistence — Clarity views are opt-in clicks, never overrides; existing users see no change unless they enable the toggle. | — Pending |
-| v1 audience = Eric on BEAAA | Scope discipline — Clipmart-readiness pulls in accessibility audit, theming portability, multi-tenant safety, and public support story; not a v1 fight. | — Pending |
-| Editor-Agent named persona ("Editor-Agent") | Mockups already use editorial voice ("Compiled by Editor-Agent", "Editorial Desk · Internal"); a single named persona reads more coherently than a utility "Compiler" label. | — Pending |
-| Bulletin cadence = 06:30 ET scheduled + on-view recompute every 60s for Situation Room | Bulletin is editorial; daily cadence matches reading habit. Situation Room is operational; near-live cadence matches need without overwhelming compute. | — Pending |
-| Pre-install backup + rollback discipline before any production action | Paperclip is single-tenant filesystem-persistent and the plugin trust model is same-origin; the cost of an unrehearsed restore is unbounded. A first phase delivering snapshot/restore scripts and a working rollback drill caps that risk before any feature code touches BEAAA. | — Pending |
+| Plugin form factor (no Paperclip fork) | Enables clean uninstall, Clipmart shipping later, zero merge debt against upstream. | ✓ Good — shipped entirely inside the manifest contribution surface; disable/uninstall preserve data (coexistence drills PASS). |
+| Hybrid chat (real-time UI, durable as issue comments) | Captures both the immediacy of chat and Paperclip's auditability of issue comments without doubling storage. | ✓ Good — 907 chat comments survived a plugin disable unchanged; canonical write is `public.issue_comments`. |
+| Editor-Agent as regular org-chart hire | Reuses existing agent governance; avoids special-case code paths and unaudited privilege. | ✓ Good — managed agent with self-loop filter + token cap + circuit breaker; no special privileges. Required an operation-issue/document-readback pattern (sessions were silently discarded) — see Phase 3 debug. |
+| Default landing = Paperclip classic dashboard | Coexistence — Clarity views are opt-in clicks, never overrides; existing users see no change unless they enable the toggle. | ✓ Good — opt-in gate enforced server-side in every handler. |
+| v1 audience = Eric on BEAAA | Scope discipline — Clipmart-readiness pulls in accessibility audit, theming portability, multi-tenant safety, and public support story; not a v1 fight. | ✓ Good — kept scope tight; also drove the npm-drop decision. |
+| Editor-Agent named persona ("Editor-Agent") | Mockups already use editorial voice ("Compiled by Editor-Agent", "Editorial Desk · Internal"); a single named persona reads more coherently than a utility "Compiler" label. | ✓ Good — shipped as Editorial Desk across all surfaces. |
+| Bulletin cadence = 06:30 ET scheduled + on-view recompute every 60s for Situation Room | Bulletin is editorial; daily cadence matches reading habit. Situation Room is operational; near-live cadence matches need without overwhelming compute. | ⚠️ Revisit — the Situation Room 60s materialized-snapshot job is dead-on-cold-start; the cockpit renders fresh-per-request instead (works, but the cache path is vestigial). Bulletin cadence good (DST-safe gate fixed a same-day string-compare bug). |
+| Pre-install backup + rollback discipline before any production action | Paperclip is single-tenant filesystem-persistent and the plugin trust model is same-origin; the cost of an unrehearsed restore is unbounded. A first phase delivering snapshot/restore scripts and a working rollback drill caps that risk before any feature code touches BEAAA. | ✓ Good — Phase 1 CLI + rehearsed restore (Countermoves PASS). BEAAA itself uses DO-droplet-backup + plugin-reinstall rollback (safety-CLI absent on that box). |
+| Distribution = internal-only (no npm publish) | v1 audience is one operator on one box; a public npm package adds supply-chain + support surface for zero v1 benefit. | ✓ Good (added v1.0.0) — ship via local-tarball `paperclipai plugin install`; no public repo. |
 
 ## Evolution
 
@@ -140,4 +147,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-07 after initialization (research synthesis + backup/rollback as first-class requirement)*
+*Last updated: 2026-06-01 after v1.0.0 milestone (all 11 phases shipped + live-verified on BEAAA; final version v1.3.0; distribution internal-only).*
