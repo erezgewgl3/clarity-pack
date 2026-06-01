@@ -17,6 +17,20 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 
 **Zero rabbit-holes.** Every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place. If anything else fails, this must hold: Eric should never have to click through three levels of unresolved task references to find out what one of his agents is stuck on.
 
+## Current Milestone: v1.4.0 Truthful Situation Room
+
+**Goal:** Make the Situation Room the one screen that truthfully tells Eric what's going on in the company — and lets him do what needs him, in place.
+
+**Target features:**
+- Honest blocker taxonomy (deterministic engine) — recognizes agent ownership, flattens transitively to the human at the end, classifies each blocked item instead of dumping everything to "unowned → assign owner."
+- Editor-Agent named single action — grounded plain-English "what unblocks this + who + ~time," with a stale→degrade guardrail (never blanks, never fabricates urgency).
+- Cockpit IA redesign — Pulse (one-line company status + vitals) → Needs-you (ranked by what it unblocks) → In-motion (calm) → Watch (quietly stalled).
+- Reply-in-place + quick-decision chips that actually unblock + resume the agent.
+- Kill the false "Assign owner" affordance except on genuinely-unowned / stuck-agent rows.
+
+**Seed:** `docs/superpowers/specs/2026-06-01-situation-room-truthful-cockpit-design.md` (approved design).
+**Open risk to de-risk first (spike):** does answering an agent (a comment) actually unblock + resume it, or is a status transition also required?
+
 ## Requirements
 
 ### Validated
@@ -35,10 +49,17 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 
 ### Active
 
-(None — v1.0.0 milestone complete. Next milestone's requirements defined via `/gsd:new-milestone`.)
+<!-- v1.4.0 Truthful Situation Room. Detailed REQ-IDs + traceability in .planning/REQUIREMENTS.md. -->
 
-Candidate follow-on for a future milestone:
-- [ ] **`R3-self-assign-one-assignee`** (minor) — "Take it myself" in the Situation Room trips the host "one assignee" rule on already-agent-owned rows. Candidate fix: clear-then-assign, or "already owned by <agent>" messaging. Tracked in `phases/09-.../09-VERIFICATION.md`.
+- [ ] **Honest blocker taxonomy** — agent-aware, transitively flattened to the human at the end; each blocked item classified (awaiting-human / agent-working / agent-stuck / self-resolving / external / cycle / genuinely-unowned).
+- [ ] **"Needs you" tells the truth** — lists only human-actionable items; agent-working and self-resolving items are excluded.
+- [ ] **Editor-Agent named single action** — grounded plain-English action + who + estimate, with stale→degrade fallback to the deterministic line.
+- [ ] **Cockpit IA** — Pulse + Needs-you (ranked by what it unblocks) + In-motion (calm, legible) + Watch (quietly stalled).
+- [ ] **Reply-in-place + quick-decision chips** that post to the agent and actually unblock + resume it.
+- [ ] **Assign-owner suppression** — the control appears only on genuinely-unowned / stuck-agent rows.
+
+Candidate follow-on (may fold in while reworking the action layer):
+- [ ] **`R3-self-assign-one-assignee`** (minor) — "Take it myself" trips the host "one assignee" rule on already-agent-owned rows. Candidate fix: clear-then-assign, or "already owned by <agent>" messaging. Tracked in `phases/09-.../09-VERIFICATION.md`.
 
 ### Out of Scope
 
@@ -147,4 +168,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-01 after v1.0.0 milestone (all 11 phases shipped + live-verified on BEAAA; final version v1.3.0; distribution internal-only).*
+*Last updated: 2026-06-01 — started milestone v1.4.0 Truthful Situation Room (continues phase numbering from Phase 10).*
