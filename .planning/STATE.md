@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.4.0
 milestone_name: Truthful Situation Room
 status: planning
-last_updated: "2026-06-01T13:30:48.032Z"
+last_updated: "2026-06-01T14:00:00.000Z"
 last_activity: 2026-06-01
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -14,6 +14,39 @@ progress:
 ---
 
 # State: Clarity Pack
+
+## ▶ v1.4.0 Truthful Situation Room — ROADMAP CREATED 2026-06-01 (Phases 10–15)
+
+Roadmap for the v1.4.0 milestone is written. 16 requirements mapped to 6 phases (continues numbering from Phase 9; phase dirs 01–09 untouched). Coverage 16/16, no orphans.
+
+**Phase structure (hybrid architecture — deterministic engine + Editor-Agent naming layer, kept visibly separate):**
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 10. Unblock-Resume Spike | Prove comment-alone-vs-comment+transition unblocks+resumes a live agent | DO-03 |
+| 11. Honest Blocker Taxonomy (engine) | Deterministic agent-aware terminal classification; flatten to the human; degrade-safe | TAX-01, TAX-02, TAX-03 |
+| 12. Needs-You Triage | "Needs you" = human-actionable only, ranked by leverage; assign-owner suppressed | NY-01, NY-02, NY-03 |
+| 13. Editor-Agent Named Action | Grounded named action + party + estimate; stale→degrade; no manufactured urgency | ACT-01, ACT-02, ACT-03 |
+| 14. Do-It-Here Action Loop | Reply-in-place + decision chips that unblock+resume, across 3 surfaces; Open ↗ for out-of-system | DO-01, DO-02, DO-04, DO-05 |
+| 15. Cockpit IA Redesign | Pulse + Needs-you / In-motion / Watch tiers consuming engine verdict + Editor cards | COCK-01, COCK-02 |
+
+**Critical sequencing (honored from the approved design):**
+- **Phase 10 is the gate.** DO-03 (does answering an agent actually unblock+resume it?) is the #1 feasibility risk. The spike proves the unblock recipe before any action UI (Phase 14) is built.
+- **Phase 11 (taxonomy)** is the deterministic engine foundation everything reads from — `blocker-chain.ts` stays pure (determinism test + AI-token grep guard intact, no AI in that file).
+- **Phase 12 (needs-you)** depends on the taxonomy.
+- **Phase 13 (Editor-Agent naming)** is the AI layer on top of the engine; reuses the existing grounded TL;DR/bulletin pattern with a stale→degrade guardrail.
+- **Phase 14 (do-it-here)** depends on the proven Phase 10 recipe + taxonomy + Phase 13 cards; DO-04 spreads the SAME primitive across Situation Room + Reader blocker panel + org-blocked backlog.
+- **Phase 15 (cockpit IA)** consumes the engine verdict + Editor-Agent cards; reply-in-place ships in the Situation Room first.
+
+**Constraints carried into success criteria:** additive-only plugin-namespace schema (disable/uninstall preserves data), NO_UUID_LEAK (UUIDs never rendered as text — mutation carries UUID, display stays human-readable), degrade-safe rows, instance-agnostic (no company-prefix literals), Editor-Agent governance parity.
+
+**Seed design:** `docs/superpowers/specs/2026-06-01-situation-room-truthful-cockpit-design.md` (approved).
+
+**Next action:** `/gsd:plan-phase 10` (the gating unblock-resume spike). Phase 14's action UI is blocked on the Phase 10 result.
+
+Files: `.planning/ROADMAP.md` (v1.4.0 section + phase details), `.planning/REQUIREMENTS.md` (traceability 16/16).
+
+---
 
 ## Deferred Items
 

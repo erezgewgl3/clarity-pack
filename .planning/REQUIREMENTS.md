@@ -52,32 +52,32 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TAX-01 | TBD | Pending |
-| TAX-02 | TBD | Pending |
-| TAX-03 | TBD | Pending |
-| NY-01 | TBD | Pending |
-| NY-02 | TBD | Pending |
-| NY-03 | TBD | Pending |
-| ACT-01 | TBD | Pending |
-| ACT-02 | TBD | Pending |
-| ACT-03 | TBD | Pending |
-| DO-01 | TBD | Pending |
-| DO-02 | TBD | Pending |
-| DO-03 | TBD | Pending |
-| DO-04 | TBD | Pending |
-| DO-05 | TBD | Pending |
-| COCK-01 | TBD | Pending |
-| COCK-02 | TBD | Pending |
+| DO-03 | Phase 10 | Pending |
+| TAX-01 | Phase 11 | Pending |
+| TAX-02 | Phase 11 | Pending |
+| TAX-03 | Phase 11 | Pending |
+| NY-01 | Phase 12 | Pending |
+| NY-02 | Phase 12 | Pending |
+| NY-03 | Phase 12 | Pending |
+| ACT-01 | Phase 13 | Pending |
+| ACT-02 | Phase 13 | Pending |
+| ACT-03 | Phase 13 | Pending |
+| DO-01 | Phase 14 | Pending |
+| DO-02 | Phase 14 | Pending |
+| DO-04 | Phase 14 | Pending |
+| DO-05 | Phase 14 | Pending |
+| COCK-01 | Phase 15 | Pending |
+| COCK-02 | Phase 15 | Pending |
 
 **Coverage:**
 - v1.4.0 requirements: 16 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16 ✓
+- Unmapped: 0 ✓
+
+Note: DO-03 is mapped to Phase 10 (the gating spike that proves the unblock/resume path). Its UI realization rides along in Phase 14 (DO-01/02/04/05), which is gated by the Phase 10 result.
 
 ---
 *Requirements defined: 2026-06-01*
-*Last updated: 2026-06-01 after milestone v1.4.0 definition*
+*Last updated: 2026-06-01 — roadmap created; all 16 requirements mapped to Phases 10–15.*
