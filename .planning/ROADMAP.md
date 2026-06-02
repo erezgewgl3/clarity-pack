@@ -132,7 +132,11 @@ Plans:
   2. The screen is organized into Needs-you → In-motion → Watch tiers, loudest-on-top: Needs-you carries the named actions + reply-in-place; In-motion is calm with clearly-legible "what each agent is working on" text; Watch holds stuck-agent / external / cycle / overflow items.
   3. The cockpit consumes the engine verdict (Phase 11/12) and Editor-Agent cards (Phase 13) directly — no re-derivation of ownership in the view layer.
   4. Rows stay degrade-safe and instance-agnostic (no company-prefix literals); the screen renders honestly when the Editor-Agent is down.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 15-01-PLAN.md — Worker pulse summary aggregation (four vital-sign counts over existing verdicts; additive snapshot field, no migration)
+- [ ] 15-02-PLAN.md — PulseHeader (deterministic status sentence + four vital-sign chips; banner folded in; NO_UUID_LEAK render-scan)
+- [ ] 15-03-PLAN.md — Tier IA (Needs-you -> In-motion -> Watch by engine verdict tier; EmployeeRow reused + calm variant; backlog -> Watch; degrade-safe wiring)
 **UI hint**: yes
 
 ## Progress
@@ -151,7 +155,7 @@ Plans:
 | 12. Needs-You Triage | 3/3 | Complete    | 2026-06-02 |
 | 13. Editor-Agent Named Action | 3/3 | Complete   | 2026-06-02 |
 | 14. Do-It-Here Action Loop | 4/4 | Built (live-drill pending) | 2026-06-03 |
-| 15. Cockpit IA Redesign | 0/0 | Not started | - |
+| 15. Cockpit IA Redesign | 0/3 | Planned | - |
 
 ---
 *Roadmap defined: 2026-05-07 · v1.0.0 milestone archived: 2026-06-01 · v1.4.0 milestone added: 2026-06-01 (Phases 10–15)*
