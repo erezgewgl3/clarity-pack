@@ -36,7 +36,7 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 ### Cockpit Information Architecture
 
 - [ ] **COCK-01**: A Pulse header states company status in one plain-English sentence + vital signs (need-you / in-motion / stuck / self-clearing counts).
-- [ ] **COCK-02**: The Situation Room is organized into Needs-you → In-motion → Watch tiers, loudest-on-top; In-motion is calm with legible "what each agent is working on" text; Watch holds stuck-agent / external / cycle / overflow items.
+- [x] **COCK-02**: The Situation Room is organized into Needs-you → In-motion → Watch tiers, loudest-on-top; In-motion is calm with legible "what each agent is working on" text; Watch holds stuck-agent / external / cycle / overflow items.
 
 ## Future Requirements
 
@@ -69,7 +69,7 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 | DO-04 | Phase 14 | Complete |
 | DO-05 | Phase 14 | Complete |
 | COCK-01 | Phase 15 | Pending |
-| COCK-02 | Phase 15 | Pending |
+| COCK-02 | Phase 15 | Complete |
 
 **Coverage:**
 - v1.4.0 requirements: 16 total

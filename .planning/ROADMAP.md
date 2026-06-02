@@ -38,7 +38,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 - [x] **Phase 12: Needs-You Triage** — "Needs you" lists only human-actionable items, ranked by leverage; Assign-owner suppressed except on genuinely-unowned / stuck-agent rows. CLOSED 2026-06-02 (3 plans; verification 4/4 PASS; CR-01 Reader-leaf-navigate blocker fixed).
 - [x] **Phase 13: Editor-Agent Named Action** — grounded plain-English named action + party + estimate, with a stale→degrade guardrail and no manufactured urgency. (completed 2026-06-02)
 - [x] **Phase 14: Do-It-Here Action Loop** — reply-in-place + quick-decision chips that unblock+resume the agent, across three surfaces; "Open ↗" for out-of-system humans. BUILT 2026-06-03 (4 plans; verify 5/5 automated; CR-01 cross-company auth gate fixed; live BEAAA reply+resume drill folded into the milestone deploy drill).
-- [ ] **Phase 15: Cockpit IA Redesign** — Pulse header + Needs-you / In-motion / Watch tiers consuming the engine verdict + Editor-Agent cards.
+- [x] **Phase 15: Cockpit IA Redesign** — Pulse header + Needs-you / In-motion / Watch tiers consuming the engine verdict + Editor-Agent cards. (completed 2026-06-02)
 
 ## Phase Details
 
@@ -136,7 +136,7 @@ Plans:
 Plans:
 - [x] 15-01-PLAN.md — Worker pulse summary aggregation (four vital-sign counts over existing verdicts; additive snapshot field, no migration) — COMPLETE (wave 1)
 - [x] 15-02-PLAN.md — PulseHeader (deterministic status sentence + four vital-sign chips; banner folded in; NO_UUID_LEAK render-scan) — COMPLETE 2026-06-03 (component + buildPulseSentence + scoped CSS + render-scan; page wiring is 15-03)
-- [ ] 15-03-PLAN.md — Tier IA (Needs-you -> In-motion -> Watch by engine verdict tier; EmployeeRow reused + calm variant; backlog -> Watch; degrade-safe wiring)
+- [x] 15-03-PLAN.md — Tier IA (Needs-you -> In-motion -> Watch by engine verdict tier; EmployeeRow reused + calm variant; backlog -> Watch; degrade-safe wiring)
 **UI hint**: yes
 
 ## Progress
@@ -155,7 +155,7 @@ Plans:
 | 12. Needs-You Triage | 3/3 | Complete    | 2026-06-02 |
 | 13. Editor-Agent Named Action | 3/3 | Complete   | 2026-06-02 |
 | 14. Do-It-Here Action Loop | 4/4 | Built (live-drill pending) | 2026-06-03 |
-| 15. Cockpit IA Redesign | 0/3 | Planned | - |
+| 15. Cockpit IA Redesign | 3/3 | Complete   | 2026-06-02 |
 
 ---
 *Roadmap defined: 2026-05-07 · v1.0.0 milestone archived: 2026-06-01 · v1.4.0 milestone added: 2026-06-01 (Phases 10–15)*
