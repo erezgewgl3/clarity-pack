@@ -57,10 +57,12 @@ export type OwnerPickerPopoverProps = {
    *  log/echo identifier — NOT the mutation id. */
   leafIssueId: string;
   /** Plan 09-04 (R3) — the leaf issue UUID (the mutation id dispatched to
-   *  situation.assignOwner → ctx.issues.update). OPTIONAL: the org-backlog
-   *  mount passes only leafIssueId (already a UUID), so the dispatch falls back
-   *  to leafIssueUuid ?? leafIssueId. Consumed ONLY as a dispatch arg
-   *  (NO_UUID_LEAK / T-08-UI) — never rendered as text. */
+   *  situation.assignOwner → ctx.issues.update). OPTIONAL: when omitted the
+   *  dispatch falls back to leafIssueUuid ?? leafIssueId. As of WR-02 (14-REVIEW)
+   *  EVERY mount passes the real UUID here (the org-backlog mount now passes
+   *  row.leafIssueUuid ?? row.issueId, and leafIssueId = row.identifier, the human
+   *  key) so the fallback no longer routes a UUID through the echo key. Consumed
+   *  ONLY as a dispatch arg (NO_UUID_LEAK / T-08-UI) — never rendered as text. */
   leafIssueUuid?: string;
   companyId: string;
   userId: string;

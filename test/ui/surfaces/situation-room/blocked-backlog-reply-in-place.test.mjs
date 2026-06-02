@@ -65,6 +65,24 @@ test('OwnerPickerPopover still gated on actionAffordance === assign (Phase 12 un
 });
 
 // ---------------------------------------------------------------------------
+// WR-02 (14-REVIEW / NO_UUID_LEAK) — the assign-branch OwnerPickerPopover must
+// receive the HUMAN key (row.identifier) as leafIssueId and the UUID
+// (row.leafIssueUuid ?? row.issueId) as the dispatch-only leafIssueUuid. The
+// previous code passed leafIssueId={row.issueId} (a UUID), which the popover
+// would echo in its success toast.
+// ---------------------------------------------------------------------------
+
+test('WR-02 — OwnerPickerPopover leafIssueId is the HUMAN key row.identifier, NOT row.issueId', () => {
+  assert.match(CODE, /leafIssueId=\{row\.identifier\}/);
+  // the root UUID must NOT be passed as the human echo key anywhere.
+  assert.doesNotMatch(CODE, /leafIssueId=\{row\.issueId\}/);
+});
+
+test('WR-02 — OwnerPickerPopover leafIssueUuid carries the UUID (row.leafIssueUuid ?? row.issueId)', () => {
+  assert.match(CODE, /leafIssueUuid=\{row\.leafIssueUuid\s*\?\?\s*row\.issueId\}/);
+});
+
+// ---------------------------------------------------------------------------
 // LEAF UUID is the mutation id — NOT row.issueId (the root).
 // ---------------------------------------------------------------------------
 

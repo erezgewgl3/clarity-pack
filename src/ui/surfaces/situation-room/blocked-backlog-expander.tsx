@@ -127,7 +127,16 @@ export function BlockedBacklogExpander({
                      *  Phase 14. */}
                     {row.actionAffordance === 'assign' ? (
                       <OwnerPickerPopover
-                        leafIssueId={row.issueId}
+                        // WR-02 (14-REVIEW / NO_UUID_LEAK) — leafIssueId is the
+                        // HUMAN display + echo key (NOT a UUID). Previously this
+                        // passed row.issueId (the root UUID), which the popover
+                        // would have echoed in the toast. row.identifier is the
+                        // human key. leafIssueUuid carries the MUTATION id
+                        // (dispatch-only): prefer the chain leaf (row.leafIssueUuid,
+                        // 14-04) and fall back to the root (row.issueId) for
+                        // single-hop chains.
+                        leafIssueId={row.identifier}
+                        leafIssueUuid={row.leafIssueUuid ?? row.issueId}
                         companyId={companyId}
                         userId={userId}
                         triggerLabel="Assign ▾"
