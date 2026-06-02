@@ -71,7 +71,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 - [x] 11-02-PLAN.md — Worker agent-ownership/liveness capture in both BFS builders + graceful()→UNCLASSIFIED degrade (wave 2)
 - [x] 11-03-PLAN.md — Rollup re-triage off the verdict + split-identity + UNCLASSIFIED-on-throw + humanize-snapshot compile-gate (wave 3)
 - [x] 11-04-PLAN.md — UI surfaces render off the verdict; assign gated to UNOWNED; all 8 kinds render; full-repo green gate (wave 4)
-- [ ] 11-05-PLAN.md — Engine/shared hardening: WR-03 cadence>0 guard, WR-04 narrow return, WR-05 EXTERNAL label, IN-02 renumber, IN-04 makeDegradedResult, blocker-free 'none' (wave 1)
+- [x] 11-05-PLAN.md — Engine/shared hardening: WR-03 cadence>0 guard, WR-04 narrow return, WR-05 EXTERNAL label, IN-02 renumber, IN-04 makeDegradedResult, blocker-free 'none' (wave 1)
 - [ ] 11-06-PLAN.md — [BLOCKER] CR-01 scrub flatten-blocker-chain success label; WR-01 noBlockers→'none'; WR-03 call sites; WR-06 single-source viewer; IN-03 shared projection (wave 2)
 - [ ] 11-07-PLAN.md — Reader panel renders scrubbed awaitedPartyLabel; WR-02 no dead button; IN-01 comment; NO_UUID_LEAK render-scan UUID-pattern guard (wave 3)
 
@@ -135,7 +135,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Unblock-Resume Spike | 2/3 | Complete    | 2026-06-02 |
-| 11. Honest Blocker Taxonomy | 4/4 | Gaps found | - |
+| 11. Honest Blocker Taxonomy | 5/7 | In Progress|  |
 | 12. Needs-You Triage | 0/0 | Not started | - |
 | 13. Editor-Agent Named Action | 0/0 | Not started | - |
 | 14. Do-It-Here Action Loop | 0/0 | Not started | - |
