@@ -202,21 +202,28 @@ test('09-04 — the banner [Assign first] stays DOM-driven; it never dispatches 
 });
 
 // ---------------------------------------------------------------------------
-// index.tsx mount — NeedsYouBanner + EmployeeRowStrip, NO standalone org banner
+// index.tsx mount — Plan 15-03 (D-07) SUPERSEDES the Phase-9 mounts.
 // ---------------------------------------------------------------------------
+// The Phase-9 index body mounted <NeedsYouBanner> + <EmployeeRowStrip>. Plan
+// 15-03 (COCK-01/COCK-02 / D-07) folds the banner role INTO the <PulseHeader>
+// and replaces the agent-state group strip with the verdict-tier <TierStrip>.
+// needs-you-banner.tsx itself stays on disk (superseded, not deleted — the
+// component tests above still exercise it); the index no longer MOUNTS it.
 
-test('index.tsx imports + mounts NeedsYouBanner and EmployeeRowStrip', () => {
-  assert.match(INDEX, /import \{ NeedsYouBanner[\s\S]*?\} from '\.\/needs-you-banner\.tsx'/);
-  assert.match(INDEX, /import \{ EmployeeRowStrip[\s\S]*?\} from '\.\/employee-row-strip\.tsx'/);
-  assert.match(INDEX, /<NeedsYouBanner/);
-  assert.match(INDEX, /<EmployeeRowStrip/);
+test('index.tsx (15-03 D-07) mounts PulseHeader + TierStrip, NOT NeedsYouBanner / EmployeeRowStrip', () => {
+  const code = stripComments(INDEX);
+  assert.match(code, /<PulseHeader/, 'index mounts the Pulse header (banner folded in)');
+  assert.match(code, /<TierStrip/, 'index mounts the verdict-tier strip');
+  assert.doesNotMatch(code, /<NeedsYouBanner/, 'index no longer mounts the standalone banner (D-07)');
+  assert.doesNotMatch(code, /<EmployeeRowStrip/, 'index no longer mounts the Phase-9 group strip');
 });
 
-test('index.tsx mount order NeedsYouBanner < EmployeeRowStrip (R6 — no standalone org banner)', () => {
-  const needs = INDEX.indexOf('<NeedsYouBanner');
-  const strip = INDEX.indexOf('<EmployeeRowStrip');
-  assert.ok(needs > 0 && strip > 0, 'both mounted');
-  assert.ok(needs < strip, 'NeedsYouBanner before EmployeeRowStrip');
+test('index.tsx mount order PulseHeader < TierStrip (the Pulse is the always-on top status)', () => {
+  const code = stripComments(INDEX);
+  const pulse = code.indexOf('<PulseHeader');
+  const tier = code.indexOf('<TierStrip');
+  assert.ok(pulse > 0 && tier > 0, 'both mounted');
+  assert.ok(pulse < tier, 'PulseHeader before TierStrip');
 });
 
 test('R1/R6 — index.tsx no longer mounts OrgBlockedBacklogBanner / CriticalPathStrip / AwaitingYouPill / AgentCard', () => {
