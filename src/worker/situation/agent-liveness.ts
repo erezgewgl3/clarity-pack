@@ -16,9 +16,10 @@
 //   working = heartbeat fresh (age < stale window) OR (stale heartbeat but work queued)
 //   stuck   = stale heartbeat AND nothing queued (D-02); ALSO a known agent with
 //             NO heartbeat signal at all (age === Infinity ⇒ D-04 conservative)
-//   null    = reserved by the CALLER for "no agent on this node" — this helper is
-//             only invoked when an assigneeAgentId is present, so it returns a
-//             non-null state for every such node.
+//   null    = reserved by the CALLER for "no agent on this node" (WR-04, Plan
+//             11-05): nullability lives at the call site, NOT in this helper. This
+//             function is only invoked when an assigneeAgentId is present, so its
+//             return type is the non-null union 'working' | 'stuck'.
 //
 // Pure: no SDK import, no I/O, no wall-clock read — nowMs is injected so every
 // boundary is deterministically unit-testable.
@@ -48,13 +49,26 @@ export type ResolveAgentStateInput = {
  * node that HAS a known assigneeAgentId; the caller supplies null when there is
  * no agent on the node). Never returns null itself — D-04 makes a missing signal
  * conservatively 'stuck' rather than silent.
+ *
+ * WR-04 (Plan 11-05): the return type is narrowed to 'working' | 'stuck' — the
+ * helper never produces null. NULLABILITY LIVES AT THE CALL SITE: callers
+ * (flatten-blocker-chain.ts, org-blocked-backlog.ts) supply null themselves when
+ * assigneeAgentId == null, i.e. when there is no agent on the node. Do not widen
+ * this annotation back to include null.
  */
-export function resolveAgentState(input: ResolveAgentStateInput): 'working' | 'stuck' | null {
+export function resolveAgentState(input: ResolveAgentStateInput): 'working' | 'stuck' {
   const { lastHeartbeatMs, hasQueuedWork, nowMs, expectedCadenceMs } = input;
 
   // Stale window = 2x the expected cadence (D-03 self-tuning) or 2x the
   // established 5-min fixed fallback (Assumption A2) when no cadence is exposed.
-  const staleWindowMs = 2 * (expectedCadenceMs ?? RUNNING_WINDOW_MS);
+  // WR-03 (Plan 11-05): use a POSITIVE-value guard, NOT nullish coalescing — a
+  // host value of 0 must fall back to RUNNING_WINDOW_MS, never collapse the stale
+  // window to a 0-width band that would falsely classify a fresh heartbeat 'stuck'.
+  const cadenceMs =
+    typeof expectedCadenceMs === 'number' && expectedCadenceMs > 0
+      ? expectedCadenceMs
+      : RUNNING_WINDOW_MS;
+  const staleWindowMs = 2 * cadenceMs;
 
   const heartbeatAge = lastHeartbeatMs != null ? nowMs - lastHeartbeatMs : Infinity;
 
