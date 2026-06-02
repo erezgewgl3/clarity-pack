@@ -193,6 +193,42 @@ test('live-blocker-panel.tsx never renders a raw UUID — only awaitedPartyLabel
   assert.match(src, /awaitedPartyLabel/, 'awaited party rendered via the scrubbed label');
 });
 
+test('live-blocker-panel.tsx: blockerLine renders the scrubbed awaitedPartyLabel — NOT t.label — for every UUID-bearing kind (Plan 11-07 / CR-01 Reader half)', () => {
+  const src = readSrc('live-blocker-panel.tsx');
+  // Isolate the blockerLine() function body so the scan only covers the
+  // headline-render switch (the UNCLASSIFIED branch keeps its degradeReason).
+  const m = src.match(/function blockerLine\([\s\S]*?\n}\n/);
+  assert.ok(m, 'blockerLine() function present');
+  const body = m[0];
+  // CR-01 root cause: the panel rendered the RAW t.label (which embeds UUIDs
+  // straight off the engine) for AWAITING_HUMAN / EXTERNAL / CYCLE / UNOWNED /
+  // SELF_RESOLVING / the AWAITING_AGENT_* compound lines. After 11-06 scrubbed
+  // data.awaitedPartyLabel at the worker boundary, the panel must render THAT.
+  assert.doesNotMatch(
+    body,
+    /\bt\.label\b/,
+    'blockerLine() must not read the raw t.label in any rendered string (CR-01 leak site)',
+  );
+  // The scrubbed awaitedPartyLabel is the awaited-party display string for the
+  // UUID-bearing kinds.
+  assert.match(
+    body,
+    /data\.awaitedPartyLabel/,
+    'blockerLine() renders data.awaitedPartyLabel (the scrubbed string)',
+  );
+  // t.kind survives for the switch + the data-terminal-kind attribute.
+  assert.match(body, /switch \(t\.kind\)/, 't.kind still drives the exhaustive switch');
+});
+
+test('live-blocker-panel.tsx: the IN-01 scrub-location comment names flatten-blocker-chain.ts (the worker handler), not the panel', () => {
+  const src = readSrc('live-blocker-panel.tsx');
+  assert.match(
+    src,
+    /flatten-blocker-chain/,
+    'the invariant comment must state the scrub happens in flatten-blocker-chain.ts (IN-01)',
+  );
+});
+
 test('live-blocker-panel.tsx: UNCLASSIFIED maps to the open affordance with no assign button (D-12 / SC3)', () => {
   const src = readSrc('live-blocker-panel.tsx');
   // 'open' affordance → an "Open ↗"-style label; 'assign' → the assign control.
