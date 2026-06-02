@@ -99,7 +99,11 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
   2. When the Editor-Agent output is stale or absent, the row degrades to the deterministic line (e.g. "waiting on you — Founder ruling, BEAAA-NN") and never blanks or invents urgency.
   3. The Editor-Agent only annotates rows the engine already flagged as human-actionable; yes/no decision options appear only when the source issue poses a binary.
   4. Action cards are cached in the additive plugin namespace and refreshed on the Editor-Agent heartbeat + the existing 60s on-view recompute, reusing the existing grounded-summary (TL;DR/bulletin) pattern under standard governance parity.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 13-01-PLAN.md — Foundation: additive action_cards migration (0015) + shared ActionCard type + cache repo (wave 1)
+- [ ] 13-02-PLAN.md — driveActionCardsStep (gloss-mirror) + action-cards OperationKind + situation.snapshot/heartbeat wiring; anti-fabrication + dual-arm staleness, never-throw (wave 2)
+- [ ] 13-03-PLAN.md — Render the cached named-action sentence + party + estimate on the needs-you row with deterministic degrade + NO_UUID_LEAK render-scan (wave 3)
 
 ### Phase 14: Do-It-Here Action Loop
 **Goal**: Let the operator act in place — reply-in-place + quick-decision chips that post to the awaited agent and actually unblock+resume it, available across all three blocker surfaces, with an honest escape hatch for out-of-system humans.
