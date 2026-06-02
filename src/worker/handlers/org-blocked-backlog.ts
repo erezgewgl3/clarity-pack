@@ -65,6 +65,30 @@ type EdgeNodeMeta = {
   agentState: 'working' | 'stuck' | null;
 };
 
+// Plan 11-06 Task 2 (IN-03 / SC5) — the SINGLE relation-node projection shape both
+// BFS walkers read from a `summary.blockedBy[]` entry. org-blocked-backlog.buildEdges
+// and flatten-blocker-chain.walkBlockerChain previously projected this shape
+// independently (one typed cast here, three chained `as unknown as {...}` casts in
+// the Reader walker). Declaring it ONCE and importing it into both makes the SC5
+// "the two builders agree" claim honest at the type level. Every field stays
+// optional + the runtime keeps its `?? null` defensive posture (Pitfall 7) — this
+// is a type-only refactor; no read order or default changes.
+export type RelationNodeProjection = {
+  id?: string;
+  issueId?: string;
+  key?: string;
+  assigneeUserId?: string | null;
+  ownerUserId?: string | null;
+  etaIso?: string | null;
+  status?: string;
+  // D-01 — agent ownership + the worker's liveness signals.
+  assigneeAgentId?: string | null;
+  lastHeartbeatMs?: number | null;
+  lastHeartbeatAt?: string | null;
+  hasQueuedWork?: boolean | null;
+  expectedCadenceMs?: number | null;
+};
+
 // D-I4-04 — cap the rendered backlog at 12–15. This plan picks 15: covers a
 // ~two-dozen-blocked org at >half while staying scannable. A "N total" count +
 // overflow indicator surface the rest. (Instance-agnostic: no company-prefix
@@ -243,23 +267,10 @@ export async function buildEdges(
     // Plan 11-02 Task 2 (Pitfall 7 / V5) — every new field read keeps the
     // defensive `?? null` posture; a missing field falls through the engine
     // cascade to UNOWNED/SELF_RESOLVING (conservative-correct), never a crash.
-    const blockedBy = (summary?.blockedBy ?? []) as Array<{
-      id?: string;
-      issueId?: string;
-      key?: string;
-      assigneeUserId?: string | null;
-      ownerUserId?: string | null;
-      etaIso?: string | null;
-      status?: string;
-      // D-01 — agent ownership + the worker's liveness signals (Assumption A1:
-      // assigneeAgentId may ride on the relation summary node; heartbeat/queue
-      // fields are best-effort, missing ⇒ conservative stuck via resolveAgentState).
-      assigneeAgentId?: string | null;
-      lastHeartbeatMs?: number | null;
-      lastHeartbeatAt?: string | null;
-      hasQueuedWork?: boolean | null;
-      expectedCadenceMs?: number | null;
-    }>;
+    // Plan 11-06 Task 2 (IN-03) — single typed cast via the shared
+    // RelationNodeProjection (was an inline object-literal type duplicated in the
+    // Reader walker). The `?? null` posture is unchanged.
+    const blockedBy = (summary?.blockedBy ?? []) as Array<RelationNodeProjection>;
     for (const blocker of blockedBy) {
       const toId = blocker.id ?? blocker.issueId ?? blocker.key ?? '';
       if (!toId) continue;
@@ -285,8 +296,13 @@ export async function buildEdges(
               lastHeartbeatMs,
               hasQueuedWork: blocker.hasQueuedWork === true,
               nowMs,
+              // WR-03 (Plan 11-06) — forward the cadence only when POSITIVE (> 0).
+              // A host 0 is meaningful-but-invalid (a 0-width stale window); the
+              // helper falls back to RUNNING_WINDOW_MS. Matches flatten-blocker-chain's
+              // call site and the 11-05 helper guard, so a host 0 never reaches the
+              // helper from EITHER builder.
               expectedCadenceMs:
-                typeof blocker.expectedCadenceMs === 'number'
+                typeof blocker.expectedCadenceMs === 'number' && blocker.expectedCadenceMs > 0
                   ? blocker.expectedCadenceMs
                   : undefined,
             });

@@ -39,6 +39,11 @@ import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 // so the Reader panel classifies an agent-owned leaf identically to the
 // Situation Room (SC5 — both BFS builders agree on the nodeMeta shape).
 import { resolveAgentState } from '../situation/agent-liveness.ts';
+// Plan 11-06 Task 2 (IN-03) — the SINGLE relation-node projection shape, declared
+// once in org-blocked-backlog.ts and shared by both BFS walkers so the SC5
+// "two builders agree" claim is honest at the type level (replaces this file's
+// triple `as unknown as {...}` casts).
+import type { RelationNodeProjection } from './org-blocked-backlog.ts';
 
 const MAX_CHAIN_DEPTH = 6;
 
@@ -290,32 +295,19 @@ export async function walkBlockerChain(
       isRoot = false;
     }
 
-    const blockedBy = summary.blockedBy ?? [];
+    // Plan 11-06 Task 2 (IN-03) — single typed projection via the shared
+    // RelationNodeProjection (was three chained `as unknown as {...}` casts here).
+    // Read order + the `?? null` defensive posture (Pitfall 7) are unchanged — the
+    // agent-owned leaf still classifies AWAITING_AGENT_* identically to buildEdges (SC5).
+    const blockedBy = (summary.blockedBy ?? []) as Array<RelationNodeProjection>;
     for (const blocker of blockedBy) {
-      const toId = (blocker as unknown as { id?: string; issueId?: string; key?: string }).id
-        ?? (blocker as unknown as { issueId?: string }).issueId
-        ?? (blocker as unknown as { key?: string }).key
-        ?? '';
+      const b = blocker;
+      const toId = b.id ?? b.issueId ?? b.key ?? '';
       if (!toId) continue;
       edges.push({ from: id, to: toId, reason: 'blocks' });
       // Populate node meta best-effort from the summary. Owner/status/eta come
       // from fields IssueRelationIssueSummary exposes — if not present, we leave
       // them null and flattenBlockerChain falls back to its unowned terminal.
-      // Plan 11-02 Task 3 (D-01 / SC5) — also capture assigneeAgentId + the
-      // worker-resolved agentState, EXACTLY mirroring buildEdges' field set, so
-      // an agent-owned leaf classifies AWAITING_AGENT_* identically on both
-      // surfaces. Every read keeps the defensive `?? null` posture (Pitfall 7).
-      const b = blocker as unknown as {
-        assigneeUserId?: string | null;
-        ownerUserId?: string | null;
-        etaIso?: string | null;
-        status?: string;
-        assigneeAgentId?: string | null;
-        lastHeartbeatMs?: number | null;
-        lastHeartbeatAt?: string | null;
-        hasQueuedWork?: boolean | null;
-        expectedCadenceMs?: number | null;
-      };
       const assigneeAgentId = b.assigneeAgentId ?? null;
       const lastHeartbeatMs =
         typeof b.lastHeartbeatMs === 'number'
