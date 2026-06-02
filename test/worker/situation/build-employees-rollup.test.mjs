@@ -239,15 +239,22 @@ test('rollup — sort order: blocked, stale, idle, reviewing, running', async ()
 });
 
 // ---------------------------------------------------------------------------
-// Test 10 — within blocked bucket: oldest activity first
+// Test 10 (UPDATED for Plan 12-02 / NY-02) — within the needs_you (blocked) band,
+// rows are ordered by LEVERAGE descending, tie-break stable leaf id ascending —
+// NOT by activity age (D-02: the sort is time-free). The two rows here have equal
+// leverage (1 each, distinct leaves x1/x2), so the deterministic stable-id
+// tie-break orders them x1 < x2 → ag-new (leaf x1) before ag-old (leaf x2),
+// REGARDLESS of activity timestamps (the older row no longer wins by age).
 // ---------------------------------------------------------------------------
-test('rollup — within blocked bucket: older (smaller lastActivityMs) first', async () => {
+test('rollup — needs_you band ordered by leverage then stable leaf id (time-free, D-02), not by activity age', async () => {
   const agents = [
     agent({ id: 'ag-new', lastHeartbeatMs: NOW - 30 * MIN }),
     agent({ id: 'ag-old', lastHeartbeatMs: NOW - 30 * MIN }),
   ];
   const issuesByAgent = {
     'ag-new': [issue({ id: 'i-new', identifier: 'COU-NEW', status: 'blocked', assigneeAgentId: 'ag-new', lastActivityMs: NOW - 1 * HOUR })],
+    // ag-old is OLDER by activity — under the old age-based rule it led; under the
+    // new leverage rule its leaf (x2) sorts AFTER x1 on the stable tie-break.
     'ag-old': [issue({ id: 'i-old', identifier: 'COU-OLD', status: 'blocked', assigneeAgentId: 'ag-old', lastActivityMs: NOW - 10 * HOUR })],
   };
   const relations = {
@@ -256,8 +263,9 @@ test('rollup — within blocked bucket: older (smaller lastActivityMs) first', a
   };
   const ctx = makeCtx({ agents, issuesByAgent, relations });
   const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
-  assert.equal(out.employees[0].agentId, 'ag-old');
-  assert.equal(out.employees[1].agentId, 'ag-new');
+  // Leverage equal (1 each) → stable leaf id ascending: x1 (ag-new) before x2 (ag-old).
+  assert.equal(out.employees[0].agentId, 'ag-new', 'leaf x1 sorts before x2 (stable tie-break, not age)');
+  assert.equal(out.employees[1].agentId, 'ag-old');
 });
 
 // ---------------------------------------------------------------------------

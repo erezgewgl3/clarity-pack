@@ -40,6 +40,17 @@ import {
   buildEdges,
   type OrgBlockedBacklogCtx,
 } from '../handlers/org-blocked-backlog.ts';
+// Plan 12-02 (NY-02) — the PURE leverage helper. Needs-you rows are ranked by
+// leverage (count of distinct blocked items whose flattened chain terminates at
+// this action, D-01) descending, tie-break stable leaf id ascending (D-02), with
+// per-leaf dedup (D-03). Leverage is a SORT KEY ONLY (D-07) and Situation-Room-
+// only (D-08). The helper reverse-counts the engine-supplied leaf keys already on
+// the rows — NO new host fetch.
+import {
+  computeLeverageByLeaf,
+  sortActionItemsByLeverage,
+  type LeverageInputRow,
+} from './leverage.ts';
 
 export type AgeBucket = 'fresh' | 'aging' | 'stale';
 
@@ -562,55 +573,94 @@ export async function buildEmployeesRollup(
   );
   const targeting = rows.filter((r) => r.__targetsViewer && r.blockerChain);
 
-  // De-dupe by agentId for the count (Set so a row never double-counts).
-  const countedAgentIds = new Set<string>();
-  for (const r of unowned) countedAgentIds.add(r.agentId);
-  for (const r of targeting) countedAgentIds.add(r.agentId);
+  // Plan 12-02 (NY-01/D-11) — the needs-you SET is the union of the two
+  // engine-verdict partitions above (unowned ∪ viewer-targeted). Membership keys
+  // STRICTLY off the engine verdict (needsYou===true via the 'assign' UNOWNED
+  // partition, or rowTargetsViewer for AWAITING_HUMAN) — NEVER an ownerName
+  // string-match. agent-working / self-resolving / stuck rows have needsYou false
+  // and never target the viewer, so they are excluded by construction (D-11).
+  const needsYouRows: InternalRow[] = [];
+  const seenNeedsYou = new Set<string>(); // de-dupe by agentId (a row satisfies ≤1 set today)
+  for (const r of [...unowned, ...targeting]) {
+    if (seenNeedsYou.has(r.agentId)) continue;
+    seenNeedsYou.add(r.agentId);
+    needsYouRows.push(r);
+  }
 
-  // topAction — oldest UNOWNED row (smallest __activityMs) when ANY unowned
-  // exists; else fall back to the oldest viewer-targeted row (preserve the
-  // Phase 8 deep-link behavior when there are zero unowned).
-  const byOldest = (a: InternalRow, b: InternalRow) => (a.__activityMs ?? 0) - (b.__activityMs ?? 0);
-  const oldestUnowned = [...unowned].sort(byOldest)[0];
-  const oldestTargeting = [...targeting].sort(byOldest)[0];
+  // Plan 12-02 (D-01/D-03) — reverse-count leverage over the needs-you rows and
+  // collapse PER LEAF. Each row carries its engine-supplied leaf key as
+  // targetIssueUuid (the leaf node the chain terminated at). The helper reads only
+  // these structural keys (NO new fetch, NO clock). The deduped action items are
+  // the count (one per distinct leaf, D-03) AND the leverage-rank source.
+  const leverageRows: Array<LeverageInputRow & { __row: InternalRow }> = needsYouRows.map((r) => ({
+    agentId: r.agentId,
+    // The leaf the chain terminates at = blockerChain.targetIssueUuid (the leaf
+    // node UUID, === picked.pathIds[last]). Read as a STRUCTURAL dispatch key
+    // only — never rendered (NO_UUID_LEAK). pathIds empty → helper falls back to
+    // targetIssueUuid as the leaf key.
+    pathIds: [],
+    targetIssueUuid: r.blockerChain?.targetIssueUuid ?? null,
+    humanAction: r.blockerChain?.humanAction,
+    leafIssueId: r.blockerChain?.leafIssueId ?? null,
+    leafIssueUuid: r.blockerChain?.leafIssueUuid ?? null,
+    __row: r,
+  }));
+  const actionItems = computeLeverageByLeaf(leverageRows);
+  const rankedItems = sortActionItemsByLeverage(actionItems);
 
+  // Plan 12-02 (D-08) — apply the leverage order to the needs_you partition ONLY.
+  // Build a leaf-key → rank-index map from the ranked action items, then stably
+  // re-order the needs_you rows by their leaf's rank (highest-leverage first).
+  // Non-needs-you groups keep the LOCKED status-bucket order above (D-routing:
+  // Working/Idle grouping is left to the Phase 15 IA redesign).
+  const leafRank = new Map<string, number>();
+  rankedItems.forEach((it, i) => leafRank.set(it.stableId, i));
+  const leafKeyOfRow = (r: InternalRow): string | null => r.blockerChain?.targetIssueUuid ?? null;
+  const needsYouSet = new Set(needsYouRows.map((r) => r.agentId));
+  const needsYouOrdered = [...needsYouRows].sort((a, b) => {
+    const ra = leafRank.get(leafKeyOfRow(a) ?? '') ?? Number.MAX_SAFE_INTEGER;
+    const rb = leafRank.get(leafKeyOfRow(b) ?? '') ?? Number.MAX_SAFE_INTEGER;
+    if (ra !== rb) return ra - rb;
+    // Stable secondary tie-break on agentId (deterministic; no time input).
+    return a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0;
+  });
+  // Splice the leverage-ordered needs_you rows back into the global row order at
+  // the positions the needs_you rows currently occupy (they lead the locked sort,
+  // so this preserves the global blocked→stale→idle→… layout while re-ordering
+  // WITHIN the needs_you band).
+  let nyCursor = 0;
+  const reordered: InternalRow[] = rows.map((r) =>
+    needsYouSet.has(r.agentId) ? needsYouOrdered[nyCursor++]! : r,
+  );
+
+  // Plan 12-02 (D-12) — topAction = the HIGHEST-LEVERAGE action item (top of the
+  // ranked list; stable-id tie-break), NOT the oldest. The banner pick and the
+  // list-top now agree. The representative row (smallest-agentId among collapsed)
+  // supplies the shape; leafIssueId stays non-null for a needs-you row with a
+  // chain (R4 — no dead [Assign first ▾]); humanAction is the already-scrubbed
+  // string (NO_UUID_LEAK).
   let topAction: NeedsYou['topAction'] = null;
-  if (oldestUnowned) {
-    // WARNING 1 / R4 — the UNOWNED case MUST carry agentId + a NON-NULL
-    // leafIssueId so 09-02's [Assign first ▾] can scroll to that row and open
-    // its owner picker (the leaf is what the picker assigns). A null leafIssueId
-    // here would force a disabled button — an R4 dead-button violation. The
-    // builder already guarantees leafIssueId is non-null for a row with a
-    // blockerChain (M2 fallback chain: leaf identifier → focusIssue.identifier;
-    // null only when BOTH lookups fail, which cannot happen alongside a present
-    // chain on a blocked row). NOT a chat deep-link — there is no ownerAgentId
-    // to chat with for an unowned chain.
+  const top = rankedItems[0];
+  if (top) {
+    const repRow = (top.representative as LeverageInputRow & { __row: InternalRow }).__row;
     topAction = {
-      agentId: oldestUnowned.agentId,
-      humanAction: oldestUnowned.blockerChain!.humanAction,
-      leafIssueId: oldestUnowned.blockerChain!.leafIssueId,
+      agentId: repRow.agentId,
+      humanAction: repRow.blockerChain!.humanAction,
+      leafIssueId: repRow.blockerChain!.leafIssueId,
       // Plan 09-04 (R3) — the mutation id (UUID) for the [Assign first ▾] picker.
-      leafIssueUuid: oldestUnowned.blockerChain!.leafIssueUuid,
-    };
-  } else if (oldestTargeting) {
-    // OWNED-needs-you case (zero unowned, ≥1 viewer-targeted) — unchanged from
-    // Phase 8: the UI resolves ownerAgentId from that row for the chat deep-link.
-    topAction = {
-      agentId: oldestTargeting.agentId,
-      humanAction: oldestTargeting.blockerChain!.humanAction,
-      leafIssueId: oldestTargeting.blockerChain!.leafIssueId,
-      // Plan 09-04 (R3) — carry the UUID on the owned fallback too (shape parity).
-      leafIssueUuid: oldestTargeting.blockerChain!.leafIssueUuid,
+      leafIssueUuid: repRow.blockerChain!.leafIssueUuid,
     };
   }
 
   const needsYou: NeedsYou = {
-    count: countedAgentIds.size,
+    // Plan 12-02 (D-03) — count = distinct deduped action items (one per leaf),
+    // replacing the prior agentId-Set count.
+    count: actionItems.length,
     topAction,
   };
 
   // Strip transient fields before returning the public shape.
-  const employees: SituationEmployeeRow[] = rows.map((r) => {
+  const employees: SituationEmployeeRow[] = reordered.map((r) => {
     const { __targetsViewer, __activityMs, ...pub } = r;
     void __targetsViewer;
     void __activityMs;
