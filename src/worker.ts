@@ -200,6 +200,17 @@ import {
   registerSituationAssignOwner,
   type SituationAssignOwnerCtx,
 } from './worker/handlers/situation-assign-owner.ts';
+// Plan 14-01 (DO-01 / DO-02) — situation.replyAndResume: the Do-It-Here reply+
+// resume mutation. Posts the operator's reply as a canonical issue_comments
+// comment (native resume trigger) then, ONLY when the caller passes
+// needsDurabilityFlip===true (Shape B), applies the operator-attributed durable
+// {status:'in_progress'} flip. Idempotent on a client messageUuid (migration
+// 0016). Capabilities issue.comments.create + issues.update are ALREADY declared
+// (D-14, no new cap; NOT issue.relations.write).
+import {
+  registerSituationReplyAndResume,
+  type SituationReplyAndResumeCtx,
+} from './worker/handlers/situation-reply-and-resume.ts';
 // Plan 09-02 (R4 / R7) — agents.pauseHeartbeat (Stand down) + issues.requestWakeup
 // (Wake): the two real write paths the actionable cockpit's idle/stale + blocked-
 // owned rows dispatch. No new capability (agents.pause + issues.wakeup already
@@ -373,6 +384,19 @@ const plugin = definePlugin({
     // via ctx.issues.update with the operator as the audit actor. Same ctx
     // clients as agent.takeOwnership (issues, agents, db for opt-in-guard).
     registerSituationAssignOwner(ctx as unknown as SituationAssignOwnerCtx);
+
+    // ---- Plan 14-01 (DO-01 / DO-02) — situation.replyAndResume -------------
+    // The Do-It-Here reply+resume mutation. Posts the operator's reply as a
+    // canonical public.issue_comments comment (the Phase-10 native resume
+    // trigger for both Shape A and Shape B), then — ONLY when the caller passes
+    // the REAL needsDurabilityFlip===true boolean (Shape B, leaf status=blocked;
+    // NOT a terminal.kind proxy) — applies the operator-attributed durable
+    // {status:'in_progress'} flip (the CTT-07 exception). Idempotent on the
+    // client messageUuid via the additive plugin-namespace dedup table
+    // (migration 0016). Same ctx clients as assign-owner (issues, db for the
+    // opt-in-guard + the reply-resume repo). The fire-and-forget requestWakeup
+    // carries idempotencyKey:messageUuid.
+    registerSituationReplyAndResume(ctx as unknown as SituationReplyAndResumeCtx);
 
     // ---- Plan 09-02 (R1 / BLOCKER 1) — situation.artifacts handler REMOVED ---
     // The dead AgentCard grid was situation.artifacts' only consumer; both the
