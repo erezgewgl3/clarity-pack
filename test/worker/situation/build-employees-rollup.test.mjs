@@ -572,9 +572,9 @@ test('rollup — 11-03: a chain-build throw yields an UNCLASSIFIED verdict row (
 // ---------------------------------------------------------------------------
 test('rollup — 11-03: split identity — awaitedPartyLabel has NO raw UUID; targetAgentUuid/targetIssueUuid carry the UUID (NO_UUID_LEAK)', async () => {
   // An agent-owned, STUCK leaf classifies AWAITING_AGENT_STUCK → verdict carries
-  // targetAgentUuid = the agent UUID (mutation-only), affordance 'nudge'. The leaf
-  // node is a real UUID so targetIssueUuid is UUID-shaped. The rendered
-  // awaitedPartyLabel must be scrubbed of every raw UUID.
+  // targetAgentUuid = the agent UUID (mutation-only), affordance 'assign' (Plan
+  // 12-01 D-05). The leaf node is a real UUID so targetIssueUuid is UUID-shaped.
+  // The rendered awaitedPartyLabel must be scrubbed of every raw UUID.
   const focusUuid = 'ffffffff-1111-2222-3333-444444444444';
   const blockerAgentUuid = 'aaaaaaaa-5555-6666-7777-888888888888';
   const leafUuid = 'bbbbbbbb-9999-0000-1111-222222222222';
@@ -601,7 +601,7 @@ test('rollup — 11-03: split identity — awaitedPartyLabel has NO raw UUID; ta
   // SOURCE-SCAN: the mutation-only ids carry the UUIDs (never rendered).
   assert.equal(row.blockerChain.targetIssueUuid, leafUuid, 'targetIssueUuid carries the leaf UUID');
   assert.ok(UUID_RE.test(row.blockerChain.targetIssueUuid), 'targetIssueUuid is UUID-shaped (mutation id)');
-  // The stuck-agent leaf surfaces the agent UUID as the nudge target, never rendered.
+  // The stuck-agent leaf surfaces the agent UUID as the mutation target, never rendered.
   assert.equal(row.blockerChain.targetAgentUuid, blockerAgentUuid, 'targetAgentUuid carries the stuck-agent UUID');
-  assert.equal(row.blockerChain.actionAffordance, 'nudge', "AWAITING_AGENT_STUCK affordance is 'nudge'");
+  assert.equal(row.blockerChain.actionAffordance, 'assign', "AWAITING_AGENT_STUCK affordance is 'assign' (Plan 12-01 D-05)");
 });
