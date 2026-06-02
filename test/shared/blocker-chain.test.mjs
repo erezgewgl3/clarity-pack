@@ -11,12 +11,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { flattenBlockerChain, pickTopChains } from '../../src/shared/blocker-chain.ts';
+import { classifyVerdict, flattenBlockerChain, pickTopChains } from '../../src/shared/blocker-chain.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BLOCKER_CHAIN_SRC = path.resolve(HERE, '..', '..', 'src', 'shared', 'blocker-chain.ts');
 
-test('HUMAN_ACTION_ON — A→B→C, C is awaiting eric, terminal is HUMAN_ACTION_ON(eric); pathIds=[A,B,C]', () => {
+test('AWAITING_HUMAN — A→B→C, C is awaiting eric, terminal is AWAITING_HUMAN(eric); pathIds=[A,B,C]; needsYou verdict', () => {
   const result = flattenBlockerChain({
     startId: 'A',
     edges: [
@@ -32,9 +32,101 @@ test('HUMAN_ACTION_ON — A→B→C, C is awaiting eric, terminal is HUMAN_ACTIO
   });
   assert.equal(result.startId, 'A');
   assert.deepEqual(result.pathIds, ['A', 'B', 'C']);
-  assert.equal(result.terminal.kind, 'HUMAN_ACTION_ON');
+  assert.equal(result.terminal.kind, 'AWAITING_HUMAN');
   assert.equal(result.terminal.userId, 'eric');
   assert.equal(typeof result.terminal.label, 'string');
+  // D-13 verdict — a person must act.
+  assert.equal(result.needsYou, true);
+  assert.equal(result.tier, 'needs-you');
+  assert.equal(result.actionAffordance, 'reply');
+  assert.equal(typeof result.awaitedPartyLabel, 'string');
+  assert.equal(result.targetIssueUuid, 'C');
+});
+
+test('AWAITING_AGENT_WORKING — walks THROUGH agent to a live agent leaf; in-motion, not needs-you (SC2)', () => {
+  const result = flattenBlockerChain({
+    startId: 'A',
+    edges: [{ from: 'A', to: 'B', reason: 'blocks' }],
+    nodeMeta: {
+      A: { ownerUserId: null, etaIso: null, status: 'blocked' },
+      B: { ownerUserId: null, etaIso: null, status: 'in_progress', assigneeAgentId: 'agent-actuary', agentState: 'working' },
+    },
+    viewerUserId: 'eric',
+  });
+  assert.equal(result.terminal.kind, 'AWAITING_AGENT_WORKING');
+  assert.equal(result.terminal.agentId, 'agent-actuary');
+  assert.equal(result.needsYou, false);
+  assert.equal(result.tier, 'in-motion');
+  assert.equal(result.actionAffordance, 'none');
+  // D-15 split identity — agent UUID carried for dispatch, not rendered text.
+  assert.equal(result.targetAgentUuid, 'agent-actuary');
+});
+
+test('AWAITING_AGENT_STUCK — agentState missing ⇒ conservative STUCK (D-04); watch tier + nudge', () => {
+  const result = flattenBlockerChain({
+    startId: 'A',
+    edges: [{ from: 'A', to: 'B', reason: 'blocks' }],
+    nodeMeta: {
+      A: { ownerUserId: null, etaIso: null, status: 'blocked' },
+      // assigneeAgentId set, agentState absent → STUCK conservatively.
+      B: { ownerUserId: null, etaIso: null, status: 'blocked', assigneeAgentId: 'agent-cfo' },
+    },
+    viewerUserId: 'eric',
+  });
+  assert.equal(result.terminal.kind, 'AWAITING_AGENT_STUCK');
+  assert.equal(result.terminal.agentId, 'agent-cfo');
+  assert.equal(result.needsYou, false);
+  assert.equal(result.tier, 'watch');
+  assert.equal(result.actionAffordance, 'nudge');
+  assert.equal(result.targetAgentUuid, 'agent-cfo');
+});
+
+test('UNOWNED — leaf with no owner, no agent, no eta ⇒ genuine UNOWNED; needs-you + assign (the ONLY honest assign)', () => {
+  const result = flattenBlockerChain({
+    startId: 'A',
+    edges: [{ from: 'A', to: 'B', reason: 'blocks' }],
+    nodeMeta: {
+      A: { ownerUserId: null, etaIso: null, status: 'blocked' },
+      B: { ownerUserId: null, etaIso: null, status: 'blocked' },
+    },
+    viewerUserId: 'eric',
+  });
+  assert.equal(result.terminal.kind, 'UNOWNED');
+  // D-11 — UNOWNED carries NO userId.
+  assert.equal(result.terminal.userId, undefined);
+  assert.equal(result.needsYou, true);
+  assert.equal(result.tier, 'needs-you');
+  assert.equal(result.actionAffordance, 'assign');
+});
+
+test('UNCLASSIFIED — classifyVerdict maps the degrade kind to watch/open/no-assign (D-12)', () => {
+  const verdict = classifyVerdict({ kind: 'UNCLASSIFIED', label: 'x' });
+  assert.equal(verdict.tier, 'watch');
+  assert.equal(verdict.actionAffordance, 'open');
+  assert.equal(verdict.needsYou, false);
+});
+
+test('classifyVerdict — encodes the design-seed Section 1 table for all 8 kinds', () => {
+  const table = {
+    AWAITING_HUMAN: { tier: 'needs-you', actionAffordance: 'reply', needsYou: true },
+    AWAITING_AGENT_WORKING: { tier: 'in-motion', actionAffordance: 'none', needsYou: false },
+    AWAITING_AGENT_STUCK: { tier: 'watch', actionAffordance: 'nudge', needsYou: false },
+    SELF_RESOLVING: { tier: 'watch', actionAffordance: 'none', needsYou: false },
+    EXTERNAL: { tier: 'watch', actionAffordance: 'open', needsYou: false },
+    CYCLE: { tier: 'watch', actionAffordance: 'open', needsYou: false },
+    UNOWNED: { tier: 'needs-you', actionAffordance: 'assign', needsYou: true },
+    UNCLASSIFIED: { tier: 'watch', actionAffordance: 'open', needsYou: false },
+  };
+  for (const [kind, expected] of Object.entries(table)) {
+    // Minimal terminal stub per kind — classifyVerdict reads only the discriminant.
+    let terminal;
+    if (kind === 'AWAITING_HUMAN') terminal = { kind, userId: 'u', label: 'l' };
+    else if (kind === 'AWAITING_AGENT_WORKING' || kind === 'AWAITING_AGENT_STUCK') terminal = { kind, agentId: 'a', label: 'l' };
+    else if (kind === 'SELF_RESOLVING') terminal = { kind, etaIso: '2026-06-02T00:00:00Z', label: 'l' };
+    else if (kind === 'CYCLE') terminal = { kind, cycleNodes: ['A'], label: 'l' };
+    else terminal = { kind, label: 'l' };
+    assert.deepEqual(classifyVerdict(terminal), expected, `classifyVerdict(${kind}) must match the table`);
+  }
 });
 
 test('SELF_RESOLVING — leaf has etaIso and no owner; terminal is SELF_RESOLVING with etaIso preserved', () => {
@@ -126,8 +218,12 @@ test('Determinism — same input produces same output bytes across 100 invocatio
 function chainOf(kind, startId) {
   let terminal;
   switch (kind) {
-    case 'HUMAN_ACTION_ON':
+    case 'AWAITING_HUMAN':
       terminal = { kind, userId: 'eric', label: `${startId} human` };
+      break;
+    case 'AWAITING_AGENT_WORKING':
+    case 'AWAITING_AGENT_STUCK':
+      terminal = { kind, agentId: 'agent', label: `${startId} agent` };
       break;
     case 'SELF_RESOLVING':
       terminal = { kind, etaIso: '2026-05-30T00:00:00Z', label: `${startId} self` };
@@ -138,30 +234,47 @@ function chainOf(kind, startId) {
     case 'CYCLE':
       terminal = { kind, cycleNodes: [startId], label: `${startId} cycle` };
       break;
+    case 'UNOWNED':
+    case 'UNCLASSIFIED':
+      terminal = { kind, label: `${startId} ${kind}` };
+      break;
     default:
       terminal = { kind: 'EXTERNAL', label: 'x' };
   }
   return { startId, pathIds: [startId], terminal, isStale: false };
 }
 
-test('pickTopChains — sorts HUMAN_ACTION_ON first, then SELF_RESOLVING, EXTERNAL, CYCLE', () => {
+test('pickTopChains — ranks needs-you kinds first per the 8-kind order (D-07/Pitfall 6)', () => {
   const input = [
+    chainOf('UNCLASSIFIED', 'x'),
     chainOf('CYCLE', 'c'),
     chainOf('EXTERNAL', 'e'),
+    chainOf('AWAITING_AGENT_STUCK', 'as'),
+    chainOf('AWAITING_AGENT_WORKING', 'aw'),
     chainOf('SELF_RESOLVING', 's'),
-    chainOf('HUMAN_ACTION_ON', 'h'),
+    chainOf('UNOWNED', 'u'),
+    chainOf('AWAITING_HUMAN', 'h'),
   ];
   const ranked = pickTopChains(input, 10);
   assert.deepEqual(
     ranked.map((c) => c.terminal.kind),
-    ['HUMAN_ACTION_ON', 'SELF_RESOLVING', 'EXTERNAL', 'CYCLE'],
+    [
+      'AWAITING_HUMAN',
+      'UNOWNED',
+      'SELF_RESOLVING',
+      'AWAITING_AGENT_WORKING',
+      'AWAITING_AGENT_STUCK',
+      'EXTERNAL',
+      'CYCLE',
+      'UNCLASSIFIED',
+    ],
   );
 });
 
 test('pickTopChains — slice(0, max) caps the result length', () => {
   const input = [
-    chainOf('HUMAN_ACTION_ON', 'h1'),
-    chainOf('HUMAN_ACTION_ON', 'h2'),
+    chainOf('AWAITING_HUMAN', 'h1'),
+    chainOf('AWAITING_HUMAN', 'h2'),
     chainOf('SELF_RESOLVING', 's1'),
     chainOf('EXTERNAL', 'e1'),
   ];
@@ -170,7 +283,7 @@ test('pickTopChains — slice(0, max) caps the result length', () => {
   // The two highest-priority survive the cap.
   assert.deepEqual(
     ranked.map((c) => c.terminal.kind),
-    ['HUMAN_ACTION_ON', 'HUMAN_ACTION_ON'],
+    ['AWAITING_HUMAN', 'AWAITING_HUMAN'],
   );
 });
 
@@ -181,7 +294,7 @@ test('pickTopChains — empty list yields empty list', () => {
 test('pickTopChains — is pure (does not mutate the input array order)', () => {
   const input = [
     chainOf('CYCLE', 'c'),
-    chainOf('HUMAN_ACTION_ON', 'h'),
+    chainOf('AWAITING_HUMAN', 'h'),
   ];
   const before = input.map((c) => c.startId).join(',');
   pickTopChains(input, 10);

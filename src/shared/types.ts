@@ -47,7 +47,7 @@ export type Terminal =
   | { kind: 'SELF_RESOLVING'; etaIso: string; label: string }
   | { kind: 'EXTERNAL'; label: string }
   | { kind: 'CYCLE'; cycleNodes: string[]; label: string } // PRIM-04
-  | { kind: 'UNOWNED'; label: string } // Plan 11-01 (D-11) — genuinely no owner; NO userId. Replaces the __unowned__ fallback lie.
+  | { kind: 'UNOWNED'; label: string } // Plan 11-01 (D-11) — genuinely no owner; NO userId. Replaces the unowned-sentinel fallback lie.
   | { kind: 'UNCLASSIFIED'; label: string }; // Plan 11-01 (D-10/D-12) — honest degrade kind when the walk cannot determine the blocker
 
 export type BlockerChainResult = {
