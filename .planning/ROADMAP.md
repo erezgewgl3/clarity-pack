@@ -134,8 +134,8 @@ Plans:
   4. Rows stay degrade-safe and instance-agnostic (no company-prefix literals); the screen renders honestly when the Editor-Agent is down.
 **Plans**: 3 plans
 Plans:
-- [ ] 15-01-PLAN.md — Worker pulse summary aggregation (four vital-sign counts over existing verdicts; additive snapshot field, no migration)
-- [ ] 15-02-PLAN.md — PulseHeader (deterministic status sentence + four vital-sign chips; banner folded in; NO_UUID_LEAK render-scan)
+- [x] 15-01-PLAN.md — Worker pulse summary aggregation (four vital-sign counts over existing verdicts; additive snapshot field, no migration) — COMPLETE (wave 1)
+- [x] 15-02-PLAN.md — PulseHeader (deterministic status sentence + four vital-sign chips; banner folded in; NO_UUID_LEAK render-scan) — COMPLETE 2026-06-03 (component + buildPulseSentence + scoped CSS + render-scan; page wiring is 15-03)
 - [ ] 15-03-PLAN.md — Tier IA (Needs-you -> In-motion -> Watch by engine verdict tier; EmployeeRow reused + calm variant; backlog -> Watch; degrade-safe wiring)
 **UI hint**: yes
 

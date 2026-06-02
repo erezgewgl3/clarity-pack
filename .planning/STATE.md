@@ -3,18 +3,32 @@ gsd_state_version: 1.0
 milestone: v1.4.0
 milestone_name: Truthful Situation Room
 status: executing
-stopped_at: Completed 14-03-PLAN.md (wave 3 — <ReplyInPlace> wired into all three blocker surfaces)
+stopped_at: Phase 15 Plan 15-02 COMPLETE (PulseHeader)
 last_updated: "2026-06-03T00:00:00.000Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 20
-  completed_plans: 19
+  total_plans: 23
+  completed_plans: 21
   percent: 52
 ---
 
 # State: Clarity Pack
+
+## ▶ Phase 15 (Cockpit IA Redesign) — Plan 15-02 COMPLETE (wave 2) 2026-06-03
+
+The `<PulseHeader>` is built (3 tasks, 3 commits `179e722`→`2a1146b` on master). The always-visible "how's the company?" header: a PURE deterministic `buildPulseSentence(pulse)` counts→status sentence (the D-02 always-on floor / SC4 degrade target — Editor-Agent prose enrichment DEFERRED per D-03 for a clean capstone) + four always-on labelled vital chips (need-you / in-motion / stuck / self-clearing) reading `snapshot.pulse` from 15-01. Banner role folds in (D-07): the need-you state lives in the Pulse sentence + gold chip; no second standalone status line. Absent/null pulse → all-zero floor ("The board is clear."), never blanks/throws (SC4/D-08). React text nodes only, zero companyPrefix/UUID, NO_UUID_LEAK render-scan extended to the new path (D-10). Scoped `.clarity-pulse*` CSS mapped to host tokens (no parallel Tailwind). PulseSummary is a structural UI mirror (no worker-type import).
+
+**Verification (all green):** `pulse-header.test.mjs` 15/15 · `pulse-header-no-uuid-leak.test.mjs` 8/8 · `blocker-chain.test.mjs` engine guard 21/21 (untouched) · `build-ui.mjs` · `check-css-scope.mjs` (206 scoped) · `check-ui-bundle-size.mjs` (754,617 / 756,736 B, no SheetJS) · `tsc --noEmit` exit 0.
+
+**Deviation [Rule 3]:** bundle ceiling bumped 735→739 kB — theme.css inlines as a text-loader string so the +1,977 B CSS delta lands now even though PulseHeader/buildPulseSentence are tree-shaken until index.tsx wires them; verified zero SheetJS; stays under the 740 kB visual-regression sanity ceiling (no operator checkpoint).
+
+**Next action:** the next Phase-15 plan wires `<PulseHeader pulse={snapshot.pulse}>` into `src/ui/surfaces/situation-room/index.tsx`, removes `<NeedsYouBanner>`, and re-partitions the row strip into the Needs-you / In-motion / Watch tier IA (COCK-02). `<PulseHeader>` is not yet mounted — D-09 final-assembly wiring is that plan's job.
+
+Files: `src/ui/surfaces/situation-room/pulse-sentence.ts`, `src/ui/surfaces/situation-room/pulse-header.tsx`, `src/ui/primitives/theme.css`, `test/ui/surfaces/situation-room/pulse-header.test.mjs`, `test/ui/surfaces/situation-room/pulse-header-no-uuid-leak.test.mjs`, `scripts/check-ui-bundle-size.mjs`, `.planning/phases/15-cockpit-ia-redesign/15-02-SUMMARY.md`.
+
+---
 
 ## ▶ v1.4.0 Truthful Situation Room — ROADMAP CREATED 2026-06-01 (Phases 10–15)
 
@@ -1345,7 +1359,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to plan
-**Progress:** [█████████░] 94%
+**Progress:** [█████████░] 87%
 
 ## Performance Metrics
 
