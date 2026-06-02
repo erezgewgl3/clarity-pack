@@ -25,14 +25,72 @@
 import * as React from 'react';
 import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 
-import type { BlockerChainResult, Terminal } from '../../../shared/types.ts';
+import type { BlockerChainResult } from '../../../shared/types.ts';
 import { StatePill } from '../../primitives/state-pill.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 
-function primaryActionLabel(t: Terminal): string {
-  if (t.kind === 'HUMAN_ACTION_ON') return `Resolve: ${t.label}`;
-  return '';
+// Plan 11-04 (D-13/SC1) — the primary action is gated on the ENGINE VERDICT's
+// actionAffordance, NOT on terminal.kind. Every one of the 8 kinds maps to one
+// of these five affordances via classifyVerdict() in the worker; the panel just
+// renders the affordance honestly. 'none' renders no button.
+type ActionAffordance = BlockerChainResult['actionAffordance'];
+
+/** The button label for each affordance, or null when no button should render.
+ *  awaitedPartyLabel is the scrubbed display string (NO_UUID_LEAK) — never a UUID. */
+function primaryActionLabel(
+  affordance: ActionAffordance,
+  awaitedPartyLabel: string,
+): string | null {
+  switch (affordance) {
+    case 'reply':
+      return `Reply: ${awaitedPartyLabel}`;
+    case 'nudge':
+      return `Nudge ${awaitedPartyLabel}`;
+    case 'assign':
+      return 'Assign owner ▾';
+    case 'open':
+      return 'Open ↗';
+    case 'none':
+      return null;
+    default: {
+      // Exhaustiveness guard — a 6th affordance becomes a compile error.
+      const _exhaustive: never = affordance;
+      return _exhaustive;
+    }
+  }
+}
+
+/** The honest one-line blocker headline for each of the 8 kinds. Renders ONLY
+ *  scrubbed display strings (terminal.label / awaitedPartyLabel / degradeReason)
+ *  — never a raw targetAgentUuid/targetIssueUuid (NO_UUID_LEAK / D-15). For
+ *  UNCLASSIFIED (D-12) the honest "can't determine — open to investigate" line. */
+function blockerLine(data: BlockerChainResult): string {
+  const t = data.terminal;
+  switch (t.kind) {
+    case 'AWAITING_HUMAN':
+      return t.label;
+    case 'AWAITING_AGENT_WORKING':
+      return `${data.awaitedPartyLabel} is working — ${t.label}`;
+    case 'AWAITING_AGENT_STUCK':
+      return `${data.awaitedPartyLabel} is stuck — ${t.label}`;
+    case 'SELF_RESOLVING':
+      return `${t.label} (resolves on its own)`;
+    case 'EXTERNAL':
+      return t.label;
+    case 'CYCLE':
+      return `Circular dependency — ${t.label}`;
+    case 'UNOWNED':
+      return `${t.label} — no owner`;
+    case 'UNCLASSIFIED':
+      return data.degradeReason
+        ? `Can't determine blocker (${data.degradeReason}) — open to investigate`
+        : "Can't determine blocker — open to investigate";
+    default: {
+      const _exhaustive: never = t;
+      return _exhaustive;
+    }
+  }
 }
 
 export function LiveBlockerPanel({ issueId }: { issueId: string }): React.ReactElement | null {
@@ -71,14 +129,20 @@ function LiveBlockerPanelWithCompany({
   });
   if (!data) return null;
   const { terminal } = data;
+  // Plan 11-04 (D-13/SC1): render straight off the engine verdict. The "ON YOU"
+  // banner is the needsYou signal (a person must act); the primary action is
+  // gated on actionAffordance, never on terminal.kind. All 8 kinds render an
+  // honest non-blank line via blockerLine().
+  const actionLabel = primaryActionLabel(data.actionAffordance, data.awaitedPartyLabel);
   return (
     <div
       className="clarity-blocker-panel"
       data-clarity-region="live-blocker"
       data-terminal-kind={terminal.kind}
+      data-action-affordance={data.actionAffordance}
     >
       <header className="clarity-blocker-header">
-        {terminal.kind === 'HUMAN_ACTION_ON' ? (
+        {data.needsYou ? (
           <>
             <span className="clarity-on-you">⚑ ON YOU</span>
             <StatePill state="AwaitingYou" age={0} />
@@ -87,9 +151,9 @@ function LiveBlockerPanelWithCompany({
           <span className="clarity-blocker-kind">{terminal.kind.replace(/_/g, ' ')}</span>
         )}
       </header>
-      <p className="clarity-blocker-label">{terminal.label}</p>
-      {terminal.kind === 'HUMAN_ACTION_ON' ? (
-        <button className="clarity-blocker-action">{primaryActionLabel(terminal)}</button>
+      <p className="clarity-blocker-label">{blockerLine(data)}</p>
+      {actionLabel !== null ? (
+        <button className="clarity-blocker-action">{actionLabel}</button>
       ) : null}
     </div>
   );

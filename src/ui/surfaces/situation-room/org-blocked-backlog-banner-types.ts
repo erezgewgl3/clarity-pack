@@ -10,12 +10,17 @@
 // org-blocked-backlog.ts). Kept structural here so the UI bundle does not
 // import worker types.
 
+import type { Terminal } from '../../../shared/types.ts';
+
 export type OrgBlockedRow = {
   issueId: string;
   identifier: string;
   title: string;
   humanAction: string;
-  terminalKind: string;
+  // Plan 11-04 (D-05/SC1) — the 8-kind honest taxonomy union, sourced from the
+  // shared Terminal type so a 9th kind is a compile error here too. Was a bare
+  // `string` (which silently accepted the legacy 4-kind set).
+  terminalKind: Terminal['kind'];
   ownerName: string | null;
   ownerAgentId: string | null;
   age_ms: number | null;

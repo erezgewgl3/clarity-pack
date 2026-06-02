@@ -141,6 +141,69 @@ test('live-blocker-panel.tsx renders ONE typed terminal (no nested blocker chain
   assert.match(src, /terminal/);
 });
 
+test('live-blocker-panel.tsx gates the primary action on the engine verdict (actionAffordance), NOT on kind === HUMAN_ACTION_ON (Plan 11-04 D-13)', () => {
+  const src = readSrc('live-blocker-panel.tsx');
+  // The legacy kind-string gate must be gone — the panel reads the verdict.
+  assert.doesNotMatch(
+    src,
+    /kind\s*===\s*['"]HUMAN_ACTION_ON['"]/,
+    'the HUMAN_ACTION_ON primary-action gate must be removed (verdict-driven now)',
+  );
+  // The primary action label + render gate read actionAffordance.
+  assert.match(src, /actionAffordance/, 'panel reads the verdict actionAffordance');
+  // The "ON YOU" banner is the needsYou verdict signal (a person must act).
+  assert.match(src, /data\.needsYou/, 'ON YOU banner gated on needsYou verdict');
+});
+
+test('live-blocker-panel.tsx renders an honest non-blank line for all 8 terminal kinds (Plan 11-04 SC1)', () => {
+  const src = readSrc('live-blocker-panel.tsx');
+  // blockerLine() must enumerate every one of the 8 honest kinds — the four NEW
+  // kinds (AWAITING_AGENT_WORKING/STUCK, UNOWNED, UNCLASSIFIED) must not be blank.
+  const EIGHT_KINDS = [
+    'AWAITING_HUMAN',
+    'AWAITING_AGENT_WORKING',
+    'AWAITING_AGENT_STUCK',
+    'SELF_RESOLVING',
+    'EXTERNAL',
+    'CYCLE',
+    'UNOWNED',
+    'UNCLASSIFIED',
+  ];
+  for (const kind of EIGHT_KINDS) {
+    assert.match(src, new RegExp(`case ['"]${kind}['"]:`), `blockerLine handles ${kind}`);
+  }
+  // UNCLASSIFIED renders the honest "can't determine — open to investigate" line (D-12).
+  assert.match(
+    src,
+    /Can't determine blocker[\s\S]*open to investigate/,
+    'UNCLASSIFIED shows the honest open-to-investigate line (D-12)',
+  );
+});
+
+test('live-blocker-panel.tsx never renders a raw UUID — only awaitedPartyLabel / label (NO_UUID_LEAK / D-15)', () => {
+  const src = readSrc('live-blocker-panel.tsx');
+  // No targetAgentUuid/targetIssueUuid may appear inside a JSX text node. The
+  // panel must not even reference them (they are mutation-only on the verdict).
+  assert.doesNotMatch(
+    src,
+    /\{[^}]*target(Agent|Issue)Uuid[^}]*\}/,
+    'no *Uuid field may be rendered in a JSX expression',
+  );
+  // The only ownership display strings are awaitedPartyLabel + terminal.label.
+  assert.match(src, /awaitedPartyLabel/, 'awaited party rendered via the scrubbed label');
+});
+
+test('live-blocker-panel.tsx: UNCLASSIFIED maps to the open affordance with no assign button (D-12 / SC3)', () => {
+  const src = readSrc('live-blocker-panel.tsx');
+  // 'open' affordance → an "Open ↗"-style label; 'assign' → the assign control.
+  // The assign affordance must NOT be wired to UNCLASSIFIED — that mapping lives
+  // in classifyVerdict() (worker), and UNCLASSIFIED → 'open'. Here we assert the
+  // panel honours BOTH affordances distinctly so an open row never shows assign.
+  assert.match(src, /case ['"]open['"]:[\s\S]*Open/, "open affordance → 'Open ↗' label");
+  assert.match(src, /case ['"]assign['"]:[\s\S]*Assign owner/, "assign affordance → assign control");
+  assert.match(src, /case ['"]none['"]:[\s\S]*return null/, "none affordance → no button");
+});
+
 test('ref-card.tsx renders the substantive excerpt (READER-04)', () => {
   const src = readSrc('ref-card.tsx');
   // The component must reference card.excerpt (or excerpt prop) — the
