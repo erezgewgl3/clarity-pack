@@ -11,7 +11,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { classifyVerdict, flattenBlockerChain, pickTopChains } from '../../src/shared/blocker-chain.ts';
+import {
+  classifyVerdict,
+  flattenBlockerChain,
+  makeBlockerFreeResult,
+  makeDegradedResult,
+  pickTopChains,
+} from '../../src/shared/blocker-chain.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BLOCKER_CHAIN_SRC = path.resolve(HERE, '..', '..', 'src', 'shared', 'blocker-chain.ts');
@@ -154,6 +160,92 @@ test('EXTERNAL — final edge reason="external" produces EXTERNAL terminal', () 
     viewerUserId: 'eric',
   });
   assert.equal(result.terminal.kind, 'EXTERNAL');
+});
+
+test('WR-05 — reached-via-external EXTERNAL branch: terminal.label names the SAME node as targetIssueUuid (current)', () => {
+  // A→B via an external edge; B is the leaf reached via external.
+  const result = flattenBlockerChain({
+    startId: 'A',
+    edges: [{ from: 'A', to: 'B', reason: 'external' }],
+    nodeMeta: {
+      A: { ownerUserId: null, etaIso: null, status: 'blocked' },
+      B: { ownerUserId: null, etaIso: null, status: 'external' },
+    },
+    viewerUserId: 'eric',
+  });
+  assert.equal(result.terminal.kind, 'EXTERNAL');
+  assert.equal(result.targetIssueUuid, 'B');
+  assert.ok(
+    result.terminal.label.includes(result.targetIssueUuid),
+    `label "${result.terminal.label}" must name targetIssueUuid "${result.targetIssueUuid}"`,
+  );
+});
+
+test('WR-05 — only-external-children EXTERNAL branch: label names the LEAF (current), not the refused child id', () => {
+  // A is the leaf; its only outgoing edge is external (to child X). The walk does
+  // NOT recurse into X — it fires EXTERNAL on A. Before the fix the label named X
+  // (externalEdge.to) while targetIssueUuid was A — a mis-attribution (WR-05).
+  const result = flattenBlockerChain({
+    startId: 'A',
+    edges: [{ from: 'A', to: 'X', reason: 'external' }],
+    nodeMeta: {
+      A: { ownerUserId: null, etaIso: null, status: 'blocked' },
+      X: { ownerUserId: null, etaIso: null, status: 'external' },
+    },
+    viewerUserId: 'eric',
+  });
+  assert.equal(result.terminal.kind, 'EXTERNAL');
+  // The leaf reached is A — both label and targetIssueUuid must name A.
+  assert.equal(result.targetIssueUuid, 'A');
+  assert.ok(
+    result.terminal.label.includes('A'),
+    `label "${result.terminal.label}" must name the leaf "A"`,
+  );
+  assert.ok(
+    !result.terminal.label.includes('X'),
+    `label "${result.terminal.label}" must NOT name the refused child "X" (WR-05)`,
+  );
+});
+
+test('IN-04 — makeDegradedResult returns a BlockerChainResult whose verdict matches classifyVerdict and whose ids target startId', () => {
+  const terminal = { kind: 'UNCLASSIFIED', label: "Can't determine blocker for A" };
+  const result = makeDegradedResult(terminal, 'A', 'max-depth-exceeded');
+  const verdict = classifyVerdict(terminal);
+  assert.equal(result.startId, 'A');
+  assert.deepEqual(result.pathIds, ['A']);
+  assert.equal(result.terminal, terminal);
+  assert.equal(result.isStale, false);
+  assert.equal(result.needsYou, verdict.needsYou);
+  assert.equal(result.tier, verdict.tier);
+  assert.equal(result.actionAffordance, verdict.actionAffordance);
+  assert.equal(result.awaitedPartyLabel, terminal.label);
+  assert.equal(result.targetAgentUuid, null);
+  assert.equal(result.targetIssueUuid, 'A');
+  assert.equal(result.degradeReason, 'max-depth-exceeded');
+});
+
+test('IN-04 — makeDegradedResult with empty startId yields empty pathIds and null targetIssueUuid', () => {
+  const terminal = { kind: 'UNCLASSIFIED', label: 'x' };
+  const result = makeDegradedResult(terminal, '');
+  assert.deepEqual(result.pathIds, []);
+  assert.equal(result.targetIssueUuid, null);
+  assert.equal(result.degradeReason, undefined);
+});
+
+test('WR-01 — blocker-free synthetic case carries actionAffordance "none" (not the EXTERNAL "open" lie)', () => {
+  const result = makeBlockerFreeResult('A', 'No active blockers');
+  // The blocker-free row must be non-actionable — no dead "Open ↗" button.
+  assert.equal(result.actionAffordance, 'none');
+  assert.equal(result.needsYou, false);
+  assert.equal(result.tier, 'watch');
+  assert.equal(result.startId, 'A');
+  assert.equal(result.targetIssueUuid, 'A');
+  assert.equal(result.targetAgentUuid, null);
+});
+
+test('WR-01 — genuine EXTERNAL still maps to "open" (a real external blocker stays openable)', () => {
+  const verdict = classifyVerdict({ kind: 'EXTERNAL', label: 'External (A)' });
+  assert.equal(verdict.actionAffordance, 'open');
 });
 
 test('CYCLE — A→B→C→A is detected; terminal.kind=CYCLE; cycleNodes contains A,B,C in canonical order (smallest first); returns in <5ms (no infinite loop)', () => {
