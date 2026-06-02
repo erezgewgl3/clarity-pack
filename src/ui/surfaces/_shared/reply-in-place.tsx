@@ -127,6 +127,12 @@ export function ReplyInPlace({
 
   const [body, setBody] = React.useState('');
   const [sending, setSending] = React.useState(false);
+  // IN-01 (14-REVIEW) — the concurrency guard reads a REF, not the `sending`
+  // state, so `sending` can be dropped from the dispatchReply useCallback deps
+  // (no callback churn each time `sending` flips). The `sending` STATE is still
+  // used for the disabled/`Sending…` render below; the ref is the synchronous
+  // re-entrancy guard. Kept in lockstep with setSending().
+  const sendingRef = React.useRef(false);
   // The messageUuid is generated once per click and REUSED on a Retry of the same
   // click (idempotency — D-15). Cleared after a confirmed { ok } so the next reply
   // gets a fresh key.
@@ -138,13 +144,23 @@ export function ReplyInPlace({
 
   const dispatchReply = React.useCallback(
     async (replyBody: string) => {
-      if (sending) return;
+      // IN-01 — the re-entrancy guard reads the synchronous ref (not async state),
+      // so a fast double-click is rejected immediately even before `sending` state
+      // flips. This is also why WR-01 is fully closed: the first call sets
+      // sendingRef.current = true synchronously below, so a racing second call
+      // returns here.
+      if (sendingRef.current) return;
       const text = replyBody.trim();
       if (!text) return;
-      setSending(true);
-      // Reuse the in-flight messageUuid on a Retry; otherwise mint a fresh one.
+      // WR-01 (14-REVIEW) — mint/reuse the messageUuid and pin it to the ref
+      // BEFORE flipping the guards and BEFORE any await. Both dispatches snapshot
+      // the SAME messageUuid the instant the first sets the ref, so the server
+      // dedup collapses them to one comment instead of racing two distinct UUIDs.
+      // Reuse on a Retry; otherwise mint a fresh one.
       const messageUuid = pendingMessageUuid.current ?? freshMessageUuid();
       pendingMessageUuid.current = messageUuid;
+      sendingRef.current = true;
+      setSending(true);
       try {
         const result = (await reply({
           companyId,
@@ -179,11 +195,16 @@ export function ReplyInPlace({
           duration: 6000,
         });
       } finally {
+        // Keep the ref in lockstep with the state (IN-01).
+        sendingRef.current = false;
         setSending(false);
       }
     },
+    // IN-01 — `sending` is intentionally NOT a dep: the re-entrancy guard reads
+    // sendingRef.current (a ref, stable identity), so this callback no longer
+    // churns each time `sending` flips. Behavior is identical (the ref mirrors
+    // the state). All other closed-over values remain deps.
     [
-      sending,
       reply,
       companyId,
       mutationIssueUuid,
