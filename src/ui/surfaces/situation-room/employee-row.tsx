@@ -152,10 +152,16 @@ export function EmployeeRow({
 
   const ageMs = ageMsFromISO(row.lastActivityAt);
   const chain = row.blockerChain;
-  // Plan 11-04 (SC3/D-13) — the assign cluster is gated STRICTLY on the engine
-  // verdict's genuinely-unowned affordance, never on an ownerName string-match.
-  // An AWAITING_HUMAN / UNCLASSIFIED row never carries 'assign', so the picker
-  // never renders a false "assign owner" for an already-owned blocker.
+  // Plan 11-04 (SC3/D-13) + Plan 12-03 Task 2 (NY-03 / D-05 / D-09) — the assign
+  // cluster is gated STRICTLY on the engine verdict's affordance, never on an
+  // ownerName string-match or a terminal.kind list. After 12-01,
+  // actionAffordance === 'assign' fires for BOTH genuinely-unowned (UNOWNED) AND
+  // stuck-agent (AWAITING_AGENT_STUCK) rows — re-owning the issue is the honest
+  // answer for both. An AWAITING_HUMAN / AWAITING_AGENT_WORKING / UNCLASSIFIED
+  // row never carries 'assign', so the picker never renders a false "assign
+  // owner" for an in-motion or already-owned blocker. This is the SAME single
+  // verdict the org-blocked backlog expander and Reader blocker panel read
+  // (D-09: the three surfaces agree by construction).
   const showAssign = chain?.actionAffordance === 'assign';
 
   // ---- handlers (every one performs a REAL effect; never a no-op) ----------

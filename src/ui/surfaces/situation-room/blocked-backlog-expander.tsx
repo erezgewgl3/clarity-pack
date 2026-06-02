@@ -88,13 +88,25 @@ export function BlockedBacklogExpander({
                 <span className="clarity-orphan-meta">{`blocked ${formatAge(row.age_ms)}`}</span>
               ) : null}
               <span className="clarity-orphan-actions">
-                <OwnerPickerPopover
-                  leafIssueId={row.issueId}
-                  companyId={companyId}
-                  userId={userId}
-                  triggerLabel="Assign ▾"
-                  onAssigned={() => onAssignSuccess()}
-                />
+                {/* Plan 12-03 Task 2 (NY-03 / D-09 / T-12-08) — the Assign
+                 *  control (which dispatches situation.assignOwner, a REAL
+                 *  mutation) renders ONLY when the engine verdict says assignment
+                 *  is the answer: actionAffordance === 'assign' ⇔ UNOWNED +
+                 *  AWAITING_AGENT_STUCK (after 12-01). This closes the prior
+                 *  unconditional mount where every orphan row showed [Assign ▾]
+                 *  regardless of kind — an AWAITING_HUMAN / in-motion / external
+                 *  row could expose an inappropriate assign mutation. We gate on
+                 *  the SAME single verdict the SR row + Reader panel read — NO
+                 *  terminal.kind list, NO ownerName string-match. */}
+                {row.actionAffordance === 'assign' ? (
+                  <OwnerPickerPopover
+                    leafIssueId={row.issueId}
+                    companyId={companyId}
+                    userId={userId}
+                    triggerLabel="Assign ▾"
+                    onAssigned={() => onAssignSuccess()}
+                  />
+                ) : null}
                 <button
                   type="button"
                   className="clarity-btn clarity-orphan-open"

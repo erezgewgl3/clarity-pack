@@ -207,11 +207,13 @@ function LiveBlockerPanelWithCompany({
   // honest non-blank line via blockerLine().
   const actionLabel = primaryActionLabel(data.actionAffordance, data.awaitedPartyLabel);
 
-  // Plan 11-07 (WR-02 no dead button / WR-01 'none' affordance) — resolve the
-  // REAL onClick for the verdict's affordance. A button renders ONLY when a wired
-  // handler backs it; any affordance with no implemented dispatch on this surface
-  // (including 'assign', which needs the OwnerPickerPopover not mounted here, and
-  // 'none' for a blocker-free issue) renders NO button rather than a dead one.
+  // Plan 11-07 (WR-02 no dead button / WR-01 'none' affordance) + Plan 12-03
+  // Task 2 (NY-03 / D-09) — resolve the REAL onClick for the verdict's
+  // affordance. A button renders ONLY when a wired handler backs it. 'assign'
+  // (UNOWNED + AWAITING_AGENT_STUCK) now navigates to the leaf issue page (an
+  // honest effect — the OwnerPickerPopover is not mounted on this surface), so
+  // the Assign affordance is no longer a dead button. Only 'none' (a blocker-
+  // free issue) renders NO button.
   // The split-identity mutation targets — read into plain consts so the JSX/
   // render body below never embeds `data.target*Uuid` inside a `{...}` expression
   // (the NO_UUID_LEAK render-scan forbids that; they are dispatch args only).
@@ -231,6 +233,16 @@ function LiveBlockerPanelWithCompany({
       };
       break;
     case 'assign':
+      // Plan 12-03 Task 2 (NY-03 / D-09 / T-12-11) — the 'assign' affordance
+      // (UNOWNED + AWAITING_AGENT_STUCK after 12-01) must be HONEST, never a
+      // dead button and never falling through to reply/nudge. The Reader panel
+      // does NOT mount the OwnerPickerPopover (no roster/dispatch wiring here),
+      // so the honest assign affordance for this surface is a navigate to the
+      // leaf issue page where the operator can assign an owner. openIssue routes
+      // to /<prefix>/issues/<identifier> (paperclip-issue-url-pattern) — a REAL
+      // effect, gated to the assign affordance only.
+      onAction = openIssue;
+      break;
     case 'none':
       onAction = null; // no wired dispatch on this surface → no button
       break;
