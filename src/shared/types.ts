@@ -35,17 +35,47 @@ export type RefCardData = {
   hiddenAsRef?: boolean;
 };
 
+// Plan 11-01 (D-05) — the honest blocker taxonomy. The 4-variant union grew to
+// exactly 8 kinds: 7 honest classifications + UNCLASSIFIED (the degrade kind).
+// The legacy human-action variant was RENAMED to `AWAITING_HUMAN` with no dead
+// alias kept — growing the union deliberately fails `tsc` at every downstream
+// switch/string match, turning the compile errors into the live migration checklist.
 export type Terminal =
-  | { kind: 'HUMAN_ACTION_ON'; userId: string; label: string } // PRIM-05
+  | { kind: 'AWAITING_HUMAN'; userId: string; label: string } // PRIM-05 (renamed from the legacy human-action variant)
+  | { kind: 'AWAITING_AGENT_WORKING'; agentId: string; label: string } // Plan 11-01 — chain flattened through a live, progressing agent
+  | { kind: 'AWAITING_AGENT_STUCK'; agentId: string; label: string } // Plan 11-01 — chain flattened through an idle/stale agent (nudge target)
   | { kind: 'SELF_RESOLVING'; etaIso: string; label: string }
   | { kind: 'EXTERNAL'; label: string }
-  | { kind: 'CYCLE'; cycleNodes: string[]; label: string }; // PRIM-04
+  | { kind: 'CYCLE'; cycleNodes: string[]; label: string } // PRIM-04
+  | { kind: 'UNOWNED'; label: string } // Plan 11-01 (D-11) — genuinely no owner; NO userId. Replaces the __unowned__ fallback lie.
+  | { kind: 'UNCLASSIFIED'; label: string }; // Plan 11-01 (D-10/D-12) — honest degrade kind when the walk cannot determine the blocker
 
 export type BlockerChainResult = {
   startId: string;
   pathIds: string[]; // BEAAA ids from start to terminal (inclusive)
   terminal: Terminal; // exactly one
   isStale: boolean; // computed against a max-age threshold
+  // Plan 11-01 (D-13) — the structured verdict every surface reads instead of
+  // re-deriving from terminal.kind or string-matching ownerName.
+  /** Plan 11-01 (D-13) — true only when a *person* must act (AWAITING_HUMAN / UNOWNED). */
+  needsYou: boolean;
+  /** Plan 11-01 (D-13) — which cockpit segment this chain belongs to. */
+  tier: 'needs-you' | 'in-motion' | 'watch';
+  /** Plan 11-01 (D-13) — the single control the row offers. 'assign' appears ONLY
+   *  for genuinely-unowned rows (UNOWNED); 'nudge' for stuck agents. */
+  actionAffordance: 'reply' | 'nudge' | 'assign' | 'open' | 'none';
+  /** Plan 11-01 (D-10) — set only when terminal === UNCLASSIFIED; explains the degrade
+   *  (e.g. 'max-depth-exceeded'). Optional so the 7 honest kinds omit it. */
+  degradeReason?: string;
+  /** Plan 11-01 (D-15) — the ONLY display string for the awaited party; scrubbed in
+   *  scrub-human-action.ts to contain zero raw UUIDs for all 8 kinds. */
+  awaitedPartyLabel: string;
+  /** Plan 11-01 (D-15) — the awaited agent's UUID for the nudge/reply mutation, carried
+   *  ONLY as the dispatch target, NEVER rendered as visible text (NO_UUID_LEAK). */
+  targetAgentUuid?: string | null;
+  /** Plan 11-01 (D-15) — the leaf issue's UUID for the open/assign mutation, carried
+   *  ONLY as the dispatch target, NEVER rendered as visible text (NO_UUID_LEAK). */
+  targetIssueUuid?: string | null;
 };
 
 export type TLDR = {

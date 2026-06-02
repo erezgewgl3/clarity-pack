@@ -24,7 +24,18 @@ export type BlockerChainInput = {
   edges: BlockerEdge[];
   nodeMeta: Record<
     string,
-    { ownerUserId: string | null; etaIso: string | null; status: string }
+    {
+      ownerUserId: string | null;
+      etaIso: string | null;
+      status: string;
+      // Plan 11-01 (D-01) — agent ownership + pre-resolved liveness, injected by
+      // the worker (the engine reads NO clock). assigneeAgentId lets the walk
+      // classify an agent-owned leaf; agentState is the worker's heartbeat-age
+      // projection ('working' | 'stuck'). Optional + defaulting to null keeps
+      // every pre-11-01 caller type-clean and falls through to UNOWNED.
+      assigneeAgentId?: string | null;
+      agentState?: 'working' | 'stuck' | null;
+    }
   >;
   viewerUserId: string;
   maxAgeMs?: number;
