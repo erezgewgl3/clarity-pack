@@ -15,8 +15,10 @@
 //
 // PER-LEAF DEDUP (D-03): rows whose chains terminate at the SAME leaf collapse to
 // ONE action item carrying leverage = the count of collapsed rows and a stable
-// representative id (the smallest leaf key among them). This makes Needs-you
-// action-centric ("one action, frees N") rather than per-employee.
+// representative (the row whose agentId sorts smallest among the collapsed rows —
+// all collapsed rows share the same leaf key, so agentId is the discriminator).
+// This makes Needs-you action-centric ("one action, frees N") rather than
+// per-employee.
 //
 // SORT-ONLY (D-07): leverage is an INTERNAL sort key. This module emits NO
 // rendered "unblocks N" badge / impact string — the grounded named-action
@@ -55,8 +57,9 @@ export type LeverageActionItem<R extends LeverageInputRow = LeverageInputRow> = 
   stableId: string;
   /** Count of distinct items this action frees (D-01). Internal sort key (D-07). */
   leverage: number;
-  /** A representative source row (the one whose leaf key is smallest among the
-   *  collapsed rows) — used to derive a banner topAction. */
+  /** A representative source row (the one whose agentId sorts smallest among the
+   *  collapsed rows — all collapsed rows share the same leaf key, so agentId is
+   *  the deterministic discriminator) — used to derive a banner topAction. */
   representative: R;
 };
 
@@ -79,9 +82,9 @@ function leafKeyOf(row: LeverageInputRow): string | null {
  *
  * For each row, the leaf its chain terminates at gains +1 leverage ("items it
  * frees"). Rows sharing a leaf collapse into ONE action item whose leverage is
- * the collapsed count and whose `stableId` / `representative` are derived from
- * the smallest leaf key (which, per-leaf, is the leaf key itself) and the row
- * carrying it — deterministic, so the downstream tie-break never drifts.
+ * the collapsed count, whose `stableId` is that shared leaf key, and whose
+ * `representative` is the row with the smallest agentId among the collapsed rows
+ * — deterministic, so the downstream tie-break never drifts.
  *
  * PURE: no clock, no I/O. Does not mutate the input array.
  */
