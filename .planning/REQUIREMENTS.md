@@ -29,7 +29,7 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 
 - [ ] **DO-01**: The operator can reply in place on a human-actionable row; the reply posts to the awaited agent's thread (canonical issue comment).
 - [ ] **DO-02**: Quick-decision chips (Approve / Reject / pick-one) are offered when the blocker is a clean yes/no.
-- [ ] **DO-03**: Completing the action actually **unblocks and resumes** the agent — verified end-to-end against the live Paperclip model. *(De-risked first by the opening-phase spike: comment alone vs. comment + status transition.)*
+- [x] **DO-03**: Completing the action actually **unblocks and resumes** the agent — verified end-to-end against the live Paperclip model. *(De-risked first by the opening-phase spike: comment alone vs. comment + status transition.)*
 - [ ] **DO-04**: The reply-in-place + quick-decision loop is available on the **Situation Room**, the **Reader-view blocker panel**, and the **org-blocked backlog** — not just the cockpit.
 - [ ] **DO-05**: When a chain terminates on an out-of-system human (not reachable via comment), the row surfaces the named action + "Open ↗" instead of a Send affordance — no dead Send button.
 
@@ -54,7 +54,7 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DO-03 | Phase 10 | Pending |
+| DO-03 | Phase 10 | Complete |
 | TAX-01 | Phase 11 | Pending |
 | TAX-02 | Phase 11 | Pending |
 | TAX-03 | Phase 11 | Pending |
