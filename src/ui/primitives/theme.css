@@ -816,6 +816,24 @@
   color: var(--clarity-ink-3, #8a8472);
 }
 
+/* Plan 13-03 (D-13) — the MINIMAL inline render of the Editor-Agent named-action
+ * card on the existing Needs-you row: the Editorial sentence + a quieter
+ * "waiting on <party> · <estimate>" secondary line. Deliberately NOT a rich
+ * card layout (that is Phase 15) — just a typographic emphasis pass that reuses
+ * the existing chain container. */
+[data-clarity-surface='situation-room'] .clarity-employee-named-action {
+  margin: 0;
+  font-weight: 600;
+  color: var(--clarity-fg);
+  line-height: 1.4;
+}
+
+[data-clarity-surface='situation-room'] .clarity-employee-await {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.85em;
+  color: var(--clarity-ink-3, #8a8472);
+}
+
 /* Plan 09-02 — the Phase 8 .clarity-employee-chain-open-chat /
  * .clarity-employee-assign / .clarity-employee-action rules were removed here;
  * the rewritten employee-row uses the shared .clarity-btn family + the

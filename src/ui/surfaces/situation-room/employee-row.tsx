@@ -111,8 +111,42 @@ export type SituationEmployeeRow = {
     /** Plan 11-04 (D-09) — set only on an honest UNCLASSIFIED degrade. */
     degradeReason?: string;
   } | null;
+  // Plan 13-03 (D-13/D-14) — the Editor-Agent named-action card for this leaf,
+  // attached by the situation.snapshot handler ONLY when fresh (13-02); null/
+  // absent when stale or not yet generated → the row degrades to the
+  // deterministic blockerChain line (D-12). Structurally mirrored here as the
+  // DISPLAY fields ONLY (the UI bundle does NOT import worker/shared types).
+  //
+  // NO_UUID_LEAK by construction (D-10/D-14): the worker ActionCard's
+  // sourceIssueUuid is INTENTIONALLY OMITTED from this mirror — it has no field
+  // on the UI row, so it cannot be threaded into a render. decisionOptions is
+  // carried (data) but NOT rendered as chips this phase (chips are Phase 14).
+  actionCard?: {
+    namedAction: string;
+    awaitedParty: string;
+    estBucket: 'quick' | 'focused' | 'deep' | (string & {});
+    actionKind: 'answer' | 'decide' | 'assign' | 'none' | (string & {});
+    decisionOptions: string[] | null;
+  } | null;
   doneTodayCount: number;
 };
+
+/** Pure helper (D-09) — map the coarse estimate bucket to human display words.
+ *  quick → "quick decision", focused → "~30-min review", deep → "deep work".
+ *  Anything else (null / garbage bucket) → null so the row OMITS the estimate
+ *  segment entirely — never a fabricated number (ACT-02 anti-false-precision). */
+function estBucketLabel(bucket: string | null | undefined): string | null {
+  switch (bucket) {
+    case 'quick':
+      return 'quick decision';
+    case 'focused':
+      return '~30-min review';
+    case 'deep':
+      return 'deep work';
+    default:
+      return null;
+  }
+}
 
 type EmployeeRowProps = {
   row: SituationEmployeeRow;
@@ -280,17 +314,43 @@ export function EmployeeRow({
        *  awaitedPartyLabel — never the raw ownerName/UUID. */}
       {row.group === 'needs_you' && chain && (
         <>
-          <div className={`clarity-employee-chain ${showAssign ? '' : 'clarity-employee-chain-owned'}`}>
-            <span className="clarity-employee-chain-prefix">{`└ blocked: `}</span>
-            <span className="clarity-employee-chain-action">
-              {showAssign
-                ? `${chain.leafIssueId ?? 'this issue'} has no owner`
-                : `waiting on ${chain.awaitedPartyLabel}`}
-            </span>
-            {chain.leafIssueId && !showAssign && (
-              <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
-            )}
-          </div>
+          {/* Plan 13-03 (D-13/D-12) — when a FRESH action card is attached
+           *  (the worker only attaches fresh cards by construction, 13-02),
+           *  render the Editorial named-action sentence + a "waiting on
+           *  <party> · <estimate-words>" secondary line. When the card is
+           *  null/absent (stale or not yet generated), fall through to the
+           *  EXISTING deterministic chain line below — never blank, never a
+           *  fabricated estimate (ACT-02). Every visible string is a React
+           *  text node; card.sourceIssueUuid is not on the mirror, so it can
+           *  never be rendered (NO_UUID_LEAK by construction, D-10/D-14).
+           *  decisionOptions is NOT rendered as chips this phase (Phase 14). */}
+          {(() => {
+            const card = row.actionCard;
+            const estWords = card ? estBucketLabel(card.estBucket) : null;
+            return card ? (
+              <div className="clarity-employee-chain clarity-employee-chain-action-card">
+                <p className="clarity-employee-named-action">{card.namedAction}</p>
+                <p className="clarity-employee-await">
+                  {`waiting on ${card.awaitedParty}${estWords ? ` · ${estWords}` : ''}`}
+                  {chain.leafIssueId && (
+                    <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <div className={`clarity-employee-chain ${showAssign ? '' : 'clarity-employee-chain-owned'}`}>
+                <span className="clarity-employee-chain-prefix">{`└ blocked: `}</span>
+                <span className="clarity-employee-chain-action">
+                  {showAssign
+                    ? `${chain.leafIssueId ?? 'this issue'} has no owner`
+                    : `waiting on ${chain.awaitedPartyLabel}`}
+                </span>
+                {chain.leafIssueId && !showAssign && (
+                  <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
+                )}
+              </div>
+            );
+          })()}
           <div className="clarity-employee-actions">
             {showAssign ? (
               <>
