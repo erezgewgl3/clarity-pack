@@ -19,9 +19,11 @@
 // agent never stalls the whole snapshot. Instance-agnostic (no company-prefix
 // literal). NO_UUID_LEAK by construction (Pitfall 7).
 
-import { pickTopChains } from '../../shared/blocker-chain.ts';
-import { flattenBlockerChain } from '../../shared/blocker-chain.ts';
-import { classifyVerdict } from '../../shared/blocker-chain.ts';
+import {
+  flattenBlockerChain,
+  pickTopChains,
+  classifyVerdict,
+} from '../../shared/blocker-chain.ts';
 import { scrubHumanAction } from '../../shared/scrub-human-action.ts';
 import type { BlockerChainResult, Terminal } from '../../shared/types.ts';
 import { polishTldr } from '../agents/compile-tldr.ts';
