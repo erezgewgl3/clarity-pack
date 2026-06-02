@@ -46,12 +46,12 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 - ✓ **Schema is additive-only** — v1.0 (all phases). Plugin-namespace migrations only; disable/uninstall leaves data intact; `--purge` opt-in only. Verified at the DB layer (row counts byte-identical across disable/enable).
 - ✓ **Plugin distribution** — v1.0. Installable via `paperclipai plugin install`. *Adjusted:* distribution is internal-only (local-tarball install); npm publish was dropped by decision — v1 audience is Eric on BEAAA.
 - ✓ **Pre-install backup, snapshot, and rollback discipline** — v1.0 (Phase 1). Snapshot/restore/smoke-test CLI + rehearsed restore drill (Countermoves 2026-05-13 PASS). For BEAAA, the bookend is the DigitalOcean droplet backup + plugin-reinstall rollback (safety-CLI not installed on that box).
+- ✓ **Honest blocker taxonomy (engine)** — Validated in Phase 11 (2026-06-02). Deterministic, agent-aware terminal taxonomy (8 kinds: awaiting-human / agent-working / agent-stuck / self-resolving / external / cycle / genuinely-unowned / unclassified) flattened transitively to the human at the end; degrade-safe per row; the single `verdict` source every surface reads. NO_UUID_LEAK enforced at every chain producer (scrub-before-return) with a render-scan regression guard. Verification 5/5 must-haves; gap-closure (CR-01 + WR/IN warnings) closed in 11-05..07.
 
 ### Active
 
 <!-- v1.4.0 Truthful Situation Room. Detailed REQ-IDs + traceability in .planning/REQUIREMENTS.md. -->
 
-- [ ] **Honest blocker taxonomy** — agent-aware, transitively flattened to the human at the end; each blocked item classified (awaiting-human / agent-working / agent-stuck / self-resolving / external / cycle / genuinely-unowned).
 - [ ] **"Needs you" tells the truth** — lists only human-actionable items; agent-working and self-resolving items are excluded.
 - [ ] **Editor-Agent named single action** — grounded plain-English action + who + estimate, with stale→degrade fallback to the deterministic line.
 - [ ] **Cockpit IA** — Pulse + Needs-you (ranked by what it unblocks) + In-motion (calm, legible) + Watch (quietly stalled).
@@ -168,4 +168,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-01 — started milestone v1.4.0 Truthful Situation Room (continues phase numbering from Phase 10).*
+*Last updated: 2026-06-02 — Phase 11 (Honest blocker taxonomy engine) complete and verified 5/5; gap closure 11-05..07 landed the NO_UUID_LEAK scrub-before-return fix.*
