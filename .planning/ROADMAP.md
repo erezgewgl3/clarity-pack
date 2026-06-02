@@ -135,7 +135,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Unblock-Resume Spike | 2/3 | Complete    | 2026-06-02 |
-| 11. Honest Blocker Taxonomy | 7/7 | Complete   | 2026-06-02 |
+| 11. Honest Blocker Taxonomy | 7/7 | Complete    | 2026-06-02 |
 | 12. Needs-You Triage | 0/0 | Not started | - |
 | 13. Editor-Agent Named Action | 0/0 | Not started | - |
 | 14. Do-It-Here Action Loop | 0/0 | Not started | - |

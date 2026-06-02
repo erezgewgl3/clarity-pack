@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.4.0
 milestone_name: Truthful Situation Room
-status: executing
-stopped_at: "Completed 11-02-PLAN.md (Phase 11 Plan 2 of 4 — worker agent-ownership + liveness + honest UNCLASSIFIED degrade). Next: `/gsd:execute-phase 11` continues to Plan 11-03 (build-employees-rollup liveness reuse + verdict re-triage + split-identity)."
-last_updated: "2026-06-02T16:17:20.982Z"
+status: ready_to_plan
+stopped_at: Phase 11 complete (7/7) — ready to discuss Phase 12
+last_updated: 2026-06-02T16:23:45.981Z
 last_activity: 2026-06-02
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 78
   percent: 17
 ---
 
@@ -600,12 +600,12 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 11 — honest-blocker-taxonomy-engine
+**Current Focus:** Phase 12 — needs you triage
 
 ## Current Position
 
-Phase: 11 (honest-blocker-taxonomy-engine) — EXECUTING
-Plan: 4 of 7
+Phase: 12
+Plan: Not started
 Status: Ready to execute
 Last activity: 2026-06-02
 
@@ -1321,7 +1321,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to execute
+**Status:** Ready to plan
 **Progress:** [█████████░] 90%
 
 ## Performance Metrics
