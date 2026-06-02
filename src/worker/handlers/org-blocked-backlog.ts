@@ -28,6 +28,7 @@
 import {
   flattenBlockerChain,
   pickTopChains,
+  classifyVerdict,
   type BlockerEdge,
 } from '../../shared/blocker-chain.ts';
 import type { BlockerChainResult, Terminal } from '../../shared/types.ts';
@@ -35,15 +36,34 @@ import type { BlockerChainResult, Terminal } from '../../shared/types.ts';
 // source of truth in src/shared/scrub-human-action.ts (extracted from this file
 // verbatim). Both ROOM-12 (here) and ROOM-13..16 (build-employees-rollup.ts)
 // import them, so a future blocker-chain change is fixed in exactly one place.
+// Plan 11-02 — the legacy unowned-sentinel import is GONE (Plan 11-01 removed
+// the sentinel lie); need_you now keys on the engine verdict, not a magic
+// userId string-match.
 import {
   scrubHumanAction,
   UUID_RE_G,
-  UNOWNED_SENTINEL,
 } from '../../shared/scrub-human-action.ts';
+// Plan 11-02 Task 2 (D-01) — the SINGLE worker-side liveness projection. The
+// engine reads no clock; the worker resolves working/stuck here and injects the
+// string into nodeMeta.
+import { resolveAgentState } from '../situation/agent-liveness.ts';
 
 // Bound the per-issue blocker walk (mirrors the snapshot job's
 // MAX_CHAIN_DEPTH at situation-snapshot.ts:39).
 const MAX_CHAIN_DEPTH = 6;
+
+// Plan 11-02 Task 2 (D-01 / SC5) — the canonical nodeMeta shape buildEdges
+// emits. Declared ONCE so the return-type annotation, the local accumulator,
+// and the buildOrgBlockedBacklog caller can never drift; the Reader BFS
+// (flatten-blocker-chain.ts) mirrors this exact field set (SC5). assigneeAgentId
+// + agentState are the agent-ownership/liveness facts injected into the engine.
+type EdgeNodeMeta = {
+  ownerUserId: string | null;
+  etaIso: string | null;
+  status: string;
+  assigneeAgentId: string | null;
+  agentState: 'working' | 'stuck' | null;
+};
 
 // D-I4-04 — cap the rendered backlog at 12–15. This plan picks 15: covers a
 // ~two-dozen-blocked org at >half while staying scannable. A "N total" count +
@@ -135,6 +155,32 @@ const EMPTY: OrgBlockedBacklog = {
   overflow: false,
 };
 
+/** Plan 11-02 Task 2 (TAX-03 / D-09) — synthesize an honest UNCLASSIFIED chain
+ *  for a blocked issue whose edge build / flatten threw. The verdict triple is
+ *  derived from classifyVerdict (UNCLASSIFIED ⇒ tier 'watch', affordance 'open',
+ *  needsYou false) so the row never claims a false "assign owner". The issue is
+ *  surfaced, not silently dropped. */
+function unclassifiedChain(startId: string, degradeReason: string): BlockerChainResult {
+  const terminal: Terminal = {
+    kind: 'UNCLASSIFIED',
+    label: `Can't determine blocker for ${startId} — open to investigate`,
+  };
+  const verdict = classifyVerdict(terminal);
+  return {
+    startId,
+    pathIds: startId ? [startId] : [],
+    terminal,
+    isStale: false,
+    needsYou: verdict.needsYou,
+    tier: verdict.tier,
+    actionAffordance: verdict.actionAffordance,
+    awaitedPartyLabel: terminal.label,
+    targetAgentUuid: null,
+    targetIssueUuid: startId || null,
+    degradeReason,
+  };
+}
+
 /** Read the first present, parseable timestamp field → age in ms, else null.
  *  <age_source_note>: the SDK Issue's "blocked-since" field name is not
  *  guaranteed; try the common candidates and degrade to null (no NaN). */
@@ -170,16 +216,11 @@ export async function buildEdges(
   startId: string,
 ): Promise<{
   edges: BlockerEdge[];
-  nodeMeta: Record<
-    string,
-    { ownerUserId: string | null; etaIso: string | null; status: string }
-  >;
+  nodeMeta: Record<string, EdgeNodeMeta>;
 }> {
   const edges: BlockerEdge[] = [];
-  const nodeMeta: Record<
-    string,
-    { ownerUserId: string | null; etaIso: string | null; status: string }
-  > = {};
+  const nodeMeta: Record<string, EdgeNodeMeta> = {};
+  const nowMs = Date.now();
   const visited = new Set<string>();
   const queue: Array<{ id: string; depth: number }> = [{ id: startId, depth: 0 }];
   let isRoot = true;
@@ -199,6 +240,9 @@ export async function buildEdges(
     } finally {
       isRoot = false;
     }
+    // Plan 11-02 Task 2 (Pitfall 7 / V5) — every new field read keeps the
+    // defensive `?? null` posture; a missing field falls through the engine
+    // cascade to UNOWNED/SELF_RESOLVING (conservative-correct), never a crash.
     const blockedBy = (summary?.blockedBy ?? []) as Array<{
       id?: string;
       issueId?: string;
@@ -207,15 +251,51 @@ export async function buildEdges(
       ownerUserId?: string | null;
       etaIso?: string | null;
       status?: string;
+      // D-01 — agent ownership + the worker's liveness signals (Assumption A1:
+      // assigneeAgentId may ride on the relation summary node; heartbeat/queue
+      // fields are best-effort, missing ⇒ conservative stuck via resolveAgentState).
+      assigneeAgentId?: string | null;
+      lastHeartbeatMs?: number | null;
+      lastHeartbeatAt?: string | null;
+      hasQueuedWork?: boolean | null;
+      expectedCadenceMs?: number | null;
     }>;
     for (const blocker of blockedBy) {
       const toId = blocker.id ?? blocker.issueId ?? blocker.key ?? '';
       if (!toId) continue;
       edges.push({ from: id, to: toId, reason: 'blocks' });
+      const assigneeAgentId = blocker.assigneeAgentId ?? null;
+      // D-01 — resolve liveness in the WORKER (clock here is legitimate) and
+      // inject the string. null when there is no agent on this node; otherwise
+      // resolveAgentState returns working/stuck (D-04: a missing heartbeat
+      // signal ⇒ conservative stuck, never null).
+      const lastHeartbeatMs =
+        typeof blocker.lastHeartbeatMs === 'number'
+          ? blocker.lastHeartbeatMs
+          : typeof blocker.lastHeartbeatAt === 'string'
+            ? (() => {
+                const t = Date.parse(blocker.lastHeartbeatAt as string);
+                return Number.isFinite(t) ? t : null;
+              })()
+            : null;
+      const agentState: 'working' | 'stuck' | null =
+        assigneeAgentId == null
+          ? null
+          : resolveAgentState({
+              lastHeartbeatMs,
+              hasQueuedWork: blocker.hasQueuedWork === true,
+              nowMs,
+              expectedCadenceMs:
+                typeof blocker.expectedCadenceMs === 'number'
+                  ? blocker.expectedCadenceMs
+                  : undefined,
+            });
       nodeMeta[toId] = {
         ownerUserId: blocker.assigneeUserId ?? blocker.ownerUserId ?? null,
         etaIso: blocker.etaIso ?? null,
         status: blocker.status ?? 'awaiting',
+        assigneeAgentId,
+        agentState,
       };
       if (!visited.has(toId) && depth + 1 <= MAX_CHAIN_DEPTH) {
         queue.push({ id: toId, depth: depth + 1 });
@@ -264,29 +344,32 @@ export async function buildOrgBlockedBacklog(
     const startId = issue.id ?? issue.identifier ?? '';
     if (!startId) continue;
     let edges: BlockerEdge[];
-    let nodeMeta: Record<
-      string,
-      { ownerUserId: string | null; etaIso: string | null; status: string }
-    >;
+    let nodeMeta: Record<string, EdgeNodeMeta>;
     try {
       ({ edges, nodeMeta } = await buildEdges(ctx, companyId, startId));
     } catch (e) {
-      ctx.logger?.warn?.('org-blocked-backlog: relations walk failed (issue skipped)', {
+      // Plan 11-02 Task 2 (TAX-03 / D-09) — a thrown edge build no longer
+      // SILENTLY DROPS the issue. Surface an honest UNCLASSIFIED row with a
+      // degradeReason so the operator sees "can't determine — open to
+      // investigate" instead of the blocked issue vanishing.
+      ctx.logger?.warn?.('org-blocked-backlog: relations walk failed (UNCLASSIFIED row)', {
         companyId,
         startId,
         err: (e as Error).message,
       });
+      paired.push({ chain: unclassifiedChain(startId, 'relations-walk-failed'), issue });
       continue;
     }
     let chain: BlockerChainResult;
     try {
       chain = flattenBlockerChain({ startId, edges, nodeMeta, viewerUserId });
     } catch (e) {
-      ctx.logger?.warn?.('org-blocked-backlog: flatten failed (issue skipped)', {
+      ctx.logger?.warn?.('org-blocked-backlog: flatten failed (UNCLASSIFIED row)', {
         companyId,
         startId,
         err: (e as Error).message,
       });
+      paired.push({ chain: unclassifiedChain(startId, 'flatten-failed'), issue });
       continue;
     }
     paired.push({ chain, issue });
@@ -305,10 +388,10 @@ export async function buildOrgBlockedBacklog(
   // 4. Resolve distinct UUIDs → display NAMES (D-09 NO_UUID_LEAK). This now
   //    covers BOTH the issue OWNER (for row.ownerName) AND every UUID the
   //    flattened terminal LABEL embeds (for scrubHumanAction) — the issue's
-  //    HUMAN_ACTION_ON terminal.userId when it is a real UUID (not the
-  //    __unowned__ sentinel) plus any UUID found inside terminal.label (07-03
-  //    HOTFIX: previously only the owner was resolved, so the raw blocker-node
-  //    UUID leaked through terminal.label into row.humanAction).
+  //    AWAITING_HUMAN terminal.userId when it is a real UUID plus any UUID found
+  //    inside terminal.label (07-03 HOTFIX: previously only the owner was
+  //    resolved, so the raw blocker-node UUID leaked through terminal.label into
+  //    row.humanAction).
   const ownerUuidFor = (issue: IssueLike): string | null =>
     (typeof issue.assigneeUserId === 'string' && issue.assigneeUserId
       ? issue.assigneeUserId
@@ -328,8 +411,11 @@ export async function buildOrgBlockedBacklog(
       if (owner) wanted.add(owner);
       // Terminal-label UUIDs → scrubHumanAction. Only hex UUIDs need resolving
       // for the scrubber; the viewer "You" substitution uses terminal.userId.
+      // Plan 11-02 — the human-action kind is now AWAITING_HUMAN (no sentinel:
+      // UNOWNED is its own kind carrying NO userId, so there is no magic userId
+      // string to exclude).
       const t = c.terminal;
-      if (t.kind === 'HUMAN_ACTION_ON' && t.userId !== UNOWNED_SENTINEL && isUuid(t.userId)) {
+      if (t.kind === 'AWAITING_HUMAN' && isUuid(t.userId)) {
         wanted.add(t.userId);
       }
       for (const u of uuidsIn(t.label)) wanted.add(u);
@@ -357,10 +443,12 @@ export async function buildOrgBlockedBacklog(
     }
   }
 
-  // 5. Emit rows. need_you_count is computed across the RANKED rows (the
-  //    rendered backlog): HUMAN_ACTION_ON terminals whose userId === viewer
-  //    (not the __unowned__ sentinel, not other users) — mirrors the snapshot
-  //    job's awaiting-you semantics (situation-snapshot.ts:414-417).
+  // 5. Emit rows. Plan 11-02 (D-13) — need_you_count keys on the ENGINE VERDICT
+  //    (chain.needsYou), not a terminal.kind + sentinel string-match. V4
+  //    viewer-scoping is preserved: among needs-you chains, only an AWAITING_HUMAN
+  //    terminal whose userId === the UI-supplied viewer counts (a genuinely-
+  //    UNOWNED needs-you chain has NO userId and is org-wide, not viewer-specific,
+  //    so it does not inflate the viewer's "M need you").
   const rows: OrgBlockedRow[] = [];
   let needYou = 0;
   for (const chain of rankedChains) {
@@ -368,8 +456,8 @@ export async function buildOrgBlockedBacklog(
     const ownerUuid = ownerUuidFor(issue);
     const terminal = chain.terminal;
     if (
-      terminal.kind === 'HUMAN_ACTION_ON' &&
-      terminal.userId !== UNOWNED_SENTINEL &&
+      chain.needsYou &&
+      terminal.kind === 'AWAITING_HUMAN' &&
       terminal.userId === viewerUserId
     ) {
       needYou += 1;

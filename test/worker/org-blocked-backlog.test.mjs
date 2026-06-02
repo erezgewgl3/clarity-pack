@@ -70,7 +70,7 @@ function makeCtx({
   return ctx;
 }
 
-// A blocked issue whose single blocker is OWNED + awaiting → HUMAN_ACTION_ON.
+// A blocked issue whose single blocker is OWNED + awaiting → AWAITING_HUMAN.
 function humanActionIssue(id, identifier, ownerUuid, viewerUuid = ownerUuid) {
   return {
     issue: {
@@ -88,6 +88,41 @@ function humanActionIssue(id, identifier, ownerUuid, viewerUuid = ownerUuid) {
           assigneeUserId: viewerUuid,
           status: 'awaiting',
           etaIso: null,
+        },
+      ],
+      blocks: [],
+    },
+  };
+}
+
+// Plan 11-02 — a blocked issue whose single blocker is AGENT-owned (no user
+// owner, not awaiting). The agentState ('working'|'stuck') is driven by the
+// blocker node's heartbeat/queue signals, which buildEdges feeds through the
+// pure resolveAgentState helper. Pass `fresh=true` for a recent heartbeat
+// (→ AWAITING_AGENT_WORKING) or `fresh=false` / omit for a stale/missing one
+// (→ AWAITING_AGENT_STUCK per D-04 conservative).
+function agentOwnedIssue(id, identifier, agentUuid, { fresh = false } = {}) {
+  return {
+    issue: {
+      id,
+      identifier,
+      title: `Title for ${identifier}`,
+      status: 'blocked',
+      assigneeUserId: null,
+      updatedAt: '2026-05-01T00:00:00Z',
+    },
+    relations: {
+      blockedBy: [
+        {
+          id: `${id}-blocker`,
+          assigneeUserId: null,
+          ownerUserId: null,
+          assigneeAgentId: agentUuid,
+          status: 'in_progress',
+          etaIso: null,
+          // Fresh heartbeat (1 min ago) ⇒ working; absent ⇒ conservative stuck.
+          lastHeartbeatMs: fresh ? Date.now() - 60 * 1000 : null,
+          hasQueuedWork: fresh,
         },
       ],
       blocks: [],
@@ -137,8 +172,8 @@ test('builder — ranks HUMAN_ACTION_ON-first; total === N', async () => {
   const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-1');
   assert.equal(backlog.total, 2);
   assert.equal(backlog.blocked_count, 2);
-  // HUMAN_ACTION_ON ranks before SELF_RESOLVING.
-  assert.equal(backlog.rows[0].terminalKind, 'HUMAN_ACTION_ON');
+  // AWAITING_HUMAN ranks before SELF_RESOLVING.
+  assert.equal(backlog.rows[0].terminalKind, 'AWAITING_HUMAN');
   assert.equal(backlog.rows[1].terminalKind, 'SELF_RESOLVING');
 });
 
@@ -246,7 +281,9 @@ test('builder — mixed-status list yields blocked-only rows (defensive filter)'
 // Degrade-safe — per-issue relations.get throw + fully-thrown list
 // ---------------------------------------------------------------------------
 
-test('builder — an issue whose relations.get throws is skipped; the others still produce rows', async () => {
+test('builder — an issue whose relations.get throws surfaces an UNCLASSIFIED row (Plan 11-02 TAX-03); the others still produce honest rows', async () => {
+  // Plan 11-02 — pre-11-02 this DROPPED the throwing issue. Now it surfaces an
+  // honest UNCLASSIFIED row so the blocked issue never silently vanishes.
   const a = humanActionIssue('i-a', 'COU-1', 'u-1');
   const b = humanActionIssue('i-b', 'COU-2', 'u-1');
   const ctx = makeCtx({
@@ -256,11 +293,12 @@ test('builder — an issue whose relations.get throws is skipped; the others sti
     agents: { 'u-1': { name: 'Head of Compliance' } },
   });
   const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-1');
-  // total counts ALL blocked issues; rows only the ones that survived.
+  // total counts ALL blocked issues; rows now include BOTH (no silent drop).
   assert.equal(backlog.total, 2);
-  const idents = backlog.rows.map((r) => r.identifier);
-  assert.ok(idents.includes('COU-2'), 'the non-throwing issue still renders');
-  assert.ok(!idents.includes('COU-1'), 'the throwing-relations issue is skipped');
+  const byIdent = Object.fromEntries(backlog.rows.map((r) => [r.identifier, r]));
+  assert.ok(byIdent['COU-2'], 'the non-throwing issue still renders');
+  assert.ok(byIdent['COU-1'], 'the throwing-relations issue surfaces, not dropped');
+  assert.equal(byIdent['COU-1'].terminalKind, 'UNCLASSIFIED');
 });
 
 test('builder — a fully-thrown issues.list yields the empty backlog shape (never throws)', async () => {
@@ -331,10 +369,11 @@ test('builder — need_you_count counts ONLY HUMAN_ACTION_ON rows whose terminal
   assert.equal(backlog.need_you_count, 1);
 });
 
-test('builder — need_you_count excludes the __unowned__ sentinel', async () => {
-  // Blocked issue with a blocker that has NO owner and NO eta → the flattener's
-  // __unowned__ HUMAN_ACTION_ON fallback. viewerUserId is irrelevant; this must
-  // NOT count toward need_you (userId === '__unowned__' !== viewerUserId).
+test('builder — need_you_count excludes a genuinely UNOWNED blocker (no userId to match)', async () => {
+  // Plan 11-02 — the legacy __unowned__ sentinel is GONE. A blocker with NO
+  // owner, NO agent, NO eta now flattens to the first-class UNOWNED terminal,
+  // which carries no userId. It is org-wide needs-you, not viewer-specific, so
+  // it must NOT inflate the viewer's "M need you" count (V4 viewer-scoping).
   const f = {
     issue: {
       id: 'i-u',
@@ -353,7 +392,8 @@ test('builder — need_you_count excludes the __unowned__ sentinel', async () =>
     issues: [f.issue],
     relations: { 'i-u': f.relations },
   });
-  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', '__unowned__');
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
+  assert.equal(backlog.rows[0].terminalKind, 'UNOWNED');
   assert.equal(backlog.need_you_count, 0);
 });
 
@@ -391,8 +431,8 @@ test('builder — each row carries title, identifier, humanAction (terminal labe
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 // A blocked issue whose single blocker is UNOWNED + no eta → the flattener's
-// __unowned__ HUMAN_ACTION_ON fallback, whose label embeds the blocker's raw
-// node UUID ("Owner unknown — assign <UUID> first").
+// first-class UNOWNED terminal, whose label embeds the blocker's raw node UUID
+// ("Owner unknown — assign <UUID> first"). Plan 11-02: no more sentinel.
 function unownedUuidBlockerIssue(id, identifier, blockerUuid) {
   return {
     issue: {
@@ -410,7 +450,7 @@ function unownedUuidBlockerIssue(id, identifier, blockerUuid) {
   };
 }
 
-test('builder — __unowned__ terminal: humanAction is a clean "assign an owner" phrase with NO raw UUID', async () => {
+test('builder — UNOWNED terminal: humanAction is a clean "assign an owner" phrase with NO raw UUID', async () => {
   const blockerUuid = '7b5c7deb-8135-4d23-b41b-6cf7b724e945';
   const f = unownedUuidBlockerIssue('i-u', 'COU-1', blockerUuid);
   const ctx = makeCtx({
@@ -419,7 +459,7 @@ test('builder — __unowned__ terminal: humanAction is a clean "assign an owner"
   });
   const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
   const row = backlog.rows[0];
-  assert.equal(row.terminalKind, 'HUMAN_ACTION_ON');
+  assert.equal(row.terminalKind, 'UNOWNED');
   assert.ok(
     !UUID_RE.test(row.humanAction),
     `humanAction must not contain a raw UUID; got: ${row.humanAction}`,
@@ -427,7 +467,7 @@ test('builder — __unowned__ terminal: humanAction is a clean "assign an owner"
   assert.match(row.humanAction, /assign an owner first/i);
 });
 
-test('builder — __unowned__ terminal: embedded blocker UUID that resolves to an agent name is shown by name', async () => {
+test('builder — UNOWNED terminal: embedded blocker UUID that resolves to an agent name is shown by name', async () => {
   const blockerUuid = '7b5c7deb-8135-4d23-b41b-6cf7b724e945';
   const f = unownedUuidBlockerIssue('i-u', 'COU-1', blockerUuid);
   const ctx = makeCtx({
@@ -445,7 +485,7 @@ test('builder — __unowned__ terminal: embedded blocker UUID that resolves to a
   assert.match(row.humanAction, /assign an owner first/i);
 });
 
-test('builder — HUMAN_ACTION_ON owned terminal: label UUIDs are replaced by the resolved agent name, never raw', async () => {
+test('builder — AWAITING_HUMAN owned terminal: label UUIDs are replaced by the resolved agent name, never raw', async () => {
   // blocker owned by a real UUID (not the viewer) → flattener label is
   // "<ownerUuid> to act on <nodeUuid>". Both UUIDs must be scrubbed.
   const ownerUuid = 'aaaaaaaa-1111-2222-3333-444444444444';
@@ -474,7 +514,7 @@ test('builder — HUMAN_ACTION_ON owned terminal: label UUIDs are replaced by th
   });
   const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
   const row = backlog.rows[0];
-  assert.equal(row.terminalKind, 'HUMAN_ACTION_ON');
+  assert.equal(row.terminalKind, 'AWAITING_HUMAN');
   assert.ok(
     !UUID_RE.test(row.humanAction),
     `humanAction must not contain a raw UUID; got: ${row.humanAction}`,
@@ -558,4 +598,75 @@ test('builder — owned label UUIDs with agents.get THROW fall back to agent#<sh
     `humanAction must not contain a raw UUID; got: ${row.humanAction}`,
   );
   assert.match(row.humanAction, /agent#/);
+});
+
+// ---------------------------------------------------------------------------
+// Plan 11-02 — agent ownership + liveness ride into the engine via nodeMeta
+// (TAX-01 / SC1 / D-01). An agent-owned leaf classifies AWAITING_AGENT_*; a
+// fresh heartbeat ⇒ WORKING, a missing/stale one ⇒ STUCK (D-04 conservative).
+// ---------------------------------------------------------------------------
+
+test('builder — agent-owned leaf with a FRESH heartbeat classifies AWAITING_AGENT_WORKING (SC1/TAX-01)', async () => {
+  const agentUuid = 'eeeeeeee-1111-2222-3333-444444444444';
+  const f = agentOwnedIssue('i-aw', 'COU-10', agentUuid, { fresh: true });
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { 'i-aw': f.relations },
+    agents: { [agentUuid]: { name: 'Builder-Agent' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
+  const row = backlog.rows[0];
+  assert.equal(row.terminalKind, 'AWAITING_AGENT_WORKING');
+  // need_you is verdict-keyed: a WORKING agent is in-motion, not needs-you.
+  assert.equal(backlog.need_you_count, 0);
+  // NO_UUID_LEAK still holds on the action label.
+  assert.ok(
+    !UUID_RE.test(row.humanAction),
+    `humanAction must not contain a raw UUID; got: ${row.humanAction}`,
+  );
+});
+
+test('builder — agent-owned leaf with NO heartbeat classifies AWAITING_AGENT_STUCK (D-04 conservative)', async () => {
+  const agentUuid = 'eeeeeeee-5555-6666-7777-888888888888';
+  const f = agentOwnedIssue('i-as', 'COU-11', agentUuid, { fresh: false });
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { 'i-as': f.relations },
+    agents: { [agentUuid]: { name: 'Stalled-Agent' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
+  const row = backlog.rows[0];
+  assert.equal(row.terminalKind, 'AWAITING_AGENT_STUCK');
+  assert.ok(
+    !UUID_RE.test(row.humanAction),
+    `humanAction must not contain a raw UUID; got: ${row.humanAction}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Plan 11-02 — a thrown edge build no longer SILENTLY DROPS the issue (TAX-03 /
+// D-09). It surfaces an honest UNCLASSIFIED row instead. Contrast with the
+// pre-11-02 "issue skipped" behavior, which lost the blocked issue entirely.
+// ---------------------------------------------------------------------------
+
+test('builder — a thrown edge build yields an honest UNCLASSIFIED row, not a dropped issue (TAX-03)', async () => {
+  const a = humanActionIssue('i-a', 'COU-1', 'u-1');
+  const b = humanActionIssue('i-b', 'COU-2', 'u-1');
+  const ctx = makeCtx({
+    issues: [a.issue, b.issue],
+    relations: { 'i-a': a.relations, 'i-b': b.relations },
+    relationsThrowFor: new Set(['i-a']), // root relations.get throws → buildEdges throws
+    agents: { 'u-1': { name: 'Head of Compliance' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-1');
+  assert.equal(backlog.total, 2);
+  // BOTH issues now produce rows — the throwing one is UNCLASSIFIED, not dropped.
+  assert.equal(backlog.rows.length, 2);
+  const byIdent = Object.fromEntries(backlog.rows.map((r) => [r.identifier, r]));
+  assert.equal(byIdent['COU-1'].terminalKind, 'UNCLASSIFIED');
+  assert.equal(byIdent['COU-2'].terminalKind, 'AWAITING_HUMAN');
+  // The UNCLASSIFIED row's action is the honest open-to-investigate line, NO
+  // "assign" verb (a walk failure must never claim a false assignment).
+  assert.match(byIdent['COU-1'].humanAction, /open to investigate/i);
+  assert.doesNotMatch(byIdent['COU-1'].humanAction, /assign/i);
 });
