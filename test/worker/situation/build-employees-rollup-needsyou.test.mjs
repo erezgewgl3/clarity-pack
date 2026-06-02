@@ -76,7 +76,13 @@ test('needsYou (R5): an UNOWNED blocked row with 0 viewer-owned yields count ≥
   // The blocked row buckets needs_you and is unowned.
   const row = out.employees.find((r) => r.agentId === 'ag-unowned');
   assert.equal(row.group, 'needs_you');
-  assert.equal(row.blockerChain.ownerName, 'Unassigned');
+  // Plan 11-03 (D-13/D-14) — assert the ENGINE VERDICT (the new re-triage key),
+  // not the legacy ownerName display string: a genuinely-unowned chain has
+  // needsYou true + affordance 'assign' (UNOWNED). The ownerName display value is
+  // still 'Unassigned' but the count is computed off the verdict (SC5).
+  assert.equal(row.blockerChain.needsYou, true, 'verdict.needsYou true for an unowned chain');
+  assert.equal(row.blockerChain.actionAffordance, 'assign', "verdict affordance 'assign' for UNOWNED");
+  assert.equal(row.blockerChain.ownerName, 'Unassigned', 'display ownerName remains Unassigned');
   // R5 — the count must NOW be ≥ 1 (Phase 8 would have returned 0).
   assert.ok(out.needsYou.count >= 1, `un-frozen count must be ≥1, got ${out.needsYou.count}`);
 });
