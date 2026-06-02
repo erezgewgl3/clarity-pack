@@ -37,8 +37,10 @@ import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
+import { isReplyReachable } from '../../../shared/reply-reachable.ts';
 import { formatAge } from '../../primitives/state-pill-format.ts';
 import { useToast } from '../../primitives/toast.tsx';
+import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { buildChatDeepLink } from '../chat/deep-link.mjs';
 import { OwnerPickerPopover } from './owner-picker-popover.tsx';
 
@@ -205,6 +207,13 @@ export function EmployeeRow({
   // verdict the org-blocked backlog expander and Reader blocker panel read
   // (D-09: the three surfaces agree by construction).
   const showAssign = chain?.actionAffordance === 'assign';
+  // Plan 14-03 Task 1 (SC3/SC4/DO-01) — the reply-in-place branch. Mutually
+  // exclusive with showAssign: 'reply' (⇔ AWAITING_HUMAN per classifyVerdict) is
+  // the ONLY affordance that mounts the shared <ReplyInPlace>; 'assign' (UNOWNED
+  // + AWAITING_AGENT_STUCK, Phase 12 D-05) keeps the OwnerPickerPopover. The
+  // reachable gate inside the primitive computes off chain.terminalKind (14-04),
+  // so a defensive non-reachable reply row still degrades to named action + Open↗.
+  const showReply = chain?.actionAffordance === 'reply';
 
   // ---- handlers (every one performs a REAL effect; never a no-op) ----------
 
@@ -381,6 +390,26 @@ export function EmployeeRow({
                   </button>
                 )}
               </>
+            ) : showReply ? (
+              /* Plan 14-03 (SC3/SC4/DO-01) — the ONE shared <ReplyInPlace> on the
+               * reply branch (⇔ AWAITING_HUMAN). reachable computed off the REAL
+               * threaded chain.terminalKind (14-04), needsDurabilityFlip from the
+               * REAL chain.needsDurabilityFlip (NOT a terminal.kind proxy). The
+               * *Uuid fields are dispatch props only (NO_UUID_LEAK). */
+              <ReplyInPlace
+                leafIssueId={chain.leafIssueId}
+                leafIssueUuid={chain.leafIssueUuid}
+                awaitedPartyLabel={chain.awaitedPartyLabel}
+                namedAction={row.actionCard?.namedAction ?? `waiting on ${chain.awaitedPartyLabel}`}
+                decisionOptions={row.actionCard?.decisionOptions ?? null}
+                needsDurabilityFlip={chain.needsDurabilityFlip}
+                reachable={isReplyReachable(chain.terminalKind)}
+                companyId={companyId}
+                userId={userId}
+                companyPrefix={companyPrefix}
+                navigate={navigate}
+                onActed={onAssignSuccess}
+              />
             ) : (
               <>
                 {chain.ownerAgentId && (

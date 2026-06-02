@@ -30,12 +30,13 @@ import {
 } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
+import { isReplyReachable } from '../../../shared/reply-reachable.ts';
+import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { StatePill } from '../../primitives/state-pill.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
-import { buildChatDeepLink } from '../chat/deep-link.mjs';
 
 // Plan 11-04 (D-13/SC1) — the primary action is gated on the ENGINE VERDICT's
 // actionAffordance, NOT on terminal.kind. Every one of the 8 kinds maps to one
@@ -165,21 +166,9 @@ function LiveBlockerPanelWithCompany({
     nav.navigate(`/${companyPrefix}/issues/${issueId}`);
   }, [nav, companyPrefix, issueId]);
 
-  // 'reply' → open the awaited employee in chat (employee-only carrier), mirroring
-  // employee-row's openChatWithOwner. Needs the awaited agent UUID as the chat
-  // correspondent (dispatch-only, never rendered).
-  const replyInChat = React.useCallback(
-    (agentUuid: string | null | undefined) => {
-      if (!agentUuid || !companyPrefix) return;
-      const link = buildChatDeepLink({
-        route: 'employee-only',
-        companyPrefix,
-        assigneeAgentId: agentUuid,
-      });
-      if (link) nav.navigate(link.to);
-    },
-    [nav, companyPrefix],
-  );
+  // Plan 14-03 — the 'reply' affordance no longer navigates to chat; it mounts the
+  // shared <ReplyInPlace> primitive (act-in-place, DO-01). The old replyInChat
+  // navigate-to-chat callback is removed.
 
   // 'nudge' → wake the stuck agent on the leaf issue (issues.requestWakeup),
   // mirroring employee-row's wake. The leaf-issue UUID is the mutation target.
@@ -218,15 +207,21 @@ function LiveBlockerPanelWithCompany({
   // The split-identity mutation targets — read into plain consts so the JSX/
   // render body below never embeds `data.target*Uuid` inside a `{...}` expression
   // (the NO_UUID_LEAK render-scan forbids that; they are dispatch args only).
-  const agentDispatchTarget = data.targetAgentUuid;
   const issueDispatchTarget = data.targetIssueUuid;
+  // Plan 14-03 Task 1 (SC3/SC4/WARNING 2) — the 'reply' affordance is now a
+  // RENDER branch (the shared <ReplyInPlace> below), not an onAction handler. It
+  // owns its own Send/chips/Open↗ + namedAction line. So 'reply' is intentionally
+  // ABSENT from this onAction switch and contributes no <button>; the dead
+  // navigate-to-chat path is removed.
+  const isReplyBranch = data.actionAffordance === 'reply';
   let onAction: (() => void) | null = null;
   switch (data.actionAffordance) {
     case 'open':
       onAction = openIssue;
       break;
     case 'reply':
-      onAction = () => replyInChat(agentDispatchTarget);
+      // Handled by <ReplyInPlace> below — no button on this path.
+      onAction = null;
       break;
     case 'nudge':
       onAction = () => {
@@ -287,7 +282,36 @@ function LiveBlockerPanelWithCompany({
           <span className="clarity-blocker-kind">{terminal.kind.replace(/_/g, ' ')}</span>
         )}
       </header>
-      <p className="clarity-blocker-label">{blockerLine(data)}</p>
+      {/* Plan 14-03 (WARNING 2) — SUPPRESS the standalone blockerLine <p> for the
+       *  reply branch: <ReplyInPlace> renders its own namedAction line, so showing
+       *  blockerLine here too would duplicate the headline. Non-reply affordances
+       *  keep the blockerLine <p> exactly as before (no regression). */}
+      {data.actionAffordance !== 'reply' ? (
+        <p className="clarity-blocker-label">{blockerLine(data)}</p>
+      ) : null}
+      {/* Plan 14-03 (SC3/SC4/DO-01) — the ONE shared <ReplyInPlace> on the reply
+       *  branch. reachable computed off data.terminal.kind (native on this
+       *  surface). leafIssueId = the open issue ONLY for a single-hop chain (CR-01
+       *  honest degrade), leafIssueUuid = the leaf mutation id (dispatch-only).
+       *  needsDurabilityFlip = false: the Reader's BlockerChainResult has no leaf
+       *  status field, so default comment-only (spike-safe) — NEVER proxied from
+       *  terminal.kind. onActed is a no-op; usePluginData re-polls the panel. */}
+      {isReplyBranch ? (
+        <ReplyInPlace
+          leafIssueId={data.pathIds.length <= 1 ? issueId : null}
+          leafIssueUuid={data.targetIssueUuid ?? null}
+          awaitedPartyLabel={data.awaitedPartyLabel}
+          namedAction={blockerLine(data)}
+          decisionOptions={null}
+          needsDurabilityFlip={false}
+          reachable={isReplyReachable(data.terminal.kind)}
+          companyId={companyId}
+          userId={viewerUserId}
+          companyPrefix={companyPrefix}
+          navigate={nav.navigate}
+          onActed={() => {}}
+        />
+      ) : null}
       {showButton ? (
         <button
           type="button"
