@@ -261,20 +261,43 @@ test('09-04 — employee-row blockerChain type mirror carries leafIssueUuid', ()
   assert.match(ROW, /leafIssueUuid:\s*string\s*\|\s*null/, 'blockerChain type carries leafIssueUuid');
 });
 
-test('09-04 — the backlog-style single-prop mount still sends the UUID via the fallback', () => {
-  // The backlog expander passes ONLY leafIssueId={row.issueId} (already a UUID).
-  // The popover's ?? leafIssueId fallback feeds that same UUID as leafIssueUuid
-  // WITHOUT any change to the backlog mount. Proven at the popover level: the
-  // dispatch uses leafIssueUuid ?? leafIssueId, so a missing leafIssueUuid prop
-  // falls back to the leafIssueId (the UUID the backlog passes).
+test('09-04/14-03 — the backlog OwnerPickerPopover (assign) mount still sends the UUID via the fallback', () => {
+  // Phase 09-04 contract (assign path, UNCHANGED by Phase 14): the backlog's
+  // OwnerPickerPopover passes ONLY leafIssueId={row.issueId} (already a UUID); the
+  // popover's `leafIssueUuid ?? leafIssueId` fallback feeds that UUID as the
+  // mutation id WITHOUT a leafIssueUuid prop on the assign mount.
+  //
+  // Phase 14-03 evolution: the SAME expander now ALSO mounts <ReplyInPlace> on the
+  // reply branch, which DOES pass leafIssueUuid={row.leafIssueUuid} (the LEAF uuid
+  // threaded in 14-04 — distinct from row.issueId, the root). So the blanket
+  // `doesNotMatch(/leafIssueUuid=/)` assertion is intentionally retired; we now
+  // scope the no-leafIssueUuid-prop guarantee to the OwnerPickerPopover assign
+  // mount specifically (the reply mount legitimately uses the leaf uuid).
   const EXPANDER = readFileSync(
     path.join(REPO_ROOT, 'src/ui/surfaces/situation-room/blocked-backlog-expander.tsx'),
     'utf8',
   );
-  // The backlog mount is UNCHANGED — single leafIssueId prop, no leafIssueUuid.
-  assert.match(EXPANDER, /leafIssueId=\{row\.issueId\}/, 'backlog passes leafIssueId={row.issueId}');
-  assert.doesNotMatch(EXPANDER, /leafIssueUuid=/, 'backlog mount is NOT given a leafIssueUuid prop');
-  // And the popover fallback covers it.
+  // Isolate the OwnerPickerPopover JSX block (the assign mount).
+  const ownerPickerMount = EXPANDER.match(/<OwnerPickerPopover[\s\S]*?\/>/);
+  assert.ok(ownerPickerMount, 'backlog mounts OwnerPickerPopover for the assign branch');
+  // The assign mount passes leafIssueId={row.issueId} and NO leafIssueUuid prop.
+  assert.match(
+    ownerPickerMount[0],
+    /leafIssueId=\{row\.issueId\}/,
+    'backlog assign mount passes leafIssueId={row.issueId}',
+  );
+  assert.doesNotMatch(
+    ownerPickerMount[0],
+    /leafIssueUuid=/,
+    'backlog OwnerPickerPopover assign mount is NOT given a leafIssueUuid prop (fallback covers it)',
+  );
+  // The 14-03 reply mount, by contrast, DOES pass the distinct leaf uuid.
+  assert.match(
+    EXPANDER,
+    /leafIssueUuid=\{row\.leafIssueUuid\}/,
+    'the 14-03 ReplyInPlace mount passes the distinct LEAF uuid (row.leafIssueUuid)',
+  );
+  // And the popover fallback covers the assign path.
   assert.match(POPOVER, /leafIssueUuid\s*\?\?\s*leafIssueId/, 'fallback feeds the backlog UUID');
 });
 

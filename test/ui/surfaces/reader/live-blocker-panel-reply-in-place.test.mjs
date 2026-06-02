@@ -81,8 +81,13 @@ test('leafIssueId = single-hop issueId else null (CR-01 honest degrade)', () => 
   assert.match(CODE, /leafIssueId=\{data\.pathIds\.length\s*<=\s*1\s*\?\s*issueId\s*:\s*null\}/);
 });
 
-test('leafIssueUuid = data.targetIssueUuid (the leaf mutation id)', () => {
-  assert.match(CODE, /leafIssueUuid=\{data\.targetIssueUuid\s*\?\?\s*null\}/);
+test('leafIssueUuid = the leaf mutation id via the dispatch-only const (NO_UUID_LEAK convention)', () => {
+  // The Reader hoists data.targetIssueUuid into issueDispatchTarget so the JSX
+  // render body never embeds data.target*Uuid in a {...} expression (the
+  // pre-existing reader-view NO_UUID_LEAK guard forbids that). leafIssueUuid is
+  // the dispatch-only const, never a rendered text node.
+  assert.match(CODE, /const\s+issueDispatchTarget\s*=\s*data\.targetIssueUuid/);
+  assert.match(CODE, /leafIssueUuid=\{issueDispatchTarget\s*\?\?\s*null\}/);
 });
 
 // ---------------------------------------------------------------------------

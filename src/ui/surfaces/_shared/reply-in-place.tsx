@@ -242,6 +242,10 @@ export function ReplyInPlace({
         <input
           type="text"
           className="clarity-reply-input"
+          // Plan 14-03 (Rule 2 a11y fix) — an accessible name for the reply input
+          // (the static a11y R2 rule requires id/name/aria-label, not just a
+          // placeholder). Scrubbed awaitedPartyLabel only (NO_UUID_LEAK).
+          aria-label={`Reply to ${awaitedPartyLabel}`}
           placeholder={`Reply to ${awaitedPartyLabel}…`}
           value={body}
           disabled={sending}

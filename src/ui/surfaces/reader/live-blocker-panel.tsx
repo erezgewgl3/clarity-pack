@@ -299,7 +299,7 @@ function LiveBlockerPanelWithCompany({
       {isReplyBranch ? (
         <ReplyInPlace
           leafIssueId={data.pathIds.length <= 1 ? issueId : null}
-          leafIssueUuid={data.targetIssueUuid ?? null}
+          leafIssueUuid={issueDispatchTarget ?? null}
           awaitedPartyLabel={data.awaitedPartyLabel}
           namedAction={blockerLine(data)}
           decisionOptions={null}

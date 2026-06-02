@@ -19,8 +19,10 @@
 import * as React from 'react';
 import { useHostLocation, useHostNavigation } from '@paperclipai/plugin-sdk/ui/hooks';
 
+import { isReplyReachable } from '../../../shared/reply-reachable.ts';
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 import { formatAge } from '../../primitives/state-pill-format.ts';
+import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { OwnerPickerPopover } from './owner-picker-popover.tsx';
 import type { OrgBlockedBacklog } from './org-blocked-backlog-banner-types.ts';
 
@@ -88,32 +90,59 @@ export function BlockedBacklogExpander({
                 <span className="clarity-orphan-meta">{`blocked ${formatAge(row.age_ms)}`}</span>
               ) : null}
               <span className="clarity-orphan-actions">
-                {/* Plan 12-03 Task 2 (NY-03 / D-09 / T-12-08) — the Assign
-                 *  control (which dispatches situation.assignOwner, a REAL
-                 *  mutation) renders ONLY when the engine verdict says assignment
-                 *  is the answer: actionAffordance === 'assign' ⇔ UNOWNED +
-                 *  AWAITING_AGENT_STUCK (after 12-01). This closes the prior
-                 *  unconditional mount where every orphan row showed [Assign ▾]
-                 *  regardless of kind — an AWAITING_HUMAN / in-motion / external
-                 *  row could expose an inappropriate assign mutation. We gate on
-                 *  the SAME single verdict the SR row + Reader panel read — NO
-                 *  terminal.kind list, NO ownerName string-match. */}
-                {row.actionAffordance === 'assign' ? (
-                  <OwnerPickerPopover
-                    leafIssueId={row.issueId}
+                {/* Plan 14-03 Task 2 (SC3/SC4/DO-01) — the ONE shared
+                 *  <ReplyInPlace> on the reply orphan rows (⇔ AWAITING_HUMAN). It
+                 *  is mutually exclusive with the Assign branch: 'reply' mounts the
+                 *  primitive (which owns its own Send/chips + Open↗ on the
+                 *  reachable-false path), 'assign' keeps the OwnerPickerPopover.
+                 *  The LEAF uuid (row.leafIssueUuid, 14-04) is the mutation id —
+                 *  NOT row.issueId (the ROOT); row.identifier is the display key.
+                 *  reachable computed off the REAL row.terminalKind (14-04, no
+                 *  inline Terminal); needsDurabilityFlip from the REAL
+                 *  row.needsDurabilityFlip (no terminalKind proxy). */}
+                {row.actionAffordance === 'reply' ? (
+                  <ReplyInPlace
+                    leafIssueId={row.identifier}
+                    leafIssueUuid={row.leafIssueUuid}
+                    awaitedPartyLabel={row.awaitedPartyLabel}
+                    namedAction={row.humanAction}
+                    decisionOptions={row.decisionOptions}
+                    needsDurabilityFlip={row.needsDurabilityFlip}
+                    reachable={isReplyReachable(row.terminalKind)}
                     companyId={companyId}
                     userId={userId}
-                    triggerLabel="Assign ▾"
-                    onAssigned={() => onAssignSuccess()}
+                    companyPrefix={companyPrefix}
+                    navigate={navigate}
+                    onActed={onAssignSuccess}
                   />
-                ) : null}
-                <button
-                  type="button"
-                  className="clarity-btn clarity-orphan-open"
-                  onClick={() => openIssue(row.identifier)}
-                >
-                  Open ↗
-                </button>
+                ) : (
+                  <>
+                    {/* Plan 12-03 Task 2 (NY-03 / D-09 / T-12-08) — the Assign
+                     *  control (which dispatches situation.assignOwner, a REAL
+                     *  mutation) renders ONLY when the engine verdict says
+                     *  assignment is the answer: actionAffordance === 'assign' ⇔
+                     *  UNOWNED + AWAITING_AGENT_STUCK (after 12-01). We gate on the
+                     *  SAME single verdict the SR row + Reader panel read — NO
+                     *  terminal.kind list, NO ownerName string-match. Untouched by
+                     *  Phase 14. */}
+                    {row.actionAffordance === 'assign' ? (
+                      <OwnerPickerPopover
+                        leafIssueId={row.issueId}
+                        companyId={companyId}
+                        userId={userId}
+                        triggerLabel="Assign ▾"
+                        onAssigned={() => onAssignSuccess()}
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      className="clarity-btn clarity-orphan-open"
+                      onClick={() => openIssue(row.identifier)}
+                    >
+                      Open ↗
+                    </button>
+                  </>
+                )}
               </span>
             </div>
           ))}

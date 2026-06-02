@@ -197,7 +197,9 @@ test('live-blocker-panel.tsx: blockerLine renders the scrubbed awaitedPartyLabel
   const src = readSrc('live-blocker-panel.tsx');
   // Isolate the blockerLine() function body so the scan only covers the
   // headline-render switch (the UNCLASSIFIED branch keeps its degradeReason).
-  const m = src.match(/function blockerLine\([\s\S]*?\n}\n/);
+  // CRLF-tolerant terminator (Plan 14-03) — the source may be saved with CRLF on
+  // Windows, so the `\n}\n` close must accept an optional `\r`.
+  const m = src.match(/function blockerLine\([\s\S]*?\r?\n}\r?\n/);
   assert.ok(m, 'blockerLine() function present');
   const body = m[0];
   // CR-01 root cause: the panel rendered the RAW t.label (which embeds UUIDs
