@@ -39,12 +39,16 @@ import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 import { PauseBanner } from '../reader/pause-banner.tsx';
-// Phase 9 (Plan 09-02) — the people-first cockpit: un-frozen needs-you banner +
-// the grouped (Needs you / Working / Idle) row strip. The flat strip, the dead
-// AgentCard grid, the org-backlog banner, the critical-path strip, and the
-// awaiting-you pill are all gone (R1 / R6).
-import { NeedsYouBanner, type NeedsYou } from './needs-you-banner.tsx';
-import { EmployeeRowStrip } from './employee-row-strip.tsx';
+// Phase 15 (Plan 15-03) — the verdict-tier IA capstone. The SR body now renders
+// the always-visible <PulseHeader> (the single status surface; the Phase-8/9
+// needs-you banner role folds in, D-07) above the <TierStrip> three-tier IA
+// (Needs-you -> In-motion -> Watch, partitioned by the engine blockerChain.tier,
+// loudest-on-top). The Phase-9 grouped people-strip (Needs you / Working / Idle,
+// agent-state group axis) is superseded; needs-you-banner.tsx + employee-row-
+// strip.tsx stay on disk (additive-only spirit — superseded, not deleted).
+import { PulseHeader, type PulseSummary } from './pulse-header.tsx';
+import { TierStrip } from './tier-strip.tsx';
+import type { NeedsYou } from './needs-you-banner.tsx';
 import type { SituationEmployeeRow } from './employee-row.tsx';
 import type { OrgBlockedBacklog } from './org-blocked-backlog-banner-types.ts';
 
@@ -56,6 +60,11 @@ type SituationData = {
   // the three-group people view.
   situation_employees?: SituationEmployeeRow[];
   needsYou?: NeedsYou;
+  // Plan 15-01/15-03 (COCK-01 / D-01) — the worker-computed Pulse summary (four
+  // vital-sign counts summed from the existing per-row verdicts). Additive
+  // optional: an absent pulse degrades the <PulseHeader> to its all-zero floor
+  // (SC4). The view only renders it — it never re-derives the counts (SC3).
+  pulse?: PulseSummary;
   // Plan 07-03 — the org-level blocked backlog; folded into the Needs-you
   // expander (R6). critical_path's narrative is folded into the same expander.
   org_blocked_backlog?: OrgBlockedBacklog | null;
@@ -227,20 +236,19 @@ function SituationRoomBody({
 
   return (
     <>
-      {/* Plan 09-02 — un-frozen banner (R5): urgent + Assign-first picker for the
-       *  unowned case, chat deep-link for the all-owned case, neutral only when
-       *  count is genuinely 0. */}
-      <NeedsYouBanner
-        needsYou={payload.needsYou ?? { count: 0, topAction: null }}
-        employees={employees}
-        companyPrefix={companyPrefix}
-        navigate={navigate}
-      />
-      {/* Plan 09-02 — the ONE three-group people view (D-03). The org-backlog +
-       *  critical-path expander (R6) lives at the end of Needs-you, rendered by
-       *  the strip. onAssignSuccess threads forceRefetch so a row re-groups
-       *  live after an assign/stand-down/resume. */}
-      <EmployeeRowStrip
+      {/* Plan 15-03 (COCK-01 / D-07) — the always-visible Pulse: one deterministic
+       *  status sentence + four vital-sign counts. It IS the single status
+       *  surface (the Phase-8/9 needs-you banner role folds in here). An absent
+       *  payload.pulse degrades to the all-zero deterministic floor — never
+       *  blanks (SC4). */}
+      <PulseHeader pulse={payload.pulse} />
+      {/* Plan 15-03 (COCK-02 / SC2 / D-04/D-05) — the verdict-tier IA: Needs-you
+       *  -> In-motion -> Watch, loudest-on-top, partitioned by the engine
+       *  blockerChain.tier (NOT the Phase-9 agent-state group). The org-backlog +
+       *  critical-path expander is folded into the WATCH tier. onAssignSuccess
+       *  threads forceRefetch so a row re-partitions live after an assign / reply
+       *  / stand-down / resume. */}
+      <TierStrip
         employees={employees}
         companyPrefix={companyPrefix}
         companyId={companyId}

@@ -470,9 +470,7 @@ export function EmployeeRow({
        *  "moving · no action needed" line. NO loud action cluster. The focus
        *  text stays legible (clarity-employee-focus), not the dimmest element. */}
       {visualTier === 'in-motion' && (
-        <p className="clarity-employee-moving clarity-tier-row-in-motion-gist">
-          moving · no action needed
-        </p>
+        <p className="clarity-employee-moving">moving · no action needed</p>
       )}
 
       {/* Watch (D-04 / D-06) — quietly stalled awareness. A chainless idle/stale

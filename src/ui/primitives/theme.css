@@ -1106,6 +1106,126 @@
   gap: 0.5rem;
 }
 
+/* ===========================================================================
+ * Plan 15-03 (COCK-02 / SC2 / D-04/D-05/D-06) — the verdict-tier IA.
+ * Needs-you (loud/gold) -> In-motion (calm/green) -> Watch (quiet/amber),
+ * loudest-on-top, partitioned by the engine blockerChain.tier. Mirrors the
+ * Phase-9 .clarity-group-* skeleton, re-tinted per tier. The mockup tokens
+ * (--gold / --green / --amber) map to the host --clarity-* family. All scoped
+ * under [data-clarity-surface='situation-room'] (SCAF-06 / COEXIST-01).
+ * =========================================================================== */
+
+[data-clarity-surface='situation-room'] .clarity-tier-section {
+  margin: 1.5rem 0 0.5rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-tier-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 0.6rem;
+}
+
+/* Instrument Serif italic tier titles (sketch-findings display-title direction). */
+[data-clarity-surface='situation-room'] .clarity-tier-title {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.55rem;
+  margin: 0;
+  color: var(--clarity-fg);
+}
+
+/* Needs-you = loud/gold; In-motion = calm/green; Watch = quiet/amber. */
+[data-clarity-surface='situation-room'] .clarity-tier-needs-you .clarity-tier-title {
+  color: var(--clarity-you, #e9c97e);
+}
+[data-clarity-surface='situation-room'] .clarity-tier-in-motion .clarity-tier-title {
+  color: var(--clarity-state-running, #8fc98f);
+}
+[data-clarity-surface='situation-room'] .clarity-tier-watch .clarity-tier-title {
+  color: var(--clarity-state-stale, #d6b15e);
+}
+
+[data-clarity-surface='situation-room'] .clarity-tier-count {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--clarity-ink-3, #8a8472);
+  border: 1px solid var(--clarity-line, rgba(255, 255, 255, 0.08));
+  border-radius: 2px;
+  padding: 0.1rem 0.45rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-tier-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--clarity-line, rgba(255, 255, 255, 0.08));
+}
+[data-clarity-surface='situation-room'] .clarity-tier-needs-you .clarity-tier-rule {
+  background: linear-gradient(90deg, color-mix(in oklch, var(--clarity-you, #e9c97e), transparent 50%), transparent);
+}
+[data-clarity-surface='situation-room'] .clarity-tier-in-motion .clarity-tier-rule {
+  background: linear-gradient(90deg, color-mix(in oklch, var(--clarity-state-running, #8fc98f), transparent 60%), transparent);
+}
+[data-clarity-surface='situation-room'] .clarity-tier-watch .clarity-tier-rule {
+  background: linear-gradient(90deg, color-mix(in oklch, var(--clarity-state-stale, #d6b15e), transparent 62%), transparent);
+}
+
+[data-clarity-surface='situation-room'] .clarity-tier-meta {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--clarity-ink-3, #8a8472);
+}
+
+[data-clarity-surface='situation-room'] .clarity-tier-empty {
+  color: var(--clarity-ink-4, #6b6657);
+  font-style: italic;
+  font-size: 0.88rem;
+  margin: 0.15rem 0 0 0.15rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-tier-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ---------- per-row calm tints (D-06) — calm scales with control ---------- */
+
+/* Needs-you rows stay full-contrast (the loud action stack). A subtle gold
+ *  left edge marks the leverage-ranked actionable rows. */
+[data-clarity-surface='situation-room'] .clarity-tier-row-needs-you {
+  border-left: 2px solid color-mix(in oklch, var(--clarity-you, #e9c97e), transparent 35%);
+}
+
+/* In-motion: calm, lower-contrast reassurance. The row chrome dims, but the
+ *  focus gist (clarity-employee-focus) is restored to legible — NOT the dimmest
+ *  element on the row (design-spec hard constraint). */
+[data-clarity-surface='situation-room'] .clarity-tier-row-in-motion {
+  border-left: 2px solid color-mix(in oklch, var(--clarity-state-running, #8fc98f), transparent 55%);
+  opacity: 0.9;
+}
+[data-clarity-surface='situation-room'] .clarity-tier-row-in-motion .clarity-employee-focus {
+  color: var(--clarity-fg);
+  opacity: 1;
+}
+[data-clarity-surface='situation-room'] .clarity-tier-row-in-motion .clarity-employee-moving {
+  color: var(--clarity-ink-3, #8a8472);
+}
+
+/* Watch: quietly stalled awareness — quieter still, but the honest affordance
+ *  (assign for stuck, Open for external/cycle) keeps full button contrast. */
+[data-clarity-surface='situation-room'] .clarity-tier-row-watch {
+  border-left: 2px solid color-mix(in oklch, var(--clarity-state-stale, #d6b15e), transparent 60%);
+  opacity: 0.85;
+}
+[data-clarity-surface='situation-room'] .clarity-tier-row-watch .clarity-employee-chain-watch {
+  color: var(--clarity-ink-2, #cdc5b6);
+}
+
 /* ---------- shared button family (R4: gold = ownership/chat; neutral chrome) ---------- */
 
 [data-clarity-surface='situation-room'] .clarity-btn {

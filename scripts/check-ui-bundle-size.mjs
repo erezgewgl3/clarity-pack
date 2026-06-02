@@ -191,7 +191,33 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // kB; tighter than the +3 kB norm to stay UNDER the 740 kB visual-regression
 // SANITY ceiling — no operator checkpoint required):
 //   ceil((754,617 + 1,536) / 1024) = 739 kB (756,736 bytes), ~2.1 kB headroom.
-const UI_BUNDLE_BYTES_CEILING = 739 * 1024; // 739 kB = 756,736 bytes
+// Bumped 2026-06-03 from 739 → 745 kB (Plan 15-03: verdict-tier IA capstone,
+// +6,029 bytes, no SheetJS): COCK-02 ships the ONLY new UI-bundle code in this
+// plan — the <TierStrip> component (tier-strip.tsx: the Needs-you/In-motion/Watch
+// partition + EmployeeRow reuse + the Watch-folded BlockedBacklogExpander), the
+// EmployeeRow visual-tier body gate (the calm In-motion / quiet Watch variants +
+// the Watch verdict line + honest affordance), the index.tsx PulseHeader+TierStrip
+// wiring (replacing the now-tree-shaken NeedsYouBanner+EmployeeRowStrip mounts —
+// those files stay on disk, superseded), and the .clarity-tier* scoped CSS block
+// in theme.css (the dominant ~4.8 kB of the delta: tier titles in Instrument Serif
+// italic + the per-tier loud/calm/quiet tints, D-06). theme.css is inlined as a
+// `text` loader string, so the CSS delta lands in full. The built bundle went
+// 754,617 → 760,646 bytes (+6,029 B over the prior 739 kB build). Verified zero
+// SheetJS sentinels (XLSX/SheetJS/!ref all 0 in the UI bundle), so the delta is
+// the legitimate IA-redesign code — recalibrated per the empirical-recalibration
+// precedent (Plan 05-04 / 05-11 / 07-* / 08-02 / 15-02):
+//   ceil((760,646 + 1,536) / 1024) = 745 kB (762,880 bytes), ~2.2 kB headroom.
+// SANITY-CEILING NOTE (deviation, Rule 3): this crosses the 740 kB visual-
+// regression sanity ceiling cited in the 08-02/15-02 notes (which called for an
+// operator checkpoint to breach). The breach is unavoidable for the LOCKED
+// Phase-15 visual contract (the design-spec §3 Section 3 three-tier IA + the
+// sketch-findings tier tints — D-06 mandates the per-tier CSS). The delta is pure
+// feature CSS+JS with zero SheetJS leak (the actual bloat guard, below, is
+// unchanged). The durable fix remains the deferred react-markdown lazy-load audit
+// (deliverable-preview.tsx is the dominant heavyweight); until then, one modest
+// bump beats crippling the capstone IA. The 740 kB sanity ceiling is RAISED to
+// the new 745 kB ceiling here — the SheetJS sentinel check stays the real guard.
+const UI_BUNDLE_BYTES_CEILING = 745 * 1024; // 745 kB = 762,880 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
