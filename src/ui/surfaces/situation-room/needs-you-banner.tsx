@@ -77,7 +77,14 @@ export function NeedsYouBanner({
       e.blockerChain &&
       e.blockerChain.actionAffordance !== 'assign',
   );
-  const stuck = unownedBlocked.length + ownedBlocked.length;
+  // WR-03 (12-REVIEW) — the banner's headline number is the SAME per-leaf deduped
+  // `count` the worker reports and every downstream decision/test uses, NOT a
+  // per-agent row tally. Phase 12-02 changed needsYou.count to "distinct deduped
+  // action items (one per leaf)"; a per-agent `unownedBlocked.length +
+  // ownedBlocked.length` could diverge (3 agents on one unowned leaf → 3 rows but
+  // count 1), so the banner would say "3 stuck" while the system acts on "1".
+  // Render `count` so the displayed number and the count model agree.
+  const actions = count;
 
   // ---- NEUTRAL (genuinely 0 need you) -------------------------------------
   if (count === 0) {
@@ -92,15 +99,28 @@ export function NeedsYouBanner({
     );
   }
 
-  // ---- URGENT + UNOWNED — [Assign first] opens the oldest-unowned picker ----
+  // ---- URGENT + UNOWNED — [Assign first] opens the highest-leverage picker ----
   if (unownedBlocked.length > 0) {
-    // Oldest unowned = the worker already sorted needs_you blocked→…; the
-    // topAction (09-01) prefers the oldest unowned row. Fall back to the first
-    // unowned row in worker order.
-    const target =
-      (needsYou.topAction &&
-        unownedBlocked.find((e) => e.agentId === needsYou.topAction?.agentId)) ||
-      unownedBlocked[0];
+    // WR-01 (12-REVIEW) — resolve the row [Assign first] scrolls to.
+    //
+    // topAction.agentId is the representative of the HIGHEST-LEVERAGE action item,
+    // and that representative can come from the `targeting` partition (an
+    // AWAITING_HUMAN row whose affordance is 'reply', not 'assign'). Such a row is
+    // NOT in unownedBlocked, so keying [Assign first] off topAction.agentId would
+    // silently fall through to the wrong row.
+    //
+    // unownedBlocked is filtered from `employees`, which the worker already returns
+    // in leverage-ranked order WITHIN the needs_you band (Plan 12-02 D-08). So
+    // unownedBlocked[0] IS the highest-leverage unowned row. We use topAction's
+    // row ONLY when it is genuinely one of the unowned rows (the common case the
+    // banner copy promises — "assign owners"); otherwise we honestly scroll to the
+    // highest-leverage unowned row rather than mis-resolving to an owned/targeting
+    // representative.
+    const topActionUnowned =
+      needsYou.topAction != null
+        ? unownedBlocked.find((e) => e.agentId === needsYou.topAction?.agentId)
+        : undefined;
+    const target = topActionUnowned ?? unownedBlocked[0];
 
     const onAssignFirst = (): void => {
       if (typeof document === 'undefined' || !target) return;
@@ -118,7 +138,7 @@ export function NeedsYouBanner({
       <header className="clarity-needs-you-banner clarity-needs-you-urgent">
         <div className="clarity-needs-you-urgent-body">
           <span className="clarity-needs-you-text">
-            {`⚠ ${stuck} stuck · ${unownedBlocked.length} unowned → assign owners to clear the board`}
+            {`⚠ ${actions} action${actions === 1 ? '' : 's'} needed · ${unownedBlocked.length} unowned → assign owners to clear the board`}
           </span>
           <button
             type="button"
@@ -159,8 +179,8 @@ export function NeedsYouBanner({
       <div className="clarity-needs-you-urgent-body">
         <span className="clarity-needs-you-text">
           {ownerName
-            ? `⚠ ${stuck} stuck, all owned → chase ${ownerName}`
-            : `⚠ ${stuck} stuck, all owned`}
+            ? `⚠ ${actions} action${actions === 1 ? '' : 's'} needed, all owned → chase ${ownerName}`
+            : `⚠ ${actions} action${actions === 1 ? '' : 's'} needed, all owned`}
         </span>
         {deepLink ? (
           <button

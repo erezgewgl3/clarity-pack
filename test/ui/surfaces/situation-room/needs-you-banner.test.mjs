@@ -120,6 +120,47 @@ test('B1 — assigneeAgentId sourced from ownerRow.blockerChain.ownerAgentId (AG
 });
 
 // ---------------------------------------------------------------------------
+// WR-01 (12-REVIEW) — [Assign first] target resolution must not silently
+// fall through to the wrong row when topAction's representative comes from the
+// targeting partition (an AWAITING_HUMAN 'reply' row, not in unownedBlocked).
+// ---------------------------------------------------------------------------
+
+test('WR-01 — [Assign first] uses topAction.agentId ONLY when it resolves to an unowned row', () => {
+  // The lookup must be scoped to unownedBlocked.find(...) so a topAction whose
+  // representative is an owned/targeting row does NOT resolve as the target.
+  assert.match(
+    BANNER_CODE,
+    /unownedBlocked\.find\(\s*\(e\)\s*=>\s*e\.agentId\s*===\s*needsYou\.topAction\?\.agentId\s*\)/,
+    'topAction match must be scoped to unownedBlocked',
+  );
+});
+
+test('WR-01 — [Assign first] falls back to the highest-leverage unowned row (unownedBlocked[0]), not unownedBlocked across the whole set', () => {
+  // unownedBlocked is filtered from the worker-leverage-ordered `employees`, so
+  // unownedBlocked[0] is the highest-leverage unowned row — the honest fallback
+  // when topAction's representative is not an unowned row.
+  assert.match(
+    BANNER_CODE,
+    /\?\?\s*unownedBlocked\[0\]/,
+    'the assign-first target must fall back to unownedBlocked[0] via a nullish coalesce',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// WR-03 (12-REVIEW) — banner headline number is the per-leaf deduped `count`
+// (the same number every downstream decision uses), not a per-agent row tally.
+// ---------------------------------------------------------------------------
+
+test('WR-03 — banner headline renders the deduped count, not a per-agent stuck tally', () => {
+  // The urgent copy must read the deduped action count (derived from needsYou.count)
+  // rather than a `unownedBlocked.length + ownedBlocked.length` per-agent sum.
+  assert.match(BANNER_CODE, /const\s+actions\s*=\s*count\s*;/, 'banner derives `actions` from the deduped count');
+  assert.match(BANNER, /action\$\{actions === 1 \? '' : 's'\} needed/, 'urgent copy renders the deduped action count');
+  // The old per-agent `stuck` headline tally must be gone from the rendered copy.
+  assert.doesNotMatch(BANNER, /\$\{stuck\} stuck/, 'no per-agent `${stuck} stuck` headline copy');
+});
+
+// ---------------------------------------------------------------------------
 // NO_UUID_LEAK + security
 // ---------------------------------------------------------------------------
 
