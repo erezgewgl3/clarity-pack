@@ -108,6 +108,14 @@ export type SituationEmployeeRow = {
     targetAgentUuid: string | null;
     /** Plan 11-04 — leaf issue UUID for the open/assign mutation; NEVER rendered. */
     targetIssueUuid: string | null;
+    // Plan 14-04 Task 1 (BLOCKER 5 / BLOCKER 2+4) — byte-parallel mirror of the
+    // worker rollup's two new fields. isReplyReachable (14-02) + <ReplyInPlace>
+    // (14-03) read THESE directly, never re-deriving from data.terminal.kind.
+    /** Plan 14-04 — the leaf Terminal kind string the reachable predicate reads. */
+    terminalKind: BlockerChainResult['terminal']['kind'];
+    /** Plan 14-04 — the Shape-B durable-flip signal (true iff the leaf was
+     *  status='blocked' at build time); passed to <ReplyInPlace>, NEVER rendered. */
+    needsDurabilityFlip: boolean;
     /** Plan 11-04 (D-09) — set only on an honest UNCLASSIFIED degrade. */
     degradeReason?: string;
   } | null;

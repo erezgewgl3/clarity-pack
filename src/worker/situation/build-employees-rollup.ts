@@ -134,6 +134,20 @@ export type SituationEmployeeRow = {
     targetAgentUuid: string | null;
     /** Plan 11-03 — leaf issue UUID for the open/assign mutation; NEVER rendered. */
     targetIssueUuid: string | null;
+    // Plan 14-04 Task 1 (BLOCKER 5 / BLOCKER 2+4) — the two signals waves 2-3
+    // depend on, threaded onto the row data model. Both are read DIRECTLY by
+    // isReplyReachable (14-02) + <ReplyInPlace> (14-03); neither is re-derived
+    // from data.terminal.kind in the view layer.
+    /** Plan 14-04 — the leaf Terminal kind STRING (= picked.terminal.kind;
+     *  'UNCLASSIFIED' on the degrade row). isReplyReachable(terminalKind) reads
+     *  THIS — never the full Terminal union, never a re-derived kind. */
+    terminalKind: Terminal['kind'];
+    /** Plan 14-04 (T-14-19) — the Shape-B durable-flip signal: true iff the LEAF
+     *  issue's status === 'blocked' at build time (resolved leaf.status ??
+     *  focusIssue.status), derived from the REAL leaf status — NOT a terminal.kind
+     *  proxy. Dispatch INPUT to <ReplyInPlace> (drives comment-only vs comment+flip);
+     *  NEVER rendered. */
+    needsDurabilityFlip: boolean;
     /** Plan 11-03 (D-09) — set only on an honest UNCLASSIFIED degrade. */
     degradeReason?: string;
   } | null;
@@ -394,6 +408,13 @@ async function buildOneEmployeeRow(
         let leafIssueUuid: string | null =
           (typeof leafNodeId === 'string' && leafNodeId.length > 0 ? leafNodeId : null) ??
           (typeof focusIssue.id === 'string' && focusIssue.id.length > 0 ? focusIssue.id : null);
+        // Plan 14-04 Task 1 (T-14-19) — capture the LEAF issue status for the
+        // Shape-B needsDurabilityFlip. Single-hop: the leaf IS the focus →
+        // focusIssue.status. Multi-hop: the EXISTING leaf fetch below resolves
+        // leaf.status (NO new host fetch — same ctx.issues.get already made for
+        // leafIssueId/leafIssueUuid). Derived from the REAL status, never terminal.kind.
+        let leafStatus: string | null =
+          typeof focusIssue.status === 'string' ? focusIssue.status : null;
         if (leafNodeId && leafNodeId !== focusIssue.id) {
           try {
             const leaf = (await ctx.issues.get(leafNodeId, companyId)) as IssueLike | null;
@@ -403,6 +424,11 @@ async function buildOneEmployeeRow(
             // Prefer the resolved leaf.id (a UUID) when present — same fetch.
             if (leaf && typeof leaf.id === 'string' && leaf.id.length > 0) {
               leafIssueUuid = leaf.id;
+            }
+            // Plan 14-04 — the resolved leaf status from the SAME fetch wins over
+            // focusIssue.status (the leaf may differ from the focus on a multi-hop chain).
+            if (leaf && typeof leaf.status === 'string' && leaf.status.length > 0) {
+              leafStatus = leaf.status;
             }
           } catch {
             // Fall back to focusIssue.identifier (already set above). NEVER emit
@@ -415,6 +441,11 @@ async function buildOneEmployeeRow(
         //      the targetIssueUuid is the leaf UUID resolved above. The
         //      awaitedPartyLabel is the SCRUBBED humanAction (the only rendered
         //      string) — NO raw UUID enters a rendered field (Pitfall 5).
+        // Plan 14-04 Task 1 (T-14-19) — the Shape-B durable-flip signal off the
+        // REAL leaf status (NOT terminal.kind): true iff the leaf issue is
+        // currently status='blocked'. Computed ONCE; the handler (14-01) fires the
+        // durability flip off THIS boolean.
+        const needsDurabilityFlip = leafStatus === 'blocked';
         blockerChain = {
           rootIssueId,
           leafIssueId,
@@ -430,6 +461,10 @@ async function buildOneEmployeeRow(
           awaitedPartyLabel: humanAction,
           targetAgentUuid: picked.targetAgentUuid ?? null,
           targetIssueUuid: leafIssueUuid,
+          // Plan 14-04 — the leaf Terminal kind (read by isReplyReachable) + the
+          // real-leaf-status durable-flip signal (read by <ReplyInPlace>).
+          terminalKind: terminal.kind,
+          needsDurabilityFlip,
           ...(picked.degradeReason != null ? { degradeReason: picked.degradeReason } : {}),
         };
 
@@ -477,6 +512,11 @@ async function buildOneEmployeeRow(
         awaitedPartyLabel: humanAction,
         targetAgentUuid: null,
         targetIssueUuid: focusUuid,
+        // Plan 14-04 Task 1 — the degrade row is honestly UNCLASSIFIED; the flip
+        // reads the REAL focusIssue.status (blocked by construction here since
+        // state==='blocked' gated the chain build) — kept honest, not hardcoded.
+        terminalKind: 'UNCLASSIFIED' as const,
+        needsDurabilityFlip: focusIssue.status === 'blocked',
         degradeReason,
       };
     }

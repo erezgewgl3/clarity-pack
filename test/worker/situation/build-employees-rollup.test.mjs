@@ -613,3 +613,107 @@ test('rollup — 11-03: split identity — awaitedPartyLabel has NO raw UUID; ta
   assert.equal(row.blockerChain.targetAgentUuid, blockerAgentUuid, 'targetAgentUuid carries the stuck-agent UUID');
   assert.equal(row.blockerChain.actionAffordance, 'assign', "AWAITING_AGENT_STUCK affordance is 'assign' (Plan 12-01 D-05)");
 });
+
+// ---------------------------------------------------------------------------
+// Test 23 (Plan 14-04 Task 1 — BLOCKER 2+4 / T-14-19) — needsDurabilityFlip is
+// derived from the LEAF issue status === 'blocked', NOT from terminal.kind. A
+// single-hop blocked leaf (the focus issue itself, status='blocked') → true.
+// ---------------------------------------------------------------------------
+test('rollup — 14-04: single-hop blocked leaf emits needsDurabilityFlip true + terminalKind matching the terminal', async () => {
+  const a = agent({ id: 'ag-flip', lastHeartbeatMs: NOW - 30 * MIN });
+  // A genuinely-unowned blocked single-hop leaf → UNOWNED terminal. The focus
+  // issue is status='blocked' (single-hop: the leaf IS the focus), so
+  // needsDurabilityFlip must be true off the REAL leaf status.
+  const blocked = issue({ id: 'i-flip', identifier: 'COU-F1', status: 'blocked', assigneeAgentId: 'ag-flip', lastActivityMs: NOW - 30 * MIN });
+  const ctx = makeCtx({
+    agents: [a],
+    issuesByAgent: { 'ag-flip': [blocked] },
+    relations: { 'i-flip': { blockedBy: [{ id: 'i-flip-x', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] } },
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
+  const row = out.employees[0];
+  assert.ok(row.blockerChain, 'chain present');
+  assert.equal(row.blockerChain.needsDurabilityFlip, true, 'blocked leaf → needsDurabilityFlip true');
+  // terminalKind is the leaf Terminal kind string (here UNOWNED), carried for isReplyReachable.
+  assert.equal(typeof row.blockerChain.terminalKind, 'string', 'terminalKind is a kind string');
+  assert.equal(row.blockerChain.terminalKind, 'UNOWNED', 'terminalKind matches the flattened terminal');
+});
+
+// ---------------------------------------------------------------------------
+// Test 24 (Plan 14-04 Task 1 — T-14-19) — an AWAITING_HUMAN awaiting-answer leaf
+// whose RESOLVED leaf status is NOT 'blocked' → needsDurabilityFlip false. This
+// is the BLOCKER-2+4 correctness assertion: the flip is OFF leaf status, NOT off
+// terminal.kind (an AWAITING_HUMAN row would be a flip-true bug if proxied).
+// ---------------------------------------------------------------------------
+test('rollup — 14-04: multi-hop leaf whose resolved status is not "blocked" → needsDurabilityFlip false (off leaf status, not terminal.kind)', async () => {
+  const viewer = 'cccccccc-9999-0000-1111-222222222222';
+  const focusUuid = 'ffffffff-0000-1111-2222-333333333333';
+  const leafUuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const a = agent({ id: 'ag-noflip', lastHeartbeatMs: NOW - 30 * MIN });
+  // The FOCUS issue is status='blocked' (so a row is built), but the MULTI-HOP
+  // leaf (fetched at the existing issues.get) resolves to status='awaiting' — so
+  // the flip must read the resolved leaf status (false), NOT focusIssue.status.
+  const blocked = issue({ id: focusUuid, identifier: 'COU-NF', status: 'blocked', assigneeAgentId: 'ag-noflip', lastActivityMs: NOW - 30 * MIN });
+  const ctx = makeCtx({
+    agents: [a],
+    issuesByAgent: { 'ag-noflip': [blocked] },
+    relations: {
+      [focusUuid]: { blockedBy: [{ id: leafUuid, assigneeUserId: viewer, status: 'awaiting', etaIso: null }], blocks: [] },
+      [leafUuid]: { blockedBy: [], blocks: [] },
+    },
+    // The resolved leaf carries a NON-blocked status → flip false.
+    issuesById: { [leafUuid]: { id: leafUuid, identifier: 'COU-NF2', status: 'awaiting' } },
+    agentsByUuid: { [viewer]: { name: 'You' } },
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', viewer);
+  const row = out.employees[0];
+  assert.ok(row.blockerChain, 'chain present');
+  assert.equal(row.blockerChain.terminalKind, 'AWAITING_HUMAN', 'terminal is AWAITING_HUMAN');
+  assert.equal(row.blockerChain.needsDurabilityFlip, false, 'resolved leaf status not blocked → flip false (NOT proxied off terminal.kind)');
+});
+
+// ---------------------------------------------------------------------------
+// Test 25 (Plan 14-04 Task 1) — the multi-hop path reads the RESOLVED leaf
+// status from the SAME existing issues.get (a blocked resolved leaf → true),
+// proving no new fetch and that the resolved status (not focusIssue.status) wins.
+// ---------------------------------------------------------------------------
+test('rollup — 14-04: multi-hop resolved-leaf status "blocked" → needsDurabilityFlip true (reuses the existing leaf fetch)', async () => {
+  const focusUuid = 'ffffffff-1111-2222-3333-444444444444';
+  const leafUuid = 'aaaaaaaa-1111-cccc-dddd-eeeeeeeeeeee';
+  const a = agent({ id: 'ag-mhflip', lastHeartbeatMs: NOW - 30 * MIN });
+  const blocked = issue({ id: focusUuid, identifier: 'COU-MH', status: 'blocked', assigneeAgentId: 'ag-mhflip', lastActivityMs: NOW - 30 * MIN });
+  const ctx = makeCtx({
+    agents: [a],
+    issuesByAgent: { 'ag-mhflip': [blocked] },
+    relations: {
+      [focusUuid]: { blockedBy: [{ id: leafUuid, assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+      [leafUuid]: { blockedBy: [], blocks: [] },
+    },
+    issuesById: { [leafUuid]: { id: leafUuid, identifier: 'COU-MH2', status: 'blocked' } },
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
+  const row = out.employees[0];
+  assert.ok(row.blockerChain, 'chain present');
+  assert.equal(row.blockerChain.needsDurabilityFlip, true, 'resolved leaf status blocked → flip true');
+});
+
+// ---------------------------------------------------------------------------
+// Test 26 (Plan 14-04 Task 1) — the UNCLASSIFIED degrade row carries
+// terminalKind === 'UNCLASSIFIED' and an honest needsDurabilityFlip off the
+// real focusIssue.status (blocked by construction here → true).
+// ---------------------------------------------------------------------------
+test('rollup — 14-04: UNCLASSIFIED degrade row carries terminalKind "UNCLASSIFIED" + needsDurabilityFlip off focusIssue.status', async () => {
+  const a = agent({ id: 'ag-uflip', lastHeartbeatMs: NOW - 30 * MIN });
+  const blocked = issue({ id: 'i-uflip', identifier: 'COU-U1', status: 'blocked', assigneeAgentId: 'ag-uflip', lastActivityMs: NOW - 30 * MIN });
+  const ctx = makeCtx({
+    agents: [a],
+    issuesByAgent: { 'ag-uflip': [blocked] },
+    relThrowsFor: new Set(['i-uflip']), // root relations.get throws → UNCLASSIFIED degrade row
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
+  const row = out.employees.find((r) => r.agentId === 'ag-uflip');
+  assert.ok(row.blockerChain, 'UNCLASSIFIED degrade emits a chain (not null)');
+  assert.equal(row.blockerChain.terminalKind, 'UNCLASSIFIED', "degrade row terminalKind is 'UNCLASSIFIED'");
+  // focusIssue.status === 'blocked' by construction (state==='blocked') → honest true.
+  assert.equal(row.blockerChain.needsDurabilityFlip, true, 'degrade flip honestly off focusIssue.status (blocked)');
+});
