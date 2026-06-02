@@ -66,11 +66,14 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
   3. A row whose chain cannot be built or classified shows an honest deterministic fallback line, never a false "assign owner."
   4. `blocker-chain.ts` stays pure and deterministic — its determinism test and AI-token grep guard pass (no AI/LLM call introduced into the engine file).
   5. The engine hands every consuming surface (Situation Room, org-blocked backlog, Reader blocker panel) the same structured per-row verdict.
-**Plans**: 4 plans
+**Plans**: 7 plans (4 shipped + 3 gap-closure for CR-01 / WR-01..06 / IN-01..04)
 - [x] 11-01-PLAN.md — Pure engine contract: 8-variant Terminal union + enriched verdict + D-07 cascade + classifyVerdict() + scrub; __unowned__ removed (wave 1)
 - [x] 11-02-PLAN.md — Worker agent-ownership/liveness capture in both BFS builders + graceful()→UNCLASSIFIED degrade (wave 2)
 - [x] 11-03-PLAN.md — Rollup re-triage off the verdict + split-identity + UNCLASSIFIED-on-throw + humanize-snapshot compile-gate (wave 3)
 - [x] 11-04-PLAN.md — UI surfaces render off the verdict; assign gated to UNOWNED; all 8 kinds render; full-repo green gate (wave 4)
+- [ ] 11-05-PLAN.md — Engine/shared hardening: WR-03 cadence>0 guard, WR-04 narrow return, WR-05 EXTERNAL label, IN-02 renumber, IN-04 makeDegradedResult, blocker-free 'none' (wave 1)
+- [ ] 11-06-PLAN.md — [BLOCKER] CR-01 scrub flatten-blocker-chain success label; WR-01 noBlockers→'none'; WR-03 call sites; WR-06 single-source viewer; IN-03 shared projection (wave 2)
+- [ ] 11-07-PLAN.md — Reader panel renders scrubbed awaitedPartyLabel; WR-02 no dead button; IN-01 comment; NO_UUID_LEAK render-scan UUID-pattern guard (wave 3)
 
 ### Phase 12: Needs-You Triage
 **Goal**: Use the new terminal taxonomy so "Needs you" tells the truth — only human-actionable items, ranked by what they unblock, with Assign-owner shown only when assignment is genuinely the answer.
