@@ -150,7 +150,12 @@ function LiveBlockerPanelWithCompany({
   const wakeAction = usePluginAction('issues.requestWakeup');
   const [busy, setBusy] = React.useState(false);
 
-  const { data } = usePluginData<BlockerChainResult>('flatten-blocker-chain', {
+  // WR-03 (14-REVIEW) — destructure `refresh` (PluginDataResult exposes a manual
+  // refresh per the SDK) so a confirmed reply can force an immediate re-poll of
+  // the blocker chain instead of waiting for the next background interval. Wired
+  // into <ReplyInPlace onActed> below, mirroring the Situation Room's
+  // onAssignSuccess force-refetch.
+  const { data, refresh } = usePluginData<BlockerChainResult>('flatten-blocker-chain', {
     startId: issueId,
     viewerUserId,
     companyId,
@@ -295,7 +300,11 @@ function LiveBlockerPanelWithCompany({
        *  honest degrade), leafIssueUuid = the leaf mutation id (dispatch-only).
        *  needsDurabilityFlip = false: the Reader's BlockerChainResult has no leaf
        *  status field, so default comment-only (spike-safe) — NEVER proxied from
-       *  terminal.kind. onActed is a no-op; usePluginData re-polls the panel. */}
+       *  terminal.kind. onActed = refresh() (WR-03, 14-REVIEW): force an immediate
+       *  re-poll of flatten-blocker-chain so the "⚑ ON YOU" row leaves the
+       *  needs-you state right after a confirmed reply, instead of looking stale
+       *  until the next background poll. Mirrors the Situation Room's
+       *  onAssignSuccess force-refetch. */}
       {isReplyBranch ? (
         <ReplyInPlace
           leafIssueId={data.pathIds.length <= 1 ? issueId : null}
@@ -309,7 +318,9 @@ function LiveBlockerPanelWithCompany({
           userId={viewerUserId}
           companyPrefix={companyPrefix}
           navigate={nav.navigate}
-          onActed={() => {}}
+          onActed={() => {
+            refresh();
+          }}
         />
       ) : null}
       {showButton ? (

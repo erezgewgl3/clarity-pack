@@ -108,6 +108,21 @@ test('blockerLine still renders for non-reply affordances (no regression)', () =
 });
 
 // ---------------------------------------------------------------------------
+// WR-03 (14-REVIEW) — onActed force-refreshes the panel after a confirmed reply
+// (no longer a no-op); refresh comes from usePluginData's PluginDataResult.
+// ---------------------------------------------------------------------------
+
+test('WR-03 — refresh is destructured from usePluginData', () => {
+  assert.match(CODE, /const\s*\{\s*data\s*,\s*refresh\s*\}\s*=\s*usePluginData/);
+});
+
+test('WR-03 — onActed calls refresh() (not a no-op)', () => {
+  // onActed must invoke refresh; the empty-arrow no-op must be gone.
+  assert.match(CODE, /onActed=\{\(\)\s*=>\s*\{\s*refresh\(\)\s*;?\s*\}\}/);
+  assert.doesNotMatch(CODE, /onActed=\{\(\)\s*=>\s*\{\s*\}\}/);
+});
+
+// ---------------------------------------------------------------------------
 // needsDurabilityFlip — false on this surface (no leaf-status field); NOT a
 // terminal.kind proxy.
 // ---------------------------------------------------------------------------
