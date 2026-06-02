@@ -43,6 +43,26 @@ import {
 
 export type AgeBucket = 'fresh' | 'aging' | 'stale';
 
+/**
+ * Plan 11-06 Task 3 (WR-06 / SC5) — the SINGLE viewer-targeting predicate.
+ *
+ * "Does this blocker chain await the VIEWER specifically?" — true only when the
+ * terminal is AWAITING_HUMAN and its userId (a USER uuid) equals the viewer. A
+ * genuinely-UNOWNED chain has NO userId (it is org-wide, not viewer-specific) and
+ * every other kind is non-human, so both return false. Declaring this ONCE and
+ * reading it everywhere kills the WR-06 desync risk: the __targetsViewer flag and
+ * the needs-you count partition can no longer compute viewer-targeting two
+ * different ways that a future Terminal-kind change could silently disagree on.
+ *
+ * Degrade-safe: a null/undefined terminal → false. Pure: no clock, no I/O.
+ */
+export function rowTargetsViewer(
+  terminal: Terminal | null | undefined,
+  viewerUserId: string,
+): boolean {
+  return !!terminal && terminal.kind === 'AWAITING_HUMAN' && terminal.userId === viewerUserId;
+}
+
 export type SituationEmployeeRow = {
   agentId: string;
   /** Resolved displayName, NEVER UUID. */
@@ -394,11 +414,13 @@ async function buildOneEmployeeRow(
           ...(picked.degradeReason != null ? { degradeReason: picked.degradeReason } : {}),
         };
 
-        // needsYou viewer-match — keys on terminal.userId (USER uuid), the
-        // LEGITIMATE use of terminal.userId (mirrors org-blocked-backlog.ts:418-461).
-        if (terminal.kind === 'AWAITING_HUMAN' && terminal.userId === viewerUserId) {
-          targetsViewer = true;
-        }
+        // WR-06 (Plan 11-06) — SINGLE-SOURCE viewer-targeting. The flag and the
+        // needs-you count partition can no longer derive "does this row target the
+        // viewer?" two independent ways: the ONE pure predicate rowTargetsViewer
+        // owns the AWAITING_HUMAN-userId-equals-viewer check (the legitimate use of
+        // terminal.userId, mirrors org-blocked-backlog.ts:418-461). A future
+        // Terminal-kind change updates exactly one place.
+        targetsViewer = rowTargetsViewer(terminal, viewerUserId);
       }
     } catch (e) {
       // i.9. Plan 11-03 (D-09/TAX-03) — a thrown chain build emits an honest
