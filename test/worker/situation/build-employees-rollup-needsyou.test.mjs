@@ -207,3 +207,188 @@ test('needsYou (R5): count is a Set of agentIds (a row never double-counts)', as
   const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer-not-owner');
   assert.equal(out.needsYou.count, 2, 'exactly two distinct unowned agentIds');
 });
+
+// ===========================================================================
+// Plan 12-02 (NY-01/NY-02) — D-11 exclusion + leverage rank + per-leaf dedup +
+// D-12 highest-leverage topAction.
+// ===========================================================================
+
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+function issueWith({ id, identifier, status = 'blocked', assigneeAgentId = null, lastActivityMs = null }) {
+  return { id, identifier, title: `Title ${identifier}`, status, assigneeAgentId, lastActivityAt: lastActivityMs != null ? iso(lastActivityMs) : null };
+}
+
+// ---------------------------------------------------------------------------
+// Test 6 (D-11) — agent-working + self-resolving rows are EXCLUDED from Needs-you
+// ---------------------------------------------------------------------------
+test('needsYou (12-02 D-11): AWAITING_AGENT_WORKING + SELF_RESOLVING rows are EXCLUDED from Needs-you', async () => {
+  const working = agent({ id: 'ag-working', lastHeartbeatMs: NOW - 30 * MIN });
+  const selfres = agent({ id: 'ag-selfres', lastHeartbeatMs: NOW - 30 * MIN });
+  const blockedWorking = issueWith({ id: 'i-working', identifier: 'COU-W1', assigneeAgentId: 'ag-working', lastActivityMs: NOW - 2 * HOUR });
+  const blockedSelf = issueWith({ id: 'i-selfres', identifier: 'COU-SR1', assigneeAgentId: 'ag-selfres', lastActivityMs: NOW - 2 * HOUR });
+  const blockerAgentUuid = 'aaaaaaaa-1111-2222-3333-444444444444';
+  const ctx = makeCtx({
+    agents: [working, selfres],
+    issuesByAgent: { 'ag-working': [blockedWorking], 'ag-selfres': [blockedSelf] },
+    relations: {
+      // A live (heartbeat fresh) agent-owned leaf → AWAITING_AGENT_WORKING (needsYou false).
+      'i-working': { blockedBy: [{ id: 'wkr-x', assigneeUserId: null, assigneeAgentId: blockerAgentUuid, status: 'blocked', etaIso: null, lastHeartbeatAt: iso(NOW - 1 * MIN) }], blocks: [] },
+      // An eta-bearing, owner-less leaf → SELF_RESOLVING (needsYou false).
+      'i-selfres': { blockedBy: [{ id: 'sr-x', assigneeUserId: null, status: 'blocked', etaIso: iso(NOW + 4 * HOUR) }], blocks: [] },
+    },
+    agentsByUuid: { [blockerAgentUuid]: { name: 'Worker Agent' } },
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer-not-owner');
+  const wRow = out.employees.find((r) => r.agentId === 'ag-working');
+  const sRow = out.employees.find((r) => r.agentId === 'ag-selfres');
+  // Both verdicts are non-needs-you.
+  assert.equal(wRow.blockerChain.needsYou, false, 'AWAITING_AGENT_WORKING is not needs-you');
+  assert.equal(sRow.blockerChain.needsYou, false, 'SELF_RESOLVING is not needs-you');
+  // The hard invariant: neither inflates the Needs-you count.
+  assert.equal(out.needsYou.count, 0, 'agent-working + self-resolving never enter Needs-you (D-11)');
+  assert.equal(out.needsYou.topAction, null, 'no needs-you item → no topAction');
+});
+
+// ---------------------------------------------------------------------------
+// Test 7 (D-11 / 12-01) — AWAITING_AGENT_STUCK (affordance now 'assign') is STILL
+// excluded from Needs-you because needsYou is false (tier 'watch').
+// ---------------------------------------------------------------------------
+test('needsYou (12-02 D-11): AWAITING_AGENT_STUCK is EXCLUDED from Needs-you even though its affordance is now "assign"', async () => {
+  const stuck = agent({ id: 'ag-stuck', lastHeartbeatMs: NOW - 30 * MIN });
+  const blocked = issueWith({ id: 'i-stuck', identifier: 'COU-ST1', assigneeAgentId: 'ag-stuck', lastActivityMs: NOW - 2 * HOUR });
+  const blockerAgentUuid = 'bbbbbbbb-5555-6666-7777-888888888888';
+  const ctx = makeCtx({
+    agents: [stuck],
+    issuesByAgent: { 'ag-stuck': [blocked] },
+    relations: {
+      // Agent-owned leaf with NO heartbeat → conservative-stuck → AWAITING_AGENT_STUCK.
+      'i-stuck': { blockedBy: [{ id: 'stk-x', assigneeUserId: null, assigneeAgentId: blockerAgentUuid, status: 'blocked', etaIso: null, lastHeartbeatAt: null }], blocks: [] },
+    },
+    agentsByUuid: { [blockerAgentUuid]: { name: 'Stuck Agent' } },
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer-not-owner');
+  const row = out.employees.find((r) => r.agentId === 'ag-stuck');
+  assert.equal(row.blockerChain.actionAffordance, 'assign', '12-01: stuck affordance is now assign');
+  assert.equal(row.blockerChain.needsYou, false, 'but the verdict is NOT needs-you (tier watch)');
+  assert.equal(out.needsYou.count, 0, 'stuck is excluded from the loud Needs-you list (D-04/D-11)');
+  assert.equal(out.needsYou.topAction, null);
+});
+
+// ---------------------------------------------------------------------------
+// Test 8 (D-01/D-02/D-12) — leverage ranking: highest-leverage leaf wins topAction;
+// order is time-free.
+// ---------------------------------------------------------------------------
+test('needsYou (12-02 D-12): topAction = the HIGHEST-LEVERAGE item (the leaf that frees the most), not the oldest', async () => {
+  // Two unowned agents whose chains both terminate at the SAME leaf 'shared-leaf'
+  // (leverage 2) and one unowned agent at a lone leaf 'lone-leaf' (leverage 1).
+  // The shared leaf frees more → it is the topAction even though one of its rows
+  // is the NEWEST (so an oldest-based pick would have chosen the lone older row).
+  const agents = [
+    agent({ id: 'ag-share-old', lastHeartbeatMs: NOW - 30 * MIN }),
+    agent({ id: 'ag-share-new', lastHeartbeatMs: NOW - 30 * MIN }),
+    agent({ id: 'ag-lone', lastHeartbeatMs: NOW - 30 * MIN }),
+  ];
+  const issuesByAgent = {
+    'ag-share-old': [issueWith({ id: 'i-so', identifier: 'COU-SO', assigneeAgentId: 'ag-share-old', lastActivityMs: NOW - 1 * HOUR })],
+    'ag-share-new': [issueWith({ id: 'i-sn', identifier: 'COU-SN', assigneeAgentId: 'ag-share-new', lastActivityMs: NOW - 1 * HOUR })],
+    // The lone row is the OLDEST by activity — an oldest pick would choose it.
+    'ag-lone': [issueWith({ id: 'i-lone', identifier: 'COU-LONE', assigneeAgentId: 'ag-lone', lastActivityMs: NOW - 50 * HOUR })],
+  };
+  const relations = {
+    // Both share-* focus issues are blocked by the SAME unowned leaf node.
+    'i-so': { blockedBy: [{ id: 'shared-leaf', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+    'i-sn': { blockedBy: [{ id: 'shared-leaf', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+    'i-lone': { blockedBy: [{ id: 'lone-leaf', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+    // The shared leaf is itself a genuinely-unowned terminal.
+    'shared-leaf': { blockedBy: [], blocks: [] },
+    'lone-leaf': { blockedBy: [], blocks: [] },
+  };
+  const ctx = makeCtx({ agents, issuesByAgent, relations });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer-not-owner');
+  // Per-leaf dedup: 'shared-leaf' (frees 2) + 'lone-leaf' (frees 1) → 2 action items.
+  assert.equal(out.needsYou.count, 2, 'per-leaf dedup: two distinct leaves → count 2 (D-03)');
+  // D-12 — topAction is the highest-leverage item (the shared leaf), NOT the oldest lone row.
+  assert.ok(out.needsYou.topAction, 'topAction present');
+  assert.ok(
+    ['ag-share-old', 'ag-share-new'].includes(out.needsYou.topAction.agentId),
+    `topAction must come from the highest-leverage shared leaf, got ${out.needsYou.topAction.agentId}`,
+  );
+  assert.notEqual(out.needsYou.topAction.agentId, 'ag-lone', 'NOT the oldest lone row (D-12: highest-leverage wins)');
+});
+
+// ---------------------------------------------------------------------------
+// Test 9 (D-02 time-invariance) — changing a row's activity timestamp does NOT
+// change the leverage order / topAction pick.
+// ---------------------------------------------------------------------------
+test('needsYou (12-02 D-02): topAction is time-free — flipping the lone row to the NEWEST does not change the highest-leverage pick', async () => {
+  // Identical to Test 8 but the lone row is now the NEWEST. The leverage order is
+  // independent of activity time, so topAction STILL comes from the shared leaf.
+  const agents = [
+    agent({ id: 'ag-share-old', lastHeartbeatMs: NOW - 30 * MIN }),
+    agent({ id: 'ag-share-new', lastHeartbeatMs: NOW - 30 * MIN }),
+    agent({ id: 'ag-lone', lastHeartbeatMs: NOW - 30 * MIN }),
+  ];
+  const issuesByAgent = {
+    'ag-share-old': [issueWith({ id: 'i-so', identifier: 'COU-SO', assigneeAgentId: 'ag-share-old', lastActivityMs: NOW - 40 * HOUR })],
+    'ag-share-new': [issueWith({ id: 'i-sn', identifier: 'COU-SN', assigneeAgentId: 'ag-share-new', lastActivityMs: NOW - 40 * HOUR })],
+    // Lone row is now the NEWEST.
+    'ag-lone': [issueWith({ id: 'i-lone', identifier: 'COU-LONE', assigneeAgentId: 'ag-lone', lastActivityMs: NOW - 1 * MIN })],
+  };
+  const relations = {
+    'i-so': { blockedBy: [{ id: 'shared-leaf', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+    'i-sn': { blockedBy: [{ id: 'shared-leaf', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+    'i-lone': { blockedBy: [{ id: 'lone-leaf', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+    'shared-leaf': { blockedBy: [], blocks: [] },
+    'lone-leaf': { blockedBy: [], blocks: [] },
+  };
+  const ctx = makeCtx({ agents, issuesByAgent, relations });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer-not-owner');
+  assert.equal(out.needsYou.count, 2);
+  assert.ok(
+    ['ag-share-old', 'ag-share-new'].includes(out.needsYou.topAction.agentId),
+    `topAction still highest-leverage regardless of activity time, got ${out.needsYou.topAction.agentId}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Test 10 (D-03) — per-leaf dedup count: two needs-you rows at the same leaf
+// collapse to ONE action item.
+// ---------------------------------------------------------------------------
+test('needsYou (12-02 D-03): two needs-you rows terminating at the same leaf collapse to ONE action item', async () => {
+  const agents = [
+    agent({ id: 'ag-1', lastHeartbeatMs: NOW - 30 * MIN }),
+    agent({ id: 'ag-2', lastHeartbeatMs: NOW - 30 * MIN }),
+  ];
+  const issuesByAgent = {
+    'ag-1': [issueWith({ id: 'i-1', identifier: 'COU-1', assigneeAgentId: 'ag-1', lastActivityMs: NOW - 2 * HOUR })],
+    'ag-2': [issueWith({ id: 'i-2', identifier: 'COU-2', assigneeAgentId: 'ag-2', lastActivityMs: NOW - 3 * HOUR })],
+  };
+  const relations = {
+    'i-1': { blockedBy: [{ id: 'one-leaf', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+    'i-2': { blockedBy: [{ id: 'one-leaf', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] },
+    'one-leaf': { blockedBy: [], blocks: [] },
+  };
+  const ctx = makeCtx({ agents, issuesByAgent, relations });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer-not-owner');
+  assert.equal(out.needsYou.count, 1, 'two rows, one shared leaf → ONE deduped action item (D-03)');
+  assert.ok(out.needsYou.topAction, 'a single deduped item still yields a topAction');
+});
+
+// ---------------------------------------------------------------------------
+// Test 11 (NO_UUID_LEAK) — topAction.humanAction carries no raw UUID after the
+// leverage repoint.
+// ---------------------------------------------------------------------------
+test('needsYou (12-02 NO_UUID_LEAK): topAction.humanAction has no raw UUID', async () => {
+  const a = agent({ id: 'ag-leak', lastHeartbeatMs: NOW - 30 * MIN });
+  const blockerUuid = 'cccccccc-1111-2222-3333-444444444444';
+  const blocked = issueWith({ id: 'i-leak', identifier: 'COU-LEAK', assigneeAgentId: 'ag-leak', lastActivityMs: NOW - 2 * HOUR });
+  const ctx = makeCtx({
+    agents: [a],
+    issuesByAgent: { 'ag-leak': [blocked] },
+    relations: { 'i-leak': { blockedBy: [{ id: blockerUuid, assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] } },
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer-not-owner');
+  assert.ok(out.needsYou.topAction, 'topAction present');
+  assert.ok(!UUID_RE.test(out.needsYou.topAction.humanAction), `topAction.humanAction leaked a UUID: ${out.needsYou.topAction.humanAction}`);
+});
