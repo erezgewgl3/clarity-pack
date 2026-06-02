@@ -108,6 +108,43 @@ test('resolveAgentState — expectedCadenceMs widens stale window to 2x cadence 
 });
 
 // ---------------------------------------------------------------------------
+// WR-03 (Plan 11-05) — expectedCadenceMs = 0 must NOT collapse the stale window
+// to 0. A host value of 0 falls back to RUNNING_WINDOW_MS (positive-value guard,
+// not nullish coalescing). A finite, fresh heartbeat is then 'working', never a
+// false 'stuck' from a zero-width window.
+// ---------------------------------------------------------------------------
+
+test('resolveAgentState — expectedCadenceMs = 0 with a fresh heartbeat → working (WR-03: 0 falls back to the 5-min window, not a 0-width window)', () => {
+  const state = resolveAgentState({
+    lastHeartbeatMs: NOW - 1 * MINUTE, // well under 2*RUNNING_WINDOW_MS (10 min)
+    hasQueuedWork: false,
+    nowMs: NOW,
+    expectedCadenceMs: 0,
+  });
+  assert.equal(state, 'working');
+});
+
+test('resolveAgentState — expectedCadenceMs = undefined, fresh heartbeat → working (WR-03 regression: fallback window still applies)', () => {
+  const state = resolveAgentState({
+    lastHeartbeatMs: NOW - 1 * MINUTE,
+    hasQueuedWork: false,
+    nowMs: NOW,
+    expectedCadenceMs: undefined,
+  });
+  assert.equal(state, 'working');
+});
+
+test('resolveAgentState — expectedCadenceMs = 0, no heartbeat signal → stuck (D-04 conservative path unchanged by WR-03 guard)', () => {
+  const state = resolveAgentState({
+    lastHeartbeatMs: null,
+    hasQueuedWork: false,
+    nowMs: NOW,
+    expectedCadenceMs: 0,
+  });
+  assert.equal(state, 'stuck');
+});
+
+// ---------------------------------------------------------------------------
 // Purity — no wall-clock read (nowMs is injected)
 // ---------------------------------------------------------------------------
 
