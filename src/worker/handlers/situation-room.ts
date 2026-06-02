@@ -42,6 +42,16 @@ import {
   type NeedsYou,
   type EmployeesRollupCtx,
 } from '../situation/build-employees-rollup.ts';
+// Plan 15-01 Task 2 (COCK-01 / SC1 worker half / SC3) — the Pulse vital-sign
+// aggregation. Pure sum over the per-row engine verdicts already on
+// employeesWithCards + the already-computed needsYou.count. ADDITIVE PAYLOAD
+// ONLY (15-CONTEXT D-01 / domain "No migration"): the snapshot gains a `pulse`
+// field; NO situation_snapshots write, NO DDL, NO new fetch. Degrades to an
+// all-zero pulse on empty input (SC4 floor — the chips never blank).
+import {
+  buildPulseSummary,
+  type PulseSummary,
+} from '../situation/build-pulse-summary.ts';
 // Plan 13-02 (D-06/D-13) — the Editor-Agent action-card step. Generation runs
 // HERE, in the situation.snapshot valid-scope handler (the 60s on-view
 // recompute), after buildEmployeesRollup — exactly where driveTldrCompileStep
@@ -191,6 +201,18 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       return { ...e, actionCard };
     });
 
+    // Plan 15-01 Task 2 (COCK-01 / SC1 / SC3) — the worker-computed Pulse vital
+    // signs. Pure sum over the per-row engine verdicts ALREADY on
+    // employeesWithCards (blockerChain.tier / .terminalKind / group) + the
+    // already-resolved needsYou.count (D-01). No new host fetch, no await — the
+    // aggregation is synchronous and pure. ADDITIVE PAYLOAD ONLY: this is NOT a
+    // schema change — no situation_snapshots write, no migration (the
+    // situation_snapshots table stays unwritten per WARNING 5 / R9). The
+    // function returns the all-zero floor on empty input, so a degraded (empty
+    // rollup) snapshot still carries a real pulse:{needYou:0,inMotion:0,stuck:0,
+    // selfClearing:0} — the Pulse chips never blank (SC4).
+    const pulse: PulseSummary = buildPulseSummary(employeesWithCards, needsYou);
+
     // Plan 09-01 (WARNING 5) — the materialized situation_snapshots read-path
     // is REMOVED. The recompute-situation cron writer was deleted in this plan,
     // so a row is never written post-Phase-9 — the SELECT + `if (row)` branch +
@@ -202,6 +224,9 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       org_blocked_backlog,
       situation_employees: employeesWithCards,
       needsYou,
+      // Plan 15-01 (D-01) — additive worker-computed vital-sign summary; four
+      // integers, NO_UUID_LEAK by construction, no migration.
+      pulse,
       taken_at: new Date().toISOString(),
     };
   });
