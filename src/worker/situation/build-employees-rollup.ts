@@ -561,11 +561,14 @@ export async function buildEmployeesRollup(
   //
   // UNOWNED predicate (Plan 11-03 D-13/D-14): the row is in the needs_you bucket,
   // has a blocker chain, and the ENGINE VERDICT says a person must act on a
-  // genuinely-unowned chain — `needsYou === true` AND `actionAffordance === 'assign'`
-  // (the 'assign' affordance fires ONLY for an UNOWNED terminal; AWAITING_HUMAN is
-  // 'reply'). This replaces the legacy ownerName-equals-Unassigned string-match
-  // (SC5 — single source of truth, no view-layer re-derivation). No raw UUID
-  // enters this path (the verdict is structured; T-09-04 preserved).
+  // genuinely-unowned chain — `needsYou === true` AND `actionAffordance === 'assign'`.
+  // After Plan 12-01, 'assign' ALSO fires for AWAITING_AGENT_STUCK (needsYou false,
+  // tier 'watch') — re-owning the issue is the honest answer for both. The
+  // `needsYou === true` guard is therefore LOAD-BEARING here: it is what keeps
+  // stuck-agent rows out of the unowned partition (D-04: stuck never enters the
+  // loud Needs-you list). This replaces the legacy ownerName-equals-Unassigned
+  // string-match (SC5 — single source of truth, no view-layer re-derivation). No
+  // raw UUID enters this path (the verdict is structured; T-09-04 preserved).
   const unowned = rows.filter(
     (r) =>
       r.group === 'needs_you' &&
