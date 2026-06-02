@@ -208,12 +208,13 @@ function LiveBlockerPanelWithCompany({
   const actionLabel = primaryActionLabel(data.actionAffordance, data.awaitedPartyLabel);
 
   // Plan 11-07 (WR-02 no dead button / WR-01 'none' affordance) + Plan 12-03
-  // Task 2 (NY-03 / D-09) — resolve the REAL onClick for the verdict's
-  // affordance. A button renders ONLY when a wired handler backs it. 'assign'
-  // (UNOWNED + AWAITING_AGENT_STUCK) now navigates to the leaf issue page (an
-  // honest effect — the OwnerPickerPopover is not mounted on this surface), so
-  // the Assign affordance is no longer a dead button. Only 'none' (a blocker-
-  // free issue) renders NO button.
+  // Task 2 (NY-03 / D-09) + CR-01 (12-REVIEW) — resolve the REAL onClick for the
+  // verdict's affordance. A button renders ONLY when a wired handler backs it.
+  // 'assign' (UNOWNED + AWAITING_AGENT_STUCK) navigates to the leaf issue page
+  // ONLY for a single-hop chain (leaf === the open issue); for a multi-hop chain
+  // there is no honest, leak-free leaf URL on this surface, so it renders NO
+  // button (CR-01 honest degrade — never a no-op/404). 'none' (a blocker-free
+  // issue) likewise renders NO button.
   // The split-identity mutation targets — read into plain consts so the JSX/
   // render body below never embeds `data.target*Uuid` inside a `{...}` expression
   // (the NO_UUID_LEAK render-scan forbids that; they are dispatch args only).
@@ -233,15 +234,31 @@ function LiveBlockerPanelWithCompany({
       };
       break;
     case 'assign':
-      // Plan 12-03 Task 2 (NY-03 / D-09 / T-12-11) — the 'assign' affordance
-      // (UNOWNED + AWAITING_AGENT_STUCK after 12-01) must be HONEST, never a
-      // dead button and never falling through to reply/nudge. The Reader panel
-      // does NOT mount the OwnerPickerPopover (no roster/dispatch wiring here),
-      // so the honest assign affordance for this surface is a navigate to the
-      // leaf issue page where the operator can assign an owner. openIssue routes
-      // to /<prefix>/issues/<identifier> (paperclip-issue-url-pattern) — a REAL
-      // effect, gated to the assign affordance only.
-      onAction = openIssue;
+      // Plan 12-03 Task 2 (NY-03 / D-09 / T-12-11) + CR-01 (12-REVIEW) — the
+      // 'assign' affordance (UNOWNED + AWAITING_AGENT_STUCK after 12-01) must be
+      // HONEST: never a dead/no-op button, never a 404, never a UUID leak.
+      //
+      // The honest target is the CHAIN LEAF (the issue an owner must be assigned
+      // to), which for a multi-hop chain is NOT the issue open in the Reader.
+      // openIssue navigates to `issueId` — the START of the chain (the open
+      // issue). That is the correct leaf ONLY for a single-hop chain (leaf ===
+      // start). For a multi-hop chain it would send the operator to the page they
+      // are already on (a no-op — the original CR-01 defect).
+      //
+      // BlockerChainResult carries NO human leaf identifier — only
+      // targetIssueUuid (the leaf NODE id), which is mutation-only and must NEVER
+      // enter a URL (NO_UUID_LEAK), and the Paperclip issue URL needs a HUMAN key
+      // (paperclip-issue-url-pattern memory: /<prefix>/issues/<identifier>, a UUID
+      // 404s). So for a multi-hop chain we cannot build a correct, leak-free leaf
+      // URL on this surface.
+      //
+      // Decision: navigate to the leaf ONLY when it equals the start (single-hop —
+      // pathIds.length <= 1, so issueId IS the leaf). For a multi-hop chain there
+      // is no honest navigation target here, so we render NO button (onAction =
+      // null) rather than a no-op/404 — consistent with the NO-dead-button rule
+      // (Phase 11 WR-02). The Situation Room's per-row OwnerPickerPopover remains
+      // the full assign path; this surface degrades honestly when it can't act.
+      onAction = data.pathIds.length <= 1 ? openIssue : null;
       break;
     case 'none':
       onAction = null; // no wired dispatch on this surface → no button

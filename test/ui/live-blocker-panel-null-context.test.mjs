@@ -79,3 +79,72 @@ test('LiveBlockerPanel still calls usePluginData("flatten-blocker-chain", { star
   // still happens for the populated-context case.
   assert.match(PANEL_SRC, /usePluginData[\s\S]*?['"]flatten-blocker-chain['"]/);
 });
+
+// ---------------------------------------------------------------------------
+// CR-01 (12-REVIEW) — the 'assign' affordance must NOT unconditionally navigate
+// to the open issue (a no-op for a multi-hop chain whose leaf ≠ start). It is
+// single-hop-gated: openIssue only when the leaf IS the start (pathIds.length
+// <= 1), otherwise NO button (honest degrade — no no-op/404, no UUID leak).
+// ---------------------------------------------------------------------------
+
+/** Isolate the `case 'assign':` arm of the ONACTION switch (NOT the
+ *  primaryActionLabel switch, which also has a 'assign' case). We anchor on the
+ *  `let onAction` declaration so we scope to the onClick-resolution switch, then
+ *  take that switch's 'assign' arm up to its `break;`. */
+function assignArm(src) {
+  const switchStart = src.indexOf('let onAction');
+  assert.ok(switchStart > 0, 'the onAction resolution switch must exist');
+  const fromSwitch = src.slice(switchStart);
+  const start = fromSwitch.indexOf("case 'assign':");
+  assert.ok(start > 0, "the onAction switch must have a case 'assign': arm");
+  const rest = fromSwitch.slice(start);
+  const end = rest.indexOf('break;');
+  assert.ok(end > 0, "the 'assign' arm must end in a break;");
+  return rest.slice(0, end);
+}
+
+test("CR-01 — the 'assign' arm gates leaf-navigation on a single-hop chain (pathIds length), not an unconditional openIssue", () => {
+  const arm = assignArm(PANEL_SRC);
+  // It must reference the chain length so it can distinguish leaf===start
+  // (single-hop) from a multi-hop chain whose leaf differs from the open issue.
+  assert.match(
+    arm,
+    /pathIds\.length/,
+    "the 'assign' arm must inspect data.pathIds.length to detect single-hop (leaf === start)",
+  );
+  // It must NOT be a bare `onAction = openIssue;` with no length guard — that was
+  // the original CR-01 no-op-for-multi-hop defect.
+  assert.doesNotMatch(
+    arm,
+    /onAction\s*=\s*openIssue\s*;/,
+    "the 'assign' arm must not unconditionally assign openIssue (the multi-hop no-op defect)",
+  );
+});
+
+test("CR-01 — the 'assign' arm degrades to NO button (onAction = null) for a multi-hop chain", () => {
+  const arm = assignArm(PANEL_SRC);
+  // The multi-hop branch must yield null (no dead/no-op button) rather than
+  // routing to reply/nudge or building a UUID URL.
+  assert.match(
+    arm,
+    /:\s*null/,
+    "the multi-hop branch of the 'assign' arm must resolve onAction to null (honest degrade)",
+  );
+});
+
+test("CR-01 — the 'assign' arm never interpolates a UUID dispatch target into a navigation URL (NO_UUID_LEAK)", () => {
+  const arm = assignArm(PANEL_SRC);
+  // The only navigation in this arm is openIssue (which routes to the human
+  // issueId). The leaf UUID (issueDispatchTarget / targetIssueUuid) must NEVER be
+  // used to build a route here.
+  assert.doesNotMatch(
+    arm,
+    /navigate\([^)]*issueDispatchTarget/,
+    'must not navigate using the leaf UUID dispatch target',
+  );
+  assert.doesNotMatch(
+    arm,
+    /navigate\([^)]*targetIssueUuid/,
+    'must not navigate using targetIssueUuid',
+  );
+});
