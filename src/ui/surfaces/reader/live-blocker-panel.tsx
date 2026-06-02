@@ -23,12 +23,19 @@
 // Renders EXACTLY ONE typed terminal kind — never the full pathIds chain.
 
 import * as React from 'react';
-import { usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
+import {
+  usePluginData,
+  usePluginAction,
+  useHostLocation,
+} from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
 import { StatePill } from '../../primitives/state-pill.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
+import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
+import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
+import { buildChatDeepLink } from '../chat/deep-link.mjs';
 
 // Plan 11-04 (D-13/SC1) — the primary action is gated on the ENGINE VERDICT's
 // actionAffordance, NOT on terminal.kind. Every one of the 8 kinds maps to one
@@ -133,11 +140,65 @@ function LiveBlockerPanelWithCompany({
   companyId: string;
   viewerUserId: string;
 }): React.ReactElement | null {
+  // Plan 11-07 (WR-02) — host navigation + wakeup dispatch for the wired
+  // affordances. companyPrefix is parsed from the pathname (detail-tab slots
+  // never receive it in host context — same source the Reader index uses).
+  const nav = useHostNavigation();
+  const { pathname } = useHostLocation();
+  const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
+  const wakeAction = usePluginAction('issues.requestWakeup');
+  const [busy, setBusy] = React.useState(false);
+
   const { data } = usePluginData<BlockerChainResult>('flatten-blocker-chain', {
     startId: issueId,
     viewerUserId,
     companyId,
   });
+
+  // Plan 11-07 (WR-02) — the action handlers. EVERY handler performs a REAL
+  // effect (navigation or a worker dispatch); the targetAgentUuid/targetIssueUuid
+  // are consumed ONLY as dispatch args, NEVER interpolated into visible text.
+  // 'open' navigates to the issue route (/<prefix>/issues/<identifier> per the
+  // paperclip-issue-url-pattern memory — NOT /<prefix>/<id>).
+  const openIssue = React.useCallback(() => {
+    if (!companyPrefix) return;
+    nav.navigate(`/${companyPrefix}/issues/${issueId}`);
+  }, [nav, companyPrefix, issueId]);
+
+  // 'reply' → open the awaited employee in chat (employee-only carrier), mirroring
+  // employee-row's openChatWithOwner. Needs the awaited agent UUID as the chat
+  // correspondent (dispatch-only, never rendered).
+  const replyInChat = React.useCallback(
+    (agentUuid: string | null | undefined) => {
+      if (!agentUuid || !companyPrefix) return;
+      const link = buildChatDeepLink({
+        route: 'employee-only',
+        companyPrefix,
+        assigneeAgentId: agentUuid,
+      });
+      if (link) nav.navigate(link.to);
+    },
+    [nav, companyPrefix],
+  );
+
+  // 'nudge' → wake the stuck agent on the leaf issue (issues.requestWakeup),
+  // mirroring employee-row's wake. The leaf-issue UUID is the mutation target.
+  const nudge = React.useCallback(
+    async (issueUuid: string | null | undefined) => {
+      const wakeIssueId = issueUuid ?? issueId;
+      if (busy) return;
+      setBusy(true);
+      try {
+        await wakeAction({ companyId, issueId: wakeIssueId, userId: viewerUserId });
+      } catch {
+        // Honest no-throw: the host call is best-effort; the panel stays mounted.
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, wakeAction, companyId, viewerUserId, issueId],
+  );
+
   if (!data) return null;
   const { terminal } = data;
   // Plan 11-04 (D-13/SC1): render straight off the engine verdict. The "ON YOU"
@@ -145,6 +206,41 @@ function LiveBlockerPanelWithCompany({
   // gated on actionAffordance, never on terminal.kind. All 8 kinds render an
   // honest non-blank line via blockerLine().
   const actionLabel = primaryActionLabel(data.actionAffordance, data.awaitedPartyLabel);
+
+  // Plan 11-07 (WR-02 no dead button / WR-01 'none' affordance) — resolve the
+  // REAL onClick for the verdict's affordance. A button renders ONLY when a wired
+  // handler backs it; any affordance with no implemented dispatch on this surface
+  // (including 'assign', which needs the OwnerPickerPopover not mounted here, and
+  // 'none' for a blocker-free issue) renders NO button rather than a dead one.
+  // The split-identity mutation targets — read into plain consts so the JSX/
+  // render body below never embeds `data.target*Uuid` inside a `{...}` expression
+  // (the NO_UUID_LEAK render-scan forbids that; they are dispatch args only).
+  const agentDispatchTarget = data.targetAgentUuid;
+  const issueDispatchTarget = data.targetIssueUuid;
+  let onAction: (() => void) | null = null;
+  switch (data.actionAffordance) {
+    case 'open':
+      onAction = openIssue;
+      break;
+    case 'reply':
+      onAction = () => replyInChat(agentDispatchTarget);
+      break;
+    case 'nudge':
+      onAction = () => {
+        void nudge(issueDispatchTarget);
+      };
+      break;
+    case 'assign':
+    case 'none':
+      onAction = null; // no wired dispatch on this surface → no button
+      break;
+    default: {
+      const _exhaustive: never = data.actionAffordance;
+      onAction = _exhaustive;
+    }
+  }
+  const showButton = actionLabel !== null && onAction !== null;
+
   return (
     <div
       className="clarity-blocker-panel"
@@ -163,8 +259,15 @@ function LiveBlockerPanelWithCompany({
         )}
       </header>
       <p className="clarity-blocker-label">{blockerLine(data)}</p>
-      {actionLabel !== null ? (
-        <button className="clarity-blocker-action">{actionLabel}</button>
+      {showButton ? (
+        <button
+          type="button"
+          className="clarity-blocker-action"
+          disabled={busy}
+          onClick={onAction ?? undefined}
+        >
+          {actionLabel}
+        </button>
       ) : null}
     </div>
   );
