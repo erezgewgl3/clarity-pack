@@ -35,7 +35,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 
 - [x] **Phase 10: Unblock-Resume Spike** — prove that answering an agent (a comment) actually unblocks + resumes it against the live Paperclip model, or determine the required status transition. Gates all action UI. (completed 2026-06-02)
 - [x] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row. (4/4 plans built; verification 2026-06-02 found gaps — CR-01 NO_UUID_LEAK breach on Reader panel; gap closure required) (completed 2026-06-02)
-- [ ] **Phase 12: Needs-You Triage** — "Needs you" lists only human-actionable items, ranked by leverage; Assign-owner suppressed except on genuinely-unowned / stuck-agent rows.
+- [x] **Phase 12: Needs-You Triage** — "Needs you" lists only human-actionable items, ranked by leverage; Assign-owner suppressed except on genuinely-unowned / stuck-agent rows. CLOSED 2026-06-02 (3 plans; verification 4/4 PASS; CR-01 Reader-leaf-navigate blocker fixed).
 - [ ] **Phase 13: Editor-Agent Named Action** — grounded plain-English named action + party + estimate, with a stale→degrade guardrail and no manufactured urgency.
 - [ ] **Phase 14: Do-It-Here Action Loop** — reply-in-place + quick-decision chips that unblock+resume the agent, across three surfaces; "Open ↗" for out-of-system humans.
 - [ ] **Phase 15: Cockpit IA Redesign** — Pulse header + Needs-you / In-motion / Watch tiers consuming the engine verdict + Editor-Agent cards.
@@ -139,7 +139,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 |-------|----------------|--------|-----------|
 | 10. Unblock-Resume Spike | 2/3 | Complete    | 2026-06-02 |
 | 11. Honest Blocker Taxonomy | 7/7 | Complete    | 2026-06-02 |
-| 12. Needs-You Triage | 0/3 | Planned     | - |
+| 12. Needs-You Triage | 3/3 | Complete    | 2026-06-02 |
 | 13. Editor-Agent Named Action | 0/0 | Not started | - |
 | 14. Do-It-Here Action Loop | 0/0 | Not started | - |
 | 15. Cockpit IA Redesign | 0/0 | Not started | - |
