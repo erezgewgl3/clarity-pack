@@ -34,7 +34,7 @@ Full phase details archived at [`milestones/v1.0.0-ROADMAP.md`](milestones/v1.0.
 Make the Situation Room the one screen that truthfully tells Eric what's going on — and lets him do what needs him, in place. Hybrid architecture: a **deterministic engine** guaranteeing honesty + degrade-safety, with an **Editor-Agent** supplying the named human sentence on top. The two halves stay visibly separate (no AI in `blocker-chain.ts`).
 
 - [x] **Phase 10: Unblock-Resume Spike** — prove that answering an agent (a comment) actually unblocks + resumes it against the live Paperclip model, or determine the required status transition. Gates all action UI. (completed 2026-06-02)
-- [x] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row. (4/4 plans built; verification 2026-06-02 found gaps — CR-01 NO_UUID_LEAK breach on Reader panel; gap closure required) (completed 2026-06-02)
+- [x] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row. (4/4 plans built; verification 2026-06-02 found gaps — CR-01 NO_UUID_LEAK breach on Reader panel; gap closure required) (completed 2026-06-02)
 - [ ] **Phase 12: Needs-You Triage** — "Needs you" lists only human-actionable items, ranked by leverage; Assign-owner suppressed except on genuinely-unowned / stuck-agent rows.
 - [ ] **Phase 13: Editor-Agent Named Action** — grounded plain-English named action + party + estimate, with a stale→degrade guardrail and no manufactured urgency.
 - [ ] **Phase 14: Do-It-Here Action Loop** — reply-in-place + quick-decision chips that unblock+resume the agent, across three surfaces; "Open ↗" for out-of-system humans.
@@ -84,7 +84,10 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
   2. "Needs you" rows are ordered by leverage (what each unblocks), not by age alone.
   3. The "Assign owner" affordance appears only on genuinely-unowned or stuck-agent rows — never on an item awaiting a named party.
   4. Triage keys off the engine's terminal kind, not a string match like `ownerName === 'Unassigned'`.
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 12-01-PLAN.md — Engine D-05 edit: classifyVerdict AWAITING_AGENT_STUCK → actionAffordance 'assign' (tier/needsYou unchanged); determinism + AI-token guards gate the edit (wave 1)
+- [ ] 12-02-PLAN.md — Worker triage: needsYou-keyed membership (D-11), leverage rank + per-leaf dedup (D-01/02/03, no new fetch), banner topAction → highest-leverage (D-12) (wave 2)
+- [ ] 12-03-PLAN.md — Assign-gating on all three surfaces (D-09): OrgBlockedRow carries actionAffordance; backlog/Reader/SR gate assign off the engine verdict only (wave 2)
 **UI hint**: yes
 
 ### Phase 13: Editor-Agent Named Action
@@ -136,7 +139,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 |-------|----------------|--------|-----------|
 | 10. Unblock-Resume Spike | 2/3 | Complete    | 2026-06-02 |
 | 11. Honest Blocker Taxonomy | 7/7 | Complete    | 2026-06-02 |
-| 12. Needs-You Triage | 0/0 | Not started | - |
+| 12. Needs-You Triage | 0/3 | Planned     | - |
 | 13. Editor-Agent Named Action | 0/0 | Not started | - |
 | 14. Do-It-Here Action Loop | 0/0 | Not started | - |
 | 15. Cockpit IA Redesign | 0/0 | Not started | - |
