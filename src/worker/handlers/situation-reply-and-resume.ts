@@ -56,6 +56,8 @@ import {
 
 export type SituationReplyAndResumeCtx = OptInGuardActionCtx &
   ReplyResumeRepoCtx & {
+    // `get` is REQUIRED (CR-01 14-REVIEW) — the company-scope authorization gate
+    // below calls ctx.issues.get(leafIssueUuid, companyId) before any mutation.
     issues: PluginIssuesClient;
     logger?: PluginLogger;
   };
@@ -95,6 +97,39 @@ export function registerSituationReplyAndResume(ctx: SituationReplyAndResumeCtx)
         leafIssueId,
         durable: existing.durable,
       };
+    }
+
+    // 1b. COMPANY-SCOPE AUTHORIZATION GATE (CR-01, 14-REVIEW BLOCKER) — before
+    //    ANY mutation, prove the caller-supplied leafIssueUuid actually refers to
+    //    an issue within `companyId`. The same-origin trust model lets plugin UI
+    //    call this handler directly with arbitrary params, so without this gate an
+    //    opted-in user could post a comment + flip status on ANY issue UUID
+    //    (cross-company) just by supplying their own companyId.
+    //
+    //    ctx.issues.get(uuid, companyId) is company-scoped at the host: a UUID
+    //    from another company resolves to null → NOT_FOUND. This mirrors
+    //    situation-assign-owner.ts's ctx.agents.get(assigneeAgentId, companyId)
+    //    gate (T-09-01).
+    //
+    //    ORDERING (idempotency-preserving): dedup check (above) → THIS gate →
+    //    createComment → conditional flip → dedup-row insert. The gate runs AFTER
+    //    the dedup read but BEFORE the dedup-row write, so a failed gate writes NO
+    //    dedup row — a legitimate later retry (e.g. a transient host error during
+    //    get) is never permanently blocked.
+    let targetIssue: unknown;
+    try {
+      targetIssue = await ctx.issues.get(leafIssueUuid, companyId);
+    } catch (e) {
+      ctx.logger?.warn?.('situation.replyAndResume: issues.get failed', {
+        leafIssueId,
+        err: (e as Error).message,
+      });
+      return { error: 'NOT_FOUND' as const };
+    }
+    if (!targetIssue) {
+      // The UUID does not resolve within the caller's company → reject without
+      // any write (no comment, no flip, no dedup row).
+      return { error: 'NOT_FOUND' as const };
     }
 
     // 2. COMMENT (await-confirm) — the operator's reply lands in

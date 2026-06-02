@@ -42,12 +42,17 @@ function makeCtx({
   // When true, createComment/update THROW on a non-UUID first arg (the live
   // host rejection) so a handler that leaked the human key trips the failure.
   uuidStrict = false,
+  // CR-01 (14-REVIEW) — when true, ctx.issues.get resolves null (the UUID is
+  // outside the caller's company); when 'throw', it rejects. Default: returns a
+  // row (the UUID is in-company).
+  getReturns = 'row',
 } = {}) {
   const handlers = new Map();
   const calls = [];
   const warnLogs = [];
   const createCommentCalls = [];
   const issueUpdateCalls = [];
+  const issueGetCalls = [];
   const wakeupCalls = [];
   // The in-memory dedup store the fake repo reads/writes (keyed by messageUuid).
   const dedupStore = new Map();
@@ -67,6 +72,15 @@ function makeCtx({
       },
     },
     issues: {
+      // CR-01 (14-REVIEW) — the company-scope authorization gate. Returns a row
+      // for an in-company UUID, null for a cross-company UUID, throws when the
+      // host call itself fails.
+      async get(issueId, companyId) {
+        issueGetCalls.push({ issueId, companyId });
+        if (getReturns === 'throw') throw new Error('host issues.get 503');
+        if (getReturns === 'null') return null;
+        return { id: issueId, companyId };
+      },
       async createComment(issueId, body, companyId) {
         createCommentCalls.push({ issueId, body, companyId });
         if (createCommentThrows) throw new Error('host createComment 503');
@@ -107,6 +121,7 @@ function makeCtx({
     _warnLogs: warnLogs,
     _createCommentCalls: createCommentCalls,
     _issueUpdateCalls: issueUpdateCalls,
+    _issueGetCalls: issueGetCalls,
     _wakeupCalls: wakeupCalls,
     _dedupStore: dedupStore,
   };
@@ -373,4 +388,50 @@ test('Test 10: the human leafIssueId NEVER reaches createComment or update (NO_U
   assert.equal(ctx._issueUpdateCalls[0].issueId, LEAF_UUID);
   for (const c of ctx._createCommentCalls) assert.notEqual(c.issueId, HUMAN_KEY);
   for (const u of ctx._issueUpdateCalls) assert.notEqual(u.issueId, HUMAN_KEY);
+});
+
+// ---- Test 11 — CR-01: cross-company leafIssueUuid → NOT_FOUND, zero writes --
+
+test('Test 11: leafIssueUuid not in caller company (issues.get → null) → NOT_FOUND, no comment/update, no dedup row', async () => {
+  const ctx = makeReplyCtx({ getReturns: 'null' });
+  const fn = getHandler(ctx);
+  const result = await fn(replyParams({ needsDurabilityFlip: true }));
+  await flush();
+
+  assert.deepEqual(result, { error: 'NOT_FOUND' }, 'rejects the cross-company target');
+  assert.equal(ctx._issueGetCalls.length, 1, 'the company-scope gate was consulted');
+  assert.equal(ctx._issueGetCalls[0].issueId, LEAF_UUID, 'gate checked the leaf UUID');
+  assert.equal(ctx._issueGetCalls[0].companyId, 'co-1', 'gate scoped to the caller company');
+  assert.equal(ctx._createCommentCalls.length, 0, 'NO comment posted on a rejected target');
+  assert.equal(ctx._issueUpdateCalls.length, 0, 'NO status flip on a rejected target');
+  assert.equal(ctx._wakeupCalls.length, 0, 'NO wakeup on a rejected target');
+  // A failed gate writes NO dedup row, so a legitimate later retry is not blocked.
+  assert.equal(ctx._dedupStore.size, 0, 'no dedup row written for a rejected target');
+});
+
+// ---- Test 12 — CR-01: the gate is consulted BEFORE any mutation on the OK path
+
+test('Test 12: in-company leafIssueUuid → issues.get called once before createComment', async () => {
+  const ctx = makeReplyCtx({ getReturns: 'row' });
+  const fn = getHandler(ctx);
+  const result = await fn(replyParams({ needsDurabilityFlip: false }));
+  await flush();
+
+  assert.equal(result.ok, true, 'in-company target proceeds');
+  assert.equal(ctx._issueGetCalls.length, 1, 'gate consulted exactly once');
+  assert.equal(ctx._createCommentCalls.length, 1, 'comment posted after the gate passed');
+});
+
+// ---- Test 13 — CR-01: a host failure in the gate → NOT_FOUND, no writes -----
+
+test('Test 13: issues.get throws → NOT_FOUND, no comment/update, no dedup row (retry-safe)', async () => {
+  const ctx = makeReplyCtx({ getReturns: 'throw' });
+  const fn = getHandler(ctx);
+  const result = await fn(replyParams({ needsDurabilityFlip: true }));
+  await flush();
+
+  assert.deepEqual(result, { error: 'NOT_FOUND' });
+  assert.equal(ctx._createCommentCalls.length, 0, 'no comment on a gate error');
+  assert.equal(ctx._issueUpdateCalls.length, 0, 'no flip on a gate error');
+  assert.equal(ctx._dedupStore.size, 0, 'no dedup row on a gate error (legit retry allowed)');
 });

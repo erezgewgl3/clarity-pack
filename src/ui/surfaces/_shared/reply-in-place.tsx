@@ -35,7 +35,10 @@ import { useToast } from '../../primitives/toast.tsx';
 /** The situation.replyAndResume action result (wave 1 — 14-01 worker contract). */
 type ReplyResult =
   | { ok: true; commentId: string; leafIssueId: string; durable: boolean }
-  | { error: 'REPLY_FAILED' | 'OPT_IN_REQUIRED' }
+  // NOT_FOUND added (CR-01, 14-REVIEW) — the worker's company-scope gate rejects a
+  // leafIssueUuid outside the caller's company. The UI treats it as a generic
+  // honest failure (input retained, no false "resumed"), same as REPLY_FAILED.
+  | { error: 'REPLY_FAILED' | 'OPT_IN_REQUIRED' | 'NOT_FOUND' }
   | null;
 
 export type ReplyInPlaceProps = {
