@@ -36,7 +36,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 - [x] **Phase 10: Unblock-Resume Spike** — prove that answering an agent (a comment) actually unblocks + resumes it against the live Paperclip model, or determine the required status transition. Gates all action UI. (completed 2026-06-02)
 - [x] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row. (4/4 plans built; verification 2026-06-02 found gaps — CR-01 NO_UUID_LEAK breach on Reader panel; gap closure required) (completed 2026-06-02)
 - [x] **Phase 12: Needs-You Triage** — "Needs you" lists only human-actionable items, ranked by leverage; Assign-owner suppressed except on genuinely-unowned / stuck-agent rows. CLOSED 2026-06-02 (3 plans; verification 4/4 PASS; CR-01 Reader-leaf-navigate blocker fixed).
-- [ ] **Phase 13: Editor-Agent Named Action** — grounded plain-English named action + party + estimate, with a stale→degrade guardrail and no manufactured urgency.
+- [x] **Phase 13: Editor-Agent Named Action** — grounded plain-English named action + party + estimate, with a stale→degrade guardrail and no manufactured urgency. (completed 2026-06-02)
 - [ ] **Phase 14: Do-It-Here Action Loop** — reply-in-place + quick-decision chips that unblock+resume the agent, across three surfaces; "Open ↗" for out-of-system humans.
 - [ ] **Phase 15: Cockpit IA Redesign** — Pulse header + Needs-you / In-motion / Watch tiers consuming the engine verdict + Editor-Agent cards.
 
@@ -101,9 +101,9 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
   4. Action cards are cached in the additive plugin namespace and refreshed on the Editor-Agent heartbeat + the existing 60s on-view recompute, reusing the existing grounded-summary (TL;DR/bulletin) pattern under standard governance parity.
 **Plans**: 3 plans
 Plans:
-- [ ] 13-01-PLAN.md — Foundation: additive action_cards migration (0015) + shared ActionCard type + cache repo (wave 1)
-- [ ] 13-02-PLAN.md — driveActionCardsStep (gloss-mirror) + action-cards OperationKind + situation.snapshot/heartbeat wiring; anti-fabrication + dual-arm staleness, never-throw (wave 2)
-- [ ] 13-03-PLAN.md — Render the cached named-action sentence + party + estimate on the needs-you row with deterministic degrade + NO_UUID_LEAK render-scan (wave 3)
+- [x] 13-01-PLAN.md — Foundation: additive action_cards migration (0015) + shared ActionCard type + cache repo (wave 1)
+- [x] 13-02-PLAN.md — driveActionCardsStep (gloss-mirror) + action-cards OperationKind + situation.snapshot/heartbeat wiring; anti-fabrication + dual-arm staleness, never-throw (wave 2)
+- [x] 13-03-PLAN.md — Render the cached named-action sentence + party + estimate on the needs-you row with deterministic degrade + NO_UUID_LEAK render-scan (wave 3)
 
 ### Phase 14: Do-It-Here Action Loop
 **Goal**: Let the operator act in place — reply-in-place + quick-decision chips that post to the awaited agent and actually unblock+resume it, available across all three blocker surfaces, with an honest escape hatch for out-of-system humans.
@@ -144,7 +144,7 @@ Plans:
 | 10. Unblock-Resume Spike | 2/3 | Complete    | 2026-06-02 |
 | 11. Honest Blocker Taxonomy | 7/7 | Complete    | 2026-06-02 |
 | 12. Needs-You Triage | 3/3 | Complete    | 2026-06-02 |
-| 13. Editor-Agent Named Action | 0/0 | Not started | - |
+| 13. Editor-Agent Named Action | 3/3 | Complete   | 2026-06-02 |
 | 14. Do-It-Here Action Loop | 0/0 | Not started | - |
 | 15. Cockpit IA Redesign | 0/0 | Not started | - |
 

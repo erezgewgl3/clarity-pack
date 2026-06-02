@@ -4,14 +4,14 @@ milestone: v1.4.0
 milestone_name: Truthful Situation Room
 status: planning
 stopped_at: Phase 12 context gathered
-last_updated: "2026-06-02T18:28:17.779Z"
+last_updated: "2026-06-02T20:38:41.930Z"
 last_activity: 2026-06-02
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 10
-  completed_plans: 9
-  percent: 17
+  completed_phases: 3
+  total_plans: 16
+  completed_plans: 15
+  percent: 50
 ---
 
 # State: Clarity Pack
@@ -47,6 +47,18 @@ Roadmap for the v1.4.0 milestone is written. 16 requirements mapped to 6 phases 
 **Next action:** `/gsd:plan-phase 10` (the gating unblock-resume spike). Phase 14's action UI is blocked on the Phase 10 result.
 
 Files: `.planning/ROADMAP.md` (v1.4.0 section + phase details), `.planning/REQUIREMENTS.md` (traceability 16/16).
+
+---
+
+## ▶ Phase 13 (Editor-Agent Named Action) — COMPLETE (all 3 plans) 2026-06-02
+
+Phase 13 is fully executed (3/3 plans). Wave 3 (Plan 13-03) landed the final piece: the cached Editor-Agent named-action sentence + awaited party + coarse estimate now render inline on the existing Situation Room **needs-you** employee row, degrading to the deterministic engine line when no fresh card exists.
+
+- **13-01** ActionCard type + `action_cards` table (migration 0015) + repo.
+- **13-02** `driveActionCardsStep` producing + caching cards, wired to `situation.snapshot` recompute + Editor-Agent heartbeat.
+- **13-03** Minimal inline render on `employee-row.tsx` (D-13): fresh card → `namedAction` + `waiting on <party> · <estimate>`; null/absent card → existing deterministic line (D-12, never blank/fabricated). UI mirror carries DISPLAY fields only; `sourceIssueUuid` omitted by construction (NO_UUID_LEAK, D-10/D-14). `estBucketLabel` maps quick/focused/deep → words; garbage bucket → omit estimate. No chips/Pulse/tiers/reply (those are Phases 14/15). Commits `dcea622` (feat) + `f5dac84` (NO_UUID_LEAK render-scan test). Build green, 71/71 row+banner tests pass, `tsc --noEmit` clean. Requirements ACT-01/ACT-02/ACT-03 satisfied (render side).
+
+**Next action:** `/gsd:plan-phase 14` (Do-It-Here Action Loop — reply-in-place + decision chips that unblock+resume, consuming the Phase 13 `decisionOptions`/`actionKind` data + the proven Phase 10 recipe). Phase 13's produced card data is the input.
 
 ---
 
@@ -1322,7 +1334,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to plan
-**Progress:** [█████████░] 90%
+**Progress:** [█████████░] 94%
 
 ## Performance Metrics
 
@@ -1352,6 +1364,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 11 P05 | 20min | 3 tasks | 5 files |
 | Phase 11 P06 | 35 | 3 tasks | 5 files |
 | Phase 11 P07 | 25 min | 3 tasks | 2 files |
+| Phase 13 P03 | ~25 min | 2 tasks | 4 files (2 created) — needs-you row named-action render + degrade; 71/71 row+banner tests, tsc clean |
 
 ## Accumulated Context
 
@@ -1443,7 +1456,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-02T18:28:17.735Z
+**Last session:** 2026-06-02T20:38:41.900Z
 
 **Stopped at:** Phase 12 context gathered
 

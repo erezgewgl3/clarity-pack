@@ -21,9 +21,9 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 
 ### Editor-Agent Named Action
 
-- [ ] **ACT-01**: Each human-actionable row shows a grounded, plain-English named single action + the awaited party + a time estimate (Editor-Agent generated).
-- [ ] **ACT-02**: Stale or absent Editor-Agent output degrades to the deterministic line (e.g. "waiting on you — Founder ruling, BEAAA-NN"); the row never blanks or fabricates.
-- [ ] **ACT-03**: The Editor-Agent only annotates rows the engine already flagged as human-actionable (it cannot manufacture urgency); yes/no decision options appear only when the source issue poses a binary.
+- [x] **ACT-01**: Each human-actionable row shows a grounded, plain-English named single action + the awaited party + a time estimate (Editor-Agent generated).
+- [x] **ACT-02**: Stale or absent Editor-Agent output degrades to the deterministic line (e.g. "waiting on you — Founder ruling, BEAAA-NN"); the row never blanks or fabricates.
+- [x] **ACT-03**: The Editor-Agent only annotates rows the engine already flagged as human-actionable (it cannot manufacture urgency); yes/no decision options appear only when the source issue poses a binary.
 
 ### Do-It-Here Action
 
@@ -61,9 +61,9 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 | NY-01 | Phase 12 | Pending |
 | NY-02 | Phase 12 | Pending |
 | NY-03 | Phase 12 | Pending |
-| ACT-01 | Phase 13 | Pending |
-| ACT-02 | Phase 13 | Pending |
-| ACT-03 | Phase 13 | Pending |
+| ACT-01 | Phase 13 | Complete |
+| ACT-02 | Phase 13 | Complete |
+| ACT-03 | Phase 13 | Complete |
 | DO-01 | Phase 14 | Pending |
 | DO-02 | Phase 14 | Pending |
 | DO-04 | Phase 14 | Pending |
