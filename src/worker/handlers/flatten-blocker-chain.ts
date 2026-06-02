@@ -22,9 +22,16 @@ import type {
 import type { BlockerChainResult, Terminal } from '../../shared/types.ts';
 import {
   flattenBlockerChain,
-  classifyVerdict,
+  makeDegradedResult,
+  makeBlockerFreeResult,
   type BlockerEdge,
 } from '../../shared/blocker-chain.ts';
+// Plan 11-06 Task 1 (CR-01 / D-15 / NO_UUID_LEAK) — the success-path scrub. This
+// handler is the LAST place to strip raw UUIDs before awaitedPartyLabel crosses
+// the bridge into the Reader DOM. Mirrors org-blocked-backlog.ts:402-471 exactly:
+// resolve a nameByUuid map from ctx.agents, then overwrite awaitedPartyLabel with
+// scrubHumanAction(result.terminal, viewerUserId, nameByUuid).
+import { scrubHumanAction, UUID_RE_G } from '../../shared/scrub-human-action.ts';
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 // Plan 11-02 Task 3 (D-01 / SC5) — the SINGLE worker-side liveness projection,
 // shared with buildEdges (org-blocked-backlog.ts). The engine reads no clock;
@@ -36,9 +43,42 @@ import { resolveAgentState } from '../situation/agent-liveness.ts';
 const MAX_CHAIN_DEPTH = 6;
 
 // Plan 02-04 Task 1 — Ctx composed from OptInGuardDataCtx (real SDK shape).
+// Plan 11-06 Task 1 (CR-01) — widen with the OPTIONAL agents.get surface (mirrors
+// OrgBlockedBacklogCtx). The structural ctx carries agents.get so the success-path
+// scrub can resolve UUID→name. When ctx.agents is absent the scrub falls through an
+// empty map and still degrades to agent#<8> — NEVER the raw UUID.
 export type FlattenBlockerChainCtx = OptInGuardDataCtx & {
   issues: PluginIssuesClient;
+  agents?: {
+    get(agentId: string, companyId: string): Promise<unknown | null>;
+  };
 };
+
+/** The structural ctx subset scrubResultLabel needs — only the optional
+ *  agents.get. Stubbable in tests without the SDK. */
+export type ScrubCtx = {
+  agents?: {
+    get(agentId: string, companyId: string): Promise<unknown | null>;
+  };
+  // meta typed as Record<string, unknown> to stay assignable from the SDK's
+  // PluginLogger (FlattenBlockerChainCtx.logger) AND a bare test stub.
+  logger?: { warn?: (msg: string, meta?: Record<string, unknown>) => void };
+};
+
+/** True iff `s` is exactly a hex UUID (strict, full string). Mirrors
+ *  org-blocked-backlog.ts:75. */
+function isUuid(s: unknown): s is string {
+  return (
+    typeof s === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
+  );
+}
+
+/** Every distinct hex UUID inside an arbitrary string. Mirrors
+ *  org-blocked-backlog.ts:80. */
+function uuidsIn(s: string): string[] {
+  return s.match(UUID_RE_G) ?? [];
+}
 
 // Plan 11-02 Task 3 (SC5) — the nodeMeta field set MUST match buildEdges'
 // EdgeNodeMeta (org-blocked-backlog.ts) EXACTLY, so the same chain classifies
@@ -68,8 +108,13 @@ export function registerFlattenBlockerChain(ctx: FlattenBlockerChainCtx): void {
 
     if (!startId || !companyId) {
       // Plan 11-02 (D-10/TAX-03) — a missing-params WALK FAILURE is honest
-      // UNCLASSIFIED, never a false EXTERNAL chase-action.
-      return degraded(startId, 'startId and companyId required', 'missing-params');
+      // UNCLASSIFIED, never a false EXTERNAL chase-action. The degrade label is
+      // UUID-safe by construction, so no scrub is needed on this path.
+      return buildHandlerResult({
+        startId,
+        viewerUserId,
+        degrade: { label: 'startId and companyId required', reason: 'missing-params' },
+      });
     }
 
     let walk: WalkOutput;
@@ -80,24 +125,132 @@ export function registerFlattenBlockerChain(ctx: FlattenBlockerChainCtx): void {
       // EXTERNAL: the walk FAILED, so we cannot honestly claim the blocker is
       // external. Surface the degrade with a reason.
       ctx.logger?.warn?.('flatten-blocker-chain: relations walk failed', { err: (e as Error).message });
-      return degraded(startId, 'Relations unavailable', 'relations-walk-failed');
+      return buildHandlerResult({
+        startId,
+        viewerUserId,
+        degrade: { label: 'Relations unavailable', reason: 'relations-walk-failed' },
+      });
     }
 
+    // buildHandlerResult routes the blocker-free case → 'none' (WR-01) and the
+    // success case → flattenBlockerChain (raw label). The success-path label is
+    // then scrubbed via scrubResultLabel BEFORE return — the CR-01 fix.
+    const result = buildHandlerResult({ startId, viewerUserId, walk, maxAgeMs });
     if (walk.edges.length === 0) {
-      // GENUINELY no blockers (Pitfall 3) — distinct from a walk failure. Keep
-      // the empty-graph EXTERNAL terminal so the UI renders its non-actionable
-      // "no active blockers" state; do NOT relabel a blocker-free issue as a
-      // degrade.
-      return noBlockers(startId, 'No active blockers');
+      // Blocker-free → already UUID-safe literal; no agents resolution needed.
+      return result;
     }
+    return scrubResultLabel(ctx, companyId, viewerUserId, result);
+  });
+}
 
-    return flattenBlockerChain({
-      startId,
-      edges: walk.edges,
-      nodeMeta: walk.nodeMeta,
-      viewerUserId,
-      maxAgeMs,
-    });
+/**
+ * Plan 11-06 Task 1 (CR-01 / D-15 / NO_UUID_LEAK) — the SUCCESS-PATH scrub.
+ *
+ * THE leak fix: flattenBlockerChain returns awaitedPartyLabel = terminal.label
+ * RAW (the engine is pure and does no I/O lookup). This handler is the last hop
+ * before the value crosses the bridge into the Reader DOM, so it resolves a
+ * nameByUuid map from ctx.agents and overwrites awaitedPartyLabel with
+ * scrubHumanAction(...). Mirrors org-blocked-backlog.ts:402-471 EXACTLY:
+ *   - collect the owner uuid (AWAITING_HUMAN userId when isUuid), the agent uuid
+ *     (AWAITING_AGENT_* agentId), and every UUID uuidsIn(terminal.label) finds
+ *     (covers the leaf node id),
+ *   - for each wanted uuid call ctx.agents.get(uuid, companyId) inside try/catch,
+ *     set the trimmed name or null, NEVER the raw UUID on throw,
+ *   - return { ...result, awaitedPartyLabel: scrubHumanAction(terminal, viewer, map) }.
+ *
+ * When ctx.agents is absent the map stays empty and the scrub degrades every UUID
+ * to agent#<8> — still NO_UUID_LEAK-safe.
+ */
+export async function scrubResultLabel(
+  ctx: ScrubCtx,
+  companyId: string,
+  viewerUserId: string,
+  result: BlockerChainResult,
+): Promise<BlockerChainResult> {
+  const terminal = result.terminal;
+  const nameByUuid = new Map<string, string | null>();
+
+  if (typeof ctx.agents?.get === 'function') {
+    const wanted = new Set<string>();
+    // Owner uuid (AWAITING_HUMAN) — only resolve when it is a real UUID; the
+    // viewer "You" substitution itself uses terminal.userId.
+    if (terminal.kind === 'AWAITING_HUMAN' && isUuid(terminal.userId)) {
+      wanted.add(terminal.userId);
+    }
+    // Agent uuid (AWAITING_AGENT_WORKING / AWAITING_AGENT_STUCK).
+    if (
+      (terminal.kind === 'AWAITING_AGENT_WORKING' || terminal.kind === 'AWAITING_AGENT_STUCK') &&
+      isUuid(terminal.agentId)
+    ) {
+      wanted.add(terminal.agentId);
+    }
+    // Every UUID the terminal label embeds (covers the leaf node id + any other).
+    for (const u of uuidsIn(terminal.label)) wanted.add(u);
+
+    for (const uuid of wanted) {
+      try {
+        const agent = await ctx.agents.get(uuid, companyId);
+        if (agent && typeof (agent as { name?: unknown }).name === 'string') {
+          const candidate = (agent as { name: string }).name.trim();
+          nameByUuid.set(uuid, candidate || null);
+        } else {
+          nameByUuid.set(uuid, null);
+        }
+      } catch (e) {
+        // D-09 — degrade silently to null on throw. NEVER fall back to the UUID;
+        // the scrubber then emits agent#<8>. This is the NO_UUID_LEAK guarantee.
+        ctx.logger?.warn?.('flatten-blocker-chain: agents.get failed', {
+          companyId,
+          uuid,
+          err: (e as Error).message,
+        });
+        nameByUuid.set(uuid, null);
+      }
+    }
+  }
+
+  return { ...result, awaitedPartyLabel: scrubHumanAction(terminal, viewerUserId, nameByUuid) };
+}
+
+/**
+ * Plan 11-06 Task 1 — the pure result router for the handler, exported so the
+ * WR-01 ('none') and degrade paths are unit-testable without the opt-in guard.
+ *
+ * Three mutually-exclusive inputs:
+ *   - degrade  → makeDegradedResult (UNCLASSIFIED; honest open-to-investigate, IN-04)
+ *   - walk with 0 edges → makeBlockerFreeResult (forced actionAffordance 'none', WR-01)
+ *   - walk with edges   → flattenBlockerChain (raw label; caller scrubs after)
+ *
+ * The blocker-free + degrade labels are UUID-safe literals by construction; only
+ * the success path (flattenBlockerChain) carries a raw UUID-bearing label that the
+ * caller must hand to scrubResultLabel before return.
+ */
+export function buildHandlerResult(args: {
+  startId: string;
+  viewerUserId: string;
+  walk?: WalkOutput;
+  maxAgeMs?: number;
+  degrade?: { label: string; reason: string };
+}): BlockerChainResult {
+  const { startId, viewerUserId, walk, maxAgeMs, degrade } = args;
+  if (degrade) {
+    // IN-04 — adopt the shared degrade-row constructor (was a hand-built object).
+    const terminal: Terminal = { kind: 'UNCLASSIFIED', label: degrade.label };
+    return makeDegradedResult(terminal, startId, degrade.reason);
+  }
+  if (!walk || walk.edges.length === 0) {
+    // WR-01 — the GENUINELY-blocker-free row carries actionAffordance 'none' (not
+    // 'open'), so the Reader renders no dead action. makeBlockerFreeResult forces
+    // the non-actionable verdict; the label is a UUID-safe literal.
+    return makeBlockerFreeResult(startId, 'No active blockers');
+  }
+  return flattenBlockerChain({
+    startId,
+    edges: walk.edges,
+    nodeMeta: walk.nodeMeta,
+    viewerUserId,
+    maxAgeMs,
   });
 }
 
@@ -180,8 +333,14 @@ export async function walkBlockerChain(
               lastHeartbeatMs,
               hasQueuedWork: b.hasQueuedWork === true,
               nowMs,
+              // WR-03 (Plan 11-06) — forward the cadence only when it is a POSITIVE
+              // number (> 0). A host 0 is meaningful-but-invalid (a 0-width stale
+              // window); the helper then falls back to RUNNING_WINDOW_MS. Mirrors
+              // the 11-05 helper guard and org-blocked-backlog's call site.
               expectedCadenceMs:
-                typeof b.expectedCadenceMs === 'number' ? b.expectedCadenceMs : undefined,
+                typeof b.expectedCadenceMs === 'number' && b.expectedCadenceMs > 0
+                  ? b.expectedCadenceMs
+                  : undefined,
             });
       nodeMeta[toId] = {
         ownerUserId: b.assigneeUserId ?? b.ownerUserId ?? null,
@@ -199,51 +358,8 @@ export async function walkBlockerChain(
   return { edges, nodeMeta };
 }
 
-/**
- * Plan 11-02 Task 3 (D-10 / TAX-03 / Pitfall 3) — a WALK FAILURE (missing
- * params, thrown relations.get) is honestly UNCLASSIFIED. It carries a
- * degradeReason and the classifyVerdict-derived verdict (tier 'watch',
- * affordance 'open', needsYou false), so the UI renders an honest
- * "can't determine — open to investigate" panel rather than a false EXTERNAL
- * chase-action. The fields mirror the engine's makeResult shape.
- */
-function degraded(startId: string, label: string, degradeReason: string): BlockerChainResult {
-  const terminal: Terminal = { kind: 'UNCLASSIFIED', label };
-  const verdict = classifyVerdict(terminal);
-  return {
-    startId,
-    pathIds: startId ? [startId] : [],
-    terminal,
-    isStale: false,
-    needsYou: verdict.needsYou,
-    tier: verdict.tier,
-    actionAffordance: verdict.actionAffordance,
-    awaitedPartyLabel: label,
-    targetAgentUuid: null,
-    targetIssueUuid: startId || null,
-    degradeReason,
-  };
-}
-
-/**
- * Plan 11-02 Task 3 (Pitfall 3) — the GENUINELY-blocker-free case (the walk
- * succeeded and found no edges). This is DISTINCT from a walk failure: the
- * EXTERNAL terminal renders the UI's non-actionable "no active blockers" state,
- * and is NOT relabeled UNCLASSIFIED (a blocker-free issue is not a degrade).
- */
-function noBlockers(startId: string, label: string): BlockerChainResult {
-  const terminal: Terminal = { kind: 'EXTERNAL', label };
-  const verdict = classifyVerdict(terminal);
-  return {
-    startId,
-    pathIds: startId ? [startId] : [],
-    terminal,
-    isStale: false,
-    needsYou: verdict.needsYou,
-    tier: verdict.tier,
-    actionAffordance: verdict.actionAffordance,
-    awaitedPartyLabel: label,
-    targetAgentUuid: null,
-    targetIssueUuid: startId || null,
-  };
-}
+// Plan 11-06 Task 1 (IN-04) — the hand-built degraded() and noBlockers() row
+// constructors were REPLACED by the shared makeDegradedResult / makeBlockerFreeResult
+// helpers (from blocker-chain.ts), routed through buildHandlerResult above. The
+// blocker-free case now carries actionAffordance 'none' (WR-01) instead of the
+// classifyVerdict(EXTERNAL) → 'open' it previously emitted.
