@@ -37,7 +37,11 @@ import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 type ActionAffordance = BlockerChainResult['actionAffordance'];
 
 /** The button label for each affordance, or null when no button should render.
- *  awaitedPartyLabel is the scrubbed display string (NO_UUID_LEAK) — never a UUID. */
+ *  awaitedPartyLabel is the scrubbed display string (NO_UUID_LEAK) — never a UUID.
+ *  The scrub itself runs in the WORKER handler (flatten-blocker-chain.ts:
+ *  scrubResultLabel → scrubHumanAction), mirroring org-blocked-backlog.ts /
+ *  build-employees-rollup.ts — NOT in this panel. The panel only RENDERS the
+ *  already-scrubbed string (Plan 11-06 / 11-07, IN-01). */
 function primaryActionLabel(
   affordance: ActionAffordance,
   awaitedPartyLabel: string,
@@ -62,26 +66,33 @@ function primaryActionLabel(
 }
 
 /** The honest one-line blocker headline for each of the 8 kinds. Renders ONLY
- *  scrubbed display strings (terminal.label / awaitedPartyLabel / degradeReason)
- *  — never a raw targetAgentUuid/targetIssueUuid (NO_UUID_LEAK / D-15). For
- *  UNCLASSIFIED (D-12) the honest "can't determine — open to investigate" line. */
+ *  the SCRUBBED display strings — data.awaitedPartyLabel (the awaited-party
+ *  string the worker handler flatten-blocker-chain.ts already scrubbed of every
+ *  raw UUID via scrubResultLabel→scrubHumanAction) and data.degradeReason — and
+ *  NEVER the raw terminal.label (which still embeds UUIDs straight off the pure
+ *  engine) nor a raw targetAgentUuid/targetIssueUuid (NO_UUID_LEAK / D-15 / CR-01).
+ *  For UNCLASSIFIED (D-12) the honest "can't determine — open to investigate" line. */
 function blockerLine(data: BlockerChainResult): string {
   const t = data.terminal;
   switch (t.kind) {
     case 'AWAITING_HUMAN':
-      return t.label;
+      return data.awaitedPartyLabel;
     case 'AWAITING_AGENT_WORKING':
-      return `${data.awaitedPartyLabel} is working — ${t.label}`;
+      return `${data.awaitedPartyLabel} is working`;
     case 'AWAITING_AGENT_STUCK':
-      return `${data.awaitedPartyLabel} is stuck — ${t.label}`;
+      return `${data.awaitedPartyLabel} is stuck`;
     case 'SELF_RESOLVING':
-      return `${t.label} (resolves on its own)`;
+      // The scrub emits "{name} — assign an owner first" only for UNOWNED; for
+      // SELF_RESOLVING awaitedPartyLabel is the scrubbed party/eta line.
+      return `${data.awaitedPartyLabel} (resolves on its own)`;
     case 'EXTERNAL':
-      return t.label;
+      return data.awaitedPartyLabel;
     case 'CYCLE':
-      return `Circular dependency — ${t.label}`;
+      return `Circular dependency — ${data.awaitedPartyLabel}`;
     case 'UNOWNED':
-      return `${t.label} — no owner`;
+      // The scrub already emits "… — assign an owner first"; do NOT append a
+      // second "— no owner".
+      return data.awaitedPartyLabel;
     case 'UNCLASSIFIED':
       return data.degradeReason
         ? `Can't determine blocker (${data.degradeReason}) — open to investigate`
