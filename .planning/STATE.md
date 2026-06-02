@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.4.0
 milestone_name: Truthful Situation Room
-status: verifying
-stopped_at: "Completed 11-02-PLAN.md (Phase 11 Plan 2 of 4 — worker agent-ownership + liveness + honest UNCLASSIFIED degrade). Next: `/gsd:execute-phase 11` continues to Plan 11-03 (build-employees-rollup liveness reuse + verdict re-triage + split-identity)."
+status: gaps_found
+stopped_at: "Phase 11 all 4 plans built + integration-green (tsc 0, suite 2317/2324; 7 failures are pre-existing CHAT/CTT traceability debt). Verification 2026-06-02 = gaps_found (4/5 must-haves): CR-01 BLOCKER — NO_UUID_LEAK breach on the Reader blocker panel (flatten-blocker-chain.ts returns the engine result unscrubbed; live-blocker-panel.tsx renders raw UUID-bearing labels). Next: `/gsd:plan-phase 11 --gaps`."
 last_updated: "2026-06-02T09:14:03.142Z"
 last_activity: 2026-06-02
 progress:
@@ -604,9 +604,9 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 ## Current Position
 
-Phase: 11 (honest-blocker-taxonomy-engine) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 11 (honest-blocker-taxonomy-engine) — GAPS FOUND (verification)
+Plan: 4 of 4 built; 1 gap-closure plan needed
+Status: Verification gaps_found (4/5 must-haves) — CR-01 NO_UUID_LEAK breach on Reader panel. Run `/gsd:plan-phase 11 --gaps`.
 Last activity: 2026-06-02
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)

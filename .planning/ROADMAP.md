@@ -34,7 +34,7 @@ Full phase details archived at [`milestones/v1.0.0-ROADMAP.md`](milestones/v1.0.
 Make the Situation Room the one screen that truthfully tells Eric what's going on — and lets him do what needs him, in place. Hybrid architecture: a **deterministic engine** guaranteeing honesty + degrade-safety, with an **Editor-Agent** supplying the named human sentence on top. The two halves stay visibly separate (no AI in `blocker-chain.ts`).
 
 - [x] **Phase 10: Unblock-Resume Spike** — prove that answering an agent (a comment) actually unblocks + resumes it against the live Paperclip model, or determine the required status transition. Gates all action UI. (completed 2026-06-02)
-- [x] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row. (completed 2026-06-02)
+- [ ] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row. (4/4 plans built; verification 2026-06-02 found gaps — CR-01 NO_UUID_LEAK breach on Reader panel; gap closure required)
 - [ ] **Phase 12: Needs-You Triage** — "Needs you" lists only human-actionable items, ranked by leverage; Assign-owner suppressed except on genuinely-unowned / stuck-agent rows.
 - [ ] **Phase 13: Editor-Agent Named Action** — grounded plain-English named action + party + estimate, with a stale→degrade guardrail and no manufactured urgency.
 - [ ] **Phase 14: Do-It-Here Action Loop** — reply-in-place + quick-decision chips that unblock+resume the agent, across three surfaces; "Open ↗" for out-of-system humans.
@@ -132,7 +132,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Unblock-Resume Spike | 2/3 | Complete    | 2026-06-02 |
-| 11. Honest Blocker Taxonomy | 4/4 | Complete   | 2026-06-02 |
+| 11. Honest Blocker Taxonomy | 4/4 | Gaps found | - |
 | 12. Needs-You Triage | 0/0 | Not started | - |
 | 13. Editor-Agent Named Action | 0/0 | Not started | - |
 | 14. Do-It-Here Action Loop | 0/0 | Not started | - |
