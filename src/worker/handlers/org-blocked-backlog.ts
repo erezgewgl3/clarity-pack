@@ -531,6 +531,16 @@ export async function buildOrgBlockedBacklog(
     const leafId = chain.targetIssueUuid;
     const leafStatus =
       (leafId && nodeMeta[leafId]?.status) ||
+      // IN-02 (14-REVIEW) — INTENTIONAL conservative fallback. DO NOT broaden.
+      // When the leaf node was not walked as a blockedBy node (e.g. it is the
+      // terminal of a chain whose outgoing edges buildEdges didn't traverse, so
+      // nodeMeta has no entry for it), fall back to 'blocked' ONLY when the leaf
+      // IS the root — the root is status='blocked' by the list filter (incl. the
+      // UNCLASSIFIED degrade chain whose leaf === root). A multi-hop chain with an
+      // ABSENT leaf nodeMeta deliberately yields null → needsDurabilityFlip=false
+      // → comment-only (Shape A, spike-safe): the comment alone triggers native
+      // resume; we just skip the durable Shape-B flip rather than over-firing it
+      // against an issue whose real status we can't confirm here.
       (leafId === rootId || leafId == null ? 'blocked' : null);
     const needsDurabilityFlip = leafStatus === 'blocked';
     rows.push({
