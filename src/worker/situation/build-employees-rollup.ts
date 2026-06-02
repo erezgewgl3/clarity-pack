@@ -25,7 +25,7 @@ import {
   classifyVerdict,
 } from '../../shared/blocker-chain.ts';
 import { scrubHumanAction } from '../../shared/scrub-human-action.ts';
-import type { BlockerChainResult, Terminal } from '../../shared/types.ts';
+import type { ActionCard, BlockerChainResult, Terminal } from '../../shared/types.ts';
 import { polishTldr } from '../agents/compile-tldr.ts';
 import {
   classifyEmployeeState,
@@ -139,6 +139,12 @@ export type SituationEmployeeRow = {
   } | null;
   /** 0 for v1.2.0 — informational; deferred per Open Question #3. */
   doneTodayCount: number;
+  /** Plan 13-02 (D-13) — the Editor-Agent action card for this needs-you row,
+   *  attached by the situation.snapshot handler AFTER the rollup (a fresh card
+   *  → the ActionCard; stale/absent/degrade → null so the UI falls back to the
+   *  deterministic blockerChain line, D-12). Optional: the builder does not set
+   *  it; only the handler does. */
+  actionCard?: ActionCard | null;
 };
 
 export type NeedsYou = {

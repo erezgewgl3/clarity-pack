@@ -50,6 +50,20 @@ import {
   operationOriginKind,
   type AgentTaskDeliveryCtx,
 } from './agent-task-delivery.ts';
+// Plan 13-02 (D-06 secondary trigger) — the Editor-Agent heartbeat is the
+// parity secondary trigger for action-card generation, mirroring TL;DR. It is
+// BEST-EFFORT and wrapped so a failure is logged and NEVER propagates (the
+// heartbeat must remain best-effort; no auto-resume). The view-driven SR data
+// handler (situation-room.ts) is the must-have primary trigger.
+import {
+  driveActionCardsStep,
+  type ActionCardsCtx,
+  type ActionCardSourceRow,
+} from './action-cards.ts';
+import {
+  buildEmployeesRollup,
+  type EmployeesRollupCtx,
+} from '../situation/build-employees-rollup.ts';
 
 // Stable agent key — referenced by manifest agents[] AND every reconcile call.
 export const EDITOR_AGENT_KEY = 'editor-agent';
@@ -317,6 +331,47 @@ export async function handleEditorHeartbeat(
         reason: (err as Error).message,
       });
     }
+  }
+
+  // Plan 13-02 (D-06 secondary trigger) — after the TL;DR compile loop, drive
+  // the action-card generation for this company BEST-EFFORT. Mirrors the
+  // view-driven SR path: derive the engine-flagged needsYou rows via
+  // buildEmployeesRollup (same builder the situation.snapshot handler uses), then
+  // call driveActionCardsStep. Wrapped so ANY failure is logged and never
+  // propagates — the heartbeat must remain best-effort; driveActionCardsStep
+  // itself already never throws. No auto-resume (the step's paused-check owns it).
+  try {
+    const rollup = await buildEmployeesRollup(
+      ctx as unknown as EmployeesRollupCtx,
+      payload.companyId,
+      '', // viewer-agnostic on the heartbeat; the engine verdict drives needsYou
+    );
+    const needsYouRows: ActionCardSourceRow[] = rollup.employees
+      .filter((e) => e.blockerChain && e.blockerChain.needsYou === true)
+      .map((e) => ({
+        sourceIssueId: e.blockerChain!.targetIssueUuid ?? e.blockerChain!.leafIssueUuid ?? '',
+        leafIssueId: e.blockerChain!.leafIssueId,
+        awaitedPartyLabel: e.blockerChain!.awaitedPartyLabel,
+        humanAction: e.blockerChain!.humanAction,
+        actionAffordance: e.blockerChain!.actionAffordance,
+        inputs: {
+          body: e.focusLine ?? '',
+          comments: [],
+          refs: e.blockerChain!.leafIssueId ? [e.blockerChain!.leafIssueId] : [],
+        },
+      }))
+      .filter((r) => r.sourceIssueId.length > 0);
+    if (needsYouRows.length > 0) {
+      await driveActionCardsStep(ctx as unknown as ActionCardsCtx, {
+        companyId: payload.companyId,
+        needsYouRows,
+      });
+    }
+  } catch (e) {
+    ctx.logger?.info?.('Editor-Agent: action-card heartbeat trigger skipped (non-fatal)', {
+      companyId: payload.companyId,
+      reason: (e as Error).message,
+    });
   }
 }
 

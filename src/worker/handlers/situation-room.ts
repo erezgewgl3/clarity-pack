@@ -42,6 +42,17 @@ import {
   type NeedsYou,
   type EmployeesRollupCtx,
 } from '../situation/build-employees-rollup.ts';
+// Plan 13-02 (D-06/D-13) — the Editor-Agent action-card step. Generation runs
+// HERE, in the situation.snapshot valid-scope handler (the 60s on-view
+// recompute), after buildEmployeesRollup — exactly where driveTldrCompileStep
+// lives for the Reader. Degrade-safe (a throw → no cards → the row renders the
+// deterministic engine line); never blocks the snapshot.
+import {
+  driveActionCardsStep,
+  type ActionCardsCtx,
+  type ActionCardSourceRow,
+} from '../agents/action-cards.ts';
+import type { ActionCard } from '../../shared/types.ts';
 
 // Plan 07-03 Task 2 + Plan 08-01 Task 3 — widen the ctx with the SDK clients the
 // builders need (mirror ResolveRefsCtx in resolve-refs.ts:76-83). org-blocked-
@@ -118,6 +129,68 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       });
     }
 
+    // Plan 13-02 (D-06/D-07/D-12) — generate the Editor-Agent action cards for
+    // the engine-flagged needsYou rows, in THIS valid-scope handler (the 60s
+    // on-view recompute). D-07: only rows the deterministic engine flagged
+    // (blockerChain.needsYou === true) are passed in — the AI never decides
+    // WHETHER a row needs a human. Degrade-safe: a throw leaves the snapshot
+    // intact (the rows fall back to the deterministic engine line). The step
+    // itself never throws; this try/catch is belt-and-suspenders.
+    //
+    // GOTCHA 2 (ctx widening) — SituationRoomCtx does NOT declare the
+    // db / agents.managed fields driveActionCardsStep needs (it carries only the
+    // builder slice). The data-handler ctx at runtime DOES carry db + the full
+    // agents/issues clients (same as bulletin.byCycle's CompileBulletinCtx cast),
+    // so we widen via `ctx as unknown as ActionCardsCtx`.
+    let cardsBySource: Record<string, ActionCard> = {};
+    try {
+      const needsYouRows: ActionCardSourceRow[] = employees
+        .filter((e) => e.blockerChain && e.blockerChain.needsYou === true)
+        .map((e) => ({
+          // D-03 — the leaf UUID is the cache key / dispatch id (never rendered).
+          sourceIssueId: e.blockerChain!.targetIssueUuid ?? e.blockerChain!.leafIssueUuid ?? '',
+          leafIssueId: e.blockerChain!.leafIssueId,
+          awaitedPartyLabel: e.blockerChain!.awaitedPartyLabel,
+          humanAction: e.blockerChain!.humanAction,
+          actionAffordance: e.blockerChain!.actionAffordance,
+          // The focus line is the closest grounding signal available in the
+          // snapshot scope (no extra host fetch); the deterministic party +
+          // leaf id ground the rest.
+          inputs: {
+            body: e.focusLine ?? '',
+            comments: [],
+            refs: e.blockerChain!.leafIssueId ? [e.blockerChain!.leafIssueId] : [],
+          },
+        }))
+        // Drop rows with no usable leaf key (can't cache/dispatch them).
+        .filter((r) => r.sourceIssueId.length > 0);
+
+      if (needsYouRows.length > 0) {
+        const step = await driveActionCardsStep(ctx as unknown as ActionCardsCtx, {
+          companyId,
+          needsYouRows,
+        });
+        cardsBySource = step.cards;
+      }
+    } catch (e) {
+      // Degrade-safe (D-12) — a thrown step leaves cardsBySource empty so every
+      // row renders the deterministic engine line. Never blocks the snapshot.
+      ctx.logger?.warn?.('situation.snapshot: action-card generation failed', {
+        companyId,
+        err: (e as Error).message,
+      });
+      cardsBySource = {};
+    }
+
+    // Attach the per-row actionCard (D-13). A fresh card → the ActionCard;
+    // stale/absent/degrade → null so the UI falls back to the deterministic
+    // line. The leaf UUID is the join key (dispatch-only — never rendered).
+    const employeesWithCards = employees.map((e) => {
+      const leafUuid = e.blockerChain?.targetIssueUuid ?? e.blockerChain?.leafIssueUuid ?? null;
+      const actionCard: ActionCard | null = leafUuid ? (cardsBySource[leafUuid] ?? null) : null;
+      return { ...e, actionCard };
+    });
+
     // Plan 09-01 (WARNING 5) — the materialized situation_snapshots read-path
     // is REMOVED. The recompute-situation cron writer was deleted in this plan,
     // so a row is never written post-Phase-9 — the SELECT + `if (row)` branch +
@@ -127,7 +200,7 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
     // added — R9 additive-only leaves the empty table in place.
     return {
       org_blocked_backlog,
-      situation_employees: employees,
+      situation_employees: employeesWithCards,
       needsYou,
       taken_at: new Date().toISOString(),
     };
