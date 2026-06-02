@@ -68,7 +68,7 @@ test('AWAITING_AGENT_WORKING — walks THROUGH agent to a live agent leaf; in-mo
   assert.equal(result.targetAgentUuid, 'agent-actuary');
 });
 
-test('AWAITING_AGENT_STUCK — agentState missing ⇒ conservative STUCK (D-04); watch tier + nudge', () => {
+test('AWAITING_AGENT_STUCK — agentState missing ⇒ conservative STUCK (D-04); watch tier + assign (D-05)', () => {
   const result = flattenBlockerChain({
     startId: 'A',
     edges: [{ from: 'A', to: 'B', reason: 'blocks' }],
@@ -83,7 +83,9 @@ test('AWAITING_AGENT_STUCK — agentState missing ⇒ conservative STUCK (D-04);
   assert.equal(result.terminal.agentId, 'agent-cfo');
   assert.equal(result.needsYou, false);
   assert.equal(result.tier, 'watch');
-  assert.equal(result.actionAffordance, 'nudge');
+  // D-05 — a stuck agent's honest answer is re-owning the issue, so the row
+  // now offers 'assign' (was 'nudge'). tier stays 'watch'; needsYou stays false.
+  assert.equal(result.actionAffordance, 'assign');
   assert.equal(result.targetAgentUuid, 'agent-cfo');
 });
 
@@ -116,7 +118,7 @@ test('classifyVerdict — encodes the design-seed Section 1 table for all 8 kind
   const table = {
     AWAITING_HUMAN: { tier: 'needs-you', actionAffordance: 'reply', needsYou: true },
     AWAITING_AGENT_WORKING: { tier: 'in-motion', actionAffordance: 'none', needsYou: false },
-    AWAITING_AGENT_STUCK: { tier: 'watch', actionAffordance: 'nudge', needsYou: false },
+    AWAITING_AGENT_STUCK: { tier: 'watch', actionAffordance: 'assign', needsYou: false },
     SELF_RESOLVING: { tier: 'watch', actionAffordance: 'none', needsYou: false },
     EXTERNAL: { tier: 'watch', actionAffordance: 'open', needsYou: false },
     CYCLE: { tier: 'watch', actionAffordance: 'open', needsYou: false },
