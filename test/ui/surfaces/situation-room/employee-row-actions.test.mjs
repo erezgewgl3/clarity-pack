@@ -13,6 +13,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+// Plan 11-07 (Task 3 / CR-01 test-gap) — the behavioral UUID-pattern guard.
+// We import the REAL scrub so the render-scan asserts the rendered label string
+// is UUID-free, not merely that *Uuid field names are absent from JSX. This is
+// the assertion that would have CAUGHT CR-01: a terminal whose label embeds a
+// raw UUID must produce an awaitedPartyLabel matching NO UUID pattern.
+import { scrubHumanAction } from '../../../../src/shared/scrub-human-action.ts';
+
+// The exact UUID shape (mirrors src/shared/scrub-human-action.ts UUID_RE).
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..');
 const ROW = readFileSync(
@@ -122,6 +132,80 @@ test('NO_UUID_LEAK render-scan — no targetAgentUuid/targetIssueUuid in a JSX e
   assert.match(ROW, /awaitedPartyLabel/, 'employee-row renders awaitedPartyLabel');
   assert.match(BANNER, /awaitedPartyLabel/, 'needs-you-banner renders awaitedPartyLabel');
   assert.match(PANEL, /awaitedPartyLabel/, 'live-blocker-panel renders awaitedPartyLabel');
+});
+
+// ---------------------------------------------------------------------------
+// Plan 11-07 (Task 3) — UPGRADED NO_UUID_LEAK render-scan for the Reader panel.
+// The CR-01 test-gap: the existing scan above only checks *Uuid FIELD-NAME
+// absence. CR-01 slipped through because the panel rendered RAW t.label (which
+// embeds UUIDs straight off the engine), and no test asserted the rendered
+// LABEL TEXT was UUID-free. These tests close that gap.
+// ---------------------------------------------------------------------------
+
+test('CR-01 source-scan — live-blocker-panel.blockerLine() reads data.awaitedPartyLabel, NOT raw t.label, for every UUID-bearing kind', () => {
+  // REGRESSION PROOF: reverting Task 1 (rendering t.label) makes this FAIL,
+  // because the assertion keys on awaitedPartyLabel being the rendered string
+  // and on NO `t.label` survival inside blockerLine().
+  const PANEL = readFileSync(
+    path.join(REPO_ROOT, 'src/ui/surfaces/reader/live-blocker-panel.tsx'),
+    'utf8',
+  );
+  // Isolate the blockerLine() body — the function that produces the rendered
+  // headline for all 8 terminal kinds.
+  const m = PANEL.match(/function blockerLine\([\s\S]*?\n\}/);
+  assert.ok(m, 'blockerLine() function must exist in live-blocker-panel.tsx');
+  const body = m[0];
+  // It renders the scrubbed display string for the UUID-bearing kinds.
+  assert.match(body, /data\.awaitedPartyLabel/, 'blockerLine renders data.awaitedPartyLabel');
+  // It must NOT read t.label inside any returned/rendered string. t.kind is the
+  // ONLY terminal field that survives (the switch discriminant); t.label is the
+  // raw leak source CR-01 was.
+  assert.doesNotMatch(
+    body,
+    /\bt\.label\b/,
+    'blockerLine() must NOT render raw t.label (CR-01 leak source) — only t.kind survives for the switch',
+  );
+});
+
+test('CR-01 behavioral guard — a terminal whose label embeds a raw UUID scrubs to a UUID-FREE awaitedPartyLabel (the assertion that would have caught CR-01)', () => {
+  // Feed a BlockerChainResult terminal carrying a real hex UUID in its label —
+  // the exact shape the pure engine emits before the 11-06 worker scrub. The
+  // scrubbed output (what the panel now renders via data.awaitedPartyLabel) must
+  // match NO UUID pattern across every UUID-bearing kind. A raw-UUID render
+  // (pre-fix) would FAIL this; the scrubbed render PASSES.
+  const AGENT = '11111111-2222-3333-4444-555555555555';
+  const VIEWER = '99999999-8888-7777-6666-555555555555';
+  const LEAF = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const emptyNames = new Map(); // unresolved → forces the agent#<8> short-form fallback
+
+  /** Each UUID-bearing kind, with a label that embeds a raw UUID exactly as the
+   *  pure engine would produce it. */
+  const fixtures = [
+    { kind: 'AWAITING_HUMAN', userId: VIEWER, label: `Waiting on ${VIEWER}` },
+    { kind: 'AWAITING_AGENT_WORKING', agentId: AGENT, label: `${AGENT} is working` },
+    { kind: 'AWAITING_AGENT_STUCK', agentId: AGENT, label: `${AGENT} is stuck` },
+    { kind: 'SELF_RESOLVING', etaIso: '2026-06-02T00:00:00.000Z', label: `${AGENT} ETA 2026-06-02` },
+    { kind: 'EXTERNAL', label: `External dependency ${LEAF}` },
+    { kind: 'CYCLE', cycleNodes: [LEAF], label: `Cycle through ${LEAF}` },
+    { kind: 'UNOWNED', label: `Leaf ${LEAF} has no owner` },
+    { kind: 'UNCLASSIFIED', label: `Could not classify ${LEAF}` },
+  ];
+
+  for (const terminal of fixtures) {
+    // Sanity: the RAW label DOES carry a UUID (so a raw-render would have leaked).
+    assert.match(
+      terminal.label,
+      UUID_RE,
+      `fixture ${terminal.kind} must embed a raw UUID so this guard is meaningful`,
+    );
+    const scrubbed = scrubHumanAction(terminal, VIEWER, emptyNames);
+    // The scrubbed string — the value the Reader panel renders — is UUID-FREE.
+    assert.doesNotMatch(
+      scrubbed,
+      UUID_RE,
+      `scrubbed awaitedPartyLabel for ${terminal.kind} still embeds a UUID (NO_UUID_LEAK / CR-01 violation): ${scrubbed}`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
