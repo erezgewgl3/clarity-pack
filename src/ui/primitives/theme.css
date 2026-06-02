@@ -569,7 +569,12 @@
   background: color-mix(in oklch, var(--clarity-bg), white 4%);
 }
 
-[data-clarity-surface='reader'] .clarity-blocker-panel[data-terminal-kind='HUMAN_ACTION_ON'] {
+/* Plan 11-04 — the "ON YOU" highlight follows the renamed honest taxonomy:
+   AWAITING_HUMAN (was HUMAN_ACTION_ON) and the genuinely-UNOWNED kind both put a
+   blocker on the operator. Keyed on data-terminal-kind, which the panel now
+   stamps with the 8-kind union value. */
+[data-clarity-surface='reader'] .clarity-blocker-panel[data-terminal-kind='AWAITING_HUMAN'],
+[data-clarity-surface='reader'] .clarity-blocker-panel[data-terminal-kind='UNOWNED'] {
   border-color: var(--clarity-state-awaiting-you-bg);
   background: color-mix(in oklch, var(--clarity-state-awaiting-you-bg), var(--clarity-bg) 80%);
 }
