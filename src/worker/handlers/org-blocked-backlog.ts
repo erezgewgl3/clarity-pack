@@ -114,6 +114,14 @@ export type OrgBlockedRow = {
    *  the UI never renders ownerAgentId as text). */
   humanAction: string;
   terminalKind: Terminal['kind'];
+  /** Plan 12-03 Task 1 (NY-03 / D-09) — the engine verdict's action affordance,
+   *  carried verbatim from chain.actionAffordance (classifyVerdict). The org-
+   *  blocked backlog expander gates the OwnerPickerPopover on
+   *  `actionAffordance === 'assign'` (UNOWNED + AWAITING_AGENT_STUCK after 12-01)
+   *  — the SAME single verdict every other surface reads, never a terminal.kind
+   *  list or an ownerName string-match. Typed off the shared union so a 6th
+   *  affordance is a compile error here AND in the UI mirror type. */
+  actionAffordance: BlockerChainResult['actionAffordance'];
   /** Owner DISPLAY NAME or null. NO_UUID_LEAK: null renders "Unassigned" in
    *  the UI — NEVER the raw UUID. */
   ownerName: string | null;
@@ -486,6 +494,10 @@ export async function buildOrgBlockedBacklog(
       // NEVER carry a raw UUID (mirrors the JOB path's humanize-snapshot.ts).
       humanAction: scrubHumanAction(terminal, viewerUserId, nameByUuid),
       terminalKind: terminal.kind,
+      // Plan 12-03 Task 1 (NY-03 / D-09) — carry the engine verdict straight off
+      // the chain (classifyVerdict already ran inside flattenBlockerChain /
+      // unclassifiedChain). No new compute, no new fetch.
+      actionAffordance: chain.actionAffordance,
       ownerName: ownerUuid ? (nameByUuid.get(ownerUuid) ?? null) : null,
       ownerAgentId: ownerUuid,
       age_ms: ageMsFrom(issue),

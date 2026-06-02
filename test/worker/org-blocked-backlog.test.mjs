@@ -649,6 +649,72 @@ test('builder — agent-owned leaf with NO heartbeat classifies AWAITING_AGENT_S
 // pre-11-02 "issue skipped" behavior, which lost the blocked issue entirely.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Plan 12-03 Task 1 (NY-03 / D-09) — OrgBlockedRow now carries the engine
+// actionAffordance so the org-blocked backlog expander can gate the
+// OwnerPickerPopover off the SAME verdict every other surface reads. After
+// 12-01, actionAffordance === 'assign' ⇔ terminal.kind ∈ {UNOWNED,
+// AWAITING_AGENT_STUCK}; AWAITING_HUMAN → 'reply'; an UNCLASSIFIED degrade →
+// 'open'. The affordance flows from chain.actionAffordance (classifyVerdict) —
+// NO new compute, NO terminal.kind string-match in the UI.
+// ---------------------------------------------------------------------------
+
+test('builder — UNOWNED row carries actionAffordance "assign" (NY-03/D-09)', async () => {
+  const blockerUuid = '7b5c7deb-8135-4d23-b41b-6cf7b724e945';
+  const f = unownedUuidBlockerIssue('i-u', 'COU-1', blockerUuid);
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { 'i-u': f.relations },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
+  const row = backlog.rows[0];
+  assert.equal(row.terminalKind, 'UNOWNED');
+  assert.equal(row.actionAffordance, 'assign');
+});
+
+test('builder — AWAITING_AGENT_STUCK row carries actionAffordance "assign" (post-12-01, NY-03/D-09)', async () => {
+  const agentUuid = 'eeeeeeee-5555-6666-7777-888888888888';
+  const f = agentOwnedIssue('i-as', 'COU-11', agentUuid, { fresh: false });
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { 'i-as': f.relations },
+    agents: { [agentUuid]: { name: 'Stalled-Agent' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
+  const row = backlog.rows[0];
+  assert.equal(row.terminalKind, 'AWAITING_AGENT_STUCK');
+  assert.equal(row.actionAffordance, 'assign');
+});
+
+test('builder — AWAITING_HUMAN row carries actionAffordance "reply" (NOT "assign")', async () => {
+  const f = humanActionIssue('i-h', 'COU-2', 'u-1');
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { 'i-h': f.relations },
+    agents: { 'u-1': { name: 'Head of Compliance' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-1');
+  const row = backlog.rows[0];
+  assert.equal(row.terminalKind, 'AWAITING_HUMAN');
+  assert.equal(row.actionAffordance, 'reply');
+  assert.notEqual(row.actionAffordance, 'assign');
+});
+
+test('builder — UNCLASSIFIED degrade row carries actionAffordance "open" (NOT "assign")', async () => {
+  const a = humanActionIssue('i-a', 'COU-1', 'u-1');
+  const ctx = makeCtx({
+    issues: [a.issue],
+    relations: { 'i-a': a.relations },
+    relationsThrowFor: new Set(['i-a']), // root relations.get throws → UNCLASSIFIED row
+    agents: { 'u-1': { name: 'Head of Compliance' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-1');
+  const row = backlog.rows[0];
+  assert.equal(row.terminalKind, 'UNCLASSIFIED');
+  assert.equal(row.actionAffordance, 'open');
+  assert.notEqual(row.actionAffordance, 'assign');
+});
+
 test('builder — a thrown edge build yields an honest UNCLASSIFIED row, not a dropped issue (TAX-03)', async () => {
   const a = humanActionIssue('i-a', 'COU-1', 'u-1');
   const b = humanActionIssue('i-b', 'COU-2', 'u-1');
