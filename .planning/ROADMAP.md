@@ -37,7 +37,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 - [x] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row. (4/4 plans built; verification 2026-06-02 found gaps — CR-01 NO_UUID_LEAK breach on Reader panel; gap closure required) (completed 2026-06-02)
 - [x] **Phase 12: Needs-You Triage** — "Needs you" lists only human-actionable items, ranked by leverage; Assign-owner suppressed except on genuinely-unowned / stuck-agent rows. CLOSED 2026-06-02 (3 plans; verification 4/4 PASS; CR-01 Reader-leaf-navigate blocker fixed).
 - [x] **Phase 13: Editor-Agent Named Action** — grounded plain-English named action + party + estimate, with a stale→degrade guardrail and no manufactured urgency. (completed 2026-06-02)
-- [ ] **Phase 14: Do-It-Here Action Loop** — reply-in-place + quick-decision chips that unblock+resume the agent, across three surfaces; "Open ↗" for out-of-system humans.
+- [x] **Phase 14: Do-It-Here Action Loop** — reply-in-place + quick-decision chips that unblock+resume the agent, across three surfaces; "Open ↗" for out-of-system humans. BUILT 2026-06-03 (4 plans; verify 5/5 automated; CR-01 cross-company auth gate fixed; live BEAAA reply+resume drill folded into the milestone deploy drill).
 - [ ] **Phase 15: Cockpit IA Redesign** — Pulse header + Needs-you / In-motion / Watch tiers consuming the engine verdict + Editor-Agent cards.
 
 ## Phase Details
@@ -150,7 +150,7 @@ Plans:
 | 11. Honest Blocker Taxonomy | 7/7 | Complete    | 2026-06-02 |
 | 12. Needs-You Triage | 3/3 | Complete    | 2026-06-02 |
 | 13. Editor-Agent Named Action | 3/3 | Complete   | 2026-06-02 |
-| 14. Do-It-Here Action Loop | 3/4 | In Progress|  |
+| 14. Do-It-Here Action Loop | 4/4 | Built (live-drill pending) | 2026-06-03 |
 | 15. Cockpit IA Redesign | 0/0 | Not started | - |
 
 ---
