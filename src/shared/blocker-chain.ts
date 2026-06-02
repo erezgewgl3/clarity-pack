@@ -124,6 +124,73 @@ function makeResult(args: {
 }
 
 /**
+ * Plan 11-05 (IN-04) — the SINGLE shared degrade-row constructor. The worker
+ * handlers (flatten-blocker-chain.ts degraded(), org-blocked-backlog.ts) hand-built
+ * three near-identical BlockerChainResult objects for the UNCLASSIFIED degrade path;
+ * a future verdict field added to BlockerChainResult could be silently missed by one
+ * of them. Routing every degrade row through this one helper closes that gap
+ * (Wave 2 adopts it). Mirrors makeResult's assembly: classifyVerdict-derived verdict,
+ * pathIds = [startId] when present, isStale false, leafId = startId, targetAgentUuid
+ * null, targetIssueUuid = startId (or null when startId is empty).
+ *
+ * Pure: no clock, no I/O, no AI tokens.
+ */
+export function makeDegradedResult(
+  terminal: Terminal,
+  startId: string,
+  degradeReason?: string,
+): BlockerChainResult {
+  const verdict = classifyVerdict(terminal);
+  return {
+    startId,
+    pathIds: startId ? [startId] : [],
+    terminal,
+    isStale: false,
+    needsYou: verdict.needsYou,
+    tier: verdict.tier,
+    actionAffordance: verdict.actionAffordance,
+    awaitedPartyLabel: terminal.label,
+    targetAgentUuid: null,
+    targetIssueUuid: startId || null,
+    ...(degradeReason != null ? { degradeReason } : {}),
+  };
+}
+
+/**
+ * Plan 11-05 (WR-01 root) — the GENUINELY-blocker-free row. The walk succeeded and
+ * found no edges: this is NOT a blocker, NOT a degrade, and must NOT surface an
+ * action. We deliberately OVERRIDE the affordance to 'none' rather than route the
+ * synthetic EXTERNAL terminal through classifyVerdict, because classifyVerdict maps
+ * EXTERNAL → 'open' BY DESIGN (a real external blocker is openable — see WR-01 in
+ * 11-REVIEW.md). Only the blocker-free synthetic case is non-actionable; the EXTERNAL
+ * → 'open' mapping for genuine externals is intentionally left untouched. The
+ * resulting row is tier 'watch', needsYou false, affordance 'none' — the Reader
+ * renders a quiet "no active blockers" state with no dead "Open ↗" button.
+ *
+ * The terminal kind stays EXTERNAL so the per-kind ranking (pickTopChains) and the
+ * scrub treat it uniformly; only the verdict triple is forced non-actionable.
+ *
+ * Pure: no clock, no I/O, no AI tokens.
+ */
+export function makeBlockerFreeResult(startId: string, label: string): BlockerChainResult {
+  const terminal: Terminal = { kind: 'EXTERNAL', label };
+  return {
+    startId,
+    pathIds: startId ? [startId] : [],
+    terminal,
+    isStale: false,
+    // WR-01: forced non-actionable verdict — NOT classifyVerdict(terminal), which
+    // would return 'open'. A blocker-free issue offers no control.
+    needsYou: false,
+    tier: 'watch',
+    actionAffordance: 'none',
+    awaitedPartyLabel: label,
+    targetAgentUuid: null,
+    targetIssueUuid: startId || null,
+  };
+}
+
+/**
  * Flatten a blocker-edge graph to its terminal. Deterministic DFS:
  *   - Stops at the first node with no outgoing edges (or only external edges) — leaf
  *   - Stops on revisit of a node already on the current path stack — cycle
@@ -218,11 +285,15 @@ export function flattenBlockerChain(input: BlockerChainInput): BlockerChainResul
       }
       // Also fire EXTERNAL when the leaf's only outgoing edges are external
       // (i.e., it has external children we won't recurse into).
+      // WR-05 (Plan 11-05): label names `current` (the leaf / leafId), NOT
+      // externalEdge.to (a refused child we never walked into). The leaf reached
+      // IS the terminal node — labeling the child mis-attributed targetIssueUuid
+      // (which is leafId === current) to a different id, leaking a node the chain
+      // never resolved to. Both EXTERNAL branches now name the same node.
       if (outgoing.length > 0 && outgoing.every((e) => e.reason === 'external')) {
-        const externalEdge = outgoing[0]!;
         const terminal: Terminal = {
           kind: 'EXTERNAL',
-          label: `External (${externalEdge.to})`,
+          label: `External (${current})`,
         };
         return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
       }

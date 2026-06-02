@@ -162,14 +162,19 @@ test('EXTERNAL — final edge reason="external" produces EXTERNAL terminal', () 
   assert.equal(result.terminal.kind, 'EXTERNAL');
 });
 
-test('WR-05 — reached-via-external EXTERNAL branch: terminal.label names the SAME node as targetIssueUuid (current)', () => {
-  // A→B via an external edge; B is the leaf reached via external.
+test('WR-05 — EXTERNAL terminal.label always names the SAME node as targetIssueUuid (the leaf / current)', () => {
+  // A walks B via a real (non-external) edge; B's only outgoing edge is external,
+  // so EXTERNAL fires on the leaf B. Label and targetIssueUuid must both name B.
   const result = flattenBlockerChain({
     startId: 'A',
-    edges: [{ from: 'A', to: 'B', reason: 'external' }],
+    edges: [
+      { from: 'A', to: 'B', reason: 'blocks' },
+      { from: 'B', to: 'C', reason: 'external' },
+    ],
     nodeMeta: {
       A: { ownerUserId: null, etaIso: null, status: 'blocked' },
-      B: { ownerUserId: null, etaIso: null, status: 'external' },
+      B: { ownerUserId: null, etaIso: null, status: 'blocked' },
+      C: { ownerUserId: null, etaIso: null, status: 'external' },
     },
     viewerUserId: 'eric',
   });
@@ -178,6 +183,10 @@ test('WR-05 — reached-via-external EXTERNAL branch: terminal.label names the S
   assert.ok(
     result.terminal.label.includes(result.targetIssueUuid),
     `label "${result.terminal.label}" must name targetIssueUuid "${result.targetIssueUuid}"`,
+  );
+  assert.ok(
+    !result.terminal.label.includes('C'),
+    `label "${result.terminal.label}" must NOT name the refused external child "C" (WR-05)`,
   );
 });
 
