@@ -66,12 +66,12 @@ export function scrubHumanAction(
     return scrubbed.replace(UUID_RE_G, (uuid) => `agent#${uuid.slice(0, 8)}`);
   }
 
-  // Step 4 — substitute every embedded UUID with a name or short-form (covers
+  // Step 3 — substitute every embedded UUID with a name or short-form (covers
   // AWAITING_AGENT_WORKING/STUCK agentId, AWAITING_HUMAN/EXTERNAL/CYCLE labels).
   let label = terminal.label.replace(UUID_RE_G, (uuid) => nameOf(uuid) ?? `agent#${uuid.slice(0, 8)}`);
 
-  // Step 5 — viewer userId → "You" for an AWAITING_HUMAN action. Run AFTER step 4
-  // because the userId is itself a UUID that step 4 would have already rewritten
+  // Step 4 — viewer userId → "You" for an AWAITING_HUMAN action. Run AFTER step 3
+  // because the userId is itself a UUID that step 3 would have already rewritten
   // to a name; substitute against the resolved fragment too.
   if (terminal.kind === 'AWAITING_HUMAN') {
     if (terminal.label.includes(terminal.userId)) {
@@ -82,6 +82,6 @@ export function scrubHumanAction(
     }
   }
 
-  // Step 6 — belt-and-suspenders: no UUID may survive.
+  // Step 5 — belt-and-suspenders: no UUID may survive.
   return label.replace(UUID_RE_G, (uuid) => `agent#${uuid.slice(0, 8)}`);
 }
