@@ -131,6 +131,31 @@ export type OrgBlockedRow = {
   /** ms since the issue was blocked, or null when no timestamp field parses
    *  (the UI omits the age chip rather than render NaN). */
   age_ms: number | null;
+  // Plan 14-04 Task 2 (BLOCKER 3 / D-02/D-08/D-10) — the fields <ReplyInPlace>
+  // needs on the org-blocked backlog surface. All additive + projection-only:
+  // the engine verdict + the leaf node status are already computed.
+  /** Plan 14-04 — the scrubbed awaited-party DISPLAY string (= the scrubbed
+   *  humanAction / chain.awaitedPartyLabel). The only rendered awaited-party
+   *  label; carries no raw UUID (NO_UUID_LEAK). */
+  awaitedPartyLabel: string;
+  /** Plan 14-04 — the awaited AGENT UUID for the reply/nudge mutation (=
+   *  chain.targetAgentUuid). DISPATCH-ONLY, NEVER rendered (NO_UUID_LEAK). */
+  targetAgentUuid: string | null;
+  /** Plan 14-04 — the conservative-binary decision options (Phase 13 D-08). The
+   *  org backlog has NO action card this phase → always null; carried so the UI
+   *  mirror stays parallel with the SR/Reader surfaces. */
+  decisionOptions: string[] | null;
+  /** Plan 14-04 — the LEAF issue UUID (= chain.targetIssueUuid), the MUTATION id
+   *  for situation.replyAndResume → ctx.issues.update. DISTINCT from issueId
+   *  (the ROOT issue UUID) on a multi-hop chain. DISPATCH-ONLY, NEVER rendered
+   *  (NO_UUID_LEAK — identifier stays the only displayed key). */
+  leafIssueUuid: string | null;
+  /** Plan 14-04 (T-14-19) — the Shape-B durable-flip signal: true iff the LEAF
+   *  node's status === 'blocked' (nodeMeta[leafId].status, falling back to
+   *  'blocked' only when the leaf IS the blocked root). Derived from the REAL
+   *  node status — NOT a terminal.kind proxy. Dispatch INPUT to <ReplyInPlace>;
+   *  NEVER rendered. */
+  needsDurabilityFlip: boolean;
 };
 
 export type OrgBlockedBacklog = {
@@ -362,7 +387,11 @@ export async function buildOrgBlockedBacklog(
 
   // 2. Flatten each blocked issue to one Terminal, keeping the source-issue
   //    pairing so the ranked top-CAP rows carry their metadata.
-  type Paired = { chain: BlockerChainResult; issue: IssueLike };
+  // Plan 14-04 Task 2 — also keep each issue's nodeMeta so the per-row emit can
+  // read the LEAF node status for needsDurabilityFlip (T-14-19) — NO new fetch;
+  // nodeMeta is the SAME map buildEdges already returned. UNCLASSIFIED degrade
+  // rows store an empty nodeMeta (their leaf is the blocked root → flip true).
+  type Paired = { chain: BlockerChainResult; issue: IssueLike; nodeMeta: Record<string, EdgeNodeMeta> };
   const paired: Paired[] = [];
   for (const issue of blocked) {
     const startId = issue.id ?? issue.identifier ?? '';
@@ -381,7 +410,7 @@ export async function buildOrgBlockedBacklog(
         startId,
         err: (e as Error).message,
       });
-      paired.push({ chain: unclassifiedChain(startId, 'relations-walk-failed'), issue });
+      paired.push({ chain: unclassifiedChain(startId, 'relations-walk-failed'), issue, nodeMeta: {} });
       continue;
     }
     let chain: BlockerChainResult;
@@ -393,17 +422,23 @@ export async function buildOrgBlockedBacklog(
         startId,
         err: (e as Error).message,
       });
-      paired.push({ chain: unclassifiedChain(startId, 'flatten-failed'), issue });
+      paired.push({ chain: unclassifiedChain(startId, 'flatten-failed'), issue, nodeMeta: {} });
       continue;
     }
-    paired.push({ chain, issue });
+    paired.push({ chain, issue, nodeMeta });
   }
 
   // 3. Rank HUMAN_ACTION_ON-first via the shared pickTopChains, then re-pair
   //    each ranked chain back to its source issue. We rank the FULL list and
   //    slice to CAP; the pairing is recovered by chain identity.
   const chainToIssue = new Map<BlockerChainResult, IssueLike>();
-  for (const p of paired) chainToIssue.set(p.chain, p.issue);
+  // Plan 14-04 Task 2 — recover each ranked chain's nodeMeta (for the leaf-status
+  // needsDurabilityFlip) by the SAME chain-identity pairing used for the issue.
+  const chainToNodeMeta = new Map<BlockerChainResult, Record<string, EdgeNodeMeta>>();
+  for (const p of paired) {
+    chainToIssue.set(p.chain, p.issue);
+    chainToNodeMeta.set(p.chain, p.nodeMeta);
+  }
   const rankedChains = pickTopChains(
     paired.map((p) => p.chain),
     CAP,
@@ -486,8 +521,20 @@ export async function buildOrgBlockedBacklog(
     ) {
       needYou += 1;
     }
+    // Plan 14-04 Task 2 (T-14-19) — needsDurabilityFlip off the REAL leaf NODE
+    // status (NOT terminal.kind). The leaf node id is chain.targetIssueUuid (the
+    // node the chain terminated at). leafStatus = nodeMeta[leafId].status, falling
+    // back to 'blocked' ONLY when the leaf IS the root (the root is status='blocked'
+    // by the list filter — incl. the UNCLASSIFIED degrade chain whose leaf === root).
+    const rootId = issue.id ?? issue.identifier ?? '';
+    const nodeMeta = chainToNodeMeta.get(chain) ?? {};
+    const leafId = chain.targetIssueUuid;
+    const leafStatus =
+      (leafId && nodeMeta[leafId]?.status) ||
+      (leafId === rootId || leafId == null ? 'blocked' : null);
+    const needsDurabilityFlip = leafStatus === 'blocked';
     rows.push({
-      issueId: issue.id ?? issue.identifier ?? '',
+      issueId: rootId,
       identifier: issue.identifier ?? issue.id ?? '',
       title: issue.title ?? '',
       // 07-03 HOTFIX — scrub the raw terminal.label so the rendered action can
@@ -501,6 +548,15 @@ export async function buildOrgBlockedBacklog(
       ownerName: ownerUuid ? (nameByUuid.get(ownerUuid) ?? null) : null,
       ownerAgentId: ownerUuid,
       age_ms: ageMsFrom(issue),
+      // Plan 14-04 Task 2 — the <ReplyInPlace> fields. awaitedPartyLabel = the
+      // scrubbed display (= the same scrubbed humanAction, NO raw UUID);
+      // targetAgentUuid/leafIssueUuid are dispatch-only (NO_UUID_LEAK);
+      // decisionOptions null (no action card on the org backlog this phase).
+      awaitedPartyLabel: scrubHumanAction(terminal, viewerUserId, nameByUuid),
+      targetAgentUuid: chain.targetAgentUuid ?? null,
+      decisionOptions: null,
+      leafIssueUuid: chain.targetIssueUuid ?? null,
+      needsDurabilityFlip,
     });
   }
 

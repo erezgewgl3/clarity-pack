@@ -30,6 +30,24 @@ export type OrgBlockedRow = {
   ownerName: string | null;
   ownerAgentId: string | null;
   age_ms: number | null;
+  // Plan 14-04 Task 2 (BLOCKER 3 / D-02/D-08/D-10) — byte-parallel mirror of the
+  // worker's five new OrgBlockedRow fields, so <ReplyInPlace> (14-03) has
+  // everything it needs on the backlog surface. A field missing on either side is
+  // a compile error at the consumer (T-14-21).
+  /** Plan 14-04 — the scrubbed awaited-party DISPLAY string; no raw UUID. */
+  awaitedPartyLabel: string;
+  /** Plan 14-04 — the awaited AGENT UUID for the reply/nudge mutation;
+   *  DISPATCH-ONLY, NEVER rendered (NO_UUID_LEAK). */
+  targetAgentUuid: string | null;
+  /** Plan 14-04 — conservative-binary chips (Phase 13 D-08); null on the org
+   *  backlog this phase (no action card). */
+  decisionOptions: string[] | null;
+  /** Plan 14-04 — the LEAF issue UUID (the mutation id), DISTINCT from issueId
+   *  (the root). DISPATCH-ONLY, NEVER rendered (NO_UUID_LEAK). */
+  leafIssueUuid: string | null;
+  /** Plan 14-04 — the Shape-B durable-flip signal (leaf node status==='blocked');
+   *  passed to <ReplyInPlace>, NEVER rendered. */
+  needsDurabilityFlip: boolean;
 };
 
 export type OrgBlockedBacklog = {

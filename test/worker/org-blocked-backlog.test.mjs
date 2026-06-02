@@ -736,3 +736,143 @@ test('builder — a thrown edge build yields an honest UNCLASSIFIED row, not a d
   assert.match(byIdent['COU-1'].humanAction, /open to investigate/i);
   assert.doesNotMatch(byIdent['COU-1'].humanAction, /assign/i);
 });
+
+// ---------------------------------------------------------------------------
+// Plan 14-04 Task 2 (BLOCKER 3 / D-02/D-08/D-10) — OrgBlockedRow gains the five
+// <ReplyInPlace> fields: awaitedPartyLabel, targetAgentUuid, decisionOptions,
+// leafIssueUuid (distinct from the ROOT issueId), needsDurabilityFlip (off the
+// LEAF node status, NOT terminal.kind). All additive, projection-only, no new fetch.
+// ---------------------------------------------------------------------------
+
+test('builder — 14-04: AWAITING_HUMAN row carries awaitedPartyLabel (scrubbed humanAction), decisionOptions null, targetAgentUuid null', async () => {
+  const f = humanActionIssue('i-h', 'COU-2', 'u-1');
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { 'i-h': f.relations },
+    agents: { 'u-1': { name: 'Head of Compliance' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-1');
+  const row = backlog.rows[0];
+  // awaitedPartyLabel === the scrubbed humanAction (the only display string).
+  assert.equal(row.awaitedPartyLabel, row.humanAction, 'awaitedPartyLabel mirrors the scrubbed humanAction');
+  assert.ok(!UUID_RE.test(row.awaitedPartyLabel), 'awaitedPartyLabel carries no raw UUID');
+  // org backlog has no action card → decisionOptions always null this phase.
+  assert.equal(row.decisionOptions, null, 'decisionOptions null on the org backlog');
+  // AWAITING_HUMAN has no awaited AGENT → targetAgentUuid null.
+  assert.equal(row.targetAgentUuid, null, 'AWAITING_HUMAN → targetAgentUuid null');
+});
+
+test('builder — 14-04: AWAITING_AGENT_STUCK row carries targetAgentUuid (dispatch-only, never rendered)', async () => {
+  const agentUuid = 'eeeeeeee-5555-6666-7777-888888888888';
+  const f = agentOwnedIssue('i-as', 'COU-11', agentUuid, { fresh: false });
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { 'i-as': f.relations },
+    agents: { [agentUuid]: { name: 'Stalled-Agent' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
+  const row = backlog.rows[0];
+  assert.equal(row.terminalKind, 'AWAITING_AGENT_STUCK');
+  // targetAgentUuid carries the stuck agent's UUID (mutation target, NEVER rendered).
+  assert.equal(row.targetAgentUuid, agentUuid, 'targetAgentUuid carries the stuck-agent UUID');
+  // NO_UUID_LEAK: the displayed humanAction/awaitedPartyLabel never carry the raw UUID.
+  assert.ok(!UUID_RE.test(row.humanAction), 'humanAction has no raw UUID');
+  assert.ok(!UUID_RE.test(row.awaitedPartyLabel), 'awaitedPartyLabel has no raw UUID');
+});
+
+test('builder — 14-04: leafIssueUuid is the LEAF UUID, DISTINCT from the root issueId on a multi-hop chain (NO_UUID_LEAK dispatch-only)', async () => {
+  // i-mh (root, blocked) → blocked by i-mh-leaf (the chain leaf). The leaf is
+  // genuinely unowned + status='blocked' → UNOWNED terminal; chain.targetIssueUuid
+  // = the leaf node id, which DIFFERS from the root issue id.
+  const rootId = 'aaaa1111-0000-0000-0000-000000000000';
+  const leafId = 'bbbb2222-0000-0000-0000-000000000000';
+  const f = {
+    issue: {
+      id: rootId,
+      identifier: 'COU-MH',
+      title: 'Multi-hop root',
+      status: 'blocked',
+      assigneeUserId: null,
+      updatedAt: '2026-05-01T00:00:00Z',
+    },
+    relations: {
+      blockedBy: [{ id: leafId, assigneeUserId: null, status: 'blocked', etaIso: null }],
+      blocks: [],
+    },
+  };
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: {
+      [rootId]: f.relations,
+      [leafId]: { blockedBy: [], blocks: [] },
+    },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
+  const row = backlog.rows[0];
+  // issueId is the ROOT issue UUID; leafIssueUuid is the LEAF (distinct).
+  assert.equal(row.issueId, rootId, 'issueId stays the root issue UUID');
+  assert.equal(row.leafIssueUuid, leafId, 'leafIssueUuid is the chain leaf UUID');
+  assert.notEqual(row.leafIssueUuid, row.issueId, 'leafIssueUuid distinct from the root issueId (multi-hop)');
+  // NO_UUID_LEAK: identifier stays the only displayed key; both *Uuid are dispatch-only.
+  assert.equal(row.identifier, 'COU-MH');
+});
+
+test('builder — 14-04: needsDurabilityFlip true when the LEAF node status === "blocked" (off nodeMeta, NOT terminal.kind)', async () => {
+  // The leaf node carries status='blocked' in nodeMeta (set on the blockedBy entry).
+  const rootId = 'cccc3333-0000-0000-0000-000000000000';
+  const leafId = 'dddd4444-0000-0000-0000-000000000000';
+  const f = {
+    issue: {
+      id: rootId,
+      identifier: 'COU-FB',
+      title: 'Flip blocked',
+      status: 'blocked',
+      assigneeUserId: null,
+      updatedAt: '2026-05-01T00:00:00Z',
+    },
+    relations: {
+      blockedBy: [{ id: leafId, assigneeUserId: null, status: 'blocked', etaIso: null }],
+      blocks: [],
+    },
+  };
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { [rootId]: f.relations, [leafId]: { blockedBy: [], blocks: [] } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
+  const row = backlog.rows[0];
+  assert.equal(row.needsDurabilityFlip, true, 'leaf node status blocked → flip true');
+});
+
+test('builder — 14-04: needsDurabilityFlip false when the LEAF node status is NOT "blocked" (e.g. awaiting)', async () => {
+  // AWAITING_HUMAN: the leaf node is owned + status='awaiting' (not blocked).
+  const f = humanActionIssue('i-h', 'COU-2', 'u-1');
+  const ctx = makeCtx({
+    issues: [f.issue],
+    relations: { 'i-h': f.relations },
+    agents: { 'u-1': { name: 'Head of Compliance' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-1');
+  const row = backlog.rows[0];
+  // humanActionIssue's blocker node status is 'awaiting' → flip false (NOT proxied off terminal.kind).
+  assert.equal(row.needsDurabilityFlip, false, 'awaiting leaf → flip false');
+});
+
+test('builder — 14-04: UNCLASSIFIED degrade row carries the five fields (decisionOptions null; flip true since leaf is the blocked root)', async () => {
+  const a = humanActionIssue('i-a', 'COU-1', 'u-1');
+  const ctx = makeCtx({
+    issues: [a.issue],
+    relations: { 'i-a': a.relations },
+    relationsThrowFor: new Set(['i-a']), // root relations.get throws → UNCLASSIFIED degrade
+    agents: { 'u-1': { name: 'Head of Compliance' } },
+  });
+  const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-1');
+  const row = backlog.rows[0];
+  assert.equal(row.terminalKind, 'UNCLASSIFIED');
+  // The unclassified chain's leaf IS the root (pathIds=[startId]) → leaf===root → blocked → flip true.
+  assert.equal(row.needsDurabilityFlip, true, 'UNCLASSIFIED degrade: leaf is the blocked root → flip true');
+  assert.equal(row.decisionOptions, null);
+  assert.equal(row.targetAgentUuid, null);
+  // leafIssueUuid for the unclassified chain is targetIssueUuid === startId (the root).
+  assert.equal(typeof row.awaitedPartyLabel, 'string');
+});
