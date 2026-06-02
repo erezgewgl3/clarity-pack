@@ -261,18 +261,19 @@ test('09-04 — employee-row blockerChain type mirror carries leafIssueUuid', ()
   assert.match(ROW, /leafIssueUuid:\s*string\s*\|\s*null/, 'blockerChain type carries leafIssueUuid');
 });
 
-test('09-04/14-03 — the backlog OwnerPickerPopover (assign) mount still sends the UUID via the fallback', () => {
-  // Phase 09-04 contract (assign path, UNCHANGED by Phase 14): the backlog's
-  // OwnerPickerPopover passes ONLY leafIssueId={row.issueId} (already a UUID); the
-  // popover's `leafIssueUuid ?? leafIssueId` fallback feeds that UUID as the
-  // mutation id WITHOUT a leafIssueUuid prop on the assign mount.
+test('09-04/14-03/14-WR-02 — the backlog OwnerPickerPopover (assign) mount sends the UUID via leafIssueUuid while displaying the human key', () => {
+  // Phase 09-04 original contract fed the assign mutation its UUID by passing
+  // leafIssueId={row.issueId} (a UUID) and relying on the popover's
+  // `leafIssueUuid ?? leafIssueId` fallback. That LEAKED the UUID to the toast
+  // (NO_UUID_LEAK breach — 14-REVIEW WR-02).
   //
-  // Phase 14-03 evolution: the SAME expander now ALSO mounts <ReplyInPlace> on the
-  // reply branch, which DOES pass leafIssueUuid={row.leafIssueUuid} (the LEAF uuid
-  // threaded in 14-04 — distinct from row.issueId, the root). So the blanket
-  // `doesNotMatch(/leafIssueUuid=/)` assertion is intentionally retired; we now
-  // scope the no-leafIssueUuid-prop guarantee to the OwnerPickerPopover assign
-  // mount specifically (the reply mount legitimately uses the leaf uuid).
+  // Corrected contract (14-WR-02): the assign mount now passes
+  //   leafIssueId={row.identifier}                 (HUMAN key — display/echo only)
+  //   leafIssueUuid={row.leafIssueUuid ?? row.issueId}   (UUID — mutation id, dispatch-only)
+  // so the popover's `leafIssueUuid ?? leafIssueId` fallback STILL feeds a UUID to
+  // situation.assignOwner (mutation unchanged), while the displayed/echoed id is the
+  // human identifier (leak fixed). For a genuinely-unowned orphan the leaf IS the
+  // orphan, so row.leafIssueUuid === row.issueId and the assign target is unchanged.
   const EXPANDER = readFileSync(
     path.join(REPO_ROOT, 'src/ui/surfaces/situation-room/blocked-backlog-expander.tsx'),
     'utf8',
@@ -280,24 +281,25 @@ test('09-04/14-03 — the backlog OwnerPickerPopover (assign) mount still sends 
   // Isolate the OwnerPickerPopover JSX block (the assign mount).
   const ownerPickerMount = EXPANDER.match(/<OwnerPickerPopover[\s\S]*?\/>/);
   assert.ok(ownerPickerMount, 'backlog mounts OwnerPickerPopover for the assign branch');
-  // The assign mount passes leafIssueId={row.issueId} and NO leafIssueUuid prop.
+  // The assign mount displays the HUMAN key, not the UUID (NO_UUID_LEAK).
   assert.match(
     ownerPickerMount[0],
-    /leafIssueId=\{row\.issueId\}/,
-    'backlog assign mount passes leafIssueId={row.issueId}',
+    /leafIssueId=\{row\.identifier\}/,
+    'backlog assign mount passes leafIssueId={row.identifier} (human key — no UUID leak)',
   );
-  assert.doesNotMatch(
+  // The mutation id is carried explicitly as a UUID via leafIssueUuid.
+  assert.match(
     ownerPickerMount[0],
-    /leafIssueUuid=/,
-    'backlog OwnerPickerPopover assign mount is NOT given a leafIssueUuid prop (fallback covers it)',
+    /leafIssueUuid=\{row\.leafIssueUuid\s*\?\?\s*row\.issueId\}/,
+    'backlog assign mount carries the UUID mutation id via leafIssueUuid (leaf uuid, else root)',
   );
-  // The 14-03 reply mount, by contrast, DOES pass the distinct leaf uuid.
+  // The 14-03 reply mount, by contrast, passes the leaf uuid directly.
   assert.match(
     EXPANDER,
     /leafIssueUuid=\{row\.leafIssueUuid\}/,
-    'the 14-03 ReplyInPlace mount passes the distinct LEAF uuid (row.leafIssueUuid)',
+    'the 14-03 ReplyInPlace mount passes the LEAF uuid (row.leafIssueUuid)',
   );
-  // And the popover fallback covers the assign path.
+  // And the popover fallback still feeds a UUID to the assign mutation.
   assert.match(POPOVER, /leafIssueUuid\s*\?\?\s*leafIssueId/, 'fallback feeds the backlog UUID');
 });
 
