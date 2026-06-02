@@ -89,8 +89,12 @@ import type { LlmAdapter } from '../bulletin/compile-pass-1.ts';
 /** The operation-issue originKind namespace. The agent matches on this prefix. */
 export const OPERATION_ORIGIN_KIND_PREFIX = 'plugin:clarity-pack:operation:';
 
-/** The two operation kinds Clarity Pack delivers to the Editor-Agent. */
-export type OperationKind = 'bulletin-compile' | 'tldr-compile' | 'bulletin-gloss';
+/** The operation kinds Clarity Pack delivers to the Editor-Agent. */
+export type OperationKind =
+  | 'bulletin-compile'
+  | 'tldr-compile'
+  | 'bulletin-gloss'
+  | 'action-cards';
 
 /**
  * The EXACT issue-document key the agent is instructed to file its result
@@ -226,6 +230,26 @@ function isResultComment(body: string, operationKind: OperationKind): boolean {
     // Structure only: it must parse to a non-array object. driveBulletinGlossStep
     // re-parses defensively (a non-object → all-null glosses), so accept any
     // JSON object body of a sane size here.
+    if (body.length > 8000) return false;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(extractJsonObject(body));
+    } catch {
+      return false;
+    }
+    return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+  }
+  if (operationKind === 'action-cards') {
+    // Plan 13-02 (GOTCHA 1) — the action-cards result is a STRICT JSON
+    // {sourceIssueId → {namedAction, awaitedParty, estBucket, actionKind,
+    // decisionOptions?}} MAP. Structure only: it must parse to a non-array
+    // object of a sane size. driveActionCardsStep re-parses + normalizes each
+    // entry DEFENSIVELY (garbage entry → no card on that row), so accept any
+    // JSON object body here. WITHOUT this branch the action-card payload would
+    // fall through to the `bulletin-compile` BulletinDraft validator below,
+    // which throws on it → pollAgentTaskResult never returns 'ready' → the
+    // readback HANGS forever (status:'pending'). Mirrors the 'bulletin-gloss'
+    // branch exactly.
     if (body.length > 8000) return false;
     let parsed: unknown;
     try {
