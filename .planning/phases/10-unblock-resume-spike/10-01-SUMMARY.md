@@ -1,17 +1,17 @@
 ---
-status: partial
+status: complete
 phase: 10-unblock-resume-spike
 plan: 01
 requirement: DO-03
-updated: 2026-06-01
+updated: 2026-06-02
 ---
 
-# Plan 10-01 — Probe harness + Wave-0 dry-confirm (PARTIAL)
+# Plan 10-01 — Probe harness + Wave-0 dry-confirm (COMPLETE)
 
-> **PARTIAL.** Code complete. Live dry-confirm ran against BEAAA and resolved A3 + D-02; **A1's
-> final yes/no is pending the live re-run** (first attempt 422'd on a now-fixed probe defect).
-> The A1 re-run is folded into the combined morning live run (see `MORNING-RUNBOOK.md`), which
-> runs dry-confirm + all three shapes in one pass once the sacrificial agent exists.
+> **COMPLETE.** Code done; live dry-confirm resolved all three Wave-0 questions in the combined
+> 2026-06-02 run: **A1 = SETTABLE** (bare `PATCH {status:'blocked'}` → 200, reads back `blocked`),
+> **A3 = manual-mint** (agent create 400), **D-02** per-shape fidelity captured. Full results in
+> `10-02-SUMMARY.md` / `10-03-SPIKE-FINDINGS.md`.
 
 ## Tasks
 

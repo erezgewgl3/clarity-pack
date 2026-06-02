@@ -1,0 +1,312 @@
+nohup: ignoring input
+probe agent: 0f20fe53-f1fc-4c35-a8dd-6de2eeeb24db
+=== STARTING COMBINED SPIKE RUN 2026-06-02T05:55:24Z ===
+[2026-06-02T05:55:24.985Z] DRY-CONFIRM-A1-A3 — can we set status:blocked + mint/delete a probe agent?
+[2026-06-02T05:55:29.325Z] OBSERVE-REAL-BLOCKED-ITEMS — D-02 read-only per-shape fidelity scan
+[2026-06-02T05:55:33.244Z] PROBE-SHAPE-A — awaiting-reply resume (comment-alone baseline)
+[2026-06-02T05:56:11.128Z] pollForNewComment: no new comment yet {"count":1,"remainingMs":445432}
+[2026-06-02T05:56:41.986Z] pollForNewComment: no new comment yet {"count":1,"remainingMs":414574}
+[2026-06-02T05:57:46.121Z] pollForNewComment: no new comment yet {"count":3,"remainingMs":448106}
+[2026-06-02T05:58:16.706Z] pollForNewComment: no new comment yet {"count":3,"remainingMs":417521}
+[2026-06-02T06:05:18.690Z] PROBE-SHAPE-B — status=blocked resume (D-08 ladder, minimal-first)
+[2026-06-02T06:05:57.496Z] pollForNewComment: no new comment yet {"count":1,"remainingMs":207157}
+[2026-06-02T06:09:36.604Z] PROBE-SHAPE-C — blockedByIssueIds cascade-on-answer (D-10 bounded)
+[2026-06-02T06:10:19.626Z] pollForNewComment: no new comment yet {"count":0,"remainingMs":446661}
+[2026-06-02T06:18:14.296Z] TEARDOWN — deleting [SPIKE 10] probe issues + sacrificial agent
+[2026-06-02T06:18:15.054Z] teardown: DELETE issue {"issueId":"4a5affe2-12cc-4208-b846-acd3fd3b94ee","status":500}
+[2026-06-02T06:18:15.976Z] teardown: DELETE issue {"issueId":"a2f0cf1c-d75d-4609-8901-eb00590c1cd6","status":500}
+[2026-06-02T06:18:16.466Z] teardown: DELETE issue {"issueId":"94abcab1-ca5f-48e6-93e4-50ace25c8e82","status":500}
+[2026-06-02T06:18:16.927Z] teardown: DELETE issue {"issueId":"bf5d6335-3cc5-40ef-92d8-65872decd096","status":500}
+
+=== UNBLOCK-RESUME SPIKE PROBE SUMMARY ===
+{
+  "probe": "unblock-resume-spike-probe",
+  "phase": "10-unblock-resume-spike",
+  "plan": "10-02",
+  "startedAt": "2026-06-02T05:55:24.985Z",
+  "apiUrl": "http://localhost:3100",
+  "companyId": "59f8876e-e729-4dda-98f9-1317c2b50492",
+  "probeAgentIdPinned": "0f20fe53-f1fc-4c35-a8dd-6de2eeeb24db",
+  "configErrors": [],
+  "findings": {
+    "dryConfirmA1A3": {
+      "probe": "DRY-CONFIRM-A1-A3",
+      "question": "A1: is status:'blocked' settable via PATCH /api/issues/{id}? A3: can the probe mint+delete a sacrificial agent via REST?",
+      "steps": [
+        "A1: assignee = 0f20fe53-f1fc-4c35-a8dd-6de2eeeb24db [SPIKE_PROBE_AGENT_ID]",
+        "A1: create throwaway issue: HTTP 201",
+        "A1: created throwaway issue 3942a907-2bd9-4be7-b336-aa8e9dd189d1",
+        "A1: pre-flip re-GET: HTTP 200, status=in_progress",
+        "A1: PATCH {status:'blocked'}: HTTP 200",
+        "A1: post-flip re-GET: HTTP 200, status=blocked",
+        "A1: teardown DELETE /api/issues/{id}: HTTP 200",
+        "A3: POST /api/companies/{C}/agents: HTTP 400 (Validation error)",
+        "A3: agent create NOT reachable via REST — manual-mint fallback documented"
+      ],
+      "a1": {
+        "createHttpStatus": 201,
+        "preFlipStatus": "in_progress",
+        "patchHttpStatus": 200,
+        "patchBodyError": null,
+        "reReadStatus": "blocked",
+        "accepted": true,
+        "hostRule": "bare status flip to blocked accepted (no blocker edge required)",
+        "shapeBMergesIntoC": false
+      },
+      "a3": {
+        "createHttpStatus": 400,
+        "createBodyError": "Validation error",
+        "agentId": null,
+        "deleteHttpStatus": null,
+        "restCapable": false,
+        "fallback": "Agent create is NOT reachable via bearer REST. The operator must mint ONE sacrificial agent manually before the Plan 10-02 run (NOT the Editor-Agent, NOT a real hire) and pin it via SPIKE_PROBE_AGENT_ID; teardown is operator-side (pause then terminate/delete), with the DO-backup rollback as the safety net.",
+        "pinnedAgentId": "0f20fe53-f1fc-4c35-a8dd-6de2eeeb24db"
+      },
+      "teardown": {
+        "issueDeleteHttpStatus": 200,
+        "agentDeleteHttpStatus": null,
+        "residue": []
+      },
+      "verdictHint": "A1=SETTABLE (bare PATCH {status:'blocked'} sticks — Shape B is independent of Shape C); A3=MANUAL-MINT (operator mints + pins SPIKE_PROBE_AGENT_ID)"
+    },
+    "observeRealBlockedItems": {
+      "probe": "OBSERVE-REAL-BLOCKED-ITEMS",
+      "question": "D-02: does the probe construction per shape match what real BEAAA blocked items look like (status string + relation shape)?",
+      "steps": [
+        "listIssues (read-only) returned 200 rows; scanning up to 200",
+        "Shape B: found real status='blocked' item BEAAA-1858",
+        "Shape C: read-only getIssue on 7f265df0-c531-4a09-9580-59719939b8d4 — blockedByIssueIds present in detail body: empty",
+        "Shape C: NO real blockedByIssueIds relation observed in the sample",
+        "Shape A: found real in_progress item BEAAA-1592"
+      ],
+      "scanned": 200,
+      "statusHistogram": {
+        "done": 166,
+        "in_review": 9,
+        "blocked": 15,
+        "in_progress": 1,
+        "todo": 2,
+        "cancelled": 6,
+        "backlog": 1
+      },
+      "shapeA": {
+        "present": true,
+        "issueId": "3ab61a9d-5477-4c04-b95b-77e01250f768",
+        "identifier": "BEAAA-1592",
+        "status": "in_progress",
+        "assigneeAgentId": "0460b110-6b57-4d63-951e-0794dc11bb34",
+        "blockedByIssueIds": [],
+        "titleExcerpt": "CSO: 30-day Phase A scorecard — weekly into CEO Friday status (window 6/01–6/29)",
+        "note": "\"awaiting reply\" is semantic (agent asked a question, parked at in_progress); status stays in_progress (04.1-01 OQ1). This real in_progress item is the closest shape match."
+      },
+      "shapeB": {
+        "present": true,
+        "issueId": "521c2201-4347-4703-880f-1eb309e7e7b6",
+        "identifier": "BEAAA-1858",
+        "status": "blocked",
+        "assigneeAgentId": "afa65747-4323-419c-9850-bdb77711648f",
+        "blockedByIssueIds": [],
+        "titleExcerpt": "UW — CEO greenlight for v1.1.0 customer-facing flip (UW-only, no CTO countersign at flip)"
+      },
+      "shapeC": {
+        "present": false,
+        "note": "no real blockedByIssueIds relation in the scanned sample (detail body confirms the field exists but is empty on the candidate) — construct Shape C synthetically at create time (Open Question 3)"
+      },
+      "verdictHint": "D-02 read-only fidelity: A=matches(in_progress-awaiting); B=matches(real status=blocked exists); C=construct-synthetically(no real relation in sample). READ-ONLY — zero writes to real items."
+    },
+    "shapeA": {
+      "probe": "PROBE-SHAPE-A",
+      "question": "Shape A (awaiting reply): does a comment alone resume an agent that asked a question and parked?",
+      "steps": [
+        "created Shape A probe issue 4a5affe2-12cc-4208-b846-acd3fd3b94ee",
+        "awaiting the agent question turn (parks awaiting-answer)",
+        "agent question turn observed (comment e6171a95-53af-48d3-9a52-1d3385d90011, runId 1fb74679-05e9-45a0-b22b-11e17894b0b2)",
+        "posted answer comment (rung 0): HTTP 201"
+      ],
+      "construction": [
+        "createIssue (in_progress, assigned to probe): HTTP 201",
+        "createComment (question): HTTP 201"
+      ],
+      "probeIssueId": "4a5affe2-12cc-4208-b846-acd3fd3b94ee",
+      "signals": {
+        "behavioral": true,
+        "consumption": true,
+        "state": true
+      },
+      "evidence": {
+        "behavioralCommentId": "c5614d1d-122f-44cd-aca4-768c376ea4d3",
+        "behavioralAuthorType": "agent",
+        "consumptionRunId": "57f14de0-abef-4101-bf1d-9b0546241c45",
+        "statusTransitions": [
+          {
+            "at": "2026-06-02T05:57:14.227Z",
+            "status": "in_progress"
+          },
+          {
+            "at": "2026-06-02T05:57:46.041Z",
+            "status": "in_review"
+          },
+          {
+            "at": "2026-06-02T05:58:47.845Z",
+            "status": "done"
+          }
+        ],
+        "finalStatus": "done",
+        "systemNoticeSeen": null
+      },
+      "ladderRungsTried": [
+        "rung0:comment-alone"
+      ],
+      "minimalRecipe": "comment-alone (rung 0) — native wake resumes an awaiting-answer agent",
+      "verdictHint": "PASS — behavioral=true consumption=true state=true"
+    },
+    "shapeB": {
+      "probe": "PROBE-SHAPE-B",
+      "question": "Shape B (status=blocked): does a comment alone resume a terminal-blocked issue, or is an un-terminal status flip required (and in which order)?",
+      "steps": [
+        "created Shape B probe issue a2f0cf1c-d75d-4609-8901-eb00590c1cd6",
+        "bare status:'blocked' flip STUCK — Shape B is independent of Shape C",
+        "agent status while issue blocked: idle",
+        "rung0:comment-alone [comment-only]: PASS (b=true c=true s=true)"
+      ],
+      "construction": [
+        "createIssue (in_progress, assigned): HTTP 201",
+        "pre-flip re-GET: HTTP 200, status=in_progress",
+        "PATCH {status:'blocked'} (bare): HTTP 200",
+        "post-flip re-GET: HTTP 200, status=blocked"
+      ],
+      "probeIssueId": "a2f0cf1c-d75d-4609-8901-eb00590c1cd6",
+      "blockedVia": "bare-status-flip",
+      "shapeBMergesIntoC": false,
+      "signals": {
+        "behavioral": true,
+        "consumption": true,
+        "state": true
+      },
+      "ladderRungsTried": [
+        "rung0:comment-alone"
+      ],
+      "ladderResults": [
+        {
+          "rung": "rung0:comment-alone",
+          "ordering": "comment-only",
+          "signals": {
+            "behavioral": true,
+            "consumption": true,
+            "state": true
+          },
+          "evidence": {
+            "behavioralCommentId": "ee60ec7a-0394-46f5-828c-1d652e6e0f14",
+            "behavioralAuthorType": "agent",
+            "consumptionRunId": "c3990329-15e4-4351-95fc-569e5124c397",
+            "statusTransitions": [
+              {
+                "at": "2026-06-02T06:05:24.653Z",
+                "status": "in_progress"
+              },
+              {
+                "at": "2026-06-02T06:07:35.392Z",
+                "status": "blocked"
+              }
+            ],
+            "finalStatus": "blocked",
+            "systemNoticeSeen": null
+          },
+          "verdict": "PASS"
+        }
+      ],
+      "minimalRecipe": "rung0:comment-alone (comment-only)",
+      "requestWakeupHttpStatus": null,
+      "agentStatusAtBlock": "idle",
+      "verdictHint": "PASS — minimal recipe locked: rung0:comment-alone (comment-only); ladder=rung0:comment-alone"
+    },
+    "shapeC": {
+      "probe": "PROBE-SHAPE-C",
+      "question": "Shape C (blockedByIssueIds): does answering the blocker cascade-resume the blocked issue within the declared capability boundary?",
+      "steps": [
+        "created blocker X 94abcab1-ca5f-48e6-93e4-50ace25c8e82",
+        "created blocked Y bf5d6335-3cc5-40ef-92d8-65872decd096",
+        "posted resolving comment on X: HTTP 201",
+        "X pre-flip re-GET: status=in_progress",
+        "flipped X to 'done': HTTP 200",
+        "X post-flip re-GET: status=done",
+        "Y relation after resolving X (read-only): blockedByIssueIds=[]"
+      ],
+      "construction": [
+        "createIssue blocker X: HTTP 201",
+        "createIssue blocked Y (blockedByIssueIds:[X] at create): HTTP 201",
+        "Y re-GET: blockedByIssueIds=[] (edge established at create: false)"
+      ],
+      "blockerIssueId": "94abcab1-ca5f-48e6-93e4-50ace25c8e82",
+      "blockedIssueId": "bf5d6335-3cc5-40ef-92d8-65872decd096",
+      "edgeEstablishedAtCreate": false,
+      "signals": {
+        "behavioral": true,
+        "consumption": true,
+        "state": true
+      },
+      "evidence": {
+        "behavioralCommentId": "fb2176ea-3c6b-4d5c-88fe-7b098d0f0500",
+        "behavioralAuthorType": "agent",
+        "consumptionRunId": "4c7ab9f8-5e94-4be6-ac19-5c168a422870",
+        "statusTransitions": [
+          {
+            "at": "2026-06-02T06:09:46.287Z",
+            "status": "in_progress"
+          },
+          {
+            "at": "2026-06-02T06:11:28.281Z",
+            "status": "done"
+          }
+        ],
+        "finalStatus": "done",
+        "systemNoticeSeen": null
+      },
+      "cascadeObserved": true,
+      "edgeClearPathSpecdNotProven": null,
+      "verdictHint": "PASS — answering/resolving blocker X cascade-resumes Y within declared caps (no relations.write). Recipe: resolve blocker (comment + status:'done'); Y resumes natively."
+    }
+  },
+  "spikeIssues": {
+    "a1ProbeIssueId": null,
+    "a3ProbeAgentId": null,
+    "shapeAProbeIssueId": "4a5affe2-12cc-4208-b846-acd3fd3b94ee",
+    "shapeBProbeIssueId": "a2f0cf1c-d75d-4609-8901-eb00590c1cd6",
+    "shapeBBlockerIssueId": null,
+    "shapeCBlockerIssueId": "94abcab1-ca5f-48e6-93e4-50ace25c8e82",
+    "shapeCBlockedIssueId": "bf5d6335-3cc5-40ef-92d8-65872decd096",
+    "note": "Spike issues are tagged [SPIKE 10] in their titles — greppable + deletable, or rollback to the DO-droplet backup bookend."
+  },
+  "teardown": {
+    "issuesDeleted": [
+      {
+        "issueId": "4a5affe2-12cc-4208-b846-acd3fd3b94ee",
+        "httpStatus": 500
+      },
+      {
+        "issueId": "a2f0cf1c-d75d-4609-8901-eb00590c1cd6",
+        "httpStatus": 500
+      },
+      {
+        "issueId": "94abcab1-ca5f-48e6-93e4-50ace25c8e82",
+        "httpStatus": 500
+      },
+      {
+        "issueId": "bf5d6335-3cc5-40ef-92d8-65872decd096",
+        "httpStatus": 500
+      }
+    ],
+    "agentDeleted": null,
+    "residue": [
+      "issue 4a5affe2-12cc-4208-b846-acd3fd3b94ee ([SPIKE 10]) — DELETE returned HTTP 500; remove via manual delete or DO-backup rollback",
+      "issue a2f0cf1c-d75d-4609-8901-eb00590c1cd6 ([SPIKE 10]) — DELETE returned HTTP 500; remove via manual delete or DO-backup rollback",
+      "issue 94abcab1-ca5f-48e6-93e4-50ace25c8e82 ([SPIKE 10]) — DELETE returned HTTP 500; remove via manual delete or DO-backup rollback",
+      "issue bf5d6335-3cc5-40ef-92d8-65872decd096 ([SPIKE 10]) — DELETE returned HTTP 500; remove via manual delete or DO-backup rollback",
+      "sacrificial agent 0f20fe53-f1fc-4c35-a8dd-6de2eeeb24db was operator-minted (SPIKE_PROBE_AGENT_ID pin, A3 manual-mint path) — operator pauses then terminates/deletes it after the run; DO-backup rollback is the safety net."
+    ]
+  },
+  "finishedAt": "2026-06-02T06:18:16.927Z"
+}
+
+Paste the JSON block above back into the GSD session so the 10-02 three-shape result can be recorded for Plan 10-03.
+=== SPIKE RUN EXIT=0 2026-06-02T06:18:16Z ===
