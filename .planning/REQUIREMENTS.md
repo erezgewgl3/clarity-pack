@@ -9,9 +9,9 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 
 ### Honest Blocker Taxonomy (engine)
 
-- [ ] **TAX-01**: The blocker-chain engine classifies each blocked item into one honest terminal kind — awaiting-human / agent-working / agent-stuck / self-resolving / external / cycle / genuinely-unowned — recognizing **agent** ownership (`assigneeAgentId`), not just user ownership.
-- [ ] **TAX-02**: A chain waiting on another agent flattens transitively to the human-actionable end; no mid-chain "poke the agent" terminal is surfaced.
-- [ ] **TAX-03**: Degrade-safe — a row whose chain can't be built or classified shows an honest fallback, never a false "assign owner."
+- [x] **TAX-01**: The blocker-chain engine classifies each blocked item into one honest terminal kind — awaiting-human / agent-working / agent-stuck / self-resolving / external / cycle / genuinely-unowned — recognizing **agent** ownership (`assigneeAgentId`), not just user ownership.
+- [x] **TAX-02**: A chain waiting on another agent flattens transitively to the human-actionable end; no mid-chain "poke the agent" terminal is surfaced.
+- [x] **TAX-03**: Degrade-safe — a row whose chain can't be built or classified shows an honest fallback, never a false "assign owner."
 
 ### Needs-You Triage
 
@@ -55,9 +55,9 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DO-03 | Phase 10 | Complete |
-| TAX-01 | Phase 11 | Pending |
-| TAX-02 | Phase 11 | Pending |
-| TAX-03 | Phase 11 | Pending |
+| TAX-01 | Phase 11 | Complete |
+| TAX-02 | Phase 11 | Complete |
+| TAX-03 | Phase 11 | Complete |
 | NY-01 | Phase 12 | Pending |
 | NY-02 | Phase 12 | Pending |
 | NY-03 | Phase 12 | Pending |
