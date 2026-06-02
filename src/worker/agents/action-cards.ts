@@ -51,7 +51,6 @@ import {
 } from './editor.ts';
 import {
   tldrContentHash,
-  finalizeTldr,
   polishTldr,
   EDITOR_AGENT_ID_TAG,
   type CompileTldrCtx,
@@ -186,6 +185,11 @@ export function actionKindFromAffordance(
     case 'assign':
       return 'assign';
     default:
+      // IN-01 — the 'decide' action_kind variant (declared in ActionCard,
+      // ActionCardRow, and the 0015 CHECK constraint) is RESERVED for Phase 14
+      // quick-decision chips: when an engine affordance carries explicit
+      // decisionOptions, Phase 14 will map it to 'decide'. It is intentionally
+      // not produced yet — do NOT remove the enum variant.
       return 'none';
   }
 }
@@ -196,32 +200,72 @@ function stripUuids(s: string): string {
   return s.replace(UUID_RE_G, '').replace(/\s{2,}/g, ' ').trim();
 }
 
+/** WR-02 — cap a single grounding-input string before it is interpolated into
+ *  the LLM prompt. Keeps the injected payload from dominating the prompt's
+ *  instruction section. */
+const PROMPT_INPUT_MAX_CHARS = 500;
+
+/** WR-02 — lines that look like an instruction-prefix override (case-insensitive,
+ *  leading-whitespace tolerant). Conservative + deterministic: a crafted issue
+ *  body that opens a line with one of these is stripped before interpolation. */
+const INJECTION_PREFIX_RE =
+  /^\s*(?:ignore\b|disregard\b|forget\b|system\s*:|assistant\s*:|user\s*:|developer\s*:|###|---|```)/i;
+
 /**
- * Build the canonical content-hash input for a needsYou row set so the cards
- * recompile ONLY when the human-actionable verdict set OR its issue inputs
- * change (D-11 correctness arm) — fixed field ordering, sorted by sourceIssueId,
- * deterministic (no clock).
+ * WR-02 — a conservative, DETERMINISTIC sanitizer for issue-derived grounding
+ * text (body / comments) before it is interpolated into the action-card prompt.
+ * Two arms: (1) drop any line whose start matches a known instruction-prefix
+ * override pattern (a prompt-injection attempt — "Ignore all previous
+ * instructions", "SYSTEM:", a fenced directive block, a `---` separator the
+ * model might read as a new instruction section); (2) cap the result to
+ * {@link PROMPT_INPUT_MAX_CHARS} so an injected payload cannot dominate the
+ * prompt. Full LLM-injection prevention is an arms race; this is the
+ * proportionate, testable floor. Pure (no clock, no I/O).
  */
-function canonicalRowsBody(rows: ActionCardSourceRow[]): string {
-  const sig = [...rows]
-    .map((r) => ({
-      id: r.sourceIssueId,
-      party: r.awaitedPartyLabel ?? '',
-      affordance: r.actionAffordance ?? 'none',
-      body: r.inputs?.body ?? '',
-      comments: Array.isArray(r.inputs?.comments) ? r.inputs!.comments : [],
-      refs: Array.isArray(r.inputs?.refs) ? r.inputs!.refs : [],
-    }))
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return JSON.stringify(sig);
+export function sanitizePromptInput(s: string): string {
+  if (typeof s !== 'string' || s.length === 0) return '';
+  const cleaned = s
+    .split(/\r?\n/)
+    .filter((line) => !INJECTION_PREFIX_RE.test(line))
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned.length > PROMPT_INPUT_MAX_CHARS
+    ? cleaned.slice(0, PROMPT_INPUT_MAX_CHARS)
+    : cleaned;
 }
 
-/** The whole-row-set content hash (D-11) — keyed on the SORTED needsYou set. */
-function actionCardsContentHash(rows: ActionCardSourceRow[]): string {
+/**
+ * WR-01 fix — build the canonical content-hash input for ONE row, covering ONLY
+ * that row's own inputs (its source leaf id + scrubbed party + engine affordance
+ * + issue body/comments/refs). A per-row recipe means adding/resolving an
+ * UNRELATED needsYou row leaves every other row's hash — and therefore its
+ * cached card — untouched (D-11 correctness arm stays per-row; the 10-min
+ * liveness arm remains meaningful). Fixed field ordering, deterministic (no
+ * clock). Exported for unit testing.
+ */
+function canonicalRowBody(r: ActionCardSourceRow): string {
+  return JSON.stringify({
+    id: r.sourceIssueId,
+    party: r.awaitedPartyLabel ?? '',
+    affordance: r.actionAffordance ?? 'none',
+    body: r.inputs?.body ?? '',
+    comments: Array.isArray(r.inputs?.comments) ? r.inputs!.comments : [],
+    refs: Array.isArray(r.inputs?.refs) ? r.inputs!.refs : [],
+  });
+}
+
+/**
+ * WR-01 fix — the PER-ROW content hash (D-11). Keyed on a single row's own
+ * inputs + its sourceIssueId scope, so the freshness check (isActionCardFresh)
+ * reuses an unchanged row's cached card across Situation Room updates even when
+ * other rows are added or resolved. Exported for unit testing.
+ */
+function actionCardRowContentHash(row: ActionCardSourceRow): string {
   return tldrContentHash({
     surface: ACTION_CARDS_SURFACE,
-    scopeId: `${ACTION_CARDS_SCOPE_PREFIX}set`,
-    inputs: { body: canonicalRowsBody(rows), comments: [], refs: [] },
+    scopeId: `${ACTION_CARDS_SCOPE_PREFIX}${row.sourceIssueId}`,
+    inputs: { body: canonicalRowBody(row), comments: [], refs: [] },
   });
 }
 
@@ -240,9 +284,17 @@ export function buildActionCardPrompt(rows: ActionCardSourceRow[]): string {
       `    awaiting: ${r.awaitedPartyLabel || 'unknown'}`,
     ];
     if (r.leafIssueId) lines.push(`    issue: ${r.leafIssueId}`);
-    if (r.inputs?.body) lines.push(`    body: ${r.inputs.body}`);
+    // WR-02 — sanitize issue-derived text (truncate + strip instruction-prefix
+    // override lines) before interpolating it into the prompt.
+    const safeBody = sanitizePromptInput(r.inputs?.body ?? '');
+    if (safeBody) lines.push(`    body: ${safeBody}`);
     if (r.inputs?.comments && r.inputs.comments.length > 0) {
-      lines.push(`    recent: ${r.inputs.comments.join(' | ')}`);
+      const safeComments = r.inputs.comments
+        .map((c) => sanitizePromptInput(c))
+        .filter((c) => c.length > 0);
+      if (safeComments.length > 0) {
+        lines.push(`    recent: ${safeComments.join(' | ')}`);
+      }
     }
     return lines.join('\n');
   });
@@ -317,6 +369,12 @@ function normalizeCardEntry(row: ActionCardSourceRow, raw: unknown, generatedAt:
       ? obj.awaitedParty
       : row.awaitedPartyLabel; // ground the fallback in the scrubbed engine label
   const awaitedParty = stripUuids(rawParty) || stripUuids(row.awaitedPartyLabel);
+  // WR-03 — if BOTH the agent party and the engine label strip to empty (e.g.
+  // an unresolved-userId label that was a bare UUID), degrade this row to NO
+  // card rather than persist/render "waiting on  · …" (a dangling, visually
+  // broken party). Consistent with D-12 and the namedAction guard above; the
+  // empty result never introduces a UUID into the label (NO_UUID_LEAK).
+  if (awaitedParty.length === 0) return null;
 
   // D-09 — coarse bucket; garbage/missing → null → render OMITS the estimate.
   const estBucket = normalizeEstBucket(obj.estBucket);
@@ -385,32 +443,43 @@ function rowToCard(row: ActionCardRow): ActionCard {
 }
 
 /**
- * Read back an existing done op's result for THIS company's action-cards op
+ * Read back an existing TERMINAL op's result for THIS company's action-cards op
  * (consume-before-spawn — the bulletin-gloss BUG-2 fix). The agent marks its op
  * `done` ~40s after the spawn-view's single poll already returned pending, so
  * startAgentTask's idempotency reuse (non-terminal only) can't catch it. Lists
- * the op(s) for this operationId INCLUDING terminal ones and returns the first
- * stored result body. Read-only + degrade-safe: any throw → null.
+ * the op(s) for this operationId and consumes ONLY ops in a TERMINAL status
+ * (done / cancelled) — IN-03 fix: a non-terminal (in-flight) op may have filed
+ * a partial/interim document body that satisfies the deliberately-permissive
+ * `isResultDocument` gate; consuming it would treat a partial body as the final
+ * cards map. A terminal-status filter guarantees we only read back a COMPLETED
+ * op (the in-flight case is handled by the normal startAgentTask+poll path,
+ * which is the standard slow-agent path anyway). Read-only + degrade-safe: any
+ * throw → null.
  */
+const OP_TERMINAL_STATUSES = new Set(['done', 'cancelled']);
+
 async function readBackExistingOp(
   ctx: ActionCardsCtx,
   args: { companyId: string; editorAgentId: string },
 ): Promise<string | null> {
   const { companyId, editorAgentId } = args;
-  let ops: Array<{ id?: string }>;
+  let ops: Array<{ id?: string; status?: string }>;
   try {
     ops = (await ctx.issues.list({
       companyId,
       originKindPrefix: OPERATION_ORIGIN_KIND_PREFIX,
       originId: actionCardsOperationId(companyId),
       includePluginOperations: true,
-    })) as Array<{ id?: string }>;
+    })) as Array<{ id?: string; status?: string }>;
   } catch (e) {
     ctx.logger?.warn?.(`action-cards: existing-op lookup failed: ${(e as Error).message}`, { companyId });
     return null;
   }
   for (const op of ops ?? []) {
     if (!op?.id) continue;
+    // IN-03 — only consume a TERMINAL op; skip in-flight ops to avoid reading a
+    // partial/interim document body as the final result.
+    if (!OP_TERMINAL_STATUSES.has(op.status ?? '')) continue;
     try {
       const poll = await pollAgentTaskResult(ctx, {
         operationIssueId: op.id,
@@ -441,9 +510,9 @@ async function readBackExistingOp(
  *  (degrade, D-12). Never throws. */
 async function finalizeBody(
   ctx: ActionCardsCtx,
-  args: { companyId: string; rows: ActionCardSourceRow[]; body: string; contentHash: string; editorAgentId: string },
+  args: { companyId: string; rows: ActionCardSourceRow[]; body: string; editorAgentId: string },
 ): Promise<Record<string, ActionCard>> {
-  const { companyId, rows, body, contentHash, editorAgentId } = args;
+  const { companyId, rows, body, editorAgentId } = args;
   const map = parseCardMap(body);
   const generatedAt = new Date().toISOString();
   const out: Record<string, ActionCard> = {};
@@ -452,7 +521,15 @@ async function finalizeBody(
     const card = normalizeCardEntry(row, map[row.sourceIssueId], generatedAt);
     if (!card) continue; // degrade — no card on this row
     out[row.sourceIssueId] = card;
-    await persistCard(ctx, { companyId, row, card, contentHash, editorAgentId });
+    // WR-01 — persist each card under its OWN per-row content hash so an
+    // unrelated roster change cannot invalidate this row's cache entry.
+    await persistCard(ctx, {
+      companyId,
+      row,
+      card,
+      contentHash: actionCardRowContentHash(row),
+      editorAgentId,
+    });
   }
   return out;
 }
@@ -476,14 +553,16 @@ export async function driveActionCardsStep(
     return { cards: {}, status: 'ready' };
   }
 
-  const contentHash = actionCardsContentHash(rows);
   const nowMs = Date.now();
 
-  // CACHE CHECK (D-11) — per-row freshness (hash equality AND age ≤ 10 min). A
-  // fresh row reuses its cached card; stale/absent rows form the compile set.
+  // CACHE CHECK (D-11) — per-row freshness (PER-ROW hash equality AND age ≤ 10
+  // min). WR-01 fix: each row is compared against its OWN content hash, so a row
+  // whose own inputs are unchanged reuses its cached card even when OTHER rows
+  // are added or resolved. Stale/absent rows form the compile set.
   const cards: Record<string, ActionCard> = {};
   const compileRows: ActionCardSourceRow[] = [];
   for (const row of rows) {
+    const rowHash = actionCardRowContentHash(row);
     let cached: ActionCardRow | null = null;
     try {
       cached = await getActionCardBySource(ctx, companyId, row.sourceIssueId);
@@ -493,7 +572,7 @@ export async function driveActionCardsStep(
         sourceIssueId: row.sourceIssueId,
       });
     }
-    if (cached && isActionCardFresh(cached, contentHash, nowMs)) {
+    if (cached && isActionCardFresh(cached, rowHash, nowMs)) {
       cards[row.sourceIssueId] = rowToCard(cached);
     } else {
       compileRows.push(row);
@@ -520,7 +599,6 @@ export async function driveActionCardsStep(
       companyId,
       rows: compileRows,
       body: priorBody,
-      contentHash,
       editorAgentId,
     });
     return { cards: { ...cards, ...fresh }, status: 'ready' };
@@ -578,7 +656,6 @@ export async function driveActionCardsStep(
     companyId,
     rows: compileRows,
     body: poll.body,
-    contentHash,
     editorAgentId,
   });
   try {
@@ -592,9 +669,3 @@ export async function driveActionCardsStep(
 
   return { cards: { ...cards, ...fresh }, status: 'ready' };
 }
-
-/** finalizeTldr is intentionally NOT used for the structured card cache (we
- *  write typed rows via the action-cards repo), but the import keeps the
- *  circuit-breaker/validation primitive available for parity; reference it to
- *  avoid an unused-import error while documenting the deliberate divergence. */
-void finalizeTldr;
