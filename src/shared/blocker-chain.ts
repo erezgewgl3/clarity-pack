@@ -47,12 +47,92 @@ function arrowPath(ids: string[]): string {
 }
 
 /**
+ * Plan 11-01 (D-14) — the pure verdict mapping. Encodes the design-seed
+ * Section 1 table 1:1: each of the 8 honest terminal kinds maps to exactly one
+ * {tier, actionAffordance, needsYou} triple. The exhaustive `switch` + the
+ * `const _exhaustive: never` guard make a future 9th kind a compile error
+ * (the established total-function-over-the-union idiom; mirrors
+ * humanize-snapshot.ts and classify-employee-state.ts).
+ *
+ * Pure: no SDK import, no I/O, no wall-clock read. The only input is the
+ * terminal's discriminant — output is deterministic per kind.
+ */
+export function classifyVerdict(terminal: Terminal): {
+  tier: BlockerChainResult['tier'];
+  actionAffordance: BlockerChainResult['actionAffordance'];
+  needsYou: boolean;
+} {
+  switch (terminal.kind) {
+    case 'AWAITING_HUMAN':
+      return { tier: 'needs-you', actionAffordance: 'reply', needsYou: true };
+    case 'AWAITING_AGENT_WORKING':
+      return { tier: 'in-motion', actionAffordance: 'none', needsYou: false };
+    case 'AWAITING_AGENT_STUCK':
+      return { tier: 'watch', actionAffordance: 'nudge', needsYou: false };
+    case 'SELF_RESOLVING':
+      return { tier: 'watch', actionAffordance: 'none', needsYou: false };
+    case 'EXTERNAL':
+      return { tier: 'watch', actionAffordance: 'open', needsYou: false };
+    case 'CYCLE':
+      return { tier: 'watch', actionAffordance: 'open', needsYou: false };
+    case 'UNOWNED':
+      return { tier: 'needs-you', actionAffordance: 'assign', needsYou: true };
+    case 'UNCLASSIFIED':
+      return { tier: 'watch', actionAffordance: 'open', needsYou: false };
+    default: {
+      // Exhaustiveness — TS narrows to `never`. A new kind fails the build here.
+      const _exhaustive: never = terminal;
+      throw new Error(`classifyVerdict: unhandled terminal kind: ${JSON.stringify(_exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * Plan 11-01 — build the enriched BlockerChainResult from a terminal. Computes
+ * the verdict triple via classifyVerdict, passes the terminal's display label
+ * through as awaitedPartyLabel (final UUID scrub happens in scrub-human-action.ts),
+ * and derives the mutation-only split-identity ids (D-15): targetAgentUuid from
+ * an AWAITING_AGENT_* agentId, targetIssueUuid from the leaf node id. Pure.
+ */
+function makeResult(args: {
+  startId: string;
+  pathIds: string[];
+  terminal: Terminal;
+  isStale: boolean;
+  leafId: string;
+  degradeReason?: string;
+}): BlockerChainResult {
+  const { startId, pathIds, terminal, isStale, leafId, degradeReason } = args;
+  const verdict = classifyVerdict(terminal);
+  const targetAgentUuid =
+    terminal.kind === 'AWAITING_AGENT_WORKING' || terminal.kind === 'AWAITING_AGENT_STUCK'
+      ? terminal.agentId
+      : null;
+  return {
+    startId,
+    pathIds,
+    terminal,
+    isStale,
+    needsYou: verdict.needsYou,
+    tier: verdict.tier,
+    actionAffordance: verdict.actionAffordance,
+    awaitedPartyLabel: terminal.label,
+    targetAgentUuid,
+    targetIssueUuid: leafId,
+    ...(degradeReason != null ? { degradeReason } : {}),
+  };
+}
+
+/**
  * Flatten a blocker-edge graph to its terminal. Deterministic DFS:
  *   - Stops at the first node with no outgoing edges (or only external edges) — leaf
  *   - Stops on revisit of a node already on the current path stack — cycle
- *   - Terminal selection follows a fixed priority: EXTERNAL (if final edge.reason ===
- *     'external') > HUMAN_ACTION_ON (leaf has owner + status='awaiting') > SELF_RESOLVING
- *     (leaf has etaIso + no owner) > HUMAN_ACTION_ON fallback ('__unowned__').
+ *   - Leaf terminal selection follows the D-07 awaiting-first cascade: EXTERNAL
+ *     (final edge.reason === 'external' or only-external children) > AWAITING_HUMAN
+ *     (status === 'awaiting') > AWAITING_HUMAN (ownerUserId present) > AWAITING_AGENT_*
+ *     (assigneeAgentId present; WORKING if agentState === 'working', else STUCK per
+ *     D-04 conservative-stuck) > SELF_RESOLVING (etaIso + no owner) > UNOWNED.
+ *   - maxSteps-exceeded degrades to UNCLASSIFIED (D-10); a real revisit is CYCLE.
  *
  * Output bytes are identical across invocations with the same input — the
  * determinism test runs the function 100 times and asserts JSON.stringify equality.
@@ -104,12 +184,13 @@ export function flattenBlockerChain(input: BlockerChainInput): BlockerChainResul
         cycleNodes: canonical,
         label: `Cycle: ${arrowPath(canonical)}`,
       };
-      return {
+      return makeResult({
         startId: input.startId,
         pathIds: [...pathIds, current],
         terminal,
         isStale: false,
-      };
+        leafId: current,
+      });
     }
     pathIds.push(current);
     onPath.add(current);
@@ -133,12 +214,7 @@ export function flattenBlockerChain(input: BlockerChainInput): BlockerChainResul
           kind: 'EXTERNAL',
           label: `External (${current})`,
         };
-        return {
-          startId: input.startId,
-          pathIds,
-          terminal,
-          isStale: false,
-        };
+        return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
       }
       // Also fire EXTERNAL when the leaf's only outgoing edges are external
       // (i.e., it has external children we won't recurse into).
@@ -148,25 +224,47 @@ export function flattenBlockerChain(input: BlockerChainInput): BlockerChainResul
           kind: 'EXTERNAL',
           label: `External (${externalEdge.to})`,
         };
-        return {
-          startId: input.startId,
-          pathIds,
-          terminal,
-          isStale: false,
-        };
+        return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
       }
-      if (meta?.ownerUserId != null && meta.status === 'awaiting') {
+      // D-07 awaiting-first cascade. The explicit `status === 'awaiting'` branch
+      // stays FIRST so awaiting beats agent ownership — a person is being waited
+      // on even if an agent is nominally assigned.
+      if (meta?.status === 'awaiting' && meta.ownerUserId != null) {
         const terminal: Terminal = {
-          kind: 'HUMAN_ACTION_ON',
+          kind: 'AWAITING_HUMAN',
           userId: meta.ownerUserId,
           label: `${meta.ownerUserId} to act on ${current}`,
         };
-        return {
-          startId: input.startId,
-          pathIds,
-          terminal,
-          isStale: false,
+        return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
+      }
+      // Widened (was gated on status==='awaiting'): a user owner alone ⇒ a person
+      // is the awaited party.
+      if (meta?.ownerUserId != null) {
+        const terminal: Terminal = {
+          kind: 'AWAITING_HUMAN',
+          userId: meta.ownerUserId,
+          label: `${meta.ownerUserId} to act on ${current}`,
         };
+        return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
+      }
+      // Agent ownership — the walk has flattened to an agent-owned leaf. WORKING
+      // when the worker-resolved liveness says 'working'; otherwise STUCK (D-04:
+      // a missing/null signal is conservatively treated as stuck so a silently
+      // idle agent surfaces a nudge rather than false reassurance).
+      if (meta?.assigneeAgentId != null) {
+        const terminal: Terminal =
+          meta.agentState === 'working'
+            ? {
+                kind: 'AWAITING_AGENT_WORKING',
+                agentId: meta.assigneeAgentId,
+                label: `${meta.assigneeAgentId} working on ${current}`,
+              }
+            : {
+                kind: 'AWAITING_AGENT_STUCK',
+                agentId: meta.assigneeAgentId,
+                label: `${meta.assigneeAgentId} stuck on ${current}`,
+              };
+        return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
       }
       if (meta?.etaIso != null && meta.ownerUserId == null) {
         const terminal: Terminal = {
@@ -174,22 +272,16 @@ export function flattenBlockerChain(input: BlockerChainInput): BlockerChainResul
           etaIso: meta.etaIso,
           label: `Self-resolving by ${meta.etaIso}`,
         };
-        return {
-          startId: input.startId,
-          pathIds,
-          terminal,
-          isStale: false,
-        };
+        return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
       }
-      // Fallback: deterministic unowned terminal. Better than throwing —
-      // surfaces render "Owner unknown — assign first" and the operator
-      // can act on it.
+      // Genuinely unowned (D-11) — a real UNOWNED terminal carrying NO userId.
+      // This is the ONLY place "assign an owner" is honest. Replaces the old
+      // unowned-sentinel fallback lie.
       const terminal: Terminal = {
-        kind: 'HUMAN_ACTION_ON',
-        userId: '__unowned__',
+        kind: 'UNOWNED',
         label: `Owner unknown — assign ${current} first`,
       };
-      return { startId: input.startId, pathIds, terminal, isStale: false };
+      return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
     }
 
     // Continue walking — take the first (lexicographically smallest by `to`)
@@ -198,26 +290,34 @@ export function flattenBlockerChain(input: BlockerChainInput): BlockerChainResul
     current = lastEdge.to;
   }
 
-  // Safety fallthrough: maxSteps exceeded. Treat as cycle for honesty.
+  // Safety fallthrough: maxSteps exceeded. We could not determine the blocker
+  // within the bound — degrade honestly to UNCLASSIFIED (D-10) rather than
+  // mislabel it a CYCLE (real revisit detection above still emits CYCLE).
   const terminal: Terminal = {
-    kind: 'CYCLE',
-    cycleNodes: pathIds,
-    label: `Cycle (depth-limit exceeded after ${maxSteps} steps)`,
+    kind: 'UNCLASSIFIED',
+    label: `Can't determine blocker for ${input.startId} — open to investigate`,
   };
-  return { startId: input.startId, pathIds, terminal, isStale: false };
+  return makeResult({
+    startId: input.startId,
+    pathIds,
+    terminal,
+    isStale: false,
+    leafId: current,
+    degradeReason: 'max-depth-exceeded',
+  });
 }
 
 /**
- * Plan 07-03 Task 1 — single source of truth for the HUMAN_ACTION_ON-first
- * ranking. MOVED here verbatim from the recompute-situation job
- * (src/worker/jobs/situation-snapshot.ts:286-303) so the job AND the new
- * org-blocked-backlog handler share one definition. Behavior is byte-identical
- * to the prior private function — the job now imports this instead of declaring
- * its own.
+ * Plan 07-03 Task 1 — single source of truth for the needs-you-first ranking.
+ * MOVED here from the recompute-situation job so the job AND the
+ * org-blocked-backlog handler share one definition.
  *
- * Priority: HUMAN_ACTION_ON=0 > SELF_RESOLVING=1 > EXTERNAL=2 > CYCLE=3
- * (default 99). Stable sort by priority, then slice(0, max). Pure — does not
- * mutate the input array.
+ * Plan 11-01 (D-07 / Pitfall 6) — re-ranked for the 8-kind union so needs-you
+ * kinds lead and no new kind falls through to default. Priority order:
+ *   AWAITING_HUMAN=0 > UNOWNED=1 > SELF_RESOLVING=2 > AWAITING_AGENT_WORKING=3 >
+ *   AWAITING_AGENT_STUCK=4 > EXTERNAL=5 > CYCLE=6 > UNCLASSIFIED=7 (default 99).
+ * Stable copy-then-sort by priority, then slice(0, max). Pure — does not mutate
+ * the input array.
  */
 export function pickTopChains(
   chains: BlockerChainResult[],
@@ -225,14 +325,22 @@ export function pickTopChains(
 ): BlockerChainResult[] {
   const priority = (c: BlockerChainResult): number => {
     switch (c.terminal.kind) {
-      case 'HUMAN_ACTION_ON':
+      case 'AWAITING_HUMAN':
         return 0;
-      case 'SELF_RESOLVING':
+      case 'UNOWNED':
         return 1;
-      case 'EXTERNAL':
+      case 'SELF_RESOLVING':
         return 2;
-      case 'CYCLE':
+      case 'AWAITING_AGENT_WORKING':
         return 3;
+      case 'AWAITING_AGENT_STUCK':
+        return 4;
+      case 'EXTERNAL':
+        return 5;
+      case 'CYCLE':
+        return 6;
+      case 'UNCLASSIFIED':
+        return 7;
       default:
         return 99;
     }
