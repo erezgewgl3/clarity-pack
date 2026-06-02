@@ -178,7 +178,20 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // The 740 kB visual-regression baseline is the SANITY ceiling (operator
 // checkpoint required to breach it); 735 kB stays under it. The LOCKED redesign
 // surface (003-B layout + 004-B type/chips) was NOT crippled to fit a tighter bump.
-const UI_BUNDLE_BYTES_CEILING = 735 * 1024; // 735 kB = 752,640 bytes
+// Bumped 2026-06-03 from 735 → 739 kB (Plan 15-02: Pulse header scoped CSS,
+// +1,977 bytes, no SheetJS): COCK-01 adds the <PulseHeader> component + the
+// buildPulseSentence pure helper (both tree-shaken out until index.tsx wires
+// them in a later 15-plan) and the .clarity-pulse* scoped CSS block in
+// src/ui/primitives/theme.css. theme.css is inlined as a `text` loader string in
+// the bundle, so the CSS delta lands now even though the component is not yet
+// imported. The built bundle went 752,640 → 754,617 bytes (+1,977 B over the
+// prior 735 kB ceiling). Verified zero SheetJS sentinels (XLSX/SheetJS/!ref all 0
+// in the UI bundle), so the delta is the legitimate Pulse CSS. Recalibrated per
+// the Phase 5/7/8/13 precedent (actual + ~1.6 kB headroom rounded UP to the next
+// kB; tighter than the +3 kB norm to stay UNDER the 740 kB visual-regression
+// SANITY ceiling — no operator checkpoint required):
+//   ceil((754,617 + 1,536) / 1024) = 739 kB (756,736 bytes), ~2.1 kB headroom.
+const UI_BUNDLE_BYTES_CEILING = 739 * 1024; // 739 kB = 756,736 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

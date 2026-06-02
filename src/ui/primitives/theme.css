@@ -933,6 +933,99 @@
   cursor: not-allowed;
 }
 
+/* ---------- Phase 15 Pulse header (Plan 15-02 / COCK-01 / SC1) ----------
+ *
+ * The always-visible "how's the company?" cockpit header: a deterministic
+ * one-sentence status line (Instrument Serif italic display per sketch-findings)
+ * + four labelled vital-sign chips (need-you gold / in-motion green / stuck red
+ * / self-clearing calm). Supersedes the Phase-8 needs-you-banner (D-07). Maps
+ * the mockup's .pulse / .head / .vitals / .vital tokens to host CSS tokens —
+ * Clarity Pack inherits host CSS and ships NO parallel Tailwind. All rules are
+ * scoped under [data-clarity-surface='situation-room'] (SCAF-06 / COEXIST-01).
+ *
+ * Tint map (mockup --gold/--green/--red/--ink families -> host tokens):
+ *   you -> --clarity-you (gold)        mov -> --clarity-state-running (green)
+ *   stk -> --clarity-state-blocked (red) slf -> --clarity-ink-3 (calm/neutral)
+ */
+[data-clarity-surface='situation-room'] .clarity-pulse {
+  border: 1px solid var(--clarity-line-bright, rgba(255, 255, 255, 0.12));
+  background: color-mix(in oklch, var(--clarity-bg), white 3%);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  margin: 0.5rem 0 1.25rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-pulse-sentence {
+  margin: 0 0 0.85rem;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-size: 1.35rem;
+  line-height: 1.3;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface='situation-room'] .clarity-pulse-vitals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+[data-clarity-surface='situation-room'] .clarity-pulse-vital {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 9px;
+  border: 1px solid var(--clarity-line, rgba(255, 255, 255, 0.08));
+  background: color-mix(in oklch, var(--clarity-bg), black 6%);
+  font-size: 0.8rem;
+  color: var(--clarity-ink-2, #cdc5b6);
+}
+
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--clarity-ink-3, #8a8472);
+}
+
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-n {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--clarity-fg);
+}
+
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-label {
+  letter-spacing: 0.01em;
+}
+
+/* Per-vital tints — the count figure + the dot pick up the family color. */
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-you .clarity-pulse-vital-n {
+  color: var(--clarity-you, #e9c97e);
+}
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-you .clarity-pulse-vital-dot {
+  background: var(--clarity-you, #e9c97e);
+}
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-mov .clarity-pulse-vital-n {
+  color: var(--clarity-state-running, #8fc98f);
+}
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-mov .clarity-pulse-vital-dot {
+  background: var(--clarity-state-running, #8fc98f);
+}
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-stk .clarity-pulse-vital-n {
+  color: var(--clarity-state-blocked, #e08a8a);
+}
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-stk .clarity-pulse-vital-dot {
+  background: var(--clarity-state-blocked, #e08a8a);
+}
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-slf .clarity-pulse-vital-n {
+  color: var(--clarity-ink-2, #cdc5b6);
+}
+[data-clarity-surface='situation-room'] .clarity-pulse-vital-slf .clarity-pulse-vital-dot {
+  background: var(--clarity-ink-3, #8a8472);
+}
+
 /* ===========================================================================
  * Plan 09-02 — actionable cockpit: three group sections, owner-picker popover,
  * per-state action buttons, the merged blocked-backlog expander, the paused
