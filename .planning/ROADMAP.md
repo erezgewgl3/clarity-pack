@@ -115,11 +115,12 @@ Plans:
   3. The reply-in-place + quick-decision primitive is available on the Situation Room, the Reader-view blocker panel, and the org-blocked backlog — the same shared primitive, not three copies.
   4. When a chain terminates on an out-of-system human (not reachable via comment), the row surfaces the named action + "Open ↗" instead of a Send affordance — no dead Send button.
   5. UUIDs are never rendered as text (NO_UUID_LEAK); the mutation carries the UUID while the display stays human-readable.
-**Plans**: 3 plans
+**Plans**: 4 plans
 Plans:
-- [ ] 14-01-PLAN.md — Additive dedup migration 0016 + situation.replyAndResume handler (comment-write + conditional Shape-B {status:'in_progress'} flip + messageUuid idempotency + opt-in guard) (wave 1)
-- [ ] 14-02-PLAN.md — Pure isReplyReachable(verdict) predicate + the ONE shared <ReplyInPlace> primitive (free-text reply + decision chips off decisionOptions + Open↗ + await-confirm) (wave 2)
-- [ ] 14-03-PLAN.md — Wire <ReplyInPlace> into all three surfaces (employee-row / live-blocker-panel / blocked-backlog-expander) — same import, no copies; full-suite green gate (wave 3)
+- [ ] 14-01-PLAN.md — Additive dedup migration 0016 + situation.replyAndResume handler (comment-write + conditional Shape-B {status:'in_progress'} flip driven by a REAL needsDurabilityFlip + messageUuid idempotency incl. wake idempotencyKey + opt-in guard) (wave 1)
+- [ ] 14-04-PLAN.md — Data-model foundation: emit worker needsDurabilityFlip (from leaf status) + terminalKind on the rollup blockerChain + employee-row mirror; widen OrgBlockedRow with awaitedPartyLabel/targetAgentUuid/decisionOptions/leafIssueUuid/needsDurabilityFlip (wave 1)
+- [ ] 14-02-PLAN.md — Pure isReplyReachable(terminalKind) predicate (AWAITING_HUMAN only; AWAITING_AGENT_STUCK deferred) + the ONE shared <ReplyInPlace> primitive (free-text reply + decision chips off decisionOptions + Open↗ + await-confirm) (wave 2)
+- [ ] 14-03-PLAN.md — Wire <ReplyInPlace> into all three surfaces (employee-row / live-blocker-panel / blocked-backlog-expander) — same import no copies, reachable off terminalKind, real needsDurabilityFlip, no duplicate blockerLine; full-suite green gate (wave 3)
 **UI hint**: yes
 
 ### Phase 15: Cockpit IA Redesign
