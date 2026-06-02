@@ -91,6 +91,39 @@ export type TLDR = {
   compiledByAgentId: string; // governance parity audit field
 };
 
+// Plan 13-01 (D-14) — the Editor-Agent named-action card. Split-identity
+// discipline mirrors BlockerChainResult (D-15 of Phase 11, NO_UUID_LEAK):
+//
+//   DISPLAY fields — the ONLY fields a render surface may show:
+//     namedAction, awaitedParty, estBucket, actionKind, decisionOptions
+//   KEY / DISPATCH-only field — carried but NEVER rendered as visible text:
+//     sourceIssueUuid
+//
+// est_bucket is a COARSE bucket (D-09) — quick ≈ a few minutes / one decision;
+// focused ≈ up to ~30-min review; deep ≈ needs a real work block — never a
+// manufactured-precise minute count. decisionOptions is null unless the source
+// issue poses an explicit binary (D-08 conservative default); an open-ended
+// question carries null, not an invented option set.
+export type ActionCard = {
+  /** DISPLAY — the single plain-English action sentence (Editorial Desk voice). */
+  namedAction: string;
+  /** DISPLAY — the human-readable awaited party (scrubbed, zero raw UUIDs, D-10). */
+  awaitedParty: string;
+  /** DISPLAY — coarse time-estimate bucket (D-09); never free-form minutes. */
+  estBucket: 'quick' | 'focused' | 'deep';
+  /** DISPLAY — the single control the row offers, grounded in the engine affordance. */
+  actionKind: 'answer' | 'decide' | 'assign' | 'none';
+  /** DISPLAY — yes/no (pick-one) options when the issue poses an explicit binary
+   *  (D-08); null otherwise (a free-text answer is expected). Never invented. */
+  decisionOptions: string[] | null;
+  /** Generation timestamp (ISO) — used for the staleness/liveness signal (D-11). */
+  generatedAt: string;
+  /** KEY / DISPATCH ONLY — the leaf/source issue UUID the card grounds in
+   *  (== verdict.targetIssueUuid / pathIds[last]). Carried as the grounding +
+   *  dispatch key, NEVER rendered as visible text (NO_UUID_LEAK, D-03/D-14). */
+  sourceIssueUuid: string;
+};
+
 export type OptInPrefs = {
   userId: string;
   optedInAt: string | null; // null = opted-OUT (OPTIN-01 absence-of-row semantics)
