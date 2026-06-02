@@ -34,7 +34,7 @@ Full phase details archived at [`milestones/v1.0.0-ROADMAP.md`](milestones/v1.0.
 Make the Situation Room the one screen that truthfully tells Eric what's going on — and lets him do what needs him, in place. Hybrid architecture: a **deterministic engine** guaranteeing honesty + degrade-safety, with an **Editor-Agent** supplying the named human sentence on top. The two halves stay visibly separate (no AI in `blocker-chain.ts`).
 
 - [x] **Phase 10: Unblock-Resume Spike** — prove that answering an agent (a comment) actually unblocks + resumes it against the live Paperclip model, or determine the required status transition. Gates all action UI. (completed 2026-06-02)
-- [ ] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row.
+- [x] **Phase 11: Honest Blocker Taxonomy (engine)** — deterministic terminal classification recognizing agent ownership, flattening transitively to the human at the end, degrade-safe per row. (completed 2026-06-02)
 - [ ] **Phase 12: Needs-You Triage** — "Needs you" lists only human-actionable items, ranked by leverage; Assign-owner suppressed except on genuinely-unowned / stuck-agent rows.
 - [ ] **Phase 13: Editor-Agent Named Action** — grounded plain-English named action + party + estimate, with a stale→degrade guardrail and no manufactured urgency.
 - [ ] **Phase 14: Do-It-Here Action Loop** — reply-in-place + quick-decision chips that unblock+resume the agent, across three surfaces; "Open ↗" for out-of-system humans.
@@ -70,7 +70,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 - [x] 11-01-PLAN.md — Pure engine contract: 8-variant Terminal union + enriched verdict + D-07 cascade + classifyVerdict() + scrub; __unowned__ removed (wave 1)
 - [x] 11-02-PLAN.md — Worker agent-ownership/liveness capture in both BFS builders + graceful()→UNCLASSIFIED degrade (wave 2)
 - [x] 11-03-PLAN.md — Rollup re-triage off the verdict + split-identity + UNCLASSIFIED-on-throw + humanize-snapshot compile-gate (wave 3)
-- [ ] 11-04-PLAN.md — UI surfaces render off the verdict; assign gated to UNOWNED; all 8 kinds render; full-repo green gate (wave 4)
+- [x] 11-04-PLAN.md — UI surfaces render off the verdict; assign gated to UNOWNED; all 8 kinds render; full-repo green gate (wave 4)
 
 ### Phase 12: Needs-You Triage
 **Goal**: Use the new terminal taxonomy so "Needs you" tells the truth — only human-actionable items, ranked by what they unblock, with Assign-owner shown only when assignment is genuinely the answer.
@@ -132,7 +132,7 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Unblock-Resume Spike | 2/3 | Complete    | 2026-06-02 |
-| 11. Honest Blocker Taxonomy | 3/4 | In Progress|  |
+| 11. Honest Blocker Taxonomy | 4/4 | Complete   | 2026-06-02 |
 | 12. Needs-You Triage | 0/0 | Not started | - |
 | 13. Editor-Agent Named Action | 0/0 | Not started | - |
 | 14. Do-It-Here Action Loop | 0/0 | Not started | - |
