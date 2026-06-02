@@ -4,29 +4,29 @@
 //
 // scrubHumanAction was a file-private helper in
 // src/worker/handlers/org-blocked-backlog.ts (Plan 07-03 hotfix 35d4945). Plan
-// 08-01 extracts it (plus UUID_RE / UUID_RE_G / UNOWNED_SENTINEL) into
+// 08-01 extracts it (plus UUID_RE / UUID_RE_G) into
 // src/shared/scrub-human-action.ts so BOTH the ROOM-12 org-blocked-backlog AND
-// the ROOM-13..16 per-employee rollup consume one definition. These 6 unit
-// tests pin every terminal-kind path against the contract: the produced string
+// the ROOM-13..16 per-employee rollup consume one definition. These unit tests
+// pin every terminal-kind path against the contract: the produced string
 // carries ZERO raw hex UUIDs, for any Terminal kind.
+//
+// Plan 11-04 (D-11/D-05) — migrated off the legacy HUMAN_ACTION_ON kind and the
+// removed UNOWNED_SENTINEL userId magic-string. UNOWNED is now a first-class
+// terminal kind carrying NO userId; the human-action variant is AWAITING_HUMAN.
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
-import {
-  scrubHumanAction,
-  UNOWNED_SENTINEL,
-} from '../../src/shared/scrub-human-action.ts';
+import { scrubHumanAction } from '../../src/shared/scrub-human-action.ts';
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
-// Test 1 — __unowned__ HUMAN_ACTION_ON whose embedded UUID does NOT resolve →
-// "Owner unknown — assign an owner first" (no UUID).
-test('scrubHumanAction — __unowned__ with unresolved UUID → "Owner unknown — assign an owner first"', () => {
+// Test 1 — genuine UNOWNED (Plan 11-01 D-11; was __unowned__ HUMAN_ACTION_ON)
+// whose embedded UUID does NOT resolve → "Owner unknown — assign an owner first".
+test('scrubHumanAction — UNOWNED with unresolved UUID → "Owner unknown — assign an owner first"', () => {
   const result = scrubHumanAction(
     {
-      kind: 'HUMAN_ACTION_ON',
-      userId: UNOWNED_SENTINEL,
+      kind: 'UNOWNED',
       label: 'Owner unknown — assign 7b5c7deb-8135-4d23-b41b-6cf7b724e945 first',
     },
     '',
@@ -36,12 +36,12 @@ test('scrubHumanAction — __unowned__ with unresolved UUID → "Owner unknown �
   assert.ok(!UUID_RE.test(result), `no raw UUID; got: ${result}`);
 });
 
-// Test 2 — __unowned__ whose embedded UUID resolves in nameByUuid →
+// Test 2 — UNOWNED whose embedded UUID resolves in nameByUuid →
 // "<name> — assign an owner first".
-test('scrubHumanAction — __unowned__ with a resolvable embedded UUID → "<name> — assign an owner first"', () => {
+test('scrubHumanAction — UNOWNED with a resolvable embedded UUID → "<name> — assign an owner first"', () => {
   const uuid = '7b5c7deb-8135-4d23-b41b-6cf7b724e945';
   const result = scrubHumanAction(
-    { kind: 'HUMAN_ACTION_ON', userId: UNOWNED_SENTINEL, label: `Owner unknown — assign ${uuid} first` },
+    { kind: 'UNOWNED', label: `Owner unknown — assign ${uuid} first` },
     '',
     new Map([[uuid, 'Compliance Bot']]),
   );
@@ -49,11 +49,11 @@ test('scrubHumanAction — __unowned__ with a resolvable embedded UUID → "<nam
   assert.ok(!UUID_RE.test(result), `no raw UUID; got: ${result}`);
 });
 
-// Test 3 — non-__unowned__ HUMAN_ACTION_ON whose userId is the viewer → "You".
-test('scrubHumanAction — HUMAN_ACTION_ON whose userId === viewer → "You"', () => {
+// Test 3 — AWAITING_HUMAN (Plan 11-01 rename) whose userId is the viewer → "You".
+test('scrubHumanAction — AWAITING_HUMAN whose userId === viewer → "You"', () => {
   const viewer = 'cccccccc-9999-0000-1111-222222222222';
   const result = scrubHumanAction(
-    { kind: 'HUMAN_ACTION_ON', userId: viewer, label: `Waiting on ${viewer}` },
+    { kind: 'AWAITING_HUMAN', userId: viewer, label: `Waiting on ${viewer}` },
     viewer,
     new Map([[viewer, 'Alice']]),
   );
@@ -61,18 +61,46 @@ test('scrubHumanAction — HUMAN_ACTION_ON whose userId === viewer → "You"', (
   assert.ok(!UUID_RE.test(result), `no raw UUID; got: ${result}`);
 });
 
-// Test 4 — non-viewer HUMAN_ACTION_ON returns the RESOLVED NAME (not the UUID).
-test('scrubHumanAction — non-viewer HUMAN_ACTION_ON returns the resolved name, never the UUID', () => {
+// Test 4 — non-viewer AWAITING_HUMAN returns the RESOLVED NAME (not the UUID).
+test('scrubHumanAction — non-viewer AWAITING_HUMAN returns the resolved name, never the UUID', () => {
   const owner = 'aaaaaaaa-1111-2222-3333-444444444444';
   const viewer = 'cccccccc-9999-0000-1111-222222222222';
   const result = scrubHumanAction(
-    { kind: 'HUMAN_ACTION_ON', userId: owner, label: `${owner} to act on COU-2` },
+    { kind: 'AWAITING_HUMAN', userId: owner, label: `${owner} to act on COU-2` },
     viewer,
     new Map([[owner, 'Head of Compliance']]),
   );
   assert.match(result, /Head of Compliance/);
   assert.ok(!result.includes('You'), 'a non-viewer must not be rewritten to You');
   assert.ok(!UUID_RE.test(result), `no raw UUID; got: ${result}`);
+});
+
+// Test 4b — the four NEW kinds (Plan 11-01 D-05) also scrub every embedded UUID.
+test('scrubHumanAction — AWAITING_AGENT_WORKING/STUCK + UNCLASSIFIED scrub embedded UUIDs', () => {
+  const u = 'eeeeeeee-7777-8888-9999-aaaaaaaaaaaa';
+  const working = scrubHumanAction(
+    { kind: 'AWAITING_AGENT_WORKING', agentId: u, label: `Agent ${u} is working` },
+    '',
+    new Map([[u, 'Drafting Bot']]),
+  );
+  assert.match(working, /Drafting Bot/);
+  assert.ok(!UUID_RE.test(working), `AWAITING_AGENT_WORKING leaked: ${working}`);
+
+  const stuck = scrubHumanAction(
+    { kind: 'AWAITING_AGENT_STUCK', agentId: u, label: `Agent ${u} is stuck` },
+    '',
+    new Map(),
+  );
+  assert.match(stuck, /agent#eeeeeeee/);
+  assert.ok(!UUID_RE.test(stuck), `AWAITING_AGENT_STUCK leaked: ${stuck}`);
+
+  const unclassified = scrubHumanAction(
+    { kind: 'UNCLASSIFIED', label: `Can't determine — ${u}` },
+    '',
+    new Map(),
+  );
+  assert.ok(!UUID_RE.test(unclassified), `UNCLASSIFIED leaked: ${unclassified}`);
+  assert.ok(!unclassified.includes('assign'), 'UNCLASSIFIED must never claim assignment (D-12)');
 });
 
 // Test 5 — SELF_RESOLVING / EXTERNAL / CYCLE labels: every embedded UUID is

@@ -332,7 +332,10 @@ test('flatten-blocker-chain — handler returns 200 (NOT 502) even when SDK call
   // Must NOT throw — the host bridge translates a thrown handler to 502.
   const result = await handler({ userId: 'eric', startId: 'X', companyId: 'co-1', viewerUserId: 'eric' });
   assert.ok(result);
-  assert.equal(result.terminal.kind, 'EXTERNAL');
+  // Plan 11-02 (D-10/TAX-03) — a ROOT relations.get throw is now an HONEST
+  // degrade: UNCLASSIFIED (open affordance, never a false EXTERNAL chase), not
+  // the old EXTERNAL lie. The genuinely-empty graph (test above) still → EXTERNAL.
+  assert.equal(result.terminal.kind, 'UNCLASSIFIED');
 });
 
 // ---------------------------------------------------------------------------

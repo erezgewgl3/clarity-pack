@@ -36,7 +36,11 @@ test('row type carries the worker group + isPaused fields (R2 / D-04)', () => {
 
 test('R4 — needs_you UNOWNED row mounts the OwnerPickerPopover (assign owner)', () => {
   assert.match(ROW, /<OwnerPickerPopover/);
-  assert.match(ROW, /isUnowned/);
+  // Plan 11-04 (D-13/SC3) — the assign cluster is gated on the engine verdict's
+  // genuinely-unowned affordance (showAssign = actionAffordance === 'assign'),
+  // NOT the legacy ownerName string-match.
+  assert.match(ROW, /showAssign/);
+  assert.match(ROW, /actionAffordance === 'assign'/);
 });
 
 test('R4 — needs_you OWNED row wires Open chat + Wake (issues.requestWakeup)', () => {
@@ -81,6 +85,43 @@ test('D-04 — a non-paused idle row shows Assign work, NOT Resume/paused marker
 test('NO_UUID_LEAK — ownerAgentId / agentId consumed as deep-link/dispatch args, never rendered as text', () => {
   // No JSX text node directly rendering an *AgentId value.
   assert.equal((ROW.match(/>\s*\{[^}]*ownerAgentId[^}]*\}\s*</g) || []).length, 0);
+});
+
+test('NO_UUID_LEAK render-scan — no targetAgentUuid/targetIssueUuid in a JSX expression across the 3 blocker surfaces (Plan 11-04 / D-15 / Pitfall 5)', () => {
+  // The split-identity *Uuid fields are mutation-only — they must never appear
+  // inside a JSX `{...}` expression (which would render them as visible text)
+  // on ANY of the three blocker surfaces. The scrubbed awaitedPartyLabel is the
+  // only awaited-party display string.
+  const BANNER = readFileSync(
+    path.join(REPO_ROOT, 'src/ui/surfaces/situation-room/needs-you-banner.tsx'),
+    'utf8',
+  );
+  const PANEL = readFileSync(
+    path.join(REPO_ROOT, 'src/ui/surfaces/reader/live-blocker-panel.tsx'),
+    'utf8',
+  );
+  // A *Uuid field is "rendered" only if it appears in a JSX TEXT-NODE expression
+  // — i.e. `>{ … targetAgentUuid … }<` or inside a `{` … `}` adjacent to JSX
+  // tags. A bare `targetAgentUuid: string | null;` TYPE declaration is NOT a
+  // render (mirrors the existing ownerAgentId scan idiom on the line above).
+  const JSX_TEXT_UUID = />\s*\{[^{}]*target(Agent|Issue)Uuid[^{}]*\}\s*</g;
+  for (const [name, src] of [['employee-row', ROW], ['needs-you-banner', BANNER], ['live-blocker-panel', PANEL]]) {
+    assert.equal(
+      (src.match(JSX_TEXT_UUID) || []).length,
+      0,
+      `${name}.tsx renders a *Uuid field in a JSX text node (NO_UUID_LEAK violation)`,
+    );
+    // Belt-and-suspenders: no template-literal interpolation of a *Uuid either.
+    assert.equal(
+      (src.match(/\$\{[^}]*target(Agent|Issue)Uuid[^}]*\}/g) || []).length,
+      0,
+      `${name}.tsx interpolates a *Uuid into a template literal (NO_UUID_LEAK violation)`,
+    );
+  }
+  // Each surface renders the scrubbed awaitedPartyLabel (the verdict display string).
+  assert.match(ROW, /awaitedPartyLabel/, 'employee-row renders awaitedPartyLabel');
+  assert.match(BANNER, /awaitedPartyLabel/, 'needs-you-banner renders awaitedPartyLabel');
+  assert.match(PANEL, /awaitedPartyLabel/, 'live-blocker-panel renders awaitedPartyLabel');
 });
 
 // ---------------------------------------------------------------------------
