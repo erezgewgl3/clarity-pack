@@ -43,7 +43,7 @@ export type RefCardData = {
 export type Terminal =
   | { kind: 'AWAITING_HUMAN'; userId: string; label: string } // PRIM-05 (renamed from the legacy human-action variant)
   | { kind: 'AWAITING_AGENT_WORKING'; agentId: string; label: string } // Plan 11-01 — chain flattened through a live, progressing agent
-  | { kind: 'AWAITING_AGENT_STUCK'; agentId: string; label: string } // Plan 11-01 — chain flattened through an idle/stale agent (nudge target)
+  | { kind: 'AWAITING_AGENT_STUCK'; agentId: string; label: string } // Plan 11-01 — chain flattened through an idle/stale agent (Plan 12-01 D-05: assign target)
   | { kind: 'SELF_RESOLVING'; etaIso: string; label: string }
   | { kind: 'EXTERNAL'; label: string }
   | { kind: 'CYCLE'; cycleNodes: string[]; label: string } // PRIM-04
@@ -61,8 +61,11 @@ export type BlockerChainResult = {
   needsYou: boolean;
   /** Plan 11-01 (D-13) — which cockpit segment this chain belongs to. */
   tier: 'needs-you' | 'in-motion' | 'watch';
-  /** Plan 11-01 (D-13) — the single control the row offers. 'assign' appears ONLY
-   *  for genuinely-unowned rows (UNOWNED); 'nudge' for stuck agents. */
+  /** Plan 11-01 (D-13) — the single control the row offers. 'assign' appears on
+   *  genuinely-unowned rows (UNOWNED) AND stuck-agent rows (AWAITING_AGENT_STUCK)
+   *  per Plan 12-01 (D-05) — re-owning the issue is the honest answer for both.
+   *  'nudge' is retained but dormant (D-06); it is reserved for the Phase 14
+   *  reply/nudge loop and has no current consumer. */
   actionAffordance: 'reply' | 'nudge' | 'assign' | 'open' | 'none';
   /** Plan 11-01 (D-10) — set only when terminal === UNCLASSIFIED; explains the degrade
    *  (e.g. 'max-depth-exceeded'). Optional so the 7 honest kinds omit it. */

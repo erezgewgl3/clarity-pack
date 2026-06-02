@@ -68,7 +68,12 @@ export function classifyVerdict(terminal: Terminal): {
     case 'AWAITING_AGENT_WORKING':
       return { tier: 'in-motion', actionAffordance: 'none', needsYou: false };
     case 'AWAITING_AGENT_STUCK':
-      return { tier: 'watch', actionAffordance: 'nudge', needsYou: false };
+      // Plan 12-01 (D-05) — a stuck agent's honest answer is re-owning the issue,
+      // so the row offers 'assign' (was 'nudge'). tier stays 'watch' and needsYou
+      // stays false (D-04: stuck never enters the loud Needs-you list). The 'nudge'
+      // affordance is reserved for the Phase 14 reply/nudge loop (D-06 — dormant,
+      // not deleted from the union).
+      return { tier: 'watch', actionAffordance: 'assign', needsYou: false };
     case 'SELF_RESOLVING':
       return { tier: 'watch', actionAffordance: 'none', needsYou: false };
     case 'EXTERNAL':
