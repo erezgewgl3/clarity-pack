@@ -8,9 +8,10 @@
 // no-ops (that was the Phase 8 sin this plan exists to fix).
 //
 // PER-STATE ACTION CLUSTERS (R4), keyed on the worker `group` field:
-//   - needs_you, UNOWNED (blockerChain.ownerName === 'Unassigned'):
+//   - needs_you, UNOWNED (blockerChain.actionAffordance === 'assign' — Plan 11-04
+//     reads the engine verdict, NOT an ownerName string-match):
 //       [Assign owner ▾] (owner-picker-popover → situation.assignOwner) + [Open <leaf> ↗]
-//   - needs_you, OWNED:
+//   - needs_you, OWNED (any other affordance — chat/wake the owner):
 //       [Open chat: <owner>] (buildChatDeepLink employee-only) + [Wake] (issues.requestWakeup) + [Open ↗]
 //   - working (running / reviewing):
 //       focus line + "moving · no action needed" — NO buttons.
@@ -35,6 +36,7 @@
 import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
+import type { BlockerChainResult } from '../../../shared/types.ts';
 import { formatAge } from '../../primitives/state-pill-format.ts';
 import { useToast } from '../../primitives/toast.tsx';
 import { buildChatDeepLink } from '../chat/deep-link.mjs';
@@ -60,10 +62,6 @@ export type AgeBucket = 'fresh' | 'aging' | 'stale';
 
 // Plan 09-01 worker field — the display group computed at the worker tier (R2).
 export type EmployeeGroup = 'needs_you' | 'working' | 'idle';
-
-/** The locked sentinel an unowned blocker-chain leaf carries as its ownerName
- *  (worker scrubHumanAction). The picker is rendered for exactly this case. */
-const UNASSIGNED = 'Unassigned';
 
 export type SituationEmployeeRow = {
   agentId: string;
@@ -92,6 +90,26 @@ export type SituationEmployeeRow = {
     ownerName: string;
     // AGENT uuid (focusIssue.assigneeAgentId), NOT a USER uuid (B1).
     ownerAgentId: string | null;
+    // Plan 11-04 (D-13/D-14, SC5) — the engine verdict. The row gates its
+    // affordances off THESE, never an ownerName string-match. Mirrors the
+    // worker rollup's blockerChain row shape (build-employees-rollup.ts).
+    /** Plan 11-04 — true only when a *person* must act (AWAITING_HUMAN / UNOWNED). */
+    needsYou: boolean;
+    /** Plan 11-04 — cockpit segment: 'needs-you' | 'in-motion' | 'watch'. */
+    tier: BlockerChainResult['tier'];
+    /** Plan 11-04 — the single control the row offers; 'assign' ONLY for UNOWNED. */
+    actionAffordance: BlockerChainResult['actionAffordance'];
+    // Plan 11-04 (D-15 / NO_UUID_LEAK) — split identity. awaitedPartyLabel is the
+    // ONLY rendered awaited-party string (scrubbed of UUIDs); the *Uuid fields are
+    // mutation-only dispatch targets, NEVER rendered, mirroring leafIssueUuid.
+    /** Plan 11-04 — rendered awaited-party display string; scrubbed, no raw UUID. */
+    awaitedPartyLabel: string;
+    /** Plan 11-04 — awaited agent UUID for the nudge/reply mutation; NEVER rendered. */
+    targetAgentUuid: string | null;
+    /** Plan 11-04 — leaf issue UUID for the open/assign mutation; NEVER rendered. */
+    targetIssueUuid: string | null;
+    /** Plan 11-04 (D-09) — set only on an honest UNCLASSIFIED degrade. */
+    degradeReason?: string;
   } | null;
   doneTodayCount: number;
 };
@@ -134,7 +152,11 @@ export function EmployeeRow({
 
   const ageMs = ageMsFromISO(row.lastActivityAt);
   const chain = row.blockerChain;
-  const isUnowned = !!chain && chain.ownerName === UNASSIGNED;
+  // Plan 11-04 (SC3/D-13) — the assign cluster is gated STRICTLY on the engine
+  // verdict's genuinely-unowned affordance, never on an ownerName string-match.
+  // An AWAITING_HUMAN / UNCLASSIFIED row never carries 'assign', so the picker
+  // never renders a false "assign owner" for an already-owned blocker.
+  const showAssign = chain?.actionAffordance === 'assign';
 
   // ---- handlers (every one performs a REAL effect; never a no-op) ----------
 
@@ -174,7 +196,7 @@ export function EmployeeRow({
     setBusy(true);
     try {
       await wakeAction({ companyId, issueId, userId });
-      showToast({ message: `Wake sent to ${chain?.ownerName ?? row.name}.` });
+      showToast({ message: `Wake sent to ${chain?.awaitedPartyLabel ?? row.name}.` });
     } catch {
       showToast({
         message: `Wake requested for ${row.name} (host call pending — verify on the agent page).`,
@@ -246,22 +268,25 @@ export function EmployeeRow({
         </p>
       )}
 
-      {/* needs_you — the blocked row's chain + per-ownership action cluster */}
+      {/* needs_you — the blocked row's chain + per-ownership action cluster.
+       *  Plan 11-04: the unowned-vs-owned split reads the engine verdict
+       *  (showAssign), and the awaited-party line renders the scrubbed
+       *  awaitedPartyLabel — never the raw ownerName/UUID. */}
       {row.group === 'needs_you' && chain && (
         <>
-          <div className={`clarity-employee-chain ${isUnowned ? '' : 'clarity-employee-chain-owned'}`}>
+          <div className={`clarity-employee-chain ${showAssign ? '' : 'clarity-employee-chain-owned'}`}>
             <span className="clarity-employee-chain-prefix">{`└ blocked: `}</span>
             <span className="clarity-employee-chain-action">
-              {isUnowned
+              {showAssign
                 ? `${chain.leafIssueId ?? 'this issue'} has no owner`
-                : `waiting on ${chain.ownerName}`}
+                : `waiting on ${chain.awaitedPartyLabel}`}
             </span>
-            {chain.leafIssueId && !isUnowned && (
+            {chain.leafIssueId && !showAssign && (
               <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
             )}
           </div>
           <div className="clarity-employee-actions">
-            {isUnowned ? (
+            {showAssign ? (
               <>
                 {chain.leafIssueId && (
                   <OwnerPickerPopover
@@ -290,7 +315,7 @@ export function EmployeeRow({
                     className="clarity-btn clarity-btn-gold clarity-employee-open-chat"
                     onClick={openChatWithOwner}
                   >
-                    {`Open chat: ${chain.ownerName}`}
+                    {`Open chat: ${chain.awaitedPartyLabel}`}
                   </button>
                 )}
                 <button

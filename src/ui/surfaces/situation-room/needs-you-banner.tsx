@@ -3,7 +3,9 @@
 // Plan 09-02 Task 2 (R5 / R4 / WARNING 1) — the un-frozen needs-you banner.
 //
 // Three variants, driven by the un-frozen 09-01 needsYou (which now counts
-// UNOWNED blockers, not just viewer-owned ones):
+// UNOWNED blockers, not just viewer-owned ones). Plan 11-04 (D-14, SC5): the
+// unowned/owned partition reads the engine verdict (actionAffordance === 'assign'
+// = genuinely UNOWNED), never the legacy ownerName-sentinel string match:
 //   - URGENT + UNOWNED (≥1 unowned blocker): "⚠ N stuck · M unowned → assign
 //     owners" + [Assign first ▾]. The button scrolls the oldest-unowned row
 //     into view and OPENS ITS OWNER PICKER (it does NOT build a chat deep-link —
@@ -46,9 +48,6 @@ type NeedsYouBannerProps = {
   navigate: (to: string) => void;
 };
 
-/** The locked sentinel an unowned blocker-chain leaf carries as ownerName. */
-const UNASSIGNED = 'Unassigned';
-
 /** DOM id stamped on each EmployeeRow so the banner can scroll to + open the
  *  oldest-unowned row's picker (mirrors the mockup's #assign-first handler). */
 export function rowDomId(agentId: string): string {
@@ -63,12 +62,20 @@ export function NeedsYouBanner({
 }: NeedsYouBannerProps): React.ReactElement {
   const count = needsYou.count;
 
-  // Partition the blocked rows the banner reasons about.
+  // Partition the blocked rows the banner reasons about. Plan 11-04 (D-14, SC5):
+  // "unowned" is the engine verdict's genuinely-unowned affordance
+  // (actionAffordance === 'assign'), NOT the legacy ownerName-sentinel string
+  // match. Every other needs-you row (AWAITING_HUMAN / agent-stuck / etc.) is
+  // "owned" for banner purposes — there is a party to chase, not an owner to
+  // assign.
   const unownedBlocked = employees.filter(
-    (e) => e.group === 'needs_you' && e.blockerChain?.ownerName === UNASSIGNED,
+    (e) => e.group === 'needs_you' && e.blockerChain?.actionAffordance === 'assign',
   );
   const ownedBlocked = employees.filter(
-    (e) => e.group === 'needs_you' && e.blockerChain && e.blockerChain.ownerName !== UNASSIGNED,
+    (e) =>
+      e.group === 'needs_you' &&
+      e.blockerChain &&
+      e.blockerChain.actionAffordance !== 'assign',
   );
   const stuck = unownedBlocked.length + ownedBlocked.length;
 
@@ -130,7 +137,10 @@ export function NeedsYouBanner({
     (needsYou.topAction &&
       ownedBlocked.find((e) => e.agentId === needsYou.topAction?.agentId)) ||
     ownedBlocked[0];
-  const ownerName = ownerRow?.blockerChain?.ownerName ?? '';
+  // Plan 11-04 — render the SCRUBBED awaitedPartyLabel (the verdict display
+  // string), never the raw ownerName. ownerAgentId stays a mutation-only
+  // deep-link arg (NO_UUID_LEAK).
+  const ownerName = ownerRow?.blockerChain?.awaitedPartyLabel ?? '';
   const ownerAgentId = ownerRow?.blockerChain?.ownerAgentId ?? null;
   const deepLink = ownerAgentId
     ? buildChatDeepLink({
