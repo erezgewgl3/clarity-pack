@@ -21,10 +21,9 @@
 
 import { pickTopChains } from '../../shared/blocker-chain.ts';
 import { flattenBlockerChain } from '../../shared/blocker-chain.ts';
-import {
-  scrubHumanAction,
-  UNOWNED_SENTINEL,
-} from '../../shared/scrub-human-action.ts';
+import { classifyVerdict } from '../../shared/blocker-chain.ts';
+import { scrubHumanAction } from '../../shared/scrub-human-action.ts';
+import type { BlockerChainResult, Terminal } from '../../shared/types.ts';
 import { polishTldr } from '../agents/compile-tldr.ts';
 import {
   classifyEmployeeState,
@@ -80,11 +79,30 @@ export type SituationEmployeeRow = {
     leafIssueUuid: string | null;
     /** Scrubbed via shared scrubHumanAction — NO_UUID_LEAK. */
     humanAction: string;
-    /** "Unassigned" when __unowned__ — NO_UUID_LEAK. */
+    /** "Unassigned" when genuinely UNOWNED — NO_UUID_LEAK. */
     ownerName: string;
     /** AGENT uuid (focusIssue.assigneeAgentId), NOT terminal.userId (USER uuid).
      *  See B1. Consumed by buildChatDeepLink({assigneeAgentId}) in Plan 08-02. */
     ownerAgentId: string | null;
+    // Plan 11-03 (D-13/D-14) — the engine verdict. Needs-you membership and the
+    // single-affordance grouping read THESE, never an ownerName string-match (SC5).
+    /** Plan 11-03 — true only when a *person* must act (AWAITING_HUMAN / UNOWNED). */
+    needsYou: boolean;
+    /** Plan 11-03 — cockpit segment: 'needs-you' | 'in-motion' | 'watch'. */
+    tier: BlockerChainResult['tier'];
+    /** Plan 11-03 — the single control the row offers ('assign' ONLY for UNOWNED). */
+    actionAffordance: BlockerChainResult['actionAffordance'];
+    // Plan 11-03 (D-15 / NO_UUID_LEAK) — split identity. awaitedPartyLabel is the
+    // ONLY rendered display string (scrubbed of UUIDs); the *Uuid fields are
+    // mutation-only dispatch targets, NEVER rendered, mirroring leafIssueUuid.
+    /** Plan 11-03 — rendered awaited-party display string; scrubbed, no raw UUID. */
+    awaitedPartyLabel: string;
+    /** Plan 11-03 — awaited agent UUID for the nudge/reply mutation; NEVER rendered. */
+    targetAgentUuid: string | null;
+    /** Plan 11-03 — leaf issue UUID for the open/assign mutation; NEVER rendered. */
+    targetIssueUuid: string | null;
+    /** Plan 11-03 (D-09) — set only on an honest UNCLASSIFIED degrade. */
+    degradeReason?: string;
   } | null;
   /** 0 for v1.2.0 — informational; deferred per Open Question #3. */
   doneTodayCount: number;
@@ -285,10 +303,10 @@ async function buildOneEmployeeRow(
       const picked = pickTopChains([chain], 1)[0];
       if (picked) {
         const terminal = picked.terminal;
-        // i.2. Collect UUIDs from terminal.label + (HUMAN_ACTION_ON) userId.
+        // i.2. Collect UUIDs from terminal.label + (AWAITING_HUMAN) userId.
         const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
         const wanted = new Set<string>(terminal.label.match(uuidRe) ?? []);
-        if (terminal.kind === 'HUMAN_ACTION_ON' && terminal.userId !== UNOWNED_SENTINEL) {
+        if (terminal.kind === 'AWAITING_HUMAN') {
           wanted.add(terminal.userId);
         }
         const nameByUuid = new Map<string, string | null>();
@@ -307,7 +325,9 @@ async function buildOneEmployeeRow(
             }),
           );
         }
-        // i.3. NO_UUID_LEAK scrub — single source of truth (Task 1).
+        // i.3. NO_UUID_LEAK scrub — single source of truth (Task 1). This is the
+        //      rendered awaitedPartyLabel; the verdict's own awaitedPartyLabel is
+        //      the raw terminal.label, so the scrubbed string is the display value.
         const humanAction = scrubHumanAction(terminal, viewerUserId, nameByUuid);
         // i.4. B1 — ownerAgentId MUST be focusIssue.assigneeAgentId (AGENT uuid).
         //      terminal.userId is a USER uuid — different namespace; consumed only
@@ -316,9 +336,10 @@ async function buildOneEmployeeRow(
           typeof focusIssue.assigneeAgentId === 'string' && focusIssue.assigneeAgentId.length > 0
             ? focusIssue.assigneeAgentId
             : null;
-        // i.5. ownerName follows terminal.userId (the "Waiting on X" display).
+        // i.5. ownerName follows the AWAITING_HUMAN userId (the "Waiting on X"
+        //      display); a genuinely-UNOWNED chain has NO userId → 'Unassigned'.
         const ownerName =
-          terminal.kind === 'HUMAN_ACTION_ON' && terminal.userId !== UNOWNED_SENTINEL
+          terminal.kind === 'AWAITING_HUMAN'
             ? (nameByUuid.get(terminal.userId) ?? 'Unassigned')
             : 'Unassigned';
         // i.6. rootIssueId — human identifier.
@@ -350,26 +371,73 @@ async function buildOneEmployeeRow(
             // UUID (never the .identifier).
           }
         }
-        blockerChain = { rootIssueId, leafIssueId, leafIssueUuid, humanAction, ownerName, ownerAgentId };
+        // i.8. Plan 11-03 (D-15) — split identity passthrough. The verdict's
+        //      targetAgentUuid (an AWAITING_AGENT_* agentId) is mutation-only;
+        //      the targetIssueUuid is the leaf UUID resolved above. The
+        //      awaitedPartyLabel is the SCRUBBED humanAction (the only rendered
+        //      string) — NO raw UUID enters a rendered field (Pitfall 5).
+        blockerChain = {
+          rootIssueId,
+          leafIssueId,
+          leafIssueUuid,
+          humanAction,
+          ownerName,
+          ownerAgentId,
+          // D-13/D-14 — the engine verdict drives needs-you re-triage + grouping.
+          needsYou: picked.needsYou,
+          tier: picked.tier,
+          actionAffordance: picked.actionAffordance,
+          // D-15 — rendered display = the scrubbed humanAction; UUIDs mutation-only.
+          awaitedPartyLabel: humanAction,
+          targetAgentUuid: picked.targetAgentUuid ?? null,
+          targetIssueUuid: leafIssueUuid,
+          ...(picked.degradeReason != null ? { degradeReason: picked.degradeReason } : {}),
+        };
 
         // needsYou viewer-match — keys on terminal.userId (USER uuid), the
-        // LEGITIMATE use of terminal.userId (mirrors org-blocked-backlog.ts:419-425).
-        if (
-          terminal.kind === 'HUMAN_ACTION_ON' &&
-          terminal.userId !== UNOWNED_SENTINEL &&
-          terminal.userId === viewerUserId
-        ) {
+        // LEGITIMATE use of terminal.userId (mirrors org-blocked-backlog.ts:418-461).
+        if (terminal.kind === 'AWAITING_HUMAN' && terminal.userId === viewerUserId) {
           targetsViewer = true;
         }
       }
     } catch (e) {
-      // i.8. A thrown chain build → blockerChain stays null (degraded, not a
-      //      thrown row — the row still ships with state='blocked').
+      // i.9. Plan 11-03 (D-09/TAX-03) — a thrown chain build emits an honest
+      //      UNCLASSIFIED verdict row (open affordance, never a false assign),
+      //      NOT blockerChain = null. The row stays visible with state='blocked'.
       ctx.logger?.warn?.('build-employees-rollup: chain build failed', {
         agentId,
         err: (e as Error).message,
       });
-      blockerChain = null;
+      const degradeReason = (e as Error).message || 'chain-build-failed';
+      const rootIssueId = focusIssue.identifier ?? focusIssue.id;
+      const focusUuid =
+        typeof focusIssue.id === 'string' && focusIssue.id.length > 0 ? focusIssue.id : null;
+      const unclassifiedTerminal: Terminal = {
+        kind: 'UNCLASSIFIED',
+        label: `Can't determine blocker for ${rootIssueId} — open to investigate`,
+      };
+      const verdict = classifyVerdict(unclassifiedTerminal);
+      // Scrub the honest fallback line (no UUID can leak — rootIssueId is a human
+      // identifier, but the scrub is belt-and-suspenders for the focusIssue.id path).
+      const humanAction = scrubHumanAction(unclassifiedTerminal, viewerUserId, new Map());
+      blockerChain = {
+        rootIssueId,
+        leafIssueId: focusIssue.identifier ?? null,
+        leafIssueUuid: focusUuid,
+        humanAction,
+        ownerName: 'Unassigned',
+        ownerAgentId:
+          typeof focusIssue.assigneeAgentId === 'string' && focusIssue.assigneeAgentId.length > 0
+            ? focusIssue.assigneeAgentId
+            : null,
+        needsYou: verdict.needsYou,
+        tier: verdict.tier,
+        actionAffordance: verdict.actionAffordance,
+        awaitedPartyLabel: humanAction,
+        targetAgentUuid: null,
+        targetIssueUuid: focusUuid,
+        degradeReason,
+      };
     }
   }
 
@@ -456,12 +524,19 @@ export async function buildEmployeesRollup(
   // predicates today — ownerName 'Unassigned' ⇔ unowned ⇔ not viewer-targeted —
   // but we Set-dedupe defensively).
   //
-  // UNOWNED predicate: the row is in the needs_you bucket, has a blocker chain,
-  // and its chain owner scrubbed to 'Unassigned' (NO_UUID_LEAK — ownerName is
-  // already the scrubbed sentinel for __unowned__; no raw UUID enters this path,
-  // T-09-04).
+  // UNOWNED predicate (Plan 11-03 D-13/D-14): the row is in the needs_you bucket,
+  // has a blocker chain, and the ENGINE VERDICT says a person must act on a
+  // genuinely-unowned chain — `needsYou === true` AND `actionAffordance === 'assign'`
+  // (the 'assign' affordance fires ONLY for an UNOWNED terminal; AWAITING_HUMAN is
+  // 'reply'). This replaces the legacy ownerName-equals-Unassigned string-match
+  // (SC5 — single source of truth, no view-layer re-derivation). No raw UUID
+  // enters this path (the verdict is structured; T-09-04 preserved).
   const unowned = rows.filter(
-    (r) => r.group === 'needs_you' && r.blockerChain && r.blockerChain.ownerName === 'Unassigned',
+    (r) =>
+      r.group === 'needs_you' &&
+      r.blockerChain &&
+      r.blockerChain.needsYou === true &&
+      r.blockerChain.actionAffordance === 'assign',
   );
   const targeting = rows.filter((r) => r.__targetsViewer && r.blockerChain);
 

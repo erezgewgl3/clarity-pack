@@ -36,6 +36,7 @@ const iso = (ms) => new Date(ms).toISOString();
  * @param {object} opts.agentsByUuid       { uuid: { name } } for agents.get
  * @param {Set<string>} [opts.listThrowsFor]   agentIds whose issues.list throws
  * @param {Set<string>} [opts.getThrowsFor]    issueIds whose issues.get throws
+ * @param {Set<string>} [opts.relThrowsFor]    issueIds whose relations.get throws (root → chain-build throw)
  * @param {boolean} [opts.agentsListThrows]
  */
 function makeCtx({
@@ -46,6 +47,7 @@ function makeCtx({
   agentsByUuid = {},
   listThrowsFor = new Set(),
   getThrowsFor = new Set(),
+  relThrowsFor = new Set(),
   agentsListThrows = false,
 } = {}) {
   return {
@@ -62,6 +64,9 @@ function makeCtx({
       },
       relations: {
         async get(id) {
+          // A ROOT relations.get throw propagates through buildEdges → the rollup
+          // chain-build try/catch (Plan 11-03 D-09: honest UNCLASSIFIED, not null).
+          if (relThrowsFor.has(id)) throw new Error(`relations.get boom for ${id}`);
           return relations[id] ?? { blockedBy: [], blocks: [] };
         },
       },
@@ -509,4 +514,94 @@ test('rollup — 17b: needsYou.count keys on terminal.userId === viewer even whe
   });
   const out = await buildEmployeesRollup(ctx, 'co-1', viewer);
   assert.equal(out.needsYou.count, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Test 20 (Plan 11-03 D-13/D-14) — needs-you re-triage reads the engine verdict
+// ---------------------------------------------------------------------------
+test('rollup — 11-03: blockerChain carries the engine verdict (needsYou/tier/actionAffordance), not an ownerName string-match', async () => {
+  // A genuinely-unowned blocker (assigneeUserId null, no eta) classifies UNOWNED →
+  // verdict needsYou true, tier 'needs-you', affordance 'assign'.
+  const a = agent({ id: 'ag-verdict', lastHeartbeatMs: NOW - 30 * MIN });
+  const blocked = issue({ id: 'i-verdict', identifier: 'COU-V1', status: 'blocked', assigneeAgentId: 'ag-verdict', lastActivityMs: NOW - 30 * MIN });
+  const ctx = makeCtx({
+    agents: [a],
+    issuesByAgent: { 'ag-verdict': [blocked] },
+    relations: { 'i-verdict': { blockedBy: [{ id: 'i-verdict-x', assigneeUserId: null, status: 'blocked', etaIso: null }], blocks: [] } },
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
+  const row = out.employees[0];
+  assert.ok(row.blockerChain, 'chain present');
+  // The verdict fields are present and drive the unowned/needs-you re-triage.
+  assert.equal(row.blockerChain.needsYou, true, 'verdict.needsYou true for an unowned blocker');
+  assert.equal(row.blockerChain.tier, 'needs-you', "tier 'needs-you' for an unowned blocker");
+  assert.equal(row.blockerChain.actionAffordance, 'assign', "affordance 'assign' fires ONLY for UNOWNED");
+  // The needs-you count is computed off the verdict, not ownerName === 'Unassigned'.
+  assert.ok(out.needsYou.count >= 1, 'verdict-driven re-triage counts the unowned row');
+});
+
+// ---------------------------------------------------------------------------
+// Test 21 (Plan 11-03 D-09/TAX-03) — chain-build throw → UNCLASSIFIED verdict, NOT null
+// ---------------------------------------------------------------------------
+test('rollup — 11-03: a chain-build throw yields an UNCLASSIFIED verdict row (honest fallback), not blockerChain=null', async () => {
+  const a = agent({ id: 'ag-throw', lastHeartbeatMs: NOW - 30 * MIN });
+  // The focus issue is blocked, but its ROOT relations.get THROWS → buildEdges
+  // propagates the root throw → the rollup's chain-build try/catch fires.
+  const blocked = issue({ id: 'i-throw', identifier: 'COU-T1', status: 'blocked', assigneeAgentId: 'ag-throw', lastActivityMs: NOW - 30 * MIN });
+  const ctx = makeCtx({
+    agents: [a],
+    issuesByAgent: { 'ag-throw': [blocked] },
+    relThrowsFor: new Set(['i-throw']),
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
+  const row = out.employees.find((r) => r.agentId === 'ag-throw');
+  assert.equal(row.state, 'blocked', 'the row stays blocked (not degraded to unknown)');
+  // The honest fallback: an UNCLASSIFIED verdict, NOT a silent null.
+  assert.ok(row.blockerChain, 'chain-build throw emits an UNCLASSIFIED verdict, not blockerChain=null');
+  assert.equal(row.blockerChain.actionAffordance, 'open', "UNCLASSIFIED affordance is 'open' (never a false 'assign')");
+  assert.equal(row.blockerChain.needsYou, false, 'UNCLASSIFIED is not a needs-you (no false assign)');
+  assert.equal(row.blockerChain.tier, 'watch', "UNCLASSIFIED tiers to 'watch'");
+  assert.ok(typeof row.blockerChain.degradeReason === 'string' && row.blockerChain.degradeReason.length > 0, 'a degradeReason is recorded');
+  // The throw must NEVER surface a false "assign owner" → not counted as needs-you.
+  assert.equal(out.needsYou.count, 0, 'an UNCLASSIFIED degrade does not inflate needs-you');
+});
+
+// ---------------------------------------------------------------------------
+// Test 22 (Plan 11-03 D-15 / Pitfall 5) — split identity: no raw UUID in the
+// rendered awaitedPartyLabel while targetAgentUuid/targetIssueUuid carry UUIDs.
+// ---------------------------------------------------------------------------
+test('rollup — 11-03: split identity — awaitedPartyLabel has NO raw UUID; targetAgentUuid/targetIssueUuid carry the UUID (NO_UUID_LEAK)', async () => {
+  // An agent-owned, STUCK leaf classifies AWAITING_AGENT_STUCK → verdict carries
+  // targetAgentUuid = the agent UUID (mutation-only), affordance 'nudge'. The leaf
+  // node is a real UUID so targetIssueUuid is UUID-shaped. The rendered
+  // awaitedPartyLabel must be scrubbed of every raw UUID.
+  const focusUuid = 'ffffffff-1111-2222-3333-444444444444';
+  const blockerAgentUuid = 'aaaaaaaa-5555-6666-7777-888888888888';
+  const leafUuid = 'bbbbbbbb-9999-0000-1111-222222222222';
+  const a = agent({ id: 'ag-split', lastHeartbeatMs: NOW - 30 * MIN });
+  const blocked = issue({ id: focusUuid, identifier: 'COU-S1', status: 'blocked', assigneeAgentId: 'ag-split', lastActivityMs: NOW - 30 * MIN });
+  const ctx = makeCtx({
+    agents: [a],
+    issuesByAgent: { 'ag-split': [blocked] },
+    relations: {
+      // The leaf node is owned by a STUCK agent (no heartbeat → conservative stuck)
+      // with no human owner / eta → AWAITING_AGENT_STUCK.
+      [focusUuid]: { blockedBy: [{ id: leafUuid, assigneeUserId: null, assigneeAgentId: blockerAgentUuid, status: 'blocked', etaIso: null, lastHeartbeatAt: null }], blocks: [] },
+      [leafUuid]: { blockedBy: [], blocks: [] },
+    },
+    issuesById: { [leafUuid]: { id: leafUuid, identifier: 'COU-S2' } },
+    agentsByUuid: { [blockerAgentUuid]: { name: 'Stuck Agent' } },
+  });
+  const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer');
+  const row = out.employees[0];
+  assert.ok(row.blockerChain, 'chain present');
+  // RENDER-SCAN: the only displayed string carries no raw UUID.
+  assert.ok(!UUID_RE.test(row.blockerChain.awaitedPartyLabel), `awaitedPartyLabel leaked a UUID: ${row.blockerChain.awaitedPartyLabel}`);
+  assert.ok(!UUID_RE.test(row.blockerChain.humanAction), `humanAction leaked a UUID: ${row.blockerChain.humanAction}`);
+  // SOURCE-SCAN: the mutation-only ids carry the UUIDs (never rendered).
+  assert.equal(row.blockerChain.targetIssueUuid, leafUuid, 'targetIssueUuid carries the leaf UUID');
+  assert.ok(UUID_RE.test(row.blockerChain.targetIssueUuid), 'targetIssueUuid is UUID-shaped (mutation id)');
+  // The stuck-agent leaf surfaces the agent UUID as the nudge target, never rendered.
+  assert.equal(row.blockerChain.targetAgentUuid, blockerAgentUuid, 'targetAgentUuid carries the stuck-agent UUID');
+  assert.equal(row.blockerChain.actionAffordance, 'nudge', "AWAITING_AGENT_STUCK affordance is 'nudge'");
 });
