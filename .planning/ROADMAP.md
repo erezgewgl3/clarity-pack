@@ -115,7 +115,11 @@ Plans:
   3. The reply-in-place + quick-decision primitive is available on the Situation Room, the Reader-view blocker panel, and the org-blocked backlog — the same shared primitive, not three copies.
   4. When a chain terminates on an out-of-system human (not reachable via comment), the row surfaces the named action + "Open ↗" instead of a Send affordance — no dead Send button.
   5. UUIDs are never rendered as text (NO_UUID_LEAK); the mutation carries the UUID while the display stays human-readable.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 14-01-PLAN.md — Additive dedup migration 0016 + situation.replyAndResume handler (comment-write + conditional Shape-B {status:'in_progress'} flip + messageUuid idempotency + opt-in guard) (wave 1)
+- [ ] 14-02-PLAN.md — Pure isReplyReachable(verdict) predicate + the ONE shared <ReplyInPlace> primitive (free-text reply + decision chips off decisionOptions + Open↗ + await-confirm) (wave 2)
+- [ ] 14-03-PLAN.md — Wire <ReplyInPlace> into all three surfaces (employee-row / live-blocker-panel / blocked-backlog-expander) — same import, no copies; full-suite green gate (wave 3)
 **UI hint**: yes
 
 ### Phase 15: Cockpit IA Redesign
@@ -145,7 +149,7 @@ Plans:
 | 11. Honest Blocker Taxonomy | 7/7 | Complete    | 2026-06-02 |
 | 12. Needs-You Triage | 3/3 | Complete    | 2026-06-02 |
 | 13. Editor-Agent Named Action | 3/3 | Complete   | 2026-06-02 |
-| 14. Do-It-Here Action Loop | 0/0 | Not started | - |
+| 14. Do-It-Here Action Loop | 0/3 | In progress | - |
 | 15. Cockpit IA Redesign | 0/0 | Not started | - |
 
 ---
