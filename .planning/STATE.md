@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4.0
 milestone_name: Truthful Situation Room
-status: planning
-stopped_at: Phase 12 context gathered
-last_updated: "2026-06-02T20:38:41.930Z"
-last_activity: 2026-06-02
+status: executing
+stopped_at: Completed 14-03-PLAN.md (wave 3 — <ReplyInPlace> wired into all three blocker surfaces)
+last_updated: "2026-06-03T00:00:00.000Z"
+last_activity: 2026-06-03
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 16
-  completed_plans: 15
-  percent: 50
+  total_plans: 20
+  completed_plans: 19
+  percent: 52
 ---
 
 # State: Clarity Pack
@@ -47,6 +47,17 @@ Roadmap for the v1.4.0 milestone is written. 16 requirements mapped to 6 phases 
 **Next action:** `/gsd:plan-phase 10` (the gating unblock-resume spike). Phase 14's action UI is blocked on the Phase 10 result.
 
 Files: `.planning/ROADMAP.md` (v1.4.0 section + phase details), `.planning/REQUIREMENTS.md` (traceability 16/16).
+
+---
+
+## ▶ Phase 14 (Do-It-Here Action Loop) — Plan 14-03 COMPLETE (wave 3) 2026-06-03
+
+Wave 3 (the final wire-up) is done: the ONE shared `<ReplyInPlace>` primitive (built in 14-02) is now mounted on **all three** blocker surfaces — the Situation Room employee row, the Reader live-blocker panel, and the org-blocked backlog expander — each on its `reply` branch, gated `reply ⇔ AWAITING_HUMAN` via `isReplyReachable(terminalKind)`. SC3 holds by construction: all three import the SAME `_shared/reply-in-place.tsx` (no copies). Out-of-system rows (reachable=false) surface named action + Open↗ (no dead Send, SC4). The real worker-emitted `needsDurabilityFlip` (14-04) is threaded — never a `data.terminal.kind` proxy. NO_UUID_LEAK preserved: the leaf UUID dispatches, the human key displays. The Reader's duplicate `blockerLine` `<p>` is suppressed on the reply branch (WARNING 2). Assign branch (Phase 12 `OwnerPickerPopover`) untouched.
+
+- **14-03 commits:** `028ac40` (test RED), `028ac40`/`fb59c75` (employee-row + live-blocker-panel feat), `fb59c75` (backlog feat + 4 green-gate auto-fixes). Test files: 3 new mount/render-scan suites.
+- **Gate:** build-ui + build-worker + `tsc --noEmit` clean; engine purity 21/21; full suite **2513 pass / 7 fail** (all 7 = KNOWN pre-existing REQUIREMENTS CHAT/CTT traceability, out-of-scope).
+- **Auto-fixes (deviations):** Rule-2 a11y `aria-label` on the shared reply input; Rule-1 Reader `leafIssueUuid` via dispatch-const (keeps blunt NO_UUID_LEAK guard green); Rule-1 retired the stale 09-04 `doesNotMatch(/leafIssueUuid=/)` assertion this plan reverses by design; Rule-3 CRLF-tolerant `blockerLine` body-isolation regex.
+- **Next:** live BEAAA deploy drill (separate from this plan) — verify a real AWAITING_HUMAN reply posts + the agent resumes, and a Shape-B (status=blocked leaf) reply flips durably. Version-bump BOTH `package.json` and `src/manifest.ts` per DEPLOY-RUNBOOK.
 
 ---
 

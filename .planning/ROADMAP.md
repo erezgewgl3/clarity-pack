@@ -118,9 +118,9 @@ Plans:
 **Plans**: 4 plans
 Plans:
 - [ ] 14-01-PLAN.md — Additive dedup migration 0016 + situation.replyAndResume handler (comment-write + conditional Shape-B {status:'in_progress'} flip driven by a REAL needsDurabilityFlip + messageUuid idempotency incl. wake idempotencyKey + opt-in guard) (wave 1)
-- [ ] 14-04-PLAN.md — Data-model foundation: emit worker needsDurabilityFlip (from leaf status) + terminalKind on the rollup blockerChain + employee-row mirror; widen OrgBlockedRow with awaitedPartyLabel/targetAgentUuid/decisionOptions/leafIssueUuid/needsDurabilityFlip (wave 1)
-- [ ] 14-02-PLAN.md — Pure isReplyReachable(terminalKind) predicate (AWAITING_HUMAN only; AWAITING_AGENT_STUCK deferred) + the ONE shared <ReplyInPlace> primitive (free-text reply + decision chips off decisionOptions + Open↗ + await-confirm) (wave 2)
-- [ ] 14-03-PLAN.md — Wire <ReplyInPlace> into all three surfaces (employee-row / live-blocker-panel / blocked-backlog-expander) — same import no copies, reachable off terminalKind, real needsDurabilityFlip, no duplicate blockerLine; full-suite green gate (wave 3)
+- [x] 14-04-PLAN.md — Data-model foundation: emit worker needsDurabilityFlip (from leaf status) + terminalKind on the rollup blockerChain + employee-row mirror; widen OrgBlockedRow with awaitedPartyLabel/targetAgentUuid/decisionOptions/leafIssueUuid/needsDurabilityFlip (wave 1)
+- [x] 14-02-PLAN.md — Pure isReplyReachable(terminalKind) predicate (AWAITING_HUMAN only; AWAITING_AGENT_STUCK deferred) + the ONE shared <ReplyInPlace> primitive (free-text reply + decision chips off decisionOptions + Open↗ + await-confirm) (wave 2)
+- [x] 14-03-PLAN.md — Wire <ReplyInPlace> into all three surfaces (employee-row / live-blocker-panel / blocked-backlog-expander) — same import no copies, reachable off terminalKind, real needsDurabilityFlip, no duplicate blockerLine; full-suite green gate (wave 3)
 **UI hint**: yes
 
 ### Phase 15: Cockpit IA Redesign
@@ -150,7 +150,7 @@ Plans:
 | 11. Honest Blocker Taxonomy | 7/7 | Complete    | 2026-06-02 |
 | 12. Needs-You Triage | 3/3 | Complete    | 2026-06-02 |
 | 13. Editor-Agent Named Action | 3/3 | Complete   | 2026-06-02 |
-| 14. Do-It-Here Action Loop | 0/3 | In progress | - |
+| 14. Do-It-Here Action Loop | 3/4 | In Progress|  |
 | 15. Cockpit IA Redesign | 0/0 | Not started | - |
 
 ---

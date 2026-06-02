@@ -27,11 +27,11 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 
 ### Do-It-Here Action
 
-- [ ] **DO-01**: The operator can reply in place on a human-actionable row; the reply posts to the awaited agent's thread (canonical issue comment).
+- [x] **DO-01**: The operator can reply in place on a human-actionable row; the reply posts to the awaited agent's thread (canonical issue comment).
 - [ ] **DO-02**: Quick-decision chips (Approve / Reject / pick-one) are offered when the blocker is a clean yes/no.
 - [x] **DO-03**: Completing the action actually **unblocks and resumes** the agent — verified end-to-end against the live Paperclip model. *(De-risked first by the opening-phase spike: comment alone vs. comment + status transition.)*
-- [ ] **DO-04**: The reply-in-place + quick-decision loop is available on the **Situation Room**, the **Reader-view blocker panel**, and the **org-blocked backlog** — not just the cockpit.
-- [ ] **DO-05**: When a chain terminates on an out-of-system human (not reachable via comment), the row surfaces the named action + "Open ↗" instead of a Send affordance — no dead Send button.
+- [x] **DO-04**: The reply-in-place + quick-decision loop is available on the **Situation Room**, the **Reader-view blocker panel**, and the **org-blocked backlog** — not just the cockpit.
+- [x] **DO-05**: When a chain terminates on an out-of-system human (not reachable via comment), the row surfaces the named action + "Open ↗" instead of a Send affordance — no dead Send button.
 
 ### Cockpit Information Architecture
 
@@ -64,10 +64,10 @@ Requirements for the Truthful Situation Room milestone. Each maps to a roadmap p
 | ACT-01 | Phase 13 | Complete |
 | ACT-02 | Phase 13 | Complete |
 | ACT-03 | Phase 13 | Complete |
-| DO-01 | Phase 14 | Pending |
+| DO-01 | Phase 14 | Complete |
 | DO-02 | Phase 14 | Pending |
-| DO-04 | Phase 14 | Pending |
-| DO-05 | Phase 14 | Pending |
+| DO-04 | Phase 14 | Complete |
+| DO-05 | Phase 14 | Complete |
 | COCK-01 | Phase 15 | Pending |
 | COCK-02 | Phase 15 | Pending |
 
