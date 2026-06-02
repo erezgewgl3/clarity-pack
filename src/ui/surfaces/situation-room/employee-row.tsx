@@ -215,6 +215,27 @@ export function EmployeeRow({
   // so a defensive non-reachable reply row still degrades to named action + Open↗.
   const showReply = chain?.actionAffordance === 'reply';
 
+  // Plan 15-03 Task 2 (COCK-02 / D-04 / D-05 / D-06) — the row BODY is gated on
+  // the ENGINE visual tier, NOT row.group. This is the SAME locked partition the
+  // <TierStrip> computes: the engine verdict tier where a chain exists; a
+  // chainless row falls back to its agent-state group (working -> in-motion,
+  // else watch); any unmatched value defensively -> watch. A stuck-agent row
+  // (group 'needs_you', tier 'watch') therefore gets the QUIET Watch body, not
+  // the loud Needs-you cluster (12-CONTEXT D-04 lock). Needs-you keeps the FULL
+  // Phase-13 action card + Phase-14 reply-in-place + Phase-12 assign — unchanged.
+  const visualTier: 'needs-you' | 'in-motion' | 'watch' =
+    chain?.tier === 'needs-you' || chain?.tier === 'in-motion' || chain?.tier === 'watch'
+      ? chain.tier
+      : chain == null
+        ? row.group === 'working'
+          ? 'in-motion'
+          : 'watch'
+        : 'watch';
+
+  // A chainless idle/stale row landing in Watch keeps the Phase-9 stand-down /
+  // resume affordances (preserved behind the quiet Watch presentation).
+  const isChainlessIdle = chain == null && row.group !== 'working';
+
   // ---- handlers (every one performs a REAL effect; never a no-op) ----------
 
   const openIssue = React.useCallback(
@@ -304,8 +325,9 @@ export function EmployeeRow({
   return (
     <div
       id={rowDomId(row.agentId)}
-      className={`clarity-employee-row clarity-state-${row.state}`}
+      className={`clarity-employee-row clarity-state-${row.state} clarity-tier-row clarity-tier-row-${visualTier}`}
       data-state={row.state}
+      data-tier={visualTier}
     >
       <span className="clarity-employee-state-dot" aria-hidden="true" />
       <span className="clarity-employee-name">{row.name}</span>
@@ -329,7 +351,7 @@ export function EmployeeRow({
        *  Plan 11-04: the unowned-vs-owned split reads the engine verdict
        *  (showAssign), and the awaited-party line renders the scrubbed
        *  awaitedPartyLabel — never the raw ownerName/UUID. */}
-      {row.group === 'needs_you' && chain && (
+      {visualTier === 'needs-you' && chain && (
         <>
           {/* Plan 13-03 (D-13/D-12) — when a FRESH action card is attached
            *  (the worker only attaches fresh cards by construction, 13-02),
@@ -443,13 +465,65 @@ export function EmployeeRow({
         </>
       )}
 
-      {/* working — momentum, no action needed */}
-      {row.group === 'working' && (
-        <p className="clarity-employee-moving">moving · no action needed</p>
+      {/* In-motion (D-06) — calm, lower-contrast reassurance: the legible
+       *  focusLine ("what each agent is working on", rendered above) + a quiet
+       *  "moving · no action needed" line. NO loud action cluster. The focus
+       *  text stays legible (clarity-employee-focus), not the dimmest element. */}
+      {visualTier === 'in-motion' && (
+        <p className="clarity-employee-moving clarity-tier-row-in-motion-gist">
+          moving · no action needed
+        </p>
       )}
 
-      {/* idle — assign work / stand down / resume (D-04) */}
-      {row.group === 'idle' && (
+      {/* Watch (D-04 / D-06) — quietly stalled awareness. A chainless idle/stale
+       *  row keeps the Phase-9 assign-work / stand-down / resume cluster
+       *  (preserved affordances). A chain-backed Watch row (stuck / external /
+       *  cycle / self-resolving) shows the honest verdict line + its affordance:
+       *  stuck -> assign (OwnerPickerPopover), external/cycle/unclassified ->
+       *  Open ↗, self-resolving -> none. Quieter than Needs-you, but NOT dead. */}
+      {visualTier === 'watch' && chain && !isChainlessIdle && (
+        <>
+          <div className="clarity-employee-chain clarity-employee-chain-watch">
+            <span className="clarity-employee-chain-prefix">{`└ `}</span>
+            <span className="clarity-employee-chain-action">
+              {showAssign
+                ? `${chain.leafIssueId ?? 'this issue'} — agent stuck`
+                : `waiting on ${chain.awaitedPartyLabel}`}
+            </span>
+            {chain.leafIssueId && !showAssign && (
+              <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
+            )}
+          </div>
+          {/* Honest affordance only — assign for stuck, Open for external/cycle/
+           *  unclassified, nothing for self-resolving (actionAffordance 'none'). */}
+          {(showAssign || chain.actionAffordance === 'open') && (
+            <div className="clarity-employee-actions">
+              {showAssign && chain.leafIssueId && (
+                <OwnerPickerPopover
+                  leafIssueId={chain.leafIssueId}
+                  leafIssueUuid={chain.leafIssueUuid ?? undefined}
+                  companyId={companyId}
+                  userId={userId}
+                  onAssigned={() => onAssignSuccess()}
+                />
+              )}
+              {chain.leafIssueId && (
+                <button
+                  type="button"
+                  className="clarity-btn clarity-employee-open-issue"
+                  onClick={() => openIssue(chain.leafIssueId)}
+                >
+                  Open ↗
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Watch — chainless idle/stale: assign work / stand down / resume (D-04,
+       *  Phase-9 affordances preserved behind the quiet Watch presentation). */}
+      {visualTier === 'watch' && isChainlessIdle && (
         <div className="clarity-employee-actions">
           {row.isPaused ? (
             <button
