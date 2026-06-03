@@ -623,7 +623,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // compile-bulletin job that would host the GC is dead-scope on this host
   // (PR #6547). No schema change; additive, degrade-safe.
   // See: .planning/debug/editor-heartbeat-db-churn.md
-  version: '1.4.4',
+  version: '1.4.5',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
