@@ -73,7 +73,11 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
   2. The employees rollup is degrade-safe per row: a slow or failed sub-read floors to the deterministic line and never blocks or blanks the view.
   3. The confirm-first baseline is recorded as the phase's starting point (done 2026-06-03: no 502, 6/6 snapshot calls 200, cold 25.7s) and drives the SNAP-01/02 targets — the v1.4.3 hotfix's removal of ~4,192 fake-ref 404 lookups + dead-scope bulletin churn is acknowledged as a partial contribution, NOT a fix for the 25.7s cold recompute.
   4. The fix is instance-agnostic (no company-prefix literals) and additive-only (plugin-namespace schema; disable/uninstall preserves data), shipped via continuous flag-gated BEAAA deploy bookended by the automated DO backup.
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 16-01-PLAN.md — Wave-0: lock live snake_case columns + relations.get timeoutMs reachability; ship the hand-rolled mapBounded pool + withDeadline floor (+ tests)
+- [ ] 16-02-PLAN.md — Wave A: collapse the N+1 fan-out — SQL-prefetch the blocked list/roster/names + compute the blocker BFS once shared across both builders; per-stage timing
+- [ ] 16-03-PLAN.md — Wave B: bound the irreducible relations.get with mapBounded + per-call deadline floor + overall snapshot budget; floor slow/hung rows to the deterministic UNCLASSIFIED line (degrade-safe, DoS-resistant)
+- [ ] 16-04-PLAN.md — Wave C: serve-last-good SWR via the existing situation_snapshots table (viewer-invariant slice, per-call needsYou recompute, no cross-viewer leak) + the bookended live BEAAA cold/warm drill vs the 25.7s baseline
 **UI hint**: yes
 
 ### Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)
@@ -230,7 +234,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 16. Snapshot performance & honest loading | 0/TBD | Not started | - |
+| 16. Snapshot performance & honest loading | 0/4 | Not started | - |
 | 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
