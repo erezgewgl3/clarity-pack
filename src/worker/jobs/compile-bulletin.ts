@@ -1148,6 +1148,27 @@ export async function resumePendingCompile(
   return compileBulletinForCompany(ctx, company, opts);
 }
 
+// HOTFIX v1.4.3 (incident 2026-06-03) — adaptive dead-scope backoff.
+//
+// On paperclipai@2026.525.0 the scheduled-job invocation scope is dead (PR #6547),
+// so ctx.companies.list() throws "missing, expired, or unknown invocation scope"
+// on EVERY minute-cron tick. The cron compile is already non-functional (the
+// bulletin is served by the view-driven resumePendingCompile path), so the
+// every-minute retry was pure churn + log spam (678 identical failures on BEAAA).
+// After N consecutive failures we skip the whole tick for a backoff window — one
+// attempt per window instead of 60/hr. A healthy host where companies.list works
+// resets the counter on success and never enters backoff (safe cross-instance).
+const SCOPE_BACKOFF_MS = 15 * 60 * 1000;
+const SCOPE_FAILURE_THRESHOLD = 2;
+let consecutiveScopeFailures = 0;
+let scopeBackoffUntilMs = 0;
+
+/** Test-only: reset the module backoff state between cases. */
+export function __resetBulletinScopeBackoff(): void {
+  consecutiveScopeFailures = 0;
+  scopeBackoffUntilMs = 0;
+}
+
 /**
  * Register the compile-bulletin job. On each fire it iterates companies and
  * delegates each to `compileBulletinForCompany(..., { force: false })` — the
@@ -1156,6 +1177,14 @@ export async function resumePendingCompile(
 export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
   ctx.jobs.register('compile-bulletin', async () => {
     const now = new Date();
+
+    // HOTFIX v1.4.3 — during a backoff window (companies.list has been failing
+    // persistently — the dead PR #6547 scope on this host), skip the whole tick:
+    // no companies.list call, no log. The bulletin is still served by the
+    // view-driven path. A healthy host never reaches here (the counter resets on
+    // a successful list below).
+    if (now.getTime() < scopeBackoffUntilMs) return;
+
     // 2026-05-28 — resolve the operator-configured bulletin timezone once per
     // tick (default Asia/Jerusalem via computeNextDueAt's BULLETIN_TZ fallback
     // when this is undefined). Passed to compileBulletinForCompany so the daily
@@ -1165,10 +1194,22 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
     let companies: Company[] = [];
     try {
       companies = await ctx.companies.list();
+      consecutiveScopeFailures = 0; // success — clear any prior failure streak
     } catch (e) {
-      ctx.logger?.warn?.('compile-bulletin: companies.list failed', {
-        err: (e as Error).message,
-      });
+      consecutiveScopeFailures += 1;
+      if (consecutiveScopeFailures >= SCOPE_FAILURE_THRESHOLD) {
+        scopeBackoffUntilMs = now.getTime() + SCOPE_BACKOFF_MS;
+        ctx.logger?.warn?.(
+          `compile-bulletin: companies.list failing (${(e as Error).message}); ` +
+            `backing off the scheduled compile for ${SCOPE_BACKOFF_MS / 60000}min ` +
+            `(bulletin still served via the view-driven path — likely the PR #6547 ` +
+            `dead invocation scope).`,
+        );
+      } else {
+        ctx.logger?.warn?.('compile-bulletin: companies.list failed', {
+          err: (e as Error).message,
+        });
+      }
       return;
     }
 
