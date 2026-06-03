@@ -30,9 +30,7 @@ import {
   walkBlockerChain,
   buildHandlerResult,
 } from '../../src/worker/handlers/flatten-blocker-chain.ts';
-import { buildEdges } from '../../src/worker/handlers/org-blocked-backlog.ts';
 import { buildEmployeesRollup } from '../../src/worker/situation/build-employees-rollup.ts';
-import { flattenBlockerChain } from '../../src/shared/blocker-chain.ts';
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -63,11 +61,15 @@ function makeReaderIssues({ root, relations = {} }) {
 // issues.get + issues.relations.get + agents.get.
 // ---------------------------------------------------------------------------
 function makeRollupCtx({ root }) {
+  // STALE heartbeat (>10 min = 2x the 5-min running window) so the rollup
+  // classifies state='blocked' (a fresh heartbeat would be 'running' and skip the
+  // blocker-chain build). A stale heartbeat also resolves agentState='stuck' →
+  // AWAITING_AGENT_STUCK for the agent-owned case (the BEAAA-972 verdict).
   const agentRow = {
     id: AGENT_UUID,
     name: 'Drill Agent',
     role: 'engineer',
-    lastHeartbeatMs: NOW - 60 * 1000,
+    lastHeartbeatAt: new Date(NOW - 30 * 60 * 1000).toISOString(),
   };
   return {
     logger: { warn() {}, info() {} },
@@ -204,24 +206,20 @@ for (const m of MATRIX) {
       walk,
     });
 
-    // Situation-Room path (the engine call build-employees-rollup makes).
+    // Situation-Room path — the REAL production path (buildEmployeesRollup is
+    // where the root-meta injection lives, mirroring walkBlockerChain). The
+    // emitted row's blockerChain.terminalKind is the SR verdict for this issue.
     const srCtx = makeRollupCtx({ root: rootSR });
-    const { edges, nodeMeta } = await buildEdges(srCtx, 'co-1', ROOT_UUID);
-    // The rollup injects the root's own meta before flattening — mirror that.
-    // (After the fix, buildEdges itself attaches nodeMeta[startId]; we read
-    //  the engine result directly to assert cross-surface agreement.)
-    const srResult = flattenBlockerChain({
-      startId: ROOT_UUID,
-      edges,
-      nodeMeta,
-      viewerUserId: VIEWER_UUID,
-    });
+    const { employees } = await buildEmployeesRollup(srCtx, 'co-1', VIEWER_UUID);
+    const srRow = employees.find((e) => e.blockerChain != null);
+    assert.ok(srRow, `Situation-Room produced a blockerChain row for ${m.name}`);
+    const srKind = srRow.blockerChain.terminalKind;
 
     assert.equal(readerResult.terminal.kind, m.expectKind, `Reader kind for ${m.name}`);
-    assert.equal(srResult.terminal.kind, m.expectKind, `Situation-Room kind for ${m.name}`);
+    assert.equal(srKind, m.expectKind, `Situation-Room kind for ${m.name}`);
     assert.equal(
       readerResult.terminal.kind,
-      srResult.terminal.kind,
+      srKind,
       `SC5: surfaces disagree for ${m.name}`,
     );
   });

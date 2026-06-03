@@ -31,6 +31,13 @@ import {
   classifyEmployeeState,
   type EmployeeState,
 } from './classify-employee-state.ts';
+// Plan 12-08 (SC5 / BEAAA-972 fix) — the SAME worker-side liveness projection
+// both BFS builders use. The rollup injects the FOCUS (root) issue's own meta
+// into nodeMeta before flattenBlockerChain so a blocked issue with zero
+// STRUCTURED blockers classifies from its own state (→ AWAITING_AGENT_STUCK),
+// identically to the Reader (flatten-blocker-chain.walkBlockerChain). NO new
+// host fetch — focusIssue + the agent's heartbeat are already in hand.
+import { resolveAgentState } from './agent-liveness.ts';
 // Plan 09-01 Task 1 — R2 worker-tier group bucket. The pure classifier maps
 // state → {needs_you|working|idle}; the UI groups BY this field and renders the
 // worker sort verbatim WITHIN each group (no client-side grouping/re-sort).
@@ -352,6 +359,49 @@ async function buildOneEmployeeRow(
         companyId,
         focusIssue.id,
       );
+      // Plan 12-08 (SC5 / BEAAA-972 fix) — inject the ROOT (focus) issue's OWN
+      // meta into nodeMeta[focusIssue.id], with the IDENTICAL field shape
+      // buildEdges/walkBlockerChain use for blocker targets. When the focus issue
+      // is blocked with ZERO structured blockers, edges is empty and the start IS
+      // the leaf; the engine then classifies from THIS meta (→ AWAITING_AGENT_STUCK
+      // for an agent owner) instead of falling through to UNOWNED. No new host
+      // fetch — focusIssue + the agent heartbeat are already resolved above.
+      // Do NOT clobber a meta buildEdges already attached for this id (it can
+      // appear as a blocker TARGET in a deeper graph); only fill when absent.
+      if (nodeMeta[focusIssue.id] == null) {
+        const rootAssigneeAgentId =
+          typeof focusIssue.assigneeAgentId === 'string' && focusIssue.assigneeAgentId.length > 0
+            ? focusIssue.assigneeAgentId
+            : null;
+        const rootStatus =
+          typeof focusIssue.status === 'string' ? focusIssue.status : 'awaiting';
+        // Plan 12-08 (locked product decision) — a BLOCKED root with an agent
+        // owner is AWAITING_AGENT_STUCK by definition (the issue is blocked, so the
+        // agent is not progressing on it). Force agentState='stuck' for a blocked
+        // root; otherwise defer to the shared liveness projection. Mirrors
+        // flatten-blocker-chain.walkBlockerChain EXACTLY (SC5 same-shape invariant).
+        const rootAgentState: 'working' | 'stuck' | null =
+          rootAssigneeAgentId == null
+            ? null
+            : rootStatus === 'blocked'
+              ? 'stuck'
+              : resolveAgentState({
+                  lastHeartbeatMs: lastHeartbeatValid ? lastHeartbeatMs : null,
+                  hasQueuedWork: false,
+                  nowMs,
+                });
+        nodeMeta[focusIssue.id] = {
+          ownerUserId:
+            (focusIssue as { assigneeUserId?: string | null; ownerUserId?: string | null })
+              .assigneeUserId ??
+            (focusIssue as { ownerUserId?: string | null }).ownerUserId ??
+            null,
+          etaIso: (focusIssue as { etaIso?: string | null }).etaIso ?? null,
+          status: rootStatus,
+          assigneeAgentId: rootAssigneeAgentId,
+          agentState: rootAgentState,
+        };
+      }
       const chain = flattenBlockerChain({ startId: focusIssue.id, edges, nodeMeta, viewerUserId });
       const picked = pickTopChains([chain], 1)[0];
       if (picked) {

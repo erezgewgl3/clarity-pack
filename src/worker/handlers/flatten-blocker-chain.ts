@@ -137,12 +137,22 @@ export function registerFlattenBlockerChain(ctx: FlattenBlockerChainCtx): void {
       });
     }
 
-    // buildHandlerResult routes the blocker-free case → 'none' (WR-01) and the
-    // success case → flattenBlockerChain (raw label). The success-path label is
-    // then scrubbed via scrubResultLabel BEFORE return — the CR-01 fix.
+    // buildHandlerResult routes the blocker-free case → 'none' (WR-01), the
+    // blocked-no-edge case → the engine (Plan 12-08, raw label with UUIDs), and
+    // the success case → flattenBlockerChain (raw label). Any path whose terminal
+    // label can embed a raw UUID MUST be scrubbed via scrubResultLabel BEFORE
+    // return — the CR-01 + 12-08 NO_UUID_LEAK fix.
     const result = buildHandlerResult({ startId, viewerUserId, walk, maxAgeMs });
-    if (walk.edges.length === 0) {
-      // Blocker-free → already UUID-safe literal; no agents resolution needed.
+    // Plan 12-08 — the ONLY path that is UUID-safe by construction is the
+    // genuinely-blocker-free EXTERNAL 'none' row (its label is the literal "No
+    // active blockers"). Detect it by the forced non-actionable verdict and skip
+    // the (unnecessary) agents resolution; everything else (success chains AND
+    // the new blocked-no-edge terminals) gets scrubbed.
+    const isBlockerFreeLiteral =
+      result.terminal.kind === 'EXTERNAL' &&
+      result.actionAffordance === 'none' &&
+      result.awaitedPartyLabel === 'No active blockers';
+    if (isBlockerFreeLiteral) {
       return result;
     }
     return scrubResultLabel(ctx, companyId, viewerUserId, result);
@@ -245,6 +255,33 @@ export function buildHandlerResult(args: {
     return makeDegradedResult(terminal, startId, degrade.reason);
   }
   if (!walk || walk.edges.length === 0) {
+    // Plan 12-08 (SC5 / BEAAA-972 fix) — the empty-edges case used to BLINDLY
+    // route to makeBlockerFreeResult → EXTERNAL "No active blockers", even for a
+    // blocked, agent-owned issue with zero STRUCTURED blockers. That diverged
+    // from the Situation Room (which classified the same issue via the engine).
+    // NOW: if the walk attached the ROOT issue's own meta (walkBlockerChain does
+    // this) AND that meta says the root is blocked OR owned, route through the
+    // SAME pure engine with edges:[] so the start IS the leaf and the engine
+    // classifies it identically to the Situation Room (→ AWAITING_AGENT_STUCK /
+    // AWAITING_HUMAN / UNOWNED). makeBlockerFreeResult is reserved for the
+    // GENUINELY not-blocked root (WR-01 unchanged, regression-guarded).
+    // The empty-edges → engine route fires ONLY when the ROOT issue is itself
+    // status='blocked' (the locked matrix: a NOT-blocked issue with no structured
+    // blockers is genuinely blocker-free EXTERNAL, regardless of its owner — the
+    // regression guard pins this). A blocked root then classifies from its own
+    // meta: agent-owned → AWAITING_AGENT_STUCK, human-owned → AWAITING_HUMAN, no
+    // owner → UNOWNED.
+    const rootMeta = walk?.nodeMeta?.[startId];
+    const rootIsBlocked = !!rootMeta && rootMeta.status === 'blocked';
+    if (rootIsBlocked) {
+      return flattenBlockerChain({
+        startId,
+        edges: [],
+        nodeMeta: walk!.nodeMeta,
+        viewerUserId,
+        maxAgeMs,
+      });
+    }
     // WR-01 — the GENUINELY-blocker-free row carries actionAffordance 'none' (not
     // 'open'), so the Reader renders no dead action. makeBlockerFreeResult forces
     // the non-actionable verdict; the label is a UUID-safe literal.
@@ -270,6 +307,63 @@ export async function walkBlockerChain(
   const edges: BlockerEdge[] = [];
   const nodeMeta: WalkOutput['nodeMeta'] = {};
   const nowMs = Date.now();
+
+  // Plan 12-08 (SC5 / BEAAA-972 fix) — attach the ROOT issue's OWN meta into
+  // nodeMeta[startId] so a blocked issue with ZERO structured blockers classifies
+  // from its own state (status/assigneeAgentId/ownerUserId) instead of falling
+  // through to the EXTERNAL "no active blockers" lie. Both BFS builders MUST do
+  // this with the IDENTICAL field shape (org-blocked-backlog.ts mirrors it) — the
+  // empty-edges case is THE divergence point the milestone's "one verdict
+  // everywhere" promise (SC5) hinges on. Best-effort: a thrown issues.get leaves
+  // the root meta absent, preserving the prior behavior for that degrade path.
+  try {
+    const root = (await issues.get(startId, companyId)) as RelationNodeProjection | null;
+    if (root) {
+      const assigneeAgentId = root.assigneeAgentId ?? null;
+      const rootStatus = root.status ?? 'awaiting';
+      // Plan 12-08 (locked product decision) — a BLOCKED root with an agent owner
+      // is AWAITING_AGENT_STUCK by definition: the issue is blocked, so the agent
+      // is NOT progressing ON IT regardless of its heartbeat liveness elsewhere.
+      // Force agentState='stuck' for a blocked root; for any other status defer to
+      // the worker liveness projection (the shared resolveAgentState). This keeps
+      // both BFS builders' field shape identical while encoding the blocked-root
+      // semantic in ONE place per builder.
+      const lastHeartbeatMs =
+        typeof root.lastHeartbeatMs === 'number'
+          ? root.lastHeartbeatMs
+          : typeof root.lastHeartbeatAt === 'string'
+            ? (() => {
+                const t = Date.parse(root.lastHeartbeatAt as string);
+                return Number.isFinite(t) ? t : null;
+              })()
+            : null;
+      const agentState: 'working' | 'stuck' | null =
+        assigneeAgentId == null
+          ? null
+          : rootStatus === 'blocked'
+            ? 'stuck'
+            : resolveAgentState({
+                lastHeartbeatMs,
+                hasQueuedWork: root.hasQueuedWork === true,
+                nowMs,
+                expectedCadenceMs:
+                  typeof root.expectedCadenceMs === 'number' && root.expectedCadenceMs > 0
+                    ? root.expectedCadenceMs
+                    : undefined,
+              });
+      nodeMeta[startId] = {
+        ownerUserId: root.assigneeUserId ?? root.ownerUserId ?? null,
+        etaIso: root.etaIso ?? null,
+        status: rootStatus,
+        assigneeAgentId,
+        agentState,
+      };
+    }
+  } catch {
+    // Best-effort: leave the root meta absent (prior behavior). The walk below
+    // still runs; an empty-edges + absent-root-meta result routes to blocker-free.
+  }
+
   const visited = new Set<string>();
   const queue: Array<{ id: string; depth: number }> = [{ id: startId, depth: 0 }];
   // Plan 11-02 Task 3 (SC5) — mirror buildEdges' root-throw semantics: a thrown
