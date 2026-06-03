@@ -610,7 +610,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // Result orphaned → "Compiling…" forever. Fix: consume-before-spawn in
   // driveTldrCompileStep (consumeExistingTldrOpResult). No schema, no dep change.
   // See: .planning/debug/reader-tldr-stuck-compiling.md
-  version: '1.4.2',
+  version: '1.4.3',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
