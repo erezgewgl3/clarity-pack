@@ -49,6 +49,10 @@ import {
   buildEdges,
   type OrgBlockedBacklogCtx,
 } from '../handlers/org-blocked-backlog.ts';
+// Plan 16-03 (Wave B) Task 2 — the bounded pool from 16-01. Replaces the rollup's
+// unbounded Promise.all(agents.map(...)) per-agent fan-out so a large roster
+// cannot stampede the host (T-16-01); same LIMIT as the shared edge-graph build.
+import { mapBounded } from '../util/map-bounded.ts';
 // Plan 12-02 (NY-02) — the PURE leverage helper. Needs-you rows are ranked by
 // leverage (count of distinct blocked items whose flattened chain terminates at
 // this action, D-01) descending, tie-break stable leaf id ascending (D-02), with
@@ -646,6 +650,14 @@ async function buildOneEmployeeRow(
   };
 }
 
+// Plan 16-03 (Wave B) Task 2 — the per-agent fan-out concurrency ceiling. SAME
+// value as the shared edge-graph build's EDGE_WALK_LIMIT (situation-room.ts);
+// kept in sync so the whole snapshot caps the host at one consistent ceiling
+// (RESEARCH A3 — start 5). Post-16-02 most per-agent work reads the prefetch, but
+// a leaf-fallback RPC may still fire, so the bound is the DoS mitigation across
+// BOTH builders (T-16-01).
+const ROLLUP_AGENT_LIMIT = 5;
+
 const ORDER: Record<EmployeeState, number> = {
   blocked: 0,
   stale: 1,
@@ -685,19 +697,22 @@ export async function buildEmployeesRollup(
   // determinism within a request).
   const nowMs = Date.now();
 
-  const rows: InternalRow[] = await Promise.all(
-    agents.map(async (agent) => {
-      try {
-        return await buildOneEmployeeRow(ctx, agent, companyId, viewerUserId, nowMs);
-      } catch (e) {
-        ctx.logger?.warn?.('build-employees-rollup: row failed', {
-          agentId: agent.id,
-          err: (e as Error).message,
-        });
-        return degradeSafeRow(agent);
-      }
-    }),
-  );
+  // Plan 16-03 (Wave B) Task 2 — bounded per-agent fan-out. mapBounded caps the
+  // in-flight per-agent work at ROLLUP_AGENT_LIMIT (≤5) so a large roster cannot
+  // stampede the host Postgres (T-16-01). The per-row try/catch → degradeSafeRow
+  // floor is UNCHANGED (already the right per-row degrade); mapBounded preserves
+  // INPUT order, so the deterministic sort that follows is unaffected.
+  const rows: InternalRow[] = await mapBounded(agents, ROLLUP_AGENT_LIMIT, async (agent) => {
+    try {
+      return await buildOneEmployeeRow(ctx, agent, companyId, viewerUserId, nowMs);
+    } catch (e) {
+      ctx.logger?.warn?.('build-employees-rollup: row failed', {
+        agentId: agent.id,
+        err: (e as Error).message,
+      });
+      return degradeSafeRow(agent);
+    }
+  });
 
   // Deterministic sort (LOCKED): blocked → stale → idle → reviewing → running;
   // oldest-first within blocked/stale/idle, most-recent-first within
