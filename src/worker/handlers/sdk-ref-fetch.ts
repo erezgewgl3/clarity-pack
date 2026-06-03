@@ -31,24 +31,106 @@ export type SdkRefIssuesClient = Pick<PluginIssuesClient, 'get' | 'list'>;
 /** A requested ref identifier paired with the host Issue it resolved to. */
 export type ResolvedRef = { requestedId: string; issue: Issue };
 
+// HOTFIX v1.4.3 (incident 2026-06-03) — the fake-issue-ID lookup flood.
+//
+// The OLD strategy did a per-ref `issues.get(token)` for EVERY requested token,
+// then a list-fallback for the nulls. The Reader/Editor ref extractor uses a
+// broad `\b[A-Z][A-Z0-9]{1,7}-\d+\b` pattern that matches plain prose tokens
+// (TIER-2, DRAFT-2, PHASE-1, ADR-0017, AG-1, DAY-80, SHA-256). Every one of
+// those hit the host as `GET /issues/<token>` → 404. On BEAAA: ~4,192 wasted
+// 404 DB lookups (~21% of all host requests), continuous.
+//
+// The fix: derive the set of REAL issue prefixes for the company from a single
+// `issues.list` (cached, short-TTL), and only `get` a token whose prefix is one
+// of them. An unknown-prefix token costs ZERO host calls and falls through to
+// the pure resolver's `unknown` placeholder — identical UX to the prior 404.
+// Instance-agnostic: the prefix set is DERIVED, never hardcoded.
+
+/** Extract the `<PREFIX>` of a canonical `<PREFIX>-<digits>` identifier, else null. */
+function prefixOf(identifier: string | null | undefined): string | null {
+  if (typeof identifier !== 'string') return null;
+  const m = /^([A-Z][A-Z0-9]{1,7})-\d+$/.exec(identifier.trim());
+  return m ? m[1] : null;
+}
+
+/** Per-company cache of the real issue-prefix set. Prefixes are stable, so a
+ *  generous TTL is safe and keeps the gate cheap across rapid Reader polls. */
+const PREFIX_CACHE_TTL_MS = 5 * 60 * 1000;
+const prefixCache = new Map<string, { prefixes: Set<string>; expiresAt: number }>();
+
+/** Test-only: reset the module prefix cache between cases. */
+export function __resetRefPrefixCache(): void {
+  prefixCache.clear();
+}
+
+/**
+ * Resolve the set of real issue prefixes for a company (cache-or-list). An
+ * empty/failed list is NOT cached (so a transient failure cannot poison the
+ * gate and block resolution); the caller treats an empty set as "unknown — fall
+ * back to legacy resolve-everything for this batch only".
+ */
+async function getValidPrefixes(
+  issues: SdkRefIssuesClient,
+  companyId: string,
+  nowMs: number,
+): Promise<Set<string>> {
+  const cached = prefixCache.get(companyId);
+  if (cached && cached.expiresAt > nowMs) return cached.prefixes;
+  let listed: Issue[] = [];
+  try {
+    listed = await issues.list({ companyId });
+  } catch {
+    listed = [];
+  }
+  const prefixes = new Set<string>();
+  for (const i of listed) {
+    const p = prefixOf(i.identifier ?? null);
+    if (p) prefixes.add(p);
+  }
+  if (prefixes.size > 0) {
+    prefixCache.set(companyId, { prefixes, expiresAt: nowMs + PREFIX_CACHE_TTL_MS });
+  }
+  return prefixes;
+}
+
 /**
  * Resolve `uniqueIds` (deduped requested identifiers) to host Issues via the
- * SDK: per-ref `get` in parallel, then ONE cached `list`-and-match fallback for
- * the nulls. Returns only the resolved pairs (unresolvable ids are omitted).
+ * SDK. v1.4.3: PREFIX-GATED — only tokens whose prefix is a real company prefix
+ * are fetched via per-ref `get` (in parallel); unknown-prefix tokens get zero
+ * host calls. A list-and-match fallback covers valid-prefix tokens missing from
+ * the (possibly paginated) list page. Returns only the resolved pairs.
  *
- * Throws only if `Promise.all(get)` rejects (a get implementation throwing) —
- * the callers wrap this so a resolution failure degrades to an empty refCards
- * list / the `unknown` placeholder rather than blanking the surface.
+ * Throws only if `Promise.all(get)` rejects — callers wrap this so a resolution
+ * failure degrades to the `unknown` placeholder rather than blanking the surface.
  */
 export async function resolveRefsViaSdk(
   issues: SdkRefIssuesClient,
   uniqueIds: string[],
   companyId: string,
 ): Promise<ResolvedRef[]> {
-  // 1. Per-ref get in parallel. Pair each result with the id we asked for so we
-  //    can echo the REQUESTED identifier (not issue.identifier, not issue.id).
+  if (uniqueIds.length === 0) return [];
+
+  const nowMs = Date.now();
+  const validPrefixes = await getValidPrefixes(issues, companyId, nowMs);
+
+  // Gate: only attempt to resolve tokens whose prefix actually exists on this
+  // instance. If we could not derive ANY prefixes (empty/failed list), fall back
+  // to legacy resolve-everything for THIS batch only (bounded by uniqueIds.length;
+  // self-heals on the next populated list) rather than silently disabling refs.
+  const idsToResolve =
+    validPrefixes.size === 0
+      ? uniqueIds
+      : uniqueIds.filter((id) => {
+          const p = prefixOf(id);
+          return p !== null && validPrefixes.has(p);
+        });
+
+  if (idsToResolve.length === 0) return [];
+
+  // 1. Per-ref get in parallel (now only for plausible refs). Pair each result
+  //    with the requested id so the caller can echo the REQUESTED identifier.
   const getResults = await Promise.all(
-    uniqueIds.map(async (requestedId) => ({
+    idsToResolve.map(async (requestedId) => ({
       requestedId,
       issue: await issues.get(requestedId, companyId),
     })),
@@ -61,15 +143,14 @@ export async function resolveRefsViaSdk(
     else nulls.push(requestedId);
   }
 
-  // 2. list-and-match fallback — only when at least one get returned null.
-  //    Cached per-invocation (NOT module scope — freshness over reuse).
+  // 2. list-and-match fallback — only when a valid-prefix get returned null
+  //    (pagination/get-shape gap). Best-effort; an unresolvable id falls through
+  //    to the pure resolver's `unknown` placeholder.
   if (nulls.length > 0) {
     let listed: Issue[] = [];
     try {
       listed = await issues.list({ companyId });
     } catch {
-      // The fallback is best-effort; an unresolvable id falls through to the
-      // pure resolver's `unknown` placeholder.
       listed = [];
     }
     if (listed.length > 0) {
