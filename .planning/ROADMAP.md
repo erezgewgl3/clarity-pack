@@ -66,7 +66,11 @@ Make every Clarity surface legible to a non-builder — plain English everywhere
   3. Blocker-chain verdict / terminal lines read as plain-English sentences — no enum or code token (e.g. `AWAITING_AGENT_STUCK`) is ever shown as user-visible text.
   4. The Situation Room focus line shows the plain-English TL;DR-cache summary when available, falling back to the polished issue title — never the bare/raw title.
   5. The same blocked item reads with the same plain-English verdict wording on the Reader blocker panel and in the Situation Room (legibility parity, extending the v1.4.2 one-verdict-everywhere fix to surfaced wording).
-**Plans**: TBD
+**Plans**: 4 plans (wave 1: 16-01, 16-02, 16-04 parallel; wave 2: 16-03)
+- [ ] 16-01-PLAN.md — Shared verdict-wording helper + Reader enum→plain-English + Reader/SR parity (LEG-03, LEG-05)
+- [ ] 16-02-PLAN.md — Scrub fallback → 'an agent' + anchored PARTIAL_HEX_RE guard + inverted/named tests (LEG-01, LEG-02)
+- [ ] 16-03-PLAN.md — Situation Room focusLine enriched from tldr_cache, degrade-wrapped (LEG-04)
+- [ ] 16-04-PLAN.md — Chat CHT-/run·/toast hex-fragment chip humanization + source-grep guard (LEG-01)
 **UI hint**: yes
 
 ### Phase 17: Editor-Agent Prose Live
