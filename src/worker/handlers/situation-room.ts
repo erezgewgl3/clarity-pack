@@ -30,6 +30,13 @@ import type {
 } from '@paperclipai/plugin-sdk';
 
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
+// Plan 16-03 (Wave B) — the bounded-concurrency pool + per-walk deadline floor
+// shipped in 16-01. The shared edge-graph build (the irreducible relations.get
+// fan-out) runs through mapBounded (≤LIMIT in flight, DoS cap T-16-01) and each
+// walk is floored with withDeadline (~2s, T-16-02) since the SDK's per-call
+// timeoutMs is provably unreachable through ctx.issues.relations.get
+// (16-SCHEMA-VERIFY.md "timeoutMs decision").
+import { mapBounded, withDeadline } from '../util/map-bounded.ts';
 import {
   buildEdges,
   buildOrgBlockedBacklog,
@@ -136,6 +143,47 @@ const PREFETCH_AGENTS_SQL =
   "SELECT id, name, role, title, last_heartbeat_at, status, paused_at " +
   "FROM public.agents WHERE company_id = $1";
 
+// Plan 16-03 (Wave B) — DoS + degrade-safety tuning (RESEARCH A3, planner
+// discretion; recorded for 16-04 live tuning). Bounded-concurrency ceiling on the
+// shared edge-graph walks so a large roster never stampedes the host Postgres
+// (T-16-01). LIMIT=5 is the start value (RESEARCH band 4-6). Per-walk deadline so
+// a single hung relations.get floors that ONE row within ~2s instead of waiting
+// the 30s host default → 502 (T-16-02).
+const EDGE_WALK_LIMIT = 5;
+const PER_WALK_DEADLINE_MS = 2000;
+
+// Plan 16-03 (Wave B / WARNING 4) — the OVERALL snapshot deadline budget, well
+// under the 30s host RPC timeout. INJECTABLE for test isolation: the production
+// default is ~8000ms but the degrade test overrides it (to ~200ms) so the
+// budget-exhaustion path settles in well under a second instead of burning the
+// full ~8s. Override precedence: an explicit per-call `snapshotBudgetMs` param
+// (threaded from the handler) wins; otherwise an env-style
+// CLARITY_SNAPSHOT_BUDGET_MS override is read; otherwise the constant default.
+const SNAPSHOT_BUDGET_MS = 8000;
+
+/** Resolve the effective overall budget: explicit param > env override > default. */
+function resolveSnapshotBudgetMs(override?: number | null): number {
+  if (typeof override === 'number' && Number.isFinite(override) && override > 0) {
+    return override;
+  }
+  const env =
+    typeof process !== 'undefined' && process?.env?.CLARITY_SNAPSHOT_BUDGET_MS
+      ? Number(process.env.CLARITY_SNAPSHOT_BUDGET_MS)
+      : NaN;
+  if (Number.isFinite(env) && env > 0) return env;
+  return SNAPSHOT_BUDGET_MS;
+}
+
+/** Plan 16-03 — the UNCLASSIFIED sentinel stored in the shared memo when a walk
+ *  times out OR the overall budget is exhausted before the walk runs. BOTH
+ *  builders already floor an `'unclassified'` memo entry via unclassifiedChain
+ *  with the carried degradeReason. The timeout path uses 'relations-walk-timeout'
+ *  (distinct from the existing 'relations-walk-failed' throw path). */
+const TIMEOUT_SENTINEL: SharedEdgeEntry = {
+  unclassified: true,
+  degradeReason: 'relations-walk-timeout',
+};
+
 /** Raw snake_case row from the public.issues SELECT. */
 type IssueSqlRow = {
   id: string | null;
@@ -231,6 +279,7 @@ function mapAgentRow(r: AgentSqlRow): PrefetchAgent {
 async function buildSnapshotPrefetch(
   ctx: SituationRoomCtx,
   companyId: string,
+  budgetMs: number = SNAPSHOT_BUDGET_MS,
 ): Promise<SnapshotPrefetchBundle | null> {
   // Two SELECTs. $1 = companyId (the sole bound param); the SQL strings are
   // static module constants (T-16-05). A throw on either read → null bundle
@@ -284,29 +333,75 @@ async function buildSnapshotPrefetch(
 
   // Shared edge graph: walk buildEdges ONCE per distinct blocked-issue id. This
   // id set IS the union {blocked roots} ∪ {blocked agent focus} (a focus issue
-  // that drives a rollup chain is a blocked issue, already here). A thrown walk
-  // → the UNCLASSIFIED sentinel for that startId (surfaced, not dropped).
+  // that drives a rollup chain is a blocked issue, already here).
+  //
+  // Plan 16-03 (Wave B) — the irreducible relations.get fan-out is the SINGLE
+  // remaining round-trip source (no relations table in coreReadTables). It is
+  // now BOTH bounded AND deadline-floored:
+  //   - mapBounded(distinctStartIds, EDGE_WALK_LIMIT, …) caps the in-flight walks
+  //     at LIMIT so a large roster never stampedes the host Postgres (T-16-01).
+  //   - each walk is wrapped in withDeadline(walk, PER_WALK_DEADLINE_MS, …) so a
+  //     hung/slow/thrown walk floors that ONE startId to the deterministic
+  //     'relations-walk-timeout' sentinel within ~2s — never the 30s host default
+  //     (T-16-02). A genuine THROW still floors to 'relations-walk-failed' (the
+  //     existing reason) because withDeadline floors a rejection to onTimeout()
+  //     too; we disambiguate by detecting the throw inside the walk.
+  //   - an OVERALL budget (deadlineMs) bounds the TOTAL build well under 30s: any
+  //     startId not yet COMPUTED when the budget is exhausted floors to the
+  //     timeout sentinel rather than blocking the response (WARNING 4).
   const edgeGraph = new Map<string, SharedEdgeEntry>();
   // buildEdges needs only ctx.issues.relations.get — satisfied by ctx (cast to
   // the structural OrgBlockedBacklogCtx the export expects).
   const edgeCtx = { issues: ctx.issues, logger: ctx.logger } as unknown as OrgBlockedBacklogCtx;
+
+  // Distinct startIds (memoize by startId — a focus issue that is also a blocked
+  // root walks exactly once).
+  const distinctStartIds: string[] = [];
+  const seenStart = new Set<string>();
   for (const issue of blockedIssues) {
     const startId = issue.id;
-    if (!startId || edgeGraph.has(startId)) continue; // memoize by startId
-    try {
-      const { edges, nodeMeta } = await buildEdges(edgeCtx, companyId, startId);
-      edgeGraph.set(startId, { edges, nodeMeta });
-    } catch (e) {
-      // A thrown root walk → the honest UNCLASSIFIED floor for this startId. The
-      // prefetch is NOT aborted; the other issues' edges still build.
+    if (!startId || seenStart.has(startId)) continue;
+    seenStart.add(startId);
+    distinctStartIds.push(startId);
+  }
+
+  const deadlineMs = Date.now() + budgetMs;
+
+  await mapBounded(distinctStartIds, EDGE_WALK_LIMIT, async (startId): Promise<void> => {
+    // Overall budget gate: if the whole-snapshot deadline is already exhausted,
+    // do NOT start this walk — floor it to the timeout sentinel immediately so the
+    // total build never exceeds the budget (the leftover startIds degrade rather
+    // than block the response).
+    if (Date.now() >= deadlineMs) {
+      edgeGraph.set(startId, TIMEOUT_SENTINEL);
+      return;
+    }
+    // Per-walk deadline: the smaller of the per-walk cap and the remaining overall
+    // budget so a walk can never push the total past the budget.
+    const remaining = deadlineMs - Date.now();
+    const walkMs = Math.max(0, Math.min(PER_WALK_DEADLINE_MS, remaining));
+    // Track a real throw (vs a timeout) so a genuine error keeps the existing
+    // 'relations-walk-failed' reason; the timeout path uses 'relations-walk-timeout'.
+    let threw = false;
+    const walk = buildEdges(edgeCtx, companyId, startId).catch((e) => {
+      threw = true;
       ctx.logger?.warn?.('situation.snapshot: shared edge walk failed (UNCLASSIFIED)', {
         companyId,
         startId,
         err: (e as Error).message,
       });
-      edgeGraph.set(startId, { unclassified: true, degradeReason: 'relations-walk-failed' });
+      return null; // floored below as 'relations-walk-failed'
+    });
+    const result = await withDeadline(walk, walkMs, () => null);
+    if (result === null) {
+      edgeGraph.set(startId, {
+        unclassified: true,
+        degradeReason: threw ? 'relations-walk-failed' : 'relations-walk-timeout',
+      });
+      return;
     }
-  }
+    edgeGraph.set(startId, { edges: result.edges, nodeMeta: result.nodeMeta });
+  });
 
   return { blockedIssues, roster: agents, issuesByAgentId, issuesById, nameByUuid, edgeGraph };
 }
@@ -327,6 +422,15 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
     const viewerUserId =
       typeof params?.userId === 'string' && params.userId ? params.userId : '';
 
+    // Plan 16-03 (Wave B / WARNING 4) — resolve the INJECTABLE overall snapshot
+    // budget. An explicit `snapshotBudgetMs` param (the degrade test passes ~200ms
+    // for fast, deterministic isolation) wins over the env override and the
+    // ~8000ms production default. Production callers never pass it → the ~8s
+    // default (well under the 30s host timeout) applies.
+    const snapshotBudgetMs = resolveSnapshotBudgetMs(
+      typeof params?.snapshotBudgetMs === 'number' ? params.snapshotBudgetMs : null,
+    );
+
     // Plan 16-02 (Wave A) — the SHARED SQL prefetch + shared edge graph,
     // computed ONCE here and threaded into BOTH builders. Collapses the N+1 RPC
     // fan-out (issues.list + agents.list + per-uuid agents.get + a duplicated
@@ -337,7 +441,7 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
     {
       const t0 = Date.now();
       try {
-        prefetch = await buildSnapshotPrefetch(ctx, companyId);
+        prefetch = await buildSnapshotPrefetch(ctx, companyId, snapshotBudgetMs);
       } catch (e) {
         // buildSnapshotPrefetch already swallows the SELECT throws; this is
         // belt-and-suspenders for an unexpected edge-graph throw.

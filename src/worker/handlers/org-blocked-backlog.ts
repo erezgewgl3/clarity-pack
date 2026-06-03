@@ -435,6 +435,13 @@ export async function buildOrgBlockedBacklog(
     // direct buildEdges (degrade-safety + old fixtures). A memo'd UNCLASSIFIED
     // sentinel (a thrown walk during the prefetch) floors to the existing
     // unclassifiedChain row — surfaced, not dropped.
+    // Plan 16-03 (Wave B) — a memo'd UNCLASSIFIED sentinel floors this row via
+    // unclassifiedChain with the carried degradeReason VERBATIM. This covers BOTH
+    // the existing 'relations-walk-failed' (a thrown walk) AND the new Wave-B
+    // 'relations-walk-timeout' (a walk that hung past the per-walk deadline OR was
+    // never started because the overall snapshot budget was exhausted). Both are
+    // the SAME honest UNCLASSIFIED floor — the timeout reason rides through the
+    // existing generic branch; no new shape is invented.
     const memo = ctx.edgeGraph?.get(startId);
     if (memo && 'unclassified' in memo) {
       paired.push({ chain: unclassifiedChain(startId, memo.degradeReason), issue, nodeMeta: {} });
