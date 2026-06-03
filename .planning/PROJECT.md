@@ -17,19 +17,18 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 
 **Zero rabbit-holes.** Every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place. If anything else fails, this must hold: Eric should never have to click through three levels of unresolved task references to find out what one of his agents is stuck on.
 
-## Current Milestone: v1.4.0 Truthful Situation Room
+## Current Milestone: v1.5.0 Truthful & Legible Situation Room
 
-**Goal:** Make the Situation Room the one screen that truthfully tells Eric what's going on in the company — and lets him do what needs him, in place.
+**Goal:** Make every Clarity surface legible to a non-builder — plain English everywhere, zero raw agent/UUID identifiers — and make the Editor-Agent's *truthful* named-action prose actually live in production, via a safe off-request (flag-gated) compile path that keeps the snapshot fast.
 
 **Target features:**
-- Honest blocker taxonomy (deterministic engine) — recognizes agent ownership, flattens transitively to the human at the end, classifies each blocked item instead of dumping everything to "unowned → assign owner."
-- Editor-Agent named single action — grounded plain-English "what unblocks this + who + ~time," with a stale→degrade guardrail (never blanks, never fabricates urgency).
-- Cockpit IA redesign — Pulse (one-line company status + vitals) → Needs-you (ranked by what it unblocks) → In-motion (calm) → Watch (quietly stalled).
-- Reply-in-place + quick-decision chips that actually unblock + resume the agent.
-- Kill the false "Assign owner" affordance except on genuinely-unowned / stuck-agent rows.
+- **No raw identifiers, anywhere** — kill partial agent-id hashes (`agent#04fcac7c`), bare UUIDs, and machine tokens across Reader / Situation Room / Bulletin / Chat; extend the NO_UUID_LEAK guard to catch partial-hash agent labels (found live 2026-06-03).
+- **Plain-English legibility pass** — verdict/terminal lines, focus lines, and blocker chains read as sentences a non-builder understands (no enum-ish jargon surfaced as text); `focusLine` enriched from `tldr_cache`, not the bare issue title.
+- **Editor-Agent prose live** — Pulse-header prose enrichment (deferred D-03 in Phase 15) + grounded named-action row prose, with the stale→degrade floor intact (never blanks, never fabricates urgency).
+- **Off-request snapshot + action-card re-architecture (flag-gated, sequenced LAST)** — move the heavy recompute off the request path to kill the 25.7s cold near-cliff, then re-enable `ACTION_CARDS_ENABLED` safely with no op-issue notification storm. Behind a flag; continuous flag-gated BEAAA deploy.
 
-**Seed:** `docs/superpowers/specs/2026-06-01-situation-room-truthful-cockpit-design.md` (approved design).
-**Open risk to de-risk first (spike):** does answering an agent (a comment) actually unblock + resume it, or is a status transition also required?
+**Live driver (2026-06-03):** with action-cards gated the room no longer 502s (6/6 snapshot calls 200), but cold snapshot recompute is **25.7s** — within ~4s of the 30s timeout cliff. This motivates the off-request path.
+**Explicitly OUT:** per-user opt-in toggle UI / multi-user (this milestone is legible-for-non-builders, not multi-user; server-side opt-in already ships).
 
 ## Requirements
 
@@ -47,22 +46,22 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 - ✓ **Plugin distribution** — v1.0. Installable via `paperclipai plugin install`. *Adjusted:* distribution is internal-only (local-tarball install); npm publish was dropped by decision — v1 audience is Eric on BEAAA.
 - ✓ **Pre-install backup, snapshot, and rollback discipline** — v1.0 (Phase 1). Snapshot/restore/smoke-test CLI + rehearsed restore drill (Countermoves 2026-05-13 PASS). For BEAAA, the bookend is the DigitalOcean droplet backup + plugin-reinstall rollback (safety-CLI not installed on that box).
 - ✓ **Honest blocker taxonomy (engine)** — Validated in Phase 11 (2026-06-02). Deterministic, agent-aware terminal taxonomy (8 kinds: awaiting-human / agent-working / agent-stuck / self-resolving / external / cycle / genuinely-unowned / unclassified) flattened transitively to the human at the end; degrade-safe per row; the single `verdict` source every surface reads. NO_UUID_LEAK enforced at every chain producer (scrub-before-return) with a render-scan regression guard. Verification 5/5 must-haves; gap-closure (CR-01 + WR/IN warnings) closed in 11-05..07.
+- ✓ **Truthful Situation Room (v1.4.0 → shipped v1.4.2, Phases 12–15)** — "Needs you" lists only human-actionable items (Phase 12); Editor-Agent named single action with stale→degrade (Phase 13); reply-in-place + decision chips that unblock+resume across surfaces (Phase 14); Pulse + Needs-you / In-motion / Watch tier IA (Phase 15). SC5 one-verdict-everywhere fix (BEAAA-972 divergence) landed v1.4.2 and live-verified 2026-06-03. **Caveat carried into v1.5.0:** action-card compile is gated OFF (v1.4.1 hotfix) because synchronous compile blocked the snapshot >30s + caused a notification storm — the Editor-Agent named-action layer is therefore dark in production until the off-request re-arch ships.
 
 ### Active
 
-<!-- v1.4.0 Truthful Situation Room. Detailed REQ-IDs + traceability in .planning/REQUIREMENTS.md. -->
+<!-- v1.5.0 Truthful & Legible Situation Room. Detailed REQ-IDs + traceability in .planning/REQUIREMENTS.md. -->
 
-- [ ] **"Needs you" tells the truth** — lists only human-actionable items; agent-working and self-resolving items are excluded.
-- [ ] **Editor-Agent named single action** — grounded plain-English action + who + estimate, with stale→degrade fallback to the deterministic line.
-- [ ] **Cockpit IA** — Pulse + Needs-you (ranked by what it unblocks) + In-motion (calm, legible) + Watch (quietly stalled).
-- [ ] **Reply-in-place + quick-decision chips** that post to the agent and actually unblock + resume it.
-- [ ] **Assign-owner suppression** — the control appears only on genuinely-unowned / stuck-agent rows.
-
-Candidate follow-on (may fold in while reworking the action layer):
-- [ ] **`R3-self-assign-one-assignee`** (minor) — "Take it myself" trips the host "one assignee" rule on already-agent-owned rows. Candidate fix: clear-then-assign, or "already owned by <agent>" messaging. Tracked in `phases/09-.../09-VERIFICATION.md`.
+- [ ] **No raw identifiers anywhere** — partial agent-id hashes, bare UUIDs, and machine tokens never render; every agent reference shows a human name/role across all four surfaces. NO_UUID_LEAK guard extended to partial-hash labels.
+- [ ] **Plain-English legibility** — verdict/terminal lines, focus lines, blocker chains read as sentences for a non-builder; focus line enriched from `tldr_cache`.
+- [ ] **Editor-Agent prose live** — Pulse-header prose + grounded named-action row prose in production; stale→degrade floor intact.
+- [ ] **Off-request snapshot + action-card re-arch (flag-gated, last)** — heavy recompute off the request path (cold snapshot well under the 30s cliff); `ACTION_CARDS_ENABLED` re-enabled safely with no notification storm.
 
 ### Out of Scope
 
+- **Per-user opt-in toggle UI / multi-user (this milestone)** — v1.5.0 is legible-for-non-builders, not multi-user; server-side opt-in already ships (Phase 2). The settings-page toggle UI stays deferred to a future "usable for everyone" milestone. *Why:* Eric's locked v1.5.0 scope.
+- **Reply-in-place for stuck-agent rows** — Phase 14 shipped reply-in-place for AWAITING_HUMAN only; the AWAITING_AGENT_STUCK reply path is deferred. *Why:* legibility + truthful prose is the v1.5.0 focus; the do-it-here action surface is feature-complete enough for now.
+- **`R3-self-assign-one-assignee`** (minor) — "Take it myself" trips the host "one assignee" rule on already-agent-owned rows; deferred candidate fix (clear-then-assign or "already owned by <agent>" messaging). Tracked in `phases/09-.../09-VERIFICATION.md`. *Why:* not legibility/prose; fold in only if cheap during the action-layer rework.
 - **Replacing the original Paperclip UI** — Reader view is an additional tab, never a replacement. *Why:* coexistence guarantee; Eric's daily flow on BEAAA must not break.
 - **Forking Paperclip core** — all functionality must live inside the plugin manifest's contribution surface. *Why:* enables clean uninstall and Clipmart shipping without merge debt.
 - **Multi-tenant isolation work for v1** — Paperclip today is single-tenant, self-hosted, single-node. Clarity Pack v1 inherits that. *Why:* matches PLUGIN_SPEC.md's stated deployment model; broadening it is a separate project.
@@ -168,4 +167,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 — Phase 11 (Honest blocker taxonomy engine) complete and verified 5/5; gap closure 11-05..07 landed the NO_UUID_LEAK scrub-before-return fix.*
+*Last updated: 2026-06-03 — started milestone v1.5.0 Truthful & Legible Situation Room; folded shipped v1.4.0 (v1.4.2) work into Validated; live-verified BEAAA loads fast + BEAAA-972 SC5 consistency.*

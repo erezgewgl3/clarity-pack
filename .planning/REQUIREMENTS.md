@@ -1,83 +1,84 @@
-# Requirements: Clarity Pack — v1.4.0 Truthful Situation Room
+# Requirements: Clarity Pack — v1.5.0 Truthful & Legible Situation Room
 
-**Defined:** 2026-06-01
-**Core Value:** Zero rabbit-holes — every blocker chain transitively flattened to a single named human action the operator can act on.
+**Defined:** 2026-06-03
+**Core Value:** Zero rabbit-holes — every blocker chain transitively flattened to a single named human action the operator can act on, in plain English a non-builder understands.
 
-## v1.4.0 Requirements
+**Milestone goal:** Make every Clarity surface legible to a non-builder — plain English everywhere, zero raw agent/UUID identifiers — and make the Editor-Agent's *truthful* named-action prose actually live in production, via a safe off-request (flag-gated) compile path that keeps the snapshot fast.
 
-Requirements for the Truthful Situation Room milestone. Each maps to a roadmap phase (continues numbering from Phase 10).
+**Carried invariants (all phases):** additive-only plugin-namespace schema (disable/uninstall preserves data); degrade-safe rows (no AI dependency in the deterministic floor); instance-agnostic (no company-prefix literals); Editor-Agent governance parity; continuous flag-gated deploy to BEAAA (bookend = DO droplet backup).
 
-### Honest Blocker Taxonomy (engine)
+## v1 Requirements
 
-- [x] **TAX-01**: The blocker-chain engine classifies each blocked item into one honest terminal kind — awaiting-human / agent-working / agent-stuck / self-resolving / external / cycle / genuinely-unowned — recognizing **agent** ownership (`assigneeAgentId`), not just user ownership.
-- [x] **TAX-02**: A chain waiting on another agent flattens transitively to the human-actionable end; no mid-chain "poke the agent" terminal is surfaced.
-- [x] **TAX-03**: Degrade-safe — a row whose chain can't be built or classified shows an honest fallback, never a false "assign owner."
+Requirements for this milestone. Each maps to exactly one roadmap phase.
 
-### Needs-You Triage
+### Legibility — plain English, no raw identifiers
 
-- [ ] **NY-01**: "Needs you" lists only human-actionable items (awaiting-human + genuinely-unowned); agent-working and self-resolving items are excluded.
-- [ ] **NY-02**: "Needs you" rows are ranked by what each unblocks (leverage), not age alone.
-- [ ] **NY-03**: The "Assign owner" affordance appears only on genuinely-unowned or stuck-agent rows — never on items awaiting a named party.
+- [ ] **LEG-01**: No raw or partial agent identifiers (e.g. `agent#04fcac7c`), bare UUIDs, or machine tokens are ever rendered as user-visible text on any surface (Reader, Situation Room, Bulletin, Chat); every agent reference shows a human name or role.
+- [ ] **LEG-02**: The NO_UUID_LEAK render-scan guard is extended to fail on partial-hash agent labels and short hex id fragments, with a named regression test.
+- [ ] **LEG-03**: Blocker-chain verdict / terminal lines render as plain-English sentences a non-builder understands — no enum or code tokens (e.g. `AWAITING_AGENT_STUCK`) surfaced as user-visible text.
+- [ ] **LEG-04**: The Situation Room focus line is enriched from the TL;DR cache (plain-English summary) when available, falling back to the polished issue title.
+- [ ] **LEG-05**: The same blocked item reads with the same plain-English verdict wording across Reader and Situation Room (legibility parity — extends the v1.4.2 one-verdict-everywhere fix to the surfaced wording).
 
-### Editor-Agent Named Action
+### Editor-Agent prose live in production
 
-- [x] **ACT-01**: Each human-actionable row shows a grounded, plain-English named single action + the awaited party + a time estimate (Editor-Agent generated).
-- [x] **ACT-02**: Stale or absent Editor-Agent output degrades to the deterministic line (e.g. "waiting on you — Founder ruling, BEAAA-NN"); the row never blanks or fabricates.
-- [x] **ACT-03**: The Editor-Agent only annotates rows the engine already flagged as human-actionable (it cannot manufacture urgency); yes/no decision options appear only when the source issue poses a binary.
+- [ ] **PROSE-01**: The Pulse header displays Editor-Agent-compiled plain-English company-status prose above the deterministic floor; when prose is absent or stale, the deterministic floor renders (never blanks).
+- [ ] **PROSE-02**: Needs-you / actionable rows display the Editor-Agent's grounded named action (what unblocks this + who + ~when) in production; when stale or ungrounded, the row degrades to the deterministic line with no fabricated urgency.
+- [ ] **PROSE-03**: All Editor-Agent prose is grounded against real issue data (no hallucinated references or identifiers) and passes the grounding + stale→degrade guardrails with a named test.
 
-### Do-It-Here Action
+### Off-request snapshot + action-card re-architecture (flag-gated, sequenced LAST)
 
-- [x] **DO-01**: The operator can reply in place on a human-actionable row; the reply posts to the awaited agent's thread (canonical issue comment).
-- [ ] **DO-02**: Quick-decision chips (Approve / Reject / pick-one) are offered when the blocker is a clean yes/no.
-- [x] **DO-03**: Completing the action actually **unblocks and resumes** the agent — verified end-to-end against the live Paperclip model. *(De-risked first by the opening-phase spike: comment alone vs. comment + status transition.)*
-- [x] **DO-04**: The reply-in-place + quick-decision loop is available on the **Situation Room**, the **Reader-view blocker panel**, and the **org-blocked backlog** — not just the cockpit.
-- [x] **DO-05**: When a chain terminates on an out-of-system human (not reachable via comment), the row surfaces the named action + "Open ↗" instead of a Send affordance — no dead Send button.
-
-### Cockpit Information Architecture
-
-- [ ] **COCK-01**: A Pulse header states company status in one plain-English sentence + vital signs (need-you / in-motion / stuck / self-clearing counts).
-- [x] **COCK-02**: The Situation Room is organized into Needs-you → In-motion → Watch tiers, loudest-on-top; In-motion is calm with legible "what each agent is working on" text; Watch holds stuck-agent / external / cycle / overflow items.
+- [ ] **PERF-01**: The Situation Room snapshot recompute runs off the request path (precomputed / cached); a cold view returns well under the 30s host timeout (target p95 < ~5s) and never 502s.
+- [ ] **PERF-02**: Action-card compile runs off the snapshot request path and writes no operation-issue notification storm; it is re-enabled behind `ACTION_CARDS_ENABLED`.
+- [ ] **PERF-03**: `ACTION_CARDS_ENABLED` is safely toggleable at runtime — OFF degrades to the deterministic floor (room still works); ON yields no snapshot 502 and no notification storm; both states are flag-gated for continuous BEAAA deploy.
 
 ## Future Requirements
 
-- **R3-SELF-01** (minor, may fold in while reworking the action layer): "Take it myself" must not trip the host "one assignee" rule on already-agent-owned rows (clear-then-assign, or "already owned by <agent>" messaging).
+Acknowledged but deferred — not in this roadmap.
+
+### Usable for everyone (multi-user)
+
+- **OPTIN-01**: Per-user opt-in toggle UI under Settings → Clarity Pack (server-side opt-in already ships; this is the toggle surface).
+- **MULTI-01**: Multi-operator support (remove single-operator assumptions: silent auto-unarchive, assignee picker).
+
+### Do-it-here completeness
+
+- **DOIT-06**: Reply-in-place for AWAITING_AGENT_STUCK rows (Phase 14 shipped AWAITING_HUMAN only).
 
 ## Out of Scope
 
+Explicitly excluded for v1.5.0. Documented to prevent scope creep.
+
 | Feature | Reason |
 |---------|--------|
-| Reworking the Daily Bulletin's existing "Requires Your Decision" inbox | Separate surface with its own Approve/Decline loop; not part of the Situation-Room/Reader/backlog action work. |
-| Non-additive schema / mutating Paperclip core tables | Forbidden by coexistence guarantee #3. New state is added via additive plugin-namespace migrations only (any number, as needed) — listed here to prevent scope creep, not a functional cap. |
-| Changing Paperclip's same-origin trust model | Not a plugin-level choice; it's a Paperclip-core posture inherited as-is. |
+| Per-user opt-in toggle UI / multi-user | v1.5.0 is legible-for-non-builders, not multi-user; server-side opt-in already ships. Deferred to a future milestone. |
+| Reply-in-place for stuck-agent rows | Legibility + truthful prose is the focus; the do-it-here surface is feature-complete enough for now. |
+| `R3-self-assign-one-assignee` fix | Not legibility/prose; fold in only if cheap during the action-layer rework. |
+| Replacing or forking the Paperclip UI/core | Coexistence guarantee — all work stays inside the plugin manifest contribution surface. |
+| New non-additive schema | Coexistence guarantee #3 — additive plugin-namespace migrations only. |
 
 ## Traceability
 
+Which phases cover which requirements. Populated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DO-03 | Phase 10 | Complete |
-| TAX-01 | Phase 11 | Complete |
-| TAX-02 | Phase 11 | Complete |
-| TAX-03 | Phase 11 | Complete |
-| NY-01 | Phase 12 | Pending |
-| NY-02 | Phase 12 | Pending |
-| NY-03 | Phase 12 | Pending |
-| ACT-01 | Phase 13 | Complete |
-| ACT-02 | Phase 13 | Complete |
-| ACT-03 | Phase 13 | Complete |
-| DO-01 | Phase 14 | Complete |
-| DO-02 | Phase 14 | Pending |
-| DO-04 | Phase 14 | Complete |
-| DO-05 | Phase 14 | Complete |
-| COCK-01 | Phase 15 | Pending |
-| COCK-02 | Phase 15 | Complete |
+| LEG-01 | — | Pending |
+| LEG-02 | — | Pending |
+| LEG-03 | — | Pending |
+| LEG-04 | — | Pending |
+| LEG-05 | — | Pending |
+| PROSE-01 | — | Pending |
+| PROSE-02 | — | Pending |
+| PROSE-03 | — | Pending |
+| PERF-01 | — | Pending |
+| PERF-02 | — | Pending |
+| PERF-03 | — | Pending |
 
 **Coverage:**
-- v1.4.0 requirements: 16 total
-- Mapped to phases: 16 ✓
-- Unmapped: 0 ✓
-
-Note: DO-03 is mapped to Phase 10 (the gating spike that proves the unblock/resume path). Its UI realization rides along in Phase 14 (DO-01/02/04/05), which is gated by the Phase 10 result.
+- v1 requirements: 11 total
+- Mapped to phases: 0 (roadmap pending)
+- Unmapped: 11 ⚠️
 
 ---
-*Requirements defined: 2026-06-01*
-*Last updated: 2026-06-01 — roadmap created; all 16 requirements mapped to Phases 10–15.*
+*Requirements defined: 2026-06-03*
+*Last updated: 2026-06-03 after milestone v1.5.0 definition*
