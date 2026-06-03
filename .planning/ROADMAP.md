@@ -56,7 +56,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 
 **Reusable input:** `.planning/phases/_superseded-legibility-16-18-misscope/` holds the OLD 16-18 mis-scope's research / patterns / plans (verdict-wording shared helper, focusLine-from-tldr enrichment, chat-chip humanization). That work is sound legibility/prose input — Phases 17 and 18 should mine it rather than start from scratch.
 
-- [ ] **Phase 16: Snapshot performance & honest loading** — cockpit loads fast (snapshot well under the 30s timeout, target p95 < ~5s, never 502s); eliminate the 25.7s cold recompute near-cliff; employees rollup degrade-safe. Confirm-first baseline already recorded. FIRST.
+- [x] **Phase 16: Snapshot performance & honest loading** — cockpit loads fast (snapshot well under the 30s timeout, target p95 < ~5s, never 502s); eliminate the 25.7s cold recompute near-cliff; employees rollup degrade-safe. Confirm-first baseline already recorded. FIRST. (completed 2026-06-03)
 - [ ] **Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)** — a machine-readable "blocked on a human decision X" signal so the deterministic engine classifies AWAITING_HUMAN instead of parking in Watch (the deep BEAAA-972 fix); every blocked-no-edge class classified truthfully; SC5 extended to a full surface × terminal-kind matrix.
 - [ ] **Phase 18: No rabbit-holes & plain-English** — "Open ↗" routes to the Clarity Reader (not the raw classic page); ZERO raw/partial agent/UUID ids in human-facing text everywhere; "Looks done — close it?" affordance when the AI TL;DR reads done but the engine still says blocked.
 - [ ] **Phase 19: Action-cards async re-architecture (LAST, flag-gated)** — action-card compile off the request path writing non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; Editor named-action prose live on needs-you rows; runtime-safe + slip-safe to v1.6.
@@ -77,7 +77,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 - [x] 16-01-PLAN.md — Wave-0: lock live snake_case columns + relations.get timeoutMs reachability; ship the hand-rolled mapBounded pool + withDeadline floor (+ tests)
 - [x] 16-02-PLAN.md — Wave A: collapse the N+1 fan-out — SQL-prefetch the blocked list/roster/names + compute the blocker BFS once shared across both builders; per-stage timing
 - [x] 16-03-PLAN.md — Wave B: bound the irreducible relations.get with mapBounded + per-call deadline floor + overall snapshot budget; floor slow/hung rows to the deterministic UNCLASSIFIED line (degrade-safe, DoS-resistant)
-- [ ] 16-04-PLAN.md — Wave C: serve-last-good SWR via the existing situation_snapshots table (viewer-invariant slice, per-call needsYou recompute, no cross-viewer leak) + the bookended live BEAAA cold/warm drill vs the 25.7s baseline
+- [x] 16-04-PLAN.md — Wave C: serve-last-good SWR via the existing situation_snapshots table (viewer-invariant slice, per-call needsYou recompute, no cross-viewer leak) + the bookended live BEAAA cold/warm drill vs the 25.7s baseline
 **UI hint**: yes
 
 ### Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)
@@ -234,7 +234,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 16. Snapshot performance & honest loading | 3/4 | In Progress|  |
+| 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
 | 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
