@@ -4,13 +4,13 @@ milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
 stopped_at: Phase 12 context gathered
-last_updated: "2026-06-03T13:40:42.977Z"
-last_activity: 2026-06-03 -- Phase 16 planning complete
+last_updated: "2026-06-03T13:52:17.637Z"
+last_activity: 2026-06-03
 progress:
   total_phases: 11
   completed_phases: 4
   total_plans: 27
-  completed_plans: 21
+  completed_plans: 22
   percent: 36
 ---
 
@@ -681,14 +681,14 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 12 — needs you triage
+**Current Focus:** Phase 16 — snapshot-performance-honest-loading
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
+Phase: 16 (snapshot-performance-honest-loading) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-03 -- Phase 16 planning complete
+Last activity: 2026-06-03
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1403,7 +1403,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 91%
+**Progress:** [████████░░] 81%
 
 ## Performance Metrics
 
@@ -1434,6 +1434,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 11 P06 | 35 | 3 tasks | 5 files |
 | Phase 11 P07 | 25 min | 3 tasks | 2 files |
 | Phase 13 P03 | ~25 min | 2 tasks | 4 files (2 created) — needs-you row named-action render + degrade; 71/71 row+banner tests, tsc clean |
+| Phase 16 P01 | ~12m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -1525,7 +1526,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-02T23:49:21.706Z
+**Last session:** 2026-06-03T13:52:09.308Z
 
 **Stopped at:** Phase 12 context gathered
 
