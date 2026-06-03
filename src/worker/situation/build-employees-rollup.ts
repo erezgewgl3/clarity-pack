@@ -145,6 +145,15 @@ export type SituationEmployeeRow = {
     targetAgentUuid: string | null;
     /** Plan 11-03 — leaf issue UUID for the open/assign mutation; NEVER rendered. */
     targetIssueUuid: string | null;
+    // Plan 16-04 Task 1 (T-16-03 / BLOCKER 2) — the AWAITING_HUMAN terminal's USER
+    // uuid, captured so the VIEWER-INVARIANT cached row carries enough terminal
+    // metadata for buildNeedsYou(rows, viewerUserId) to RE-partition the
+    // viewer-targeted set per call (no cross-viewer leak). Set ONLY when the
+    // terminal kind is AWAITING_HUMAN; null for every other kind (UNOWNED, agent
+    // kinds, UNCLASSIFIED). This is a DISPATCH/PARTITION key, NOT a render field —
+    // a viewer's own uuid compared to it never produces a rendered string (the
+    // scrubbed humanAction / awaitedPartyLabel are the only displayed party text).
+    awaitedUserId: string | null;
     // Plan 14-04 Task 1 (BLOCKER 5 / BLOCKER 2+4) — the two signals waves 2-3
     // depend on, threaded onto the row data model. Both are read DIRECTLY by
     // isReplyReachable (14-02) + <ReplyInPlace> (14-03); neither is re-derived
@@ -568,6 +577,10 @@ async function buildOneEmployeeRow(
           awaitedPartyLabel: humanAction,
           targetAgentUuid: picked.targetAgentUuid ?? null,
           targetIssueUuid: leafIssueUuid,
+          // Plan 16-04 (T-16-03 / BLOCKER 2) — capture the AWAITING_HUMAN USER uuid
+          // so the viewer-invariant cached row lets buildNeedsYou re-partition the
+          // viewer-targeted set per call. Only AWAITING_HUMAN carries a userId.
+          awaitedUserId: terminal.kind === 'AWAITING_HUMAN' ? terminal.userId : null,
           // Plan 14-04 — the leaf Terminal kind (read by isReplyReachable) + the
           // real-leaf-status durable-flip signal (read by <ReplyInPlace>).
           terminalKind: terminal.kind,
@@ -619,6 +632,8 @@ async function buildOneEmployeeRow(
         awaitedPartyLabel: humanAction,
         targetAgentUuid: null,
         targetIssueUuid: focusUuid,
+        // Plan 16-04 (T-16-03) — the degrade row is UNCLASSIFIED (no human userId).
+        awaitedUserId: null,
         // Plan 14-04 Task 1 — the degrade row is honestly UNCLASSIFIED; the flip
         // reads the REAL focusIssue.status (blocked by construction here since
         // state==='blocked' gated the chain build) — kept honest, not hardcoded.
@@ -727,83 +742,25 @@ export async function buildEmployeesRollup(
     return bT - aT; // most-recent-first
   });
 
-  // needsYou — Plan 09-01 R5 (UN-FROZEN). Phase 8 counted ONLY viewer-owned
-  // blocked chains, so an all-unowned org showed a permanent "✓ 0 need you".
-  // R5: count = (unowned blocked rows) ∪ (viewer-targeted blocked rows),
-  // de-duplicated by agentId (a row can satisfy at most one of the two
-  // predicates today — ownerName 'Unassigned' ⇔ unowned ⇔ not viewer-targeted —
-  // but we Set-dedupe defensively).
-  //
-  // UNOWNED predicate (Plan 11-03 D-13/D-14): the row is in the needs_you bucket,
-  // has a blocker chain, and the ENGINE VERDICT says a person must act on a
-  // genuinely-unowned chain — `needsYou === true` AND `actionAffordance === 'assign'`.
-  // After Plan 12-01, 'assign' ALSO fires for AWAITING_AGENT_STUCK (needsYou false,
-  // tier 'watch') — re-owning the issue is the honest answer for both. The
-  // `needsYou === true` guard is therefore LOAD-BEARING here: it is what keeps
-  // stuck-agent rows out of the unowned partition (D-04: stuck never enters the
-  // loud Needs-you list). This replaces the legacy ownerName-equals-Unassigned
-  // string-match (SC5 — single source of truth, no view-layer re-derivation). No
-  // raw UUID enters this path (the verdict is structured; T-09-04 preserved).
-  const unowned = rows.filter(
-    (r) =>
-      r.group === 'needs_you' &&
-      r.blockerChain &&
-      r.blockerChain.needsYou === true &&
-      r.blockerChain.actionAffordance === 'assign',
-  );
-  const targeting = rows.filter((r) => r.__targetsViewer && r.blockerChain);
-
-  // Plan 12-02 (NY-01/D-11) — the needs-you SET is the union of the two
-  // engine-verdict partitions above (unowned ∪ viewer-targeted). Membership keys
-  // STRICTLY off the engine verdict (needsYou===true via the 'assign' UNOWNED
-  // partition, or rowTargetsViewer for AWAITING_HUMAN) — NEVER an ownerName
-  // string-match. agent-working / self-resolving / stuck rows have needsYou false
-  // and never target the viewer, so they are excluded by construction (D-11).
-  const needsYouRows: InternalRow[] = [];
-  const seenNeedsYou = new Set<string>(); // de-dupe by agentId (a row satisfies ≤1 set today)
-  for (const r of [...unowned, ...targeting]) {
-    if (seenNeedsYou.has(r.agentId)) continue;
-    seenNeedsYou.add(r.agentId);
-    needsYouRows.push(r);
-  }
-
-  // Plan 12-02 (D-01/D-03) — reverse-count leverage over the needs-you rows and
-  // collapse PER LEAF. Each row carries its engine-supplied leaf key as
-  // targetIssueUuid (the leaf node the chain terminated at). The helper reads only
-  // these structural keys (NO new fetch, NO clock). The deduped action items are
-  // the count (one per distinct leaf, D-03) AND the leverage-rank source.
-  const leverageRows: Array<LeverageInputRow & { __row: InternalRow }> = needsYouRows.map((r) => ({
-    agentId: r.agentId,
-    // The leaf the chain terminates at = blockerChain.targetIssueUuid (the leaf
-    // node UUID, === picked.pathIds[last]). Read as a STRUCTURAL dispatch key
-    // only — never rendered (NO_UUID_LEAK). pathIds empty → helper falls back to
-    // targetIssueUuid as the leaf key.
-    pathIds: [],
-    targetIssueUuid: r.blockerChain?.targetIssueUuid ?? null,
-    humanAction: r.blockerChain?.humanAction,
-    leafIssueId: r.blockerChain?.leafIssueId ?? null,
-    leafIssueUuid: r.blockerChain?.leafIssueUuid ?? null,
-    __row: r,
-  }));
-  const actionItems = computeLeverageByLeaf(leverageRows);
-  const rankedItems = sortActionItemsByLeverage(actionItems);
+  // Plan 16-04 (BLOCKER 2 / T-16-03) — the viewer-scoped needsYou compute is now
+  // the EXPORTED pure helper buildNeedsYou (below). It re-partitions the union
+  // (unowned ∪ viewer-targeted) over the ALREADY-built rows and returns the
+  // count + topAction for THIS viewer. The SWR handler calls it per call over the
+  // cached viewer-invariant rows so two viewers over the SAME cache get distinct
+  // counts (no cross-viewer leak). Here the rollup calls it directly to preserve
+  // the original return shape (behavior-preserving extraction).
+  const needsYou = buildNeedsYou(rows, viewerUserId);
 
   // Plan 12-02 (D-08) — apply the leverage order to the needs_you partition ONLY.
-  // Build a leaf-key → rank-index map from the ranked action items, then stably
-  // re-order the needs_you rows by their leaf's rank (highest-leverage first).
-  // Non-needs-you groups keep the LOCKED status-bucket order above (D-routing:
-  // Working/Idle grouping is left to the Phase 15 IA redesign).
-  const leafRank = new Map<string, number>();
-  rankedItems.forEach((it, i) => leafRank.set(it.stableId, i));
-  const leafKeyOfRow = (r: InternalRow): string | null => r.blockerChain?.targetIssueUuid ?? null;
-  const needsYouSet = new Set(needsYouRows.map((r) => r.agentId));
-  const needsYouOrdered = [...needsYouRows].sort((a, b) => {
-    const ra = leafRank.get(leafKeyOfRow(a) ?? '') ?? Number.MAX_SAFE_INTEGER;
-    const rb = leafRank.get(leafKeyOfRow(b) ?? '') ?? Number.MAX_SAFE_INTEGER;
-    if (ra !== rb) return ra - rb;
-    // Stable secondary tie-break on agentId (deterministic; no time input).
-    return a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0;
-  });
+  // The leverage ordering re-uses the SAME partition the count is built from
+  // (orderNeedsYouRows) so there is no second copy of the partition predicate.
+  // Non-needs-you groups keep the LOCKED status-bucket order above. Row ordering
+  // is a cosmetic leverage sort; only the viewer-scoped COUNT/topAction is
+  // recomputed per call by the SWR handler.
+  const orderedAgentIds = orderNeedsYouRows(rows, viewerUserId);
+  const needsYouSet = new Set(orderedAgentIds);
+  const orderedById = new Map(rows.map((r) => [r.agentId, r] as const));
+  const needsYouOrdered = orderedAgentIds.map((id) => orderedById.get(id)!);
   // Splice the leverage-ordered needs_you rows back into the global row order at
   // the positions the needs_you rows currently occupy (they lead the locked sort,
   // so this preserves the global blocked→stale→idle→… layout while re-ordering
@@ -812,32 +769,6 @@ export async function buildEmployeesRollup(
   const reordered: InternalRow[] = rows.map((r) =>
     needsYouSet.has(r.agentId) ? needsYouOrdered[nyCursor++]! : r,
   );
-
-  // Plan 12-02 (D-12) — topAction = the HIGHEST-LEVERAGE action item (top of the
-  // ranked list; stable-id tie-break), NOT the oldest. The banner pick and the
-  // list-top now agree. The representative row (smallest-agentId among collapsed)
-  // supplies the shape; leafIssueId stays non-null for a needs-you row with a
-  // chain (R4 — no dead [Assign first ▾]); humanAction is the already-scrubbed
-  // string (NO_UUID_LEAK).
-  let topAction: NeedsYou['topAction'] = null;
-  const top = rankedItems[0];
-  if (top) {
-    const repRow = (top.representative as LeverageInputRow & { __row: InternalRow }).__row;
-    topAction = {
-      agentId: repRow.agentId,
-      humanAction: repRow.blockerChain!.humanAction,
-      leafIssueId: repRow.blockerChain!.leafIssueId,
-      // Plan 09-04 (R3) — the mutation id (UUID) for the [Assign first ▾] picker.
-      leafIssueUuid: repRow.blockerChain!.leafIssueUuid,
-    };
-  }
-
-  const needsYou: NeedsYou = {
-    // Plan 12-02 (D-03) — count = distinct deduped action items (one per leaf),
-    // replacing the prior agentId-Set count.
-    count: actionItems.length,
-    topAction,
-  };
 
   // Strip transient fields before returning the public shape.
   const employees: SituationEmployeeRow[] = reordered.map((r) => {
@@ -848,4 +779,149 @@ export async function buildEmployeesRollup(
   });
 
   return { employees, needsYou };
+}
+
+// ---------------------------------------------------------------------------
+// Plan 16-04 Task 1 (BLOCKER 2 / T-16-03) — the viewer-scoped needs-you partition,
+// extracted as a PURE helper so the SWR handler can recompute it per call over
+// the cached VIEWER-INVARIANT rows. NO fetch, NO ctx, NO clock.
+// ---------------------------------------------------------------------------
+
+/** A row carrying the blockerChain fields buildNeedsYou reads. Both the public
+ *  SituationEmployeeRow and the internal row satisfy this (the public row is the
+ *  cached shape; awaitedUserId + terminalKind on blockerChain make the
+ *  viewer-targeting re-partition possible WITHOUT the transient __targetsViewer
+ *  flag that was baked at write time for one viewer). */
+type NeedsYouInputRow = Pick<SituationEmployeeRow, 'agentId' | 'group' | 'blockerChain'>;
+
+/** Plan 16-04 — recompute "does this row target the VIEWER?" from the cached
+ *  viewer-invariant terminal metadata (terminalKind + awaitedUserId) instead of
+ *  the write-time __targetsViewer flag. Mirrors rowTargetsViewer EXACTLY
+ *  (AWAITING_HUMAN && userId === viewer) but reads the persisted blockerChain
+ *  fields a cache round-trip preserves. */
+function rowTargetsViewerFromCache(
+  blockerChain: SituationEmployeeRow['blockerChain'],
+  viewerUserId: string,
+): boolean {
+  return (
+    !!blockerChain &&
+    blockerChain.terminalKind === 'AWAITING_HUMAN' &&
+    blockerChain.awaitedUserId === viewerUserId
+  );
+}
+
+/** Plan 16-04 — the single needs-you partition (unowned ∪ viewer-targeted),
+ *  deduped by agentId. The ONE source of truth both buildNeedsYou (count +
+ *  topAction) and orderNeedsYouRows (leverage ordering) read, so the partition
+ *  predicate is never copied. Viewer-targeting is recomputed from the cached
+ *  terminal metadata (T-16-03 — no cross-viewer leak). */
+function partitionNeedsYouRows<R extends NeedsYouInputRow>(
+  rows: R[],
+  viewerUserId: string,
+): R[] {
+  // UNOWNED partition (Plan 11-03 D-13/D-14) — viewer-invariant: a genuinely
+  // unowned chain needs a person regardless of who is looking.
+  const unowned = rows.filter(
+    (r) =>
+      r.group === 'needs_you' &&
+      r.blockerChain &&
+      r.blockerChain.needsYou === true &&
+      r.blockerChain.actionAffordance === 'assign',
+  );
+  // VIEWER-TARGETED partition — the ONLY viewer-dependent slice. Recomputed from
+  // the cached terminal metadata so two viewers over identical cached rows get
+  // different membership (and therefore different counts).
+  const targeting = rows.filter(
+    (r) => r.blockerChain && rowTargetsViewerFromCache(r.blockerChain, viewerUserId),
+  );
+  const out: R[] = [];
+  const seen = new Set<string>(); // de-dupe by agentId (a row satisfies ≤1 set today)
+  for (const r of [...unowned, ...targeting]) {
+    if (seen.has(r.agentId)) continue;
+    seen.add(r.agentId);
+    out.push(r);
+  }
+  return out;
+}
+
+/** Plan 12-02 (D-01/D-03) — build the leverage-ranked action items over the
+ *  needs-you partition. Shared by buildNeedsYou (count + topAction) and
+ *  orderNeedsYouRows (rank map). Pure: reads only the structural leaf keys. */
+function rankNeedsYouRows<R extends NeedsYouInputRow>(
+  needsYouRows: R[],
+): ReturnType<typeof sortActionItemsByLeverage> {
+  const leverageRows: Array<LeverageInputRow & { __row: R }> = needsYouRows.map((r) => ({
+    agentId: r.agentId,
+    pathIds: [],
+    targetIssueUuid: r.blockerChain?.targetIssueUuid ?? null,
+    humanAction: r.blockerChain?.humanAction,
+    leafIssueId: r.blockerChain?.leafIssueId ?? null,
+    leafIssueUuid: r.blockerChain?.leafIssueUuid ?? null,
+    __row: r,
+  }));
+  const actionItems = computeLeverageByLeaf(leverageRows);
+  return sortActionItemsByLeverage(actionItems);
+}
+
+/**
+ * Plan 16-04 (BLOCKER 2 / T-16-03) — the VIEWER-SCOPED needs-you compute, PURE.
+ *
+ * Given the already-built (cached or fresh) viewer-invariant employee rows and a
+ * viewerUserId, return the NeedsYou {count, topAction} for THAT viewer by
+ * re-running the union partition (unowned ∪ rowTargetsViewer) over the rows'
+ * blockerChain terminal metadata. NO fetch, NO ctx, NO clock — so the SWR handler
+ * can call it on every request over the cached company slice with zero round-trips
+ * and zero cross-viewer leak. The SAME rows with two distinct viewerUserIds yield
+ * different counts whenever a row is AWAITING_HUMAN targeted at one of them.
+ */
+export function buildNeedsYou(
+  rows: NeedsYouInputRow[],
+  viewerUserId: string,
+): NeedsYou {
+  const needsYouRows = partitionNeedsYouRows(rows, viewerUserId);
+  const rankedItems = rankNeedsYouRows(needsYouRows);
+
+  // Plan 12-02 (D-12) — topAction = the HIGHEST-LEVERAGE action item (top of the
+  // ranked list; stable-id tie-break). The representative row supplies the shape;
+  // humanAction is the already-scrubbed string (NO_UUID_LEAK).
+  let topAction: NeedsYou['topAction'] = null;
+  const top = rankedItems[0];
+  if (top) {
+    const repRow = (top.representative as LeverageInputRow & { __row: NeedsYouInputRow }).__row;
+    topAction = {
+      agentId: repRow.agentId,
+      humanAction: repRow.blockerChain!.humanAction,
+      leafIssueId: repRow.blockerChain!.leafIssueId,
+      // Plan 09-04 (R3) — the mutation id (UUID) for the [Assign first ▾] picker.
+      leafIssueUuid: repRow.blockerChain!.leafIssueUuid,
+    };
+  }
+
+  return {
+    // Plan 12-02 (D-03) — count = distinct deduped action items (one per leaf).
+    count: rankedItems.length,
+    topAction,
+  };
+}
+
+/** Plan 16-04 — the leverage-ordered needs-you agentIds (highest-leverage first,
+ *  agentId tie-break). Re-uses partitionNeedsYouRows + rankNeedsYouRows so the
+ *  ordering and the count agree on membership. */
+function orderNeedsYouRows<R extends NeedsYouInputRow>(
+  rows: R[],
+  viewerUserId: string,
+): string[] {
+  const needsYouRows = partitionNeedsYouRows(rows, viewerUserId);
+  const rankedItems = rankNeedsYouRows(needsYouRows);
+  const leafRank = new Map<string, number>();
+  rankedItems.forEach((it, i) => leafRank.set(it.stableId, i));
+  const leafKeyOfRow = (r: R): string | null => r.blockerChain?.targetIssueUuid ?? null;
+  return [...needsYouRows]
+    .sort((a, b) => {
+      const ra = leafRank.get(leafKeyOfRow(a) ?? '') ?? Number.MAX_SAFE_INTEGER;
+      const rb = leafRank.get(leafKeyOfRow(b) ?? '') ?? Number.MAX_SAFE_INTEGER;
+      if (ra !== rb) return ra - rb;
+      return a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0;
+    })
+    .map((r) => r.agentId);
 }

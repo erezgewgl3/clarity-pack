@@ -48,10 +48,24 @@ import {
 // alongside org_blocked_backlog in this same valid HTTP-request scope.
 import {
   buildEmployeesRollup,
+  buildNeedsYou,
   type SituationEmployeeRow,
   type NeedsYou,
   type EmployeesRollupCtx,
 } from '../situation/build-employees-rollup.ts';
+// Plan 16-04 (Wave C) Task 1 — the stale-while-revalidate repo. Serve the
+// last-good viewer-invariant slice instantly when fresh, revalidate from inside
+// THIS valid data-handler scope (fire-and-forget; NO cron, NO setInterval —
+// Pitfall 4 / governance parity). The viewer-scoped needsYou is recomputed per
+// call via buildNeedsYou over the cached rows so a company-keyed cache never
+// leaks one viewer's count to another (T-16-03).
+import {
+  readLatestSnapshot,
+  writeSnapshot,
+  hashViewerInvariantSlice,
+  type ViewerInvariantSlice,
+  type SnapshotCacheCtx,
+} from '../situation/snapshot-cache.ts';
 // Plan 15-01 Task 2 (COCK-01 / SC1 worker half / SC3) — the Pulse vital-sign
 // aggregation. Pure sum over the per-row engine verdicts already on
 // employeesWithCards + the already-computed needsYou.count. ADDITIVE PAYLOAD
@@ -89,9 +103,20 @@ export type SituationRoomCtx = OptInGuardDataCtx & {
   // SELECTs through ctx.db.query (SELECT-only; public.issues + public.agents are
   // in coreReadTables). `query` mirrors StandingNumbersCtx at
   // standing-numbers.ts:117-121.
-  db: Pick<PluginDatabaseClient, 'query'>;
+  // Plan 16-04 (Wave C) — `execute` added for the SWR writeSnapshot (namespace-only
+  // DML; situation_snapshots is in the plugin namespace). The data-handler ctx
+  // carries it at runtime (same as ReplyResumeRepoCtx / TldrCacheCtx).
+  db: Pick<PluginDatabaseClient, 'query' | 'execute'>;
   logger?: PluginLogger;
 };
+
+// Plan 16-04 (Wave C / RESEARCH OQ#3) — the SWR freshness window. A cached
+// viewer-invariant row younger than this is served immediately (serve-last-good)
+// while a fresh recompute is kicked off in the background; an older/absent row
+// triggers a synchronous recompute. Start value 60000ms (60s) per OQ#3 — matches
+// the legacy 60s on-view recompute cadence the materialized cache targeted. Tune
+// live on BEAAA (Task 3) if needed.
+const FRESHNESS_MS = 60_000;
 
 // Plan 16-02 (Wave A) — the camelCase Issue shape both builders consume (the raw
 // SQL projects snake_case, so the prefetch maps it ONCE here). The fields are the
@@ -406,6 +431,166 @@ async function buildSnapshotPrefetch(
   return { blockedIssues, roster: agents, issuesByAgentId, issuesById, nameByUuid, edgeGraph };
 }
 
+/**
+ * Plan 16-04 (Wave C) — compute the VIEWER-INVARIANT slice FRESH: the shared SQL
+ * prefetch + shared edge graph (16-02), the org blocked backlog, the per-employee
+ * rollup (with each row's blockerChain terminal metadata), the gated-off action
+ * cards, and the pulse. This is everything the snapshot returns EXCEPT the
+ * viewer-scoped needsYou count — which the caller recomputes per call via
+ * buildNeedsYou over the (cached or fresh) rows so a company-keyed cache never
+ * leaks one viewer's count (T-16-03).
+ *
+ * The pulse stored here is computed with the slice's OWN freshly-built rows (so
+ * the persisted payload is self-consistent); the serve path recomputes pulse from
+ * the cached rows + the per-call needsYou. Every stage is degrade-safe and
+ * snap.stage-timed.
+ */
+async function computeViewerInvariantSlice(
+  ctx: SituationRoomCtx,
+  companyId: string,
+  viewerUserId: string,
+  snapshotBudgetMs: number,
+): Promise<ViewerInvariantSlice> {
+  // Plan 16-02 (Wave A) — the SHARED SQL prefetch + shared edge graph, computed
+  // ONCE and threaded into BOTH builders. Degrade-safe: a thrown/null bundle →
+  // the builders fall back to their original RPC path. Stage-timed.
+  let prefetch: SnapshotPrefetchBundle | null = null;
+  {
+    const t0 = Date.now();
+    try {
+      prefetch = await buildSnapshotPrefetch(ctx, companyId, snapshotBudgetMs);
+    } catch (e) {
+      ctx.logger?.warn?.('situation.snapshot: prefetch failed (RPC fallback)', {
+        companyId,
+        err: (e as Error).message,
+      });
+      prefetch = null;
+    }
+    ctx.logger?.info?.('snap.stage', { stage: 'prefetch', ms: Date.now() - t0, companyId });
+  }
+
+  const sharedPrefetch = prefetch
+    ? {
+        blockedIssues: prefetch.blockedIssues,
+        nameByUuid: prefetch.nameByUuid,
+        edgeGraph: prefetch.edgeGraph,
+      }
+    : {};
+
+  // Compute the org-level blocked backlog FRESH (valid scope). Degrade-safe.
+  let org_blocked_backlog: OrgBlockedBacklog;
+  {
+    const t0 = Date.now();
+    try {
+      org_blocked_backlog = await buildOrgBlockedBacklog(
+        {
+          issues: ctx.issues,
+          agents: ctx.agents,
+          logger: ctx.logger,
+          ...sharedPrefetch,
+        } as unknown as OrgBlockedBacklogCtx,
+        companyId,
+        viewerUserId,
+      );
+    } catch (e) {
+      ctx.logger?.warn?.('situation.snapshot: org-blocked-backlog compute failed', {
+        companyId,
+        err: (e as Error).message,
+      });
+      org_blocked_backlog = { ...EMPTY_BACKLOG };
+    }
+    ctx.logger?.info?.('snap.stage', { stage: 'org-backlog', ms: Date.now() - t0, companyId });
+  }
+
+  // Plan 08-01 Task 3 — the per-employee rollup FRESH alongside the backlog.
+  // The rollup's own needsYou is discarded for the slice; needsYou is recomputed
+  // per call via buildNeedsYou (T-16-03). Degrade-safe.
+  let employees: SituationEmployeeRow[] = [];
+  {
+    const t0 = Date.now();
+    try {
+      const rollup = await buildEmployeesRollup(
+        {
+          issues: ctx.issues,
+          agents: ctx.agents,
+          logger: ctx.logger,
+          ...sharedPrefetch,
+          ...(prefetch
+            ? {
+                roster: prefetch.roster,
+                issuesByAgentId: prefetch.issuesByAgentId,
+                issuesById: prefetch.issuesById,
+              }
+            : {}),
+        } as unknown as EmployeesRollupCtx,
+        companyId,
+        viewerUserId,
+      );
+      employees = rollup.employees;
+    } catch (e) {
+      ctx.logger?.warn?.('situation.snapshot: employees rollup failed', {
+        companyId,
+        err: (e as Error).message,
+      });
+    }
+    ctx.logger?.info?.('snap.stage', { stage: 'employees-rollup', ms: Date.now() - t0, companyId });
+  }
+
+  // Plan 13-02 (D-06/D-07/D-12) — the Editor-Agent action cards. GATED OFF
+  // (ACTION_CARDS_ENABLED=false, v1.4.1 BEAAA-2092 hotfix) so cardsBySource stays
+  // {} → every row degrades to the deterministic engine line. The block is kept
+  // for the gate; degrade-safe.
+  let cardsBySource: Record<string, ActionCard> = {};
+  try {
+    const needsYouRows: ActionCardSourceRow[] = employees
+      .filter((e) => e.blockerChain && e.blockerChain.needsYou === true)
+      .map((e) => ({
+        sourceIssueId: e.blockerChain!.targetIssueUuid ?? e.blockerChain!.leafIssueUuid ?? '',
+        leafIssueId: e.blockerChain!.leafIssueId,
+        awaitedPartyLabel: e.blockerChain!.awaitedPartyLabel,
+        humanAction: e.blockerChain!.humanAction,
+        actionAffordance: e.blockerChain!.actionAffordance,
+        inputs: {
+          body: e.focusLine ?? '',
+          comments: [],
+          refs: e.blockerChain!.leafIssueId ? [e.blockerChain!.leafIssueId] : [],
+        },
+      }))
+      .filter((r) => r.sourceIssueId.length > 0);
+
+    if (ACTION_CARDS_ENABLED && needsYouRows.length > 0) {
+      const step = await driveActionCardsStep(ctx as unknown as ActionCardsCtx, {
+        companyId,
+        needsYouRows,
+      });
+      cardsBySource = step.cards;
+    }
+  } catch (e) {
+    ctx.logger?.warn?.('situation.snapshot: action-card generation failed', {
+      companyId,
+      err: (e as Error).message,
+    });
+    cardsBySource = {};
+  }
+
+  // Attach the per-row actionCard (D-13) — null when the card is absent/gated so
+  // the UI falls back to the deterministic line. This is the cached employee shape.
+  const situation_employees = employees.map((e) => {
+    const leafUuid = e.blockerChain?.targetIssueUuid ?? e.blockerChain?.leafIssueUuid ?? null;
+    const actionCard: ActionCard | null = leafUuid ? (cardsBySource[leafUuid] ?? null) : null;
+    return { ...e, actionCard };
+  });
+
+  // Plan 15-01 — the pulse, computed from the slice's OWN rows + the slice's own
+  // needsYou (buildNeedsYou over THESE freshly-built rows, viewer-scoped to the
+  // writer). The serve path recomputes pulse from the cached rows + the per-call
+  // needsYou, so the stored value is only the writer's self-consistent snapshot.
+  const sliceNeedsYou = buildNeedsYou(situation_employees, viewerUserId);
+  const pulse: PulseSummary = buildPulseSummary(situation_employees, sliceNeedsYou);
+
+  return { org_blocked_backlog, situation_employees, pulse };
+}
+
 export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
   wrapDataHandler(ctx, 'situation.snapshot', async (params) => {
     const companyId =
@@ -423,201 +608,99 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       typeof params?.userId === 'string' && params.userId ? params.userId : '';
 
     // Plan 16-03 (Wave B / WARNING 4) — resolve the INJECTABLE overall snapshot
-    // budget. An explicit `snapshotBudgetMs` param (the degrade test passes ~200ms
-    // for fast, deterministic isolation) wins over the env override and the
-    // ~8000ms production default. Production callers never pass it → the ~8s
-    // default (well under the 30s host timeout) applies.
+    // budget. An explicit `snapshotBudgetMs` param wins over the env override and
+    // the ~8000ms production default (well under the 30s host timeout).
     const snapshotBudgetMs = resolveSnapshotBudgetMs(
       typeof params?.snapshotBudgetMs === 'number' ? params.snapshotBudgetMs : null,
     );
 
-    // Plan 16-02 (Wave A) — the SHARED SQL prefetch + shared edge graph,
-    // computed ONCE here and threaded into BOTH builders. Collapses the N+1 RPC
-    // fan-out (issues.list + agents.list + per-uuid agents.get + a duplicated
-    // BFS) into 2 SQL reads + one shared BFS. Degrade-safe: a thrown/null bundle
-    // → the builders fall back to their original RPC path (the handler stays up).
-    // Stage-timed (snap.stage) so the N+1 reduction is measurable in worker logs.
-    let prefetch: SnapshotPrefetchBundle | null = null;
-    {
-      const t0 = Date.now();
-      try {
-        prefetch = await buildSnapshotPrefetch(ctx, companyId, snapshotBudgetMs);
-      } catch (e) {
-        // buildSnapshotPrefetch already swallows the SELECT throws; this is
-        // belt-and-suspenders for an unexpected edge-graph throw.
-        ctx.logger?.warn?.('situation.snapshot: prefetch failed (RPC fallback)', {
-          companyId,
-          err: (e as Error).message,
-        });
-        prefetch = null;
-      }
-      ctx.logger?.info?.('snap.stage', { stage: 'prefetch', ms: Date.now() - t0, companyId });
-    }
-
-    // The prefetch slice shared by both builders (empty object when the prefetch
-    // degraded — the builders then take their RPC path).
-    const sharedPrefetch = prefetch
-      ? {
-          blockedIssues: prefetch.blockedIssues,
-          nameByUuid: prefetch.nameByUuid,
-          edgeGraph: prefetch.edgeGraph,
-        }
-      : {};
-
-    // Compute the org-level blocked backlog FRESH (valid scope). Degrade-safe:
-    // a thrown builder leaves the rest of the handler intact.
-    let org_blocked_backlog: OrgBlockedBacklog;
-    {
-      const t0 = Date.now();
-      try {
-        org_blocked_backlog = await buildOrgBlockedBacklog(
-          {
-            issues: ctx.issues,
-            agents: ctx.agents,
-            logger: ctx.logger,
-            ...sharedPrefetch,
-          } as unknown as OrgBlockedBacklogCtx,
-          companyId,
-          viewerUserId,
-        );
-      } catch (e) {
-        ctx.logger?.warn?.('situation.snapshot: org-blocked-backlog compute failed', {
-          companyId,
-          err: (e as Error).message,
-        });
-        org_blocked_backlog = { ...EMPTY_BACKLOG };
-      }
-      ctx.logger?.info?.('snap.stage', { stage: 'org-backlog', ms: Date.now() - t0, companyId });
-    }
-
-    // Plan 08-01 Task 3 — compute the per-employee rollup FRESH alongside the
-    // backlog (same valid scope). Degrade-safe: a thrown builder leaves
-    // org_blocked_backlog + the agent grid intact.
-    let employees: SituationEmployeeRow[] = [];
-    let needsYou: NeedsYou = { count: 0, topAction: null };
-    {
-      const t0 = Date.now();
-      try {
-        const rollup = await buildEmployeesRollup(
-          {
-            issues: ctx.issues,
-            agents: ctx.agents,
-            logger: ctx.logger,
-            ...sharedPrefetch,
-            // Rollup-specific prefetch slice (roster + per-agent focus + leaf set).
-            ...(prefetch
-              ? {
-                  roster: prefetch.roster,
-                  issuesByAgentId: prefetch.issuesByAgentId,
-                  issuesById: prefetch.issuesById,
-                }
-              : {}),
-          } as unknown as EmployeesRollupCtx,
-          companyId,
-          viewerUserId,
-        );
-        employees = rollup.employees;
-        needsYou = rollup.needsYou;
-      } catch (e) {
-        ctx.logger?.warn?.('situation.snapshot: employees rollup failed', {
-          companyId,
-          err: (e as Error).message,
-        });
-      }
-      ctx.logger?.info?.('snap.stage', { stage: 'employees-rollup', ms: Date.now() - t0, companyId });
-    }
-
-    // Plan 13-02 (D-06/D-07/D-12) — generate the Editor-Agent action cards for
-    // the engine-flagged needsYou rows, in THIS valid-scope handler (the 60s
-    // on-view recompute). D-07: only rows the deterministic engine flagged
-    // (blockerChain.needsYou === true) are passed in — the AI never decides
-    // WHETHER a row needs a human. Degrade-safe: a throw leaves the snapshot
-    // intact (the rows fall back to the deterministic engine line). The step
-    // itself never throws; this try/catch is belt-and-suspenders.
-    //
-    // GOTCHA 2 (ctx widening) — SituationRoomCtx does NOT declare the
-    // db / agents.managed fields driveActionCardsStep needs (it carries only the
-    // builder slice). The data-handler ctx at runtime DOES carry db + the full
-    // agents/issues clients (same as bulletin.byCycle's CompileBulletinCtx cast),
-    // so we widen via `ctx as unknown as ActionCardsCtx`.
-    let cardsBySource: Record<string, ActionCard> = {};
+    // Plan 16-04 (Wave C) — STALE-WHILE-REVALIDATE. Read the most-recent cached
+    // VIEWER-INVARIANT slice for this company. If it is fresh (< FRESHNESS_MS old),
+    // serve it IMMEDIATELY and kick off a fresh recompute in the background
+    // (fire-and-forget, from inside THIS valid data-handler scope — NO cron, NO
+    // setInterval, Pitfall 4). If it is absent or stale, recompute synchronously,
+    // serve the fresh result, and write it back for the next caller. In BOTH paths
+    // the viewer-scoped needsYou + pulse are recomputed per call over the (cached
+    // or fresh) rows via buildNeedsYou — NEVER read from the cache (T-16-03).
+    const cacheCtx = ctx as unknown as SnapshotCacheCtx;
+    let cached: Awaited<ReturnType<typeof readLatestSnapshot>> = null;
     try {
-      const needsYouRows: ActionCardSourceRow[] = employees
-        .filter((e) => e.blockerChain && e.blockerChain.needsYou === true)
-        .map((e) => ({
-          // D-03 — the leaf UUID is the cache key / dispatch id (never rendered).
-          sourceIssueId: e.blockerChain!.targetIssueUuid ?? e.blockerChain!.leafIssueUuid ?? '',
-          leafIssueId: e.blockerChain!.leafIssueId,
-          awaitedPartyLabel: e.blockerChain!.awaitedPartyLabel,
-          humanAction: e.blockerChain!.humanAction,
-          actionAffordance: e.blockerChain!.actionAffordance,
-          // The focus line is the closest grounding signal available in the
-          // snapshot scope (no extra host fetch); the deterministic party +
-          // leaf id ground the rest.
-          inputs: {
-            body: e.focusLine ?? '',
-            comments: [],
-            refs: e.blockerChain!.leafIssueId ? [e.blockerChain!.leafIssueId] : [],
-          },
-        }))
-        // Drop rows with no usable leaf key (can't cache/dispatch them).
-        .filter((r) => r.sourceIssueId.length > 0);
-
-      // v1.4.1 HOTFIX (BEAAA-2092) — gated OFF: do not compile on the snapshot
-      // request path (it blocked the RPC → 502 and churned the op issue →
-      // notification storm). cardsBySource stays {} → every row degrades to the
-      // deterministic engine line (D-12).
-      if (ACTION_CARDS_ENABLED && needsYouRows.length > 0) {
-        const step = await driveActionCardsStep(ctx as unknown as ActionCardsCtx, {
-          companyId,
-          needsYouRows,
-        });
-        cardsBySource = step.cards;
-      }
+      cached = await readLatestSnapshot(cacheCtx, companyId);
     } catch (e) {
-      // Degrade-safe (D-12) — a thrown step leaves cardsBySource empty so every
-      // row renders the deterministic engine line. Never blocks the snapshot.
-      ctx.logger?.warn?.('situation.snapshot: action-card generation failed', {
+      // A read failure is non-fatal — fall through to the synchronous recompute.
+      ctx.logger?.warn?.('situation.snapshot: SWR read failed (recompute fresh)', {
         companyId,
         err: (e as Error).message,
       });
-      cardsBySource = {};
+      cached = null;
     }
 
-    // Attach the per-row actionCard (D-13). A fresh card → the ActionCard;
-    // stale/absent/degrade → null so the UI falls back to the deterministic
-    // line. The leaf UUID is the join key (dispatch-only — never rendered).
-    const employeesWithCards = employees.map((e) => {
-      const leafUuid = e.blockerChain?.targetIssueUuid ?? e.blockerChain?.leafIssueUuid ?? null;
-      const actionCard: ActionCard | null = leafUuid ? (cardsBySource[leafUuid] ?? null) : null;
-      return { ...e, actionCard };
-    });
+    const isFresh =
+      cached != null && Date.now() - Date.parse(cached.takenAt) < FRESHNESS_MS;
 
-    // Plan 15-01 Task 2 (COCK-01 / SC1 / SC3) — the worker-computed Pulse vital
-    // signs. Pure sum over the per-row engine verdicts ALREADY on
-    // employeesWithCards (blockerChain.tier / .terminalKind / group) + the
-    // already-resolved needsYou.count (D-01). No new host fetch, no await — the
-    // aggregation is synchronous and pure. ADDITIVE PAYLOAD ONLY: this is NOT a
-    // schema change — no situation_snapshots write, no migration (the
-    // situation_snapshots table stays unwritten per WARNING 5 / R9). The
-    // function returns the all-zero floor on empty input, so a degraded (empty
-    // rollup) snapshot still carries a real pulse:{needYou:0,inMotion:0,stuck:0,
-    // selfClearing:0} — the Pulse chips never blank (SC4).
-    const pulse: PulseSummary = buildPulseSummary(employeesWithCards, needsYou);
+    if (isFresh && cached) {
+      // SERVE-LAST-GOOD. Recompute the viewer-scoped needsYou + pulse per call
+      // from the cached rows (pure, no fetch). Kick off a fresh recompute +
+      // write-back fire-and-forget — do NOT await it before responding.
+      const slice = cached.payload;
+      const needsYou = buildNeedsYou(slice.situation_employees, viewerUserId);
+      const pulse: PulseSummary = buildPulseSummary(slice.situation_employees, needsYou);
 
-    // Plan 09-01 (WARNING 5) — the materialized situation_snapshots read-path
-    // is REMOVED. The recompute-situation cron writer was deleted in this plan,
-    // so a row is never written post-Phase-9 — the SELECT + `if (row)` branch +
-    // the `...payload` spread were PERMANENTLY DEAD. The handler now ALWAYS
-    // returns the FRESHLY computed rollup (the no-row path became the only
-    // path). The situation_snapshots TABLE is NOT dropped and no migration is
-    // added — R9 additive-only leaves the empty table in place.
+      // Fire-and-forget revalidation INSIDE the valid handler scope (Pitfall 4 —
+      // no cron, no setInterval). Errors are swallowed so a failed recompute never
+      // affects the served response.
+      void (async () => {
+        try {
+          const fresh = await computeViewerInvariantSlice(
+            ctx,
+            companyId,
+            viewerUserId,
+            snapshotBudgetMs,
+          );
+          await writeSnapshot(cacheCtx, companyId, fresh, hashViewerInvariantSlice(fresh));
+        } catch (e) {
+          ctx.logger?.warn?.('situation.snapshot: SWR background revalidate failed', {
+            companyId,
+            err: (e as Error).message,
+          });
+        }
+      })();
+
+      return {
+        org_blocked_backlog: slice.org_blocked_backlog,
+        situation_employees: slice.situation_employees,
+        needsYou,
+        pulse,
+        taken_at: cached.takenAt,
+      };
+    }
+
+    // CACHE MISS / STALE — recompute synchronously, serve, and write back.
+    const slice = await computeViewerInvariantSlice(
+      ctx,
+      companyId,
+      viewerUserId,
+      snapshotBudgetMs,
+    );
+    const needsYou = buildNeedsYou(slice.situation_employees, viewerUserId);
+    const pulse: PulseSummary = buildPulseSummary(slice.situation_employees, needsYou);
+
+    // Write the viewer-invariant slice for the next caller. ON CONFLICT DO NOTHING
+    // makes an identical-hash write a no-op; a write failure is non-fatal (the
+    // response is already computed) — swallow it.
+    try {
+      await writeSnapshot(cacheCtx, companyId, slice, hashViewerInvariantSlice(slice));
+    } catch (e) {
+      ctx.logger?.warn?.('situation.snapshot: SWR write-back failed', {
+        companyId,
+        err: (e as Error).message,
+      });
+    }
+
     return {
-      org_blocked_backlog,
-      situation_employees: employeesWithCards,
+      org_blocked_backlog: slice.org_blocked_backlog,
+      situation_employees: slice.situation_employees,
       needsYou,
-      // Plan 15-01 (D-01) — additive worker-computed vital-sign summary; four
-      // integers, NO_UUID_LEAK by construction, no migration.
       pulse,
       taken_at: new Date().toISOString(),
     };

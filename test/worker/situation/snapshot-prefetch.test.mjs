@@ -101,10 +101,15 @@ function makeCtx({ issueRows = [], agentRows = [], relations = {}, optedIn = tru
         if (/clarity_user_prefs/.test(sql)) {
           return optedIn ? [{ opted_in_at: '2026-05-14T08:00:00Z' }] : [];
         }
+        // Plan 16-04 (Wave C) — the SWR situation_snapshots read is infrastructure
+        // (serve-last-good), NOT a prefetch SELECT. It is excluded from dbQuerySql
+        // (same posture as the opt-in prefs lookup) so the "exactly TWO prefetch
+        // SELECTs" round-trip-count contract still measures only the public.*
+        // prefetch reads. Return [] → a cache miss → synchronous recompute path.
+        if (/situation_snapshots/.test(sql)) return [];
         spies.dbQuerySql.push(sql);
         if (/FROM public\.issues/i.test(sql)) return issueRows;
         if (/FROM public\.agents/i.test(sql)) return agentRows;
-        if (/situation_snapshots/.test(sql)) return [];
         return [];
       },
       async execute() {

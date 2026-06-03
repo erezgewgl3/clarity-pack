@@ -232,16 +232,34 @@ test('situation.snapshot: opted-out caller returns {error:OPT_IN_REQUIRED} (wrap
   assert.deepEqual(result, { error: 'OPT_IN_REQUIRED' });
 });
 
-test('situation.snapshot (Plan 09-01, WARNING 5): NO situation_snapshots SELECT fires (the materialized read-path is removed)', async () => {
-  // The handler used to SELECT the most-recent situation_snapshots row. Plan
-  // 09-01 deleted that dead read-path, so the only db.query left is the
-  // opt-in-guard prefs lookup — never a situation_snapshots query.
+test('situation.snapshot (Plan 16-04, SWR): the most-recent situation_snapshots row is read and a fresh slice is written back on a cache miss', async () => {
+  // Plan 16-04 (Wave C) SUPERSEDES the Plan 09-01 WARNING 5 invariant: the
+  // stale-while-revalidate design REINTRODUCES the situation_snapshots read — but
+  // now it reads the VIEWER-INVARIANT slice (serve-last-good) and re-derives the
+  // viewer-scoped needsYou per call. On a cache miss (no row) the handler
+  // recomputes synchronously and WRITES the slice back for the next caller.
   const bag = makeCtx({ snapshotRow: null, optedIn: true });
   registerSituationRoomHandlers(bag.ctx);
   const handler = bag.dataRegistry.get('situation.snapshot');
   await handler({ userId: 'eric', companyId: 'co-1' });
-  const snapshotQuery = bag.dbCalls.find((c) => /situation_snapshots/.test(c.sql ?? ''));
-  assert.equal(snapshotQuery, undefined, 'no situation_snapshots query should be issued after the read-path removal');
+  // The SWR read fires: the most-recent-row SELECT (ORDER BY taken_at DESC LIMIT 1,
+  // filtered on computed_for_company_id = $1).
+  const swrRead = bag.dbCalls.find(
+    (c) => c.kind === 'query' && /situation_snapshots/.test(c.sql ?? ''),
+  );
+  assert.ok(swrRead, 'a situation_snapshots SELECT should be issued (SWR read)');
+  assert.match(swrRead.sql, /computed_for_company_id\s*=\s*\$1/);
+  assert.match(swrRead.sql, /ORDER BY\s+taken_at\s+DESC/i);
+  assert.match(swrRead.sql, /LIMIT\s+1/i);
+  assert.deepEqual(swrRead.params, ['co-1']);
+  // The write-back fires on the miss: an INSERT ... ON CONFLICT DO NOTHING via
+  // ctx.db.execute, parameterized on the company id (no prefix literal).
+  const swrWrite = bag.dbCalls.find(
+    (c) => c.kind === 'execute' && /situation_snapshots/.test(c.sql ?? ''),
+  );
+  assert.ok(swrWrite, 'a situation_snapshots INSERT should fire (SWR write-back on miss)');
+  assert.match(swrWrite.sql, /ON CONFLICT \(computed_for_company_id, content_hash\) DO NOTHING/);
+  assert.equal(swrWrite.params[0], 'co-1', 'the write is company-scoped (no prefix literal)');
 });
 
 // ---------------------------------------------------------------------------
