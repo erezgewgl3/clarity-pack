@@ -41,9 +41,7 @@ import * as React from 'react';
 import { EmployeeRow, type SituationEmployeeRow } from './employee-row.tsx';
 import { BlockedBacklogExpander } from './blocked-backlog-expander.tsx';
 import type { OrgBlockedBacklog } from './org-blocked-backlog-banner-types.ts';
-
-/** The three VISUAL tiers — the engine verdict `tier` values (hyphenated). */
-type VisualTier = 'needs-you' | 'in-motion' | 'watch';
+import { visualTierOf, type VisualTier } from './tier-utils.ts';
 
 type TierStripProps = {
   employees: SituationEmployeeRow[];
@@ -84,23 +82,9 @@ const TIER_META: Record<
   },
 };
 
-/** The LOCKED D-05 partition rule (pure): the engine verdict tier where a chain
- *  exists; a chainless row falls back to its agent-state group (working ->
- *  in-motion, else watch); ANY unmatched value defensively lands in watch so no
- *  row is ever dropped from the board. NEVER re-derives from terminalKind. */
-function visualTierOf(row: SituationEmployeeRow): VisualTier {
-  const t = row.blockerChain?.tier;
-  if (t === 'needs-you' || t === 'in-motion' || t === 'watch') {
-    return t;
-  }
-  // Chainless fallback (no blocker chain): an actively-working agent is calm
-  // In-motion awareness; everything else (idle / stale / paused) is Watch.
-  if (row.blockerChain == null) {
-    return row.group === 'working' ? 'in-motion' : 'watch';
-  }
-  // Defensive: a chain present with an unknown tier never vanishes.
-  return 'watch';
-}
+// The LOCKED D-05 partition rule now lives in ./tier-utils.ts (visualTierOf) —
+// imported here AND by employee-row.tsx so the strip's partition and each row's
+// body variant can never silently diverge (WR-02).
 
 export function TierStrip({
   employees,
@@ -143,7 +127,7 @@ export function TierStrip({
             </header>
 
             {rows.length === 0 ? (
-              <p className="clarity-tier-empty">{`— none — ${meta.emptyNote}`}</p>
+              <p className="clarity-tier-empty">{meta.emptyNote}</p>
             ) : (
               <div className="clarity-tier-rows">
                 {rows.map((row) => (

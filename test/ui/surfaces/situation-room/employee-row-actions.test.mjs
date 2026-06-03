@@ -61,7 +61,10 @@ test('R4 — needs_you OWNED row wires Open chat + Wake (issues.requestWakeup)',
 
 test('R4 — working group renders "moving · no action needed" with NO buttons', () => {
   assert.match(ROW, /moving · no action needed/);
-  assert.match(ROW, /group === 'working'/);
+  // WR-02: the working-group -> in-motion fallback now lives in the shared
+  // visualTierOf helper (tier-utils.ts); the row body gates the calm "moving"
+  // line on visualTier === 'in-motion' (the In-motion variant).
+  assert.match(ROW, /visualTier\s*===\s*'in-motion'/);
 });
 
 test('R4 — idle group wires Assign work (chat deep-link)', () => {

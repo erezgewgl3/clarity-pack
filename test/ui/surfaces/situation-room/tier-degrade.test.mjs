@@ -25,6 +25,8 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { buildPulseSentence } from '../../../../src/ui/surfaces/situation-room/pulse-sentence.ts';
+// WR-02 — the ONE shared partition helper both UI surfaces import.
+import { visualTierOf } from '../../../../src/ui/surfaces/situation-room/tier-utils.ts';
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -73,13 +75,8 @@ test('SC4 — the deterministic sentence renders real counts with NO Editor-Agen
 //     every row (SC4 / D-08: tier membership is degrade-safe by construction).
 // ---------------------------------------------------------------------------
 
-/** The same locked D-05 partition the TierStrip + EmployeeRow compute. */
-function visualTierOf(row) {
-  const t = row.blockerChain?.tier;
-  if (t === 'needs-you' || t === 'in-motion' || t === 'watch') return t;
-  if (row.blockerChain == null) return row.group === 'working' ? 'in-motion' : 'watch';
-  return 'watch';
-}
+// visualTierOf is imported from tier-utils.ts (WR-02) — the SAME helper the
+// TierStrip + EmployeeRow compute with.
 
 function chain(tier, terminalKind) {
   return {

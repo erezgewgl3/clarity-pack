@@ -20,6 +20,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+// WR-02 — import the ONE shared partition helper both UI surfaces use, instead
+// of re-implementing a third copy here (which could pass while the components
+// silently diverge).
+import { visualTierOf } from '../../../../src/ui/surfaces/situation-room/tier-utils.ts';
+
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 function stripComments(src) {
@@ -42,23 +47,10 @@ const ROW_SRC = readFileSync(
 const ROW_CODE = stripComments(ROW_SRC);
 
 // ---------------------------------------------------------------------------
-// Shared partition simulation — MIRRORS the locked D-05 rule in tier-strip.tsx.
-// (Kept in sync; the simulation tests assert the partition the component must
-// implement; the source-grep tests assert the component implements it the same
-// way — keying on blockerChain.tier, not row.group.)
+// Shared partition — the SAME visualTierOf both UI surfaces import (tier-utils.ts,
+// WR-02). The simulation tests assert the partition behavior; the source-grep
+// tests assert both components import THIS one helper rather than re-deriving.
 // ---------------------------------------------------------------------------
-
-/** The locked D-05 partition: tier where a chain exists; chainless -> group
- *  fallback (working -> in-motion, else watch); any unmatched -> watch. */
-function visualTierOf(row) {
-  const t = row.blockerChain?.tier;
-  if (t === 'needs-you' || t === 'in-motion' || t === 'watch') return t;
-  // chainless fallback
-  if (row.blockerChain == null) {
-    return row.group === 'working' ? 'in-motion' : 'watch';
-  }
-  return 'watch';
-}
 
 function partition(rows) {
   const out = { 'needs-you': [], 'in-motion': [], watch: [] };
@@ -120,22 +112,23 @@ test('TierStrip — TIER_ORDER is loudest-on-top: needs-you -> in-motion -> watc
   assert.ok(iNeeds >= 0 && iMotion > iNeeds && iWatch > iMotion, `bad order: ${order}`);
 });
 
-test('TierStrip — partitions on the ENGINE blockerChain.tier (not row.group as the primary tier key)', () => {
-  assert.match(STRIP_CODE, /blockerChain/, 'references blockerChain');
-  assert.match(STRIP_CODE, /\.tier/, 'reads the tier field');
-  // The primary partition key is NOT `row.group ===` — group is only a chainless
-  // fallback. There must be a blockerChain?.tier read; the group compare (if any)
-  // is the fallback only.
+test('TierStrip — partitions via the ONE shared visualTierOf helper (WR-02, no re-derivation)', () => {
+  // WR-02: the strip must IMPORT the shared partition helper from tier-utils,
+  // not re-implement a blockerChain.tier read inline (which could diverge from
+  // employee-row.tsx). The strip calls visualTierOf(row) to bucket each row.
   assert.match(
     STRIP_CODE,
-    /blockerChain\??\.\s*tier|chain\??\.\s*tier/,
-    'partition keys on blockerChain.tier',
+    /import[\s\S]*visualTierOf[\s\S]*from\s*['"]\.\/tier-utils/,
+    'strip imports visualTierOf from tier-utils',
   );
+  assert.match(STRIP_CODE, /visualTierOf\(/, 'strip calls visualTierOf to partition');
 });
 
-test('TierStrip — chainless fallback: working -> in-motion, else -> watch', () => {
-  assert.match(STRIP_CODE, /'working'|"working"/, 'fallback references the working group');
-  assert.match(STRIP_CODE, /in-motion/, 'working fallback -> in-motion');
+test('TierStrip — chainless fallback (working -> in-motion, else -> watch) lives in the shared helper', () => {
+  // The locked chainless fallback is exercised through the imported helper —
+  // the simulation tests below assert the behavior end-to-end.
+  assert.equal(visualTierOf({ blockerChain: null, group: 'working' }), 'in-motion');
+  assert.equal(visualTierOf({ blockerChain: null, group: 'idle' }), 'watch');
 });
 
 test('TierStrip — reuses EmployeeRow (no row re-implementation)', () => {
@@ -239,9 +232,16 @@ test('PARTITION — full mixed board partitions exactly per D-05', () => {
 // Task 2 — EmployeeRow calm tier-variant (body gates on the engine tier)
 // ===========================================================================
 
-test('EmployeeRow — derives a visualTier from the engine blockerChain.tier (not row.group as the body gate)', () => {
+test('EmployeeRow — derives its visualTier via the ONE shared visualTierOf helper (WR-02)', () => {
   assert.match(ROW_CODE, /visualTier/, 'a visualTier is computed');
-  assert.match(ROW_CODE, /blockerChain\??\.\s*tier|chain\??\.\s*tier/, 'visualTier reads the engine tier');
+  // WR-02: the row body gates on the SAME shared partition the strip uses —
+  // imported from tier-utils, not re-implemented inline.
+  assert.match(
+    ROW_CODE,
+    /import[\s\S]*visualTierOf[\s\S]*from\s*['"]\.\/tier-utils/,
+    'row imports visualTierOf from tier-utils',
+  );
+  assert.match(ROW_CODE, /visualTier\s*=\s*visualTierOf\(/, 'row computes visualTier via the shared helper');
 });
 
 test('EmployeeRow — stamps a tier modifier class on the row root for the calm CSS variant', () => {

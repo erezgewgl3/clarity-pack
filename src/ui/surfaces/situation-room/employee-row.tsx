@@ -43,6 +43,7 @@ import { useToast } from '../../primitives/toast.tsx';
 import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { buildChatDeepLink } from '../chat/deep-link.mjs';
 import { OwnerPickerPopover } from './owner-picker-popover.tsx';
+import { visualTierOf } from './tier-utils.ts';
 
 /** DOM id stamped on the row root so the needs-you banner's [Assign first] can
  *  scroll to the oldest-unowned row and open its picker (mockup parity / R5). */
@@ -217,20 +218,13 @@ export function EmployeeRow({
 
   // Plan 15-03 Task 2 (COCK-02 / D-04 / D-05 / D-06) — the row BODY is gated on
   // the ENGINE visual tier, NOT row.group. This is the SAME locked partition the
-  // <TierStrip> computes: the engine verdict tier where a chain exists; a
-  // chainless row falls back to its agent-state group (working -> in-motion,
-  // else watch); any unmatched value defensively -> watch. A stuck-agent row
-  // (group 'needs_you', tier 'watch') therefore gets the QUIET Watch body, not
-  // the loud Needs-you cluster (12-CONTEXT D-04 lock). Needs-you keeps the FULL
-  // Phase-13 action card + Phase-14 reply-in-place + Phase-12 assign — unchanged.
-  const visualTier: 'needs-you' | 'in-motion' | 'watch' =
-    chain?.tier === 'needs-you' || chain?.tier === 'in-motion' || chain?.tier === 'watch'
-      ? chain.tier
-      : chain == null
-        ? row.group === 'working'
-          ? 'in-motion'
-          : 'watch'
-        : 'watch';
+  // <TierStrip> computes — both call the ONE shared visualTierOf (tier-utils.ts,
+  // WR-02) so the strip's partition and this row's body variant can never
+  // diverge. A stuck-agent row (group 'needs_you', tier 'watch') therefore gets
+  // the QUIET Watch body, not the loud Needs-you cluster (12-CONTEXT D-04 lock).
+  // Needs-you keeps the FULL Phase-13 action card + Phase-14 reply-in-place +
+  // Phase-12 assign — unchanged.
+  const visualTier = visualTierOf(row);
 
   // A chainless idle/stale row landing in Watch keeps the Phase-9 stand-down /
   // resume affordances (preserved behind the quiet Watch presentation).
