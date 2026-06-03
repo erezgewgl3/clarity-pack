@@ -15,7 +15,7 @@
 
 ### Snapshot performance & honest loading (Phase 16)
 
-- [ ] **SNAP-01**: The Situation Room cockpit loads fast — the snapshot returns well under the 30s host timeout (target p95 < ~5s) and never 502s, including a cold cache.
+- [x] **SNAP-01**: The Situation Room cockpit loads fast — the snapshot returns well under the 30s host timeout (target p95 < ~5s) and never 502s, including a cold cache.
 - [x] **SNAP-02**: The cold snapshot recompute no longer approaches the 30s cliff (the live 25.7s near-miss is eliminated); the employees rollup is degrade-safe (a slow/failed sub-read floors to the deterministic line, never blocks the view).
 - [ ] **SNAP-03**: Confirm-first step — verify whether the room still 502s now that action-cards are gated, and record the cold/warm snapshot timings as the phase baseline. (Done 2026-06-03: no 502, 6/6 snapshot calls 200, cold 25.7s — drives SNAP-01/02.)
 
@@ -58,7 +58,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SNAP-01 | Phase 16 | Pending |
+| SNAP-01 | Phase 16 | Complete |
 | SNAP-02 | Phase 16 | Complete |
 | SNAP-03 | Phase 16 | Pending |
 | WAIT-01 | Phase 17 | Pending |
