@@ -1,5 +1,5 @@
 ---
-status: fixed-local-verified
+status: resolved
 trigger: "BEAAA CPU load since plugin install — operator suspects clarity-pack is recursive / hitting the DB too much. Confirmed: Editor-Agent heartbeat causes self-amplifying DB churn + unbounded operation-issue growth."
 created: 2026-06-03
 updated: 2026-06-03
@@ -72,7 +72,7 @@ verification: |
   - New unit tests: test/worker/op-issue-set.test.mjs (8) + test/worker/heartbeat-dispatcher.test.mjs (9) — 17 pass. Cover: batch-collapse (5 events → 1 reconcile + 1 heartbeat), issueId dedupe, Fix-2 remembered-op + actorType-plugin drop-before-reconcile, burst-cap early flush, agentId cache across flushes, unresolvable-agent skip, TTL expiry, LRU eviction.
   - Full worker suite: 1176/1176 pass. Full repo suite: 2633 pass / 7 fail — the 7 failures are pre-existing REQUIREMENTS.md traceability-doc tests (test/phases/04-traceability.test.mjs + 04.1-traceability.test.mjs, CHAT-*/CTT-* rows); they read a planning doc, touch NONE of the changed code, and are unrelated to this hotfix.
   - tsc --noEmit clean. node scripts/build-worker.mjs clean (dist/worker.js 2.5mb, contains HeartbeatDispatcher + rememberOwnOperationIssue + isRememberedOwnOperationIssue). Manifest build clean (dist/manifest.js version = 1.4.4).
-  - LIVE verification deferred to operator: bookended (DO-backup) local-tarball v1.4.4 deploy on BEAAA, then a worker-log re-capture confirming the ~3.8/sec self-triggered heartbeat rate drops to near-zero and the tldr-compile op-issue count stops growing.
+  - LIVE verification DONE (2026-06-03, commit b376725): deployed v1.4.4 to BEAAA via bookended local-tarball flow — pre-deploy app DB backup `paperclip-20260603-164528.sql.gz` (128.1M) + automated DO filesystem backup as the bookend; tarball sha256 69607fdc… verified on box; uninstall-then-install → `clarity-pack v1.4.4 (ready)` id=a763176a-2f4d-4986-b190-b5151e42cc00; pm2 restart; worker boot line at 16:48:55. A 150s post-deploy worker-log window showed "skipped own operation issue" = **0** (v1.4.3 baseline ~3.8/sec / ~570 per 150s), Editor-Agent heartbeat thrash = 0, only 2 legit new op-issues created, total worker-log volume ~2 lines/sec (was ~330/sec). The self-amplifying heartbeat DB churn is eliminated in production. (Caveat: ambient UI traffic was lighter at capture time — 0 POST /plugins — but "skipped own operation issue" is the fix-specific, UI-independent signal.) The op-issue ACCUMULATION (~1,275) is unchanged — that is the Fix-3 follow-up; Fixes 1+2 stop the growth DRIVER so it no longer climbs.
 files_changed:
   - src/worker.ts (replaced per-event heartbeat loop with HeartbeatDispatcher wiring; async event handler)
   - src/worker/agents/heartbeat-dispatcher.ts (NEW — Fix 1 batch+debounce + Fix 2 read short-circuit)
