@@ -184,7 +184,14 @@ export type NeedsYou = {
 
 /** The structural ctx the builder accepts — a superset of OrgBlockedBacklogCtx
  *  that additionally needs agents.list + issues.get (leaf identifier lookup).
- *  Stubbable in tests; satisfied at runtime by the widened SituationRoomCtx. */
+ *  Stubbable in tests; satisfied at runtime by the widened SituationRoomCtx.
+ *
+ *  Plan 16-02 (Wave A) — inherits the SnapshotPrefetch fields (blockedIssues,
+ *  nameByUuid, edgeGraph) from OrgBlockedBacklogCtx AND adds the rollup-specific
+ *  prefetch slice (roster, open issues grouped by agent, issues by id for leaf
+ *  lookups). Every prefetch field is OPTIONAL: a builder reads it when present
+ *  and falls back to the original RPC path when absent (degrade-safety + old
+ *  fixtures). */
 export type EmployeesRollupCtx = OrgBlockedBacklogCtx & {
   issues: OrgBlockedBacklogCtx['issues'] & {
     list(input: {
@@ -199,6 +206,17 @@ export type EmployeesRollupCtx = OrgBlockedBacklogCtx & {
     list(input: { companyId: string }): Promise<unknown[]>;
     get(agentId: string, companyId: string): Promise<unknown | null>;
   };
+  /** Plan 16-02 — the prefetched roster (camelCase-mapped from the public.agents
+   *  SELECT). When present, REPLACES ctx.agents.list. */
+  roster?: AgentLike[];
+  /** Plan 16-02 — the prefetched OPEN issues grouped by assignee_agent_id
+   *  (camelCase-mapped, EXCLUDE_OPERATION_ISSUES_SQL already applied in the
+   *  handler SELECT). When present, REPLACES the per-agent ctx.issues.list. */
+  issuesByAgentId?: Map<string, IssueLike[]>;
+  /** Plan 16-02 — the prefetched issue set keyed by issue id (UUID). When present
+   *  AND the leaf is in-company, REPLACES the multi-hop leaf ctx.issues.get;
+   *  falls back to the RPC only for a leaf NOT in the prefetch. */
+  issuesById?: Map<string, IssueLike>;
 };
 
 /** Loosely-typed projections — read camelCase (07-01 proved the real shape). */
@@ -302,9 +320,14 @@ async function buildOneEmployeeRow(
 ): Promise<InternalRow> {
   const agentId = agent.id ?? '';
 
-  // a. List open assigned issues (UNFILTERED — Pitfall 3 singular status filter;
-  //    client-side filter is cheaper). limit: 50 defensively bounds the fetch.
-  const listed = (await ctx.issues.list({ companyId, assigneeAgentId: agentId, limit: 50 })) as IssueLike[];
+  // a. List open assigned issues. Plan 16-02 (Wave A) — when the handler supplied
+  //    the prefetched open-issue set grouped by assignee_agent_id, read this
+  //    agent's slice from it (one shared SELECT replaces one ctx.issues.list per
+  //    agent); otherwise fall back to the per-agent RPC list (old fixtures +
+  //    degrade-safety). limit: 50 defensively bounds the RPC fallback fetch.
+  const listed = ctx.issuesByAgentId
+    ? (ctx.issuesByAgentId.get(agentId) ?? [])
+    : ((await ctx.issues.list({ companyId, assigneeAgentId: agentId, limit: 50 })) as IssueLike[]);
   // b. Filter to OPEN_STATUSES.
   const open = (Array.isArray(listed) ? listed : []).filter(
     (i) => i && typeof i === 'object' && OPEN_STATUSES.has(String(i.status)),
@@ -354,11 +377,23 @@ async function buildOneEmployeeRow(
   let targetsViewer = false;
   if (state === 'blocked' && focusIssue && focusIssue.id) {
     try {
-      const { edges, nodeMeta } = await buildEdges(
-        ctx as unknown as OrgBlockedBacklogCtx,
-        companyId,
-        focusIssue.id,
-      );
+      // Plan 16-02 (Wave A) — read this focus issue's edges from the shared memo
+      // the handler built ONCE across {blocked roots} ∪ {blocked agent focus}
+      // (no second relations walk). A memo'd UNCLASSIFIED sentinel (a thrown
+      // prefetch walk) is re-thrown so the existing per-row catch floors the row
+      // to the honest inline UNCLASSIFIED block. A memo miss falls back to a
+      // direct buildEdges (degrade-safety + old fixtures).
+      const memo = ctx.edgeGraph?.get(focusIssue.id);
+      if (memo && 'unclassified' in memo) {
+        throw new Error(memo.degradeReason);
+      }
+      const { edges, nodeMeta } = memo
+        ? { edges: memo.edges, nodeMeta: { ...memo.nodeMeta } }
+        : await buildEdges(
+            ctx as unknown as OrgBlockedBacklogCtx,
+            companyId,
+            focusIssue.id,
+          );
       // Plan 12-08 (SC5 / BEAAA-972 fix) — inject the ROOT (focus) issue's OWN
       // meta into nodeMeta[focusIssue.id], with the IDENTICAL field shape
       // buildEdges/walkBlockerChain use for blocker targets. When the focus issue
@@ -412,21 +447,32 @@ async function buildOneEmployeeRow(
         if (terminal.kind === 'AWAITING_HUMAN') {
           wanted.add(terminal.userId);
         }
-        const nameByUuid = new Map<string, string | null>();
-        if (typeof ctx.agents?.get === 'function') {
-          await Promise.all(
-            [...wanted].map(async (u) => {
-              try {
-                const ag = (await ctx.agents!.get(u, companyId)) as { name?: unknown } | null;
-                const candidate =
-                  ag && typeof ag.name === 'string' ? ag.name.trim() : null;
-                nameByUuid.set(u, candidate || null);
-              } catch {
-                // D-09 — degrade silently to null; NEVER the UUID.
-                nameByUuid.set(u, null);
-              }
-            }),
-          );
+        // Plan 16-02 (Wave A) — resolve names from the prefetched nameByUuid Map
+        // (built ONCE from the public.agents SELECT) when the handler supplied
+        // it: NO per-uuid ctx.agents.get round-trips. A missing uuid still yields
+        // null (NO_UUID_LEAK), NEVER the raw UUID. Falls back to the per-uuid RPC
+        // Promise.all only when the prefetch is absent (old fixtures +
+        // degrade-safety).
+        let nameByUuid: Map<string, string | null>;
+        if (ctx.nameByUuid != null) {
+          nameByUuid = ctx.nameByUuid;
+        } else {
+          nameByUuid = new Map<string, string | null>();
+          if (typeof ctx.agents?.get === 'function') {
+            await Promise.all(
+              [...wanted].map(async (u) => {
+                try {
+                  const ag = (await ctx.agents!.get(u, companyId)) as { name?: unknown } | null;
+                  const candidate =
+                    ag && typeof ag.name === 'string' ? ag.name.trim() : null;
+                  nameByUuid.set(u, candidate || null);
+                } catch {
+                  // D-09 — degrade silently to null; NEVER the UUID.
+                  nameByUuid.set(u, null);
+                }
+              }),
+            );
+          }
         }
         // i.3. NO_UUID_LEAK scrub — single source of truth (Task 1). This is the
         //      rendered awaitedPartyLabel; the verdict's own awaitedPartyLabel is
@@ -467,7 +513,14 @@ async function buildOneEmployeeRow(
           typeof focusIssue.status === 'string' ? focusIssue.status : null;
         if (leafNodeId && leafNodeId !== focusIssue.id) {
           try {
-            const leaf = (await ctx.issues.get(leafNodeId, companyId)) as IssueLike | null;
+            // Plan 16-02 (Wave A) — serve the leaf from the prefetched issue set
+            // when it is in-company (one shared SELECT replaces one
+            // ctx.issues.get per multi-hop chain); fall back to the RPC ONLY for
+            // a leaf NOT in the prefetch (e.g. a blocker outside the open-issue
+            // working set).
+            const prefetchedLeaf = ctx.issuesById?.get(leafNodeId);
+            const leaf = (prefetchedLeaf ??
+              (await ctx.issues.get(leafNodeId, companyId))) as IssueLike | null;
             if (leaf && typeof leaf.identifier === 'string' && leaf.identifier.length > 0) {
               leafIssueId = leaf.identifier;
             }
@@ -613,8 +666,19 @@ export async function buildEmployeesRollup(
   companyId: string,
   viewerUserId: string,
 ): Promise<{ employees: SituationEmployeeRow[]; needsYou: NeedsYou }> {
-  if (typeof ctx.agents?.list !== 'function') return { ...EMPTY };
-  const agents = (await ctx.agents.list({ companyId })) as AgentLike[];
+  // Plan 16-02 (Wave A) — the roster comes from the prefetched public.agents
+  // SELECT when the handler supplied it (one SQL read replaces ctx.agents.list);
+  // otherwise fall back to the RPC list (old fixtures + degrade-safety). The
+  // prefetch SELECT lives in situation-room.ts and is company-scoped
+  // `WHERE company_id = $1` (parameterized, no prefix literal) — this file only
+  // CONSUMES those rows (the per-agent focus + roster + names).
+  let agents: AgentLike[];
+  if (Array.isArray(ctx.roster)) {
+    agents = ctx.roster;
+  } else {
+    if (typeof ctx.agents?.list !== 'function') return { ...EMPTY };
+    agents = (await ctx.agents.list({ companyId })) as AgentLike[];
+  }
   if (!Array.isArray(agents) || agents.length === 0) return { ...EMPTY };
 
   // Capture nowMs ONCE so all classifier + sort calls share one clock (sort
