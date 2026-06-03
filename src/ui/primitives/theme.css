@@ -1223,6 +1223,12 @@
   opacity: 0.85;
 }
 [data-clarity-surface='situation-room'] .clarity-tier-row-watch .clarity-employee-chain-watch {
+  /* WR-01 (D-06 visual honesty) — the base .clarity-employee-chain border-left is
+   *  a loud red (--clarity-state-blocked). A Watch-tier chain (stuck / external /
+   *  cycle / self-resolving) is "quiet stalled awareness", NOT an act-now blocker:
+   *  override the bar to the calm/amber stale token (matching .clarity-tier-row-watch
+   *  and .clarity-employee-chain-owned), never the loud red. */
+  border-left-color: color-mix(in oklch, var(--clarity-state-stale, #d6b15e), transparent 55%);
   color: var(--clarity-ink-2, #cdc5b6);
 }
 
