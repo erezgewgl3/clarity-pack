@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
-status: planning
-last_updated: "2026-06-03T12:00:00.000Z"
-last_activity: 2026-06-03
+status: executing
+stopped_at: Phase 12 context gathered
+last_updated: "2026-06-03T13:40:42.977Z"
+last_activity: 2026-06-03 -- Phase 16 planning complete
 progress:
-  total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 11
+  completed_phases: 4
+  total_plans: 27
+  completed_plans: 21
+  percent: 36
 ---
 
 # State: Clarity Pack
@@ -686,8 +687,8 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 Phase: Not started (defining requirements)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-03 — Milestone v1.5.0 started
+Status: Ready to execute
+Last activity: 2026-06-03 -- Phase 16 planning complete
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1401,7 +1402,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to plan
+**Status:** Ready to execute
 **Progress:** [█████████░] 91%
 
 ## Performance Metrics
