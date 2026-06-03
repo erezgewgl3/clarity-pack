@@ -1,89 +1,86 @@
 # Requirements: Clarity Pack — v1.5.0 Truthful & Legible Situation Room
 
-**Defined:** 2026-06-03
+**Defined:** 2026-06-03 (re-aligned to the locked-scope memory `v150-scope-locked` after the initial roadmap mis-scoped 16-18; the locked scope is 16-20 with a structured-human-wait centerpiece).
 **Core Value:** Zero rabbit-holes — every blocker chain transitively flattened to a single named human action the operator can act on, in plain English a non-builder understands.
 
-**Milestone goal:** Make every Clarity surface legible to a non-builder — plain English everywhere, zero raw agent/UUID identifiers — and make the Editor-Agent's *truthful* named-action prose actually live in production, via a safe off-request (flag-gated) compile path that keeps the snapshot fast.
+**Milestone goal:** Make the Situation Room load instantly and tell the truth a non-builder can read — agents declare human-waits *structurally* (so the engine honestly classifies needs-you), every surface routes to plain-English Reader views with zero raw ids, and the Editor named-action prose goes live via a safe off-request (flag-gated) action-card path.
 
-**Carried invariants (all phases):** additive-only plugin-namespace schema (disable/uninstall preserves data); degrade-safe rows (no AI dependency in the deterministic floor); instance-agnostic (no company-prefix literals); Editor-Agent governance parity; continuous flag-gated deploy to BEAAA (bookend = DO droplet backup).
+**Locked decisions (from `v150-scope-locked`):** "usable for everyone" = LEGIBLE-for-non-builders, NOT multi-operator (keep the existing Phase-2 opt-in toggle; no multi-operator/onboarding investment). Action-cards: IN, re-architected (off-request, non-notifying op-issues), sequenced LAST, behind the flag, slip-safe to v1.6. Deploy: continuous to BEAAA, risky features flag-gated; PREREQUISITE = automated DO backups ON (the bookend for no-downtime continuous deploy).
+
+**Carried invariants (all phases):** additive-only plugin-namespace schema; degrade-safe deterministic floor (no AI dependency); instance-agnostic (no company-prefix literals); Editor-Agent governance parity; `blocker-chain.ts` purity (determinism + AI-token guards).
+
+**Already partially delivered by the v1.4.3 incident hotfix (2026-06-03):** PERF — removed ~4,192 fake-ref 404 DB lookups + the dead-scope bulletin churn (helps SNAP but does not fix the 25.7s cold recompute); LEG — the prefix-gate kills fake-ref id leakage (partial NO-RAW-IDS); HYG — version label refreshed to 1.4.3, the chat-watchdog timing flake is now a known item.
 
 ## v1 Requirements
 
-Requirements for this milestone. Each maps to exactly one roadmap phase.
+### Snapshot performance & honest loading (Phase 16)
 
-### Legibility — plain English, no raw identifiers
+- [ ] **SNAP-01**: The Situation Room cockpit loads fast — the snapshot returns well under the 30s host timeout (target p95 < ~5s) and never 502s, including a cold cache.
+- [ ] **SNAP-02**: The cold snapshot recompute no longer approaches the 30s cliff (the live 25.7s near-miss is eliminated); the employees rollup is degrade-safe (a slow/failed sub-read floors to the deterministic line, never blocks the view).
+- [ ] **SNAP-03**: Confirm-first step — verify whether the room still 502s now that action-cards are gated, and record the cold/warm snapshot timings as the phase baseline. (Done 2026-06-03: no 502, 6/6 snapshot calls 200, cold 25.7s — drives SNAP-01/02.)
 
-- [ ] **LEG-01**: No raw or partial agent identifiers (e.g. `agent#04fcac7c`), bare UUIDs, or machine tokens are ever rendered as user-visible text on any surface (Reader, Situation Room, Bulletin, Chat); every agent reference shows a human name or role.
-- [ ] **LEG-02**: The NO_UUID_LEAK render-scan guard is extended to fail on partial-hash agent labels and short hex id fragments, with a named regression test.
-- [ ] **LEG-03**: Blocker-chain verdict / terminal lines render as plain-English sentences a non-builder understands — no enum or code tokens (e.g. `AWAITING_AGENT_STUCK`) surfaced as user-visible text.
-- [ ] **LEG-04**: The Situation Room focus line is enriched from the TL;DR cache (plain-English summary) when available, falling back to the polished issue title.
-- [ ] **LEG-05**: The same blocked item reads with the same plain-English verdict wording across Reader and Situation Room (legibility parity — extends the v1.4.2 one-verdict-everywhere fix to the surfaced wording).
+### Structured human-wait + truthful verdicts — CENTERPIECE (Phase 17)
 
-### Editor-Agent prose live in production
+- [ ] **WAIT-01**: Agents have a STRUCTURED way to declare "blocked on a human decision X" (a machine-readable signal, not free prose the engine cannot parse).
+- [ ] **WAIT-02**: The deterministic engine classifies a structured human-wait as AWAITING_HUMAN (needs-you), instead of conservatively parking it in Watch — the deep fix behind the BEAAA-972 confusion.
+- [ ] **WAIT-03**: Every blocked-no-edge class is classified truthfully (the BEAAA-972 family: blocked+agent-owned, blocked+human-owned, blocked+unowned, structured-human-wait).
+- [ ] **WAIT-04**: The SC5 cross-surface consistency guard is extended into a FULL matrix (every surface × every terminal kind reads one consistent verdict).
 
-- [ ] **PROSE-01**: The Pulse header displays Editor-Agent-compiled plain-English company-status prose above the deterministic floor; when prose is absent or stale, the deterministic floor renders (never blanks).
-- [ ] **PROSE-02**: Needs-you / actionable rows display the Editor-Agent's grounded named action (what unblocks this + who + ~when) in production; when stale or ungrounded, the row degrades to the deterministic line with no fabricated urgency.
-- [ ] **PROSE-03**: All Editor-Agent prose is grounded against real issue data (no hallucinated references or identifiers) and passes the grounding + stale→degrade guardrails with a named test.
+### No rabbit-holes & plain-English (Phase 18)
 
-### Off-request snapshot + action-card re-architecture (flag-gated, sequenced LAST)
+- [ ] **LEG-01**: "Open ↗" routes to the Clarity Reader view (inline-resolved, plain-English), never the raw classic Paperclip issue page (the wall of unresolved inline references).
+- [ ] **LEG-02**: ZERO raw or partial agent/UUID identifiers in any human-facing text on any surface; every agent reference shows a human name/role (extends NO_UUID_LEAK; the v1.4.3 prefix-gate is the partial start).
+- [ ] **LEG-03**: A "Looks done — close it?" affordance appears when the AI TL;DR reads done but the deterministic engine still classifies the item as blocked (honest divergence surfaced as an action, not hidden).
 
-- [ ] **PERF-01**: The Situation Room snapshot recompute runs off the request path (precomputed / cached); a cold view returns well under the 30s host timeout (target p95 < ~5s) and never 502s.
-- [ ] **PERF-02**: Action-card compile runs off the snapshot request path and writes no operation-issue notification storm; it is re-enabled behind `ACTION_CARDS_ENABLED`.
-- [ ] **PERF-03**: `ACTION_CARDS_ENABLED` is safely toggleable at runtime — OFF degrades to the deterministic floor (room still works); ON yields no snapshot 502 and no notification storm; both states are flag-gated for continuous BEAAA deploy.
+### Action-cards async re-architecture — LAST, flag-gated (Phase 19)
 
-## Future Requirements
+- [ ] **CARD-01**: Action-card compile runs OFF the request path (not in the snapshot RPC) and writes non-notifying op-issues (no "Someone updated" storm).
+- [ ] **CARD-02**: `ACTION_CARDS_ENABLED` is re-enabled behind the flag once proven; the Editor named-action prose (what unblocks this + who + ~when) goes live on needs-you rows, stale→degrade intact.
+- [ ] **CARD-03**: The flag is runtime-safe and slip-safe — OFF degrades to the deterministic floor (room still works); ON yields no snapshot 502 and no notification storm.
 
-Acknowledged but deferred — not in this roadmap.
+### Hygiene & honestly-green CI (Phase 20)
 
-### Usable for everyone (multi-user)
-
-- **OPTIN-01**: Per-user opt-in toggle UI under Settings → Clarity Pack (server-side opt-in already ships; this is the toggle surface).
-- **MULTI-01**: Multi-operator support (remove single-operator assumptions: silent auto-unarchive, assignee picker).
-
-### Do-it-here completeness
-
-- **DOIT-06**: Reply-in-place for AWAITING_AGENT_STUCK rows (Phase 14 shipped AWAITING_HUMAN only).
+- [ ] **HYG-01**: The SC5 full-matrix coverage runs in CI (every surface × every terminal kind).
+- [ ] **HYG-02**: The 7 CHAT/CTT REQUIREMENTS traceability test failures are resolved (they fail only because those rows were archived to v1.0.0-REQUIREMENTS.md — re-point the test at the archive or formally accept).
+- [ ] **HYG-03**: The load-dependent chat-watchdog timing flake (`U7 WATCHDOG-FIRE-AND-FORGET`) is stabilized (condition-based, not a wall-clock threshold).
+- [ ] **HYG-04**: The stale plugin-list version label is refreshed and automated DO backups are confirmed ON (the continuous-deploy bookend prerequisite).
 
 ## Out of Scope
 
-Explicitly excluded for v1.5.0. Documented to prevent scope creep.
-
 | Feature | Reason |
 |---------|--------|
-| Per-user opt-in toggle UI / multi-user | v1.5.0 is legible-for-non-builders, not multi-user; server-side opt-in already ships. Deferred to a future milestone. |
-| Reply-in-place for stuck-agent rows | Legibility + truthful prose is the focus; the do-it-here surface is feature-complete enough for now. |
-| `R3-self-assign-one-assignee` fix | Not legibility/prose; fold in only if cheap during the action-layer rework. |
-| Replacing or forking the Paperclip UI/core | Coexistence guarantee — all work stays inside the plugin manifest contribution surface. |
-| New non-additive schema | Coexistence guarantee #3 — additive plugin-namespace migrations only. |
+| Multi-operator / onboarding / opt-in toggle UI | Locked: "usable for everyone" = legible-for-non-builders, NOT multi-operator. BEAAA is effectively solo; keep the existing Phase-2 opt-in. |
+| Re-enabling action-cards without re-architecting | Locked: action-cards must be rebuilt off-request + non-notifying before the flag flips (v1.4.1 gated them for exactly the storm/timeout reasons). |
+| Host-side Postgres / agent-concurrency tuning | The BEAAA CPU bursts are host/company-agent driven (v1.4.3 incident finding), a Paperclip-instance concern, not a Clarity milestone. |
+| Replacing/forking the Paperclip UI/core; non-additive schema | Coexistence guarantees. |
 
 ## Traceability
 
-Which phases cover which requirements. Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LEG-01 | Phase 16 | Pending |
-| LEG-02 | Phase 16 | Pending |
-| LEG-03 | Phase 16 | Pending |
-| LEG-04 | Phase 16 | Pending |
-| LEG-05 | Phase 16 | Pending |
-| PROSE-01 | Phase 17 | Pending |
-| PROSE-02 | Phase 17 | Pending |
-| PROSE-03 | Phase 17 | Pending |
-| PERF-01 | Phase 18 | Pending |
-| PERF-02 | Phase 18 | Pending |
-| PERF-03 | Phase 18 | Pending |
+| SNAP-01 | Phase 16 | Pending |
+| SNAP-02 | Phase 16 | Pending |
+| SNAP-03 | Phase 16 | Pending |
+| WAIT-01 | Phase 17 | Pending |
+| WAIT-02 | Phase 17 | Pending |
+| WAIT-03 | Phase 17 | Pending |
+| WAIT-04 | Phase 17 | Pending |
+| LEG-01 | Phase 18 | Pending |
+| LEG-02 | Phase 18 | Pending |
+| LEG-03 | Phase 18 | Pending |
+| CARD-01 | Phase 19 | Pending |
+| CARD-02 | Phase 19 | Pending |
+| CARD-03 | Phase 19 | Pending |
+| HYG-01 | Phase 20 | Pending |
+| HYG-02 | Phase 20 | Pending |
+| HYG-03 | Phase 20 | Pending |
+| HYG-04 | Phase 20 | Pending |
 
 **Coverage:**
-- v1 requirements: 11 total
-- Mapped to phases: 11 ✓
+- v1 requirements: 17 total
+- Mapped to phases: 17 ✓ (16-20)
 - Unmapped: 0
-
-**Phase rollup:**
-- Phase 16 — Legibility / No-Raw-Identifiers Pass: LEG-01, LEG-02, LEG-03, LEG-04, LEG-05 (5)
-- Phase 17 — Editor-Agent Prose Live: PROSE-01, PROSE-02, PROSE-03 (3)
-- Phase 18 — Off-Request Snapshot + Action-Card Re-Arch (flag-gated, LAST): PERF-01, PERF-02, PERF-03 (3)
 
 ---
 *Requirements defined: 2026-06-03*
-*Last updated: 2026-06-03 — roadmap created; 11/11 requirements mapped to Phases 16–18, no orphans*
+*Last updated: 2026-06-03 — re-aligned to locked-scope memory (16-20, structured-human-wait centerpiece); supersedes the initial 16-18 (LEG/PROSE/PERF) mis-scope.*

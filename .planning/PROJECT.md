@@ -21,14 +21,16 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 
 **Goal:** Make every Clarity surface legible to a non-builder — plain English everywhere, zero raw agent/UUID identifiers — and make the Editor-Agent's *truthful* named-action prose actually live in production, via a safe off-request (flag-gated) compile path that keeps the snapshot fast.
 
-**Target features:**
-- **No raw identifiers, anywhere** — kill partial agent-id hashes (`agent#04fcac7c`), bare UUIDs, and machine tokens across Reader / Situation Room / Bulletin / Chat; extend the NO_UUID_LEAK guard to catch partial-hash agent labels (found live 2026-06-03).
-- **Plain-English legibility pass** — verdict/terminal lines, focus lines, and blocker chains read as sentences a non-builder understands (no enum-ish jargon surfaced as text); `focusLine` enriched from `tldr_cache`, not the bare issue title.
-- **Editor-Agent prose live** — Pulse-header prose enrichment (deferred D-03 in Phase 15) + grounded named-action row prose, with the stale→degrade floor intact (never blanks, never fabricates urgency).
-- **Off-request snapshot + action-card re-architecture (flag-gated, sequenced LAST)** — move the heavy recompute off the request path to kill the 25.7s cold near-cliff, then re-enable `ACTION_CARDS_ENABLED` safely with no op-issue notification storm. Behind a flag; continuous flag-gated BEAAA deploy.
+**Target features (locked scope `v150-scope-locked`, Phases 16-20):**
+- **16 — Snapshot performance & honest loading** — cockpit loads instantly; rollup fast + degrade-safe; no 30s/502 (the live 25.7s cold recompute). FIRST.
+- **17 — Structured human-wait + truthful verdicts (CENTERPIECE)** — agents declare "blocked on a human decision X" *structurally* so the engine honestly classifies AWAITING_HUMAN instead of parking in Watch; the deep fix behind BEAAA-972; SC5 extended to a full surface×terminal matrix.
+- **18 — No rabbit-holes & plain-English** — "Open ↗" → Clarity Reader (not the raw page); zero raw agent/UUID ids in human-facing text; "Looks done — close it?" when the AI TL;DR says done but the engine says blocked.
+- **19 — Action-cards async re-architecture (LAST, flag-gated)** — off-request compile + non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; named-action prose live; slip-safe to v1.6.
+- **20 — Hygiene & honestly-green CI** — SC5 full-matrix; fix the 7 CHAT/CTT traceability failures; stabilize the chat-watchdog timing flake; refresh the version label; confirm automated DO backups (the continuous-deploy bookend).
 
-**Live driver (2026-06-03):** with action-cards gated the room no longer 502s (6/6 snapshot calls 200), but cold snapshot recompute is **25.7s** — within ~4s of the 30s timeout cliff. This motivates the off-request path.
-**Explicitly OUT:** per-user opt-in toggle UI / multi-user (this milestone is legible-for-non-builders, not multi-user; server-side opt-in already ships).
+**Live driver (2026-06-03):** room no longer 502s with action-cards gated (6/6 snapshot calls 200), but cold recompute is **25.7s** (~4s under the 30s cliff) → Phase 16. The BEAAA-972 confusion (agents expressing human-waits as prose the engine can't read) → Phase 17 centerpiece.
+**Note:** the v1.4.3 incident hotfix already partially delivered Phase-16 (less DB load), Phase-18 (prefix-gate kills fake-ref id leakage), and Phase-20 (version label, known watchdog flake) pieces.
+**Explicitly OUT:** multi-operator / onboarding / opt-in toggle UI — "usable for everyone" = legible-for-non-builders, NOT multi-user; the Phase-2 opt-in already ships.
 
 ## Requirements
 

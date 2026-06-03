@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: planning
-last_updated: "2026-06-03T08:00:00.000Z"
+last_updated: "2026-06-03T12:00:00.000Z"
 last_activity: 2026-06-03
 progress:
-  total_phases: 3
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -15,29 +15,35 @@ progress:
 
 # State: Clarity Pack
 
-## ▶ v1.5.0 Truthful & Legible Situation Room — ROADMAP CREATED 2026-06-03 (Phases 16–18)
+## ▶ v1.5.0 Truthful & Legible Situation Room — RE-ROADMAPPED 2026-06-03 (Phases 16–20)
 
-Roadmap for the v1.5.0 milestone is written. 11 requirements mapped to 3 phases (continues numbering from Phase 15; phase dirs 01–15 untouched). Coverage 11/11, no orphans, no duplicates. Granularity: coarse.
+**CORRECTION:** the prior `/gsd:new-milestone` run mis-scoped v1.5.0 as 3 phases (16-18 LEG/PROSE/PERF) because a degraded MemPalace index hid the locked-scope memory `v150-scope-locked`. The authoritative scope is the **5-phase 16-20 structure** (SNAP / WAIT / LEG / CARD / HYG) with a **structured-human-wait centerpiece (Phase 17)**. The roadmap's v1.5.0 section was replaced; v1.0.0 / v1.4.0 sections and phase dirs 01–15 untouched. 17 requirements mapped to 5 phases. Coverage 17/17, no orphans, no duplicates. Granularity: coarse.
 
-**Phase structure (legibility → prose live → off-request re-arch; PERF locked LAST + flag-gated):**
+**Phase structure (operator-LOCKED sequence 16 → 17 → 18 → 19 → 20):**
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
-| 16. Legibility / No-Raw-Identifiers Pass | Plain English everywhere; kill partial agent-id hashes + bare UUIDs across all four surfaces; extend NO_UUID_LEAK to partial-hash labels; enrich focusLine from tldr_cache; verdict-wording parity Reader+SR | LEG-01, LEG-02, LEG-03, LEG-04, LEG-05 |
-| 17. Editor-Agent Prose Live | Pulse-header prose enrichment (deferred D-03) + grounded named-action row prose in production; stale→degrade floor intact | PROSE-01, PROSE-02, PROSE-03 |
-| 18. Off-Request Snapshot + Action-Card Re-Arch (flag-gated, LAST) | Recompute off the request path (kill the 25.7s cold near-cliff); re-enable ACTION_CARDS_ENABLED with no notification storm; runtime-toggleable | PERF-01, PERF-02, PERF-03 |
+| 16. Snapshot performance & honest loading | Cockpit loads fast (p95 < ~5s, never 502); eliminate the 25.7s cold-recompute near-cliff; rollup degrade-safe. Confirm-first baseline recorded. FIRST. | SNAP-01, SNAP-02, SNAP-03 |
+| 17. Structured human-wait + truthful verdicts (CENTERPIECE) | Machine-readable "blocked on a human decision" signal so the engine classifies AWAITING_HUMAN instead of parking in Watch (deep BEAAA-972 fix); every blocked-no-edge class truthful; SC5 full surface×terminal-kind matrix | WAIT-01, WAIT-02, WAIT-03, WAIT-04 |
+| 18. No rabbit-holes & plain-English | "Open ↗"→Clarity Reader (not raw page); ZERO raw/partial agent/UUID ids in human-facing text; "Looks done — close it?" when AI TL;DR says done but engine says blocked | LEG-01, LEG-02, LEG-03 |
+| 19. Action-cards async re-architecture (LAST, flag-gated) | Compile off the request path + non-notifying op-issues; re-enable ACTION_CARDS_ENABLED behind the flag; Editor named-action prose live; runtime-safe + slip-safe to v1.6 | CARD-01, CARD-02, CARD-03 |
+| 20. Hygiene & honestly-green CI | SC5 full-matrix in CI; fix the 7 CHAT/CTT traceability failures; stabilize the chat-watchdog flake; refresh version label; confirm automated DO backups | HYG-01, HYG-02, HYG-03, HYG-04 |
 
 **Critical sequencing (operator-locked):**
 
-- **Phase 18 (PERF) is LAST and flag-gated** (`ACTION_CARDS_ENABLED`). It depends on the legibility (16) + prose (17) work landing first — re-architecting a known-good, legible surface, not a moving target.
-- **Live driver:** cold snapshot is 25.7s today (no 502 with action-cards gated OFF, but ~4s under the 30s host-timeout cliff). Re-enabling action-cards synchronously caused the prior 502 + BEAAA-2092 notification storm (v1.4.1 hotfix gated it OFF). Phase 18 makes re-enable safe by moving compile off the request path.
-- **Phase 16 → 17 dependency:** the prose layer consumes Phase 16's legibility primitives (plain-English focusLine, scrubbed identifiers, verdict wording) so prose is legible + identifier-clean by construction.
+- **16 is FIRST** — the cockpit must load fast/honestly before truthful verdicts matter. Confirm-first done (no 502, 6/6 snapshot calls 200, cold 25.7s); Phase 16 targets the 25.7s cold recompute + degrade-safety. The v1.4.3 hotfix (removed ~4,192 fake-ref 404 lookups + dead-scope bulletin churn) helps load but does NOT fix the 25.7s recompute.
+- **17 is the CENTERPIECE** — a structured machine-readable human-wait signal so the deterministic engine classifies AWAITING_HUMAN instead of parking in Watch (the deep BEAAA-972 fix). Depends on 16's honest, fast rollup. SC5 extended to a full surface × terminal-kind matrix.
+- **18 consumes 17's truthful verdicts** for the plain-English surfaces (Open↗→Reader, zero raw ids, looks-done affordance). The v1.4.3 prefix-gate is the partial NO-RAW-IDS start.
+- **19 (action-cards async) is LAST and flag-gated** — off-request compile + non-notifying op-issues; depends on 16-18; slip-safe to v1.6. Re-enabling action-cards synchronously caused the prior 502 + BEAAA-2092 notification storm (v1.4.1 gated it OFF).
+- **20 (hygiene/CI) closes SC5 full-matrix + known test-debt** (7 CHAT/CTT traceability + chat-watchdog flake); may run alongside.
 
-**Carried invariants in every phase's success criteria:** additive-only plugin-namespace schema (disable/uninstall preserves data); degrade-safe deterministic floor (no AI dependency — floor renders when the Editor-Agent is down); instance-agnostic (no company-prefix literals); Editor-Agent governance parity; continuous flag-gated BEAAA deploy (bookend = DO droplet backup; version-bump BOTH package.json AND src/manifest.ts per DEPLOY-RUNBOOK).
+**Reusable input:** `.planning/phases/_superseded-legibility-16-18-misscope/` holds the OLD mis-scope's research/patterns/plans (verdict-wording shared helper, focusLine-from-tldr enrichment, chat-chip humanization) — sound legibility/prose input for Phases 17/18; mine it rather than start fresh.
 
-**Next action:** `/gsd:plan-phase 16` (the legibility / no-raw-identifiers pass). Phase 17 prose work depends on Phase 16 primitives; Phase 18 PERF is locked LAST.
+**Carried invariants in every phase's success criteria:** additive-only plugin-namespace schema (disable/uninstall preserves data); degrade-safe deterministic floor (no AI dependency — floor renders when the Editor-Agent is down; NO AI in `blocker-chain.ts`, determinism + AI-token grep guards); instance-agnostic (no company-prefix literals); Editor-Agent governance parity; continuous flag-gated BEAAA deploy (bookend = automated DO backups; version-bump BOTH package.json AND src/manifest.ts per DEPLOY-RUNBOOK).
 
-Files: `.planning/ROADMAP.md` (v1.5.0 section + phase details, appended — v1.0.0/v1.4.0 sections preserved), `.planning/REQUIREMENTS.md` (traceability 11/11).
+**Next action:** `/gsd:plan-phase 16` (snapshot performance & honest loading — FIRST). Phase 17 (structured-human-wait centerpiece) depends on Phase 16's fast/honest rollup; Phase 19 action-cards is locked LAST + flag-gated.
+
+Files: `.planning/ROADMAP.md` (v1.5.0 section replaced — 16-20; v1.0.0/v1.4.0 preserved), `.planning/REQUIREMENTS.md` (traceability 17/17, already re-aligned).
 
 ---
 

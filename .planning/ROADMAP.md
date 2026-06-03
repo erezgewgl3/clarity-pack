@@ -7,7 +7,7 @@
 
 - ✅ **v1.0.0 — v1 Final Internal** — Phases 1–9 (shipped 2026-06-01, final version v1.3.0 live on BEAAA)
 - ✅ **v1.4.0 — Truthful Situation Room** — Phases 10–15 (shipped v1.4.2, live-verified BEAAA 2026-06-03)
-- ▶ **v1.5.0 — Truthful & Legible Situation Room** — Phases 16–18 (active; continues phase numbering)
+- ▶ **v1.5.0 — Truthful & Legible Situation Room** — Phases 16–20 (active; continues phase numbering)
 
 ## Phases
 
@@ -44,57 +44,84 @@ Make the Situation Room the one screen that truthfully tells Eric what's going o
 
 </details>
 
-### ▶ v1.5.0 — Truthful & Legible Situation Room (Phases 16–18)
+### ▶ v1.5.0 — Truthful & Legible Situation Room (Phases 16–20)
 
-Make every Clarity surface legible to a non-builder — plain English everywhere, zero raw agent/UUID identifiers — and make the Editor-Agent's *truthful* named-action prose actually live in production, via a safe off-request (flag-gated) compile path that keeps the snapshot fast. Builds directly on the v1.4.0 deterministic engine + Editor-Agent layer: legibility first, prose live on top, then the off-request re-architecture that lets the prose layer run safely without blowing the 30s snapshot cliff.
+Make the Situation Room load instantly and tell the truth a non-builder can read. The Situation Room must (1) load fast and honestly before truthful verdicts can matter, (2) let agents declare human-waits *structurally* so the deterministic engine honestly classifies needs-you (the deep BEAAA-972 fix — the milestone centerpiece), (3) route every surface to plain-English Reader views with zero raw ids, then (4) ship the Editor-Agent named-action prose live via a safe off-request (flag-gated) action-card path, with (5) honestly-green CI behind it.
 
-**Live driver (2026-06-03):** with action-cards gated OFF (v1.4.1 hotfix), the room no longer 502s (6/6 snapshot calls 200) but cold snapshot recompute is **25.7s** — within ~4s of the 30s host-timeout cliff. Re-enabling action-cards synchronously is what previously blocked the snapshot >30s and triggered the BEAAA-2092 notification storm. The PERF phase (sequenced LAST, flag-gated) makes re-enable safe.
+**Sequence is operator-LOCKED: 16 → 17 → 18 → 19 → 20.** Snapshot perf first (the cockpit must load fast/honestly before truthful verdicts matter); the structured-human-wait centerpiece next (it depends on the honest rollup); plain-English surfaces consume those truthful verdicts; the action-card re-architecture comes LAST and flag-gated (slip-safe to v1.6); hygiene/CI closes the full SC5 matrix and may run alongside.
 
-- [ ] **Phase 16: Legibility / No-Raw-Identifiers Pass** — plain English everywhere; kill partial agent-id hashes + bare UUIDs across all four surfaces; extend NO_UUID_LEAK to partial-hash labels; enrich focus line from `tldr_cache`; verdict-wording parity across Reader + Situation Room.
-- [ ] **Phase 17: Editor-Agent Prose Live** — Pulse-header prose enrichment (deferred D-03) + grounded named-action row prose in production, with the stale→degrade floor intact (never blanks, never fabricates urgency).
-- [ ] **Phase 18: Off-Request Snapshot + Action-Card Re-Arch (flag-gated, LAST)** — move the heavy recompute off the request path to kill the 25.7s cold near-cliff; re-enable `ACTION_CARDS_ENABLED` safely with no notification storm; flag toggleable at runtime for continuous BEAAA deploy.
+**Live driver (2026-06-03):** with action-cards gated OFF (v1.4.1 hotfix), the room no longer 502s (6/6 snapshot calls 200) but cold snapshot recompute is **25.7s** — within ~4s of the 30s host-timeout cliff. The confirm-first step is already done (no 502, cold 25.7s) → Phase 16 targets the 25.7s cold recompute + degrade-safety. The BEAAA-972 confusion (agents expressing human-waits as free prose the engine cannot parse, so they park in Watch instead of Needs-you) → Phase 17 centerpiece.
+
+**Partially delivered by the v1.4.3 incident hotfix (2026-06-03):** Phase 16 (removed ~4,192 fake-ref 404 DB lookups + dead-scope bulletin churn — helps load but does NOT fix the 25.7s cold recompute), Phase 18 (prefix-gate kills fake-ref id leakage — partial NO-RAW-IDS), Phase 20 (version label refreshed to 1.4.3; the chat-watchdog timing flake is a known HYG-03 item). These are noted in the relevant success criteria so they are not re-done wholesale.
+
+**Reusable input:** `.planning/phases/_superseded-legibility-16-18-misscope/` holds the OLD 16-18 mis-scope's research / patterns / plans (verdict-wording shared helper, focusLine-from-tldr enrichment, chat-chip humanization). That work is sound legibility/prose input — Phases 17 and 18 should mine it rather than start from scratch.
+
+- [ ] **Phase 16: Snapshot performance & honest loading** — cockpit loads fast (snapshot well under the 30s timeout, target p95 < ~5s, never 502s); eliminate the 25.7s cold recompute near-cliff; employees rollup degrade-safe. Confirm-first baseline already recorded. FIRST.
+- [ ] **Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)** — a machine-readable "blocked on a human decision X" signal so the deterministic engine classifies AWAITING_HUMAN instead of parking in Watch (the deep BEAAA-972 fix); every blocked-no-edge class classified truthfully; SC5 extended to a full surface × terminal-kind matrix.
+- [ ] **Phase 18: No rabbit-holes & plain-English** — "Open ↗" routes to the Clarity Reader (not the raw classic page); ZERO raw/partial agent/UUID ids in human-facing text everywhere; "Looks done — close it?" affordance when the AI TL;DR reads done but the engine still says blocked.
+- [ ] **Phase 19: Action-cards async re-architecture (LAST, flag-gated)** — action-card compile off the request path writing non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; Editor named-action prose live on needs-you rows; runtime-safe + slip-safe to v1.6.
+- [ ] **Phase 20: Hygiene & honestly-green CI** — SC5 full-matrix in CI; fix the 7 CHAT/CTT traceability failures; stabilize the chat-watchdog timing flake; refresh the version label; confirm automated DO backups (the continuous-deploy bookend).
 
 ## Phase Details (v1.5.0)
 
-### Phase 16: Legibility / No-Raw-Identifiers Pass
-**Goal**: Every Clarity surface reads as plain English for a non-builder — no raw or partial machine identifiers, no enum/code tokens surfaced as text, and the same blocked item reads with the same wording everywhere.
-**Depends on**: Nothing new (opening phase of v1.5.0; continues numbering from Phase 15). Builds on the v1.4.0 engine verdict + NO_UUID_LEAK render-scan already in place.
-**Requirements**: LEG-01, LEG-02, LEG-03, LEG-04, LEG-05
+### Phase 16: Snapshot performance & honest loading
+**Goal**: The Situation Room cockpit loads fast and honestly — the snapshot returns well under the 30s host timeout even on a cold cache, never 502s, and a slow or failed sub-read floors to the deterministic line rather than blocking the whole view.
+**Depends on**: Nothing new (opening phase of v1.5.0; continues numbering from Phase 15). Builds on the v1.4.0 deterministic engine + rollup already in place. Confirm-first baseline (SNAP-03) already recorded 2026-06-03.
+**Requirements**: SNAP-01, SNAP-02, SNAP-03
 **Success Criteria** (what must be TRUE):
-  1. A non-builder reading any surface (Reader, Situation Room, Bulletin, Chat) never sees a raw or partial agent identifier (e.g. `agent#04fcac7c`), a bare UUID, or a machine token — every agent reference shows a human name or role.
-  2. The NO_UUID_LEAK render-scan guard fails the build when a partial-hash agent label or short hex id fragment would render, proven by a named regression test (extends the v1.4.x UUID-pattern guard).
-  3. Blocker-chain verdict / terminal lines read as plain-English sentences — no enum or code token (e.g. `AWAITING_AGENT_STUCK`) is ever shown as user-visible text.
-  4. The Situation Room focus line shows the plain-English TL;DR-cache summary when available, falling back to the polished issue title — never the bare/raw title.
-  5. The same blocked item reads with the same plain-English verdict wording on the Reader blocker panel and in the Situation Room (legibility parity, extending the v1.4.2 one-verdict-everywhere fix to surfaced wording).
-**Plans**: 4 plans (wave 1: 16-01, 16-02, 16-04 parallel; wave 2: 16-03)
-- [ ] 16-01-PLAN.md — Shared verdict-wording helper + Reader enum→plain-English + Reader/SR parity (LEG-03, LEG-05)
-- [ ] 16-02-PLAN.md — Scrub fallback → 'an agent' + anchored PARTIAL_HEX_RE guard + inverted/named tests (LEG-01, LEG-02)
-- [ ] 16-03-PLAN.md — Situation Room focusLine enriched from tldr_cache, degrade-wrapped (LEG-04)
-- [ ] 16-04-PLAN.md — Chat CHT-/run·/toast hex-fragment chip humanization + source-grep guard (LEG-01)
-**UI hint**: yes
-
-### Phase 17: Editor-Agent Prose Live
-**Goal**: Make the Editor-Agent's truthful named-action prose actually render in production — Pulse-header company-status prose and grounded named-action row prose — on top of the deterministic floor, which always still renders when prose is absent, stale, or ungrounded.
-**Depends on**: Phase 16 (consumes the legibility primitives — plain-English focus lines, scrubbed identifiers, verdict wording — so the prose layer is legible and identifier-clean by construction).
-**Requirements**: PROSE-01, PROSE-02, PROSE-03
-**Success Criteria** (what must be TRUE):
-  1. The Pulse header displays Editor-Agent-compiled plain-English company-status prose above the deterministic floor; when that prose is absent or stale, the deterministic floor sentence renders instead and the header never blanks.
-  2. Needs-you / actionable rows display the Editor-Agent's grounded named action (what unblocks this + who + ~when) in production; when stale or ungrounded, the row degrades to the deterministic line with no fabricated urgency.
-  3. Every piece of Editor-Agent prose is grounded against real issue data — no hallucinated references or identifiers — and the grounding + stale→degrade guardrails are enforced by a named test.
-  4. The prose layer stays within Editor-Agent governance parity (standard caps, pause/terminate, audit) and the deterministic floor has zero AI dependency, so the surfaces render honestly when the Editor-Agent is down.
+  1. A cold-cache Situation Room view returns well under the 30s host timeout (target p95 < ~5s) and never 502s — the live 25.7s cold-recompute near-cliff is eliminated.
+  2. The employees rollup is degrade-safe per row: a slow or failed sub-read floors to the deterministic line and never blocks or blanks the view.
+  3. The confirm-first baseline is recorded as the phase's starting point (done 2026-06-03: no 502, 6/6 snapshot calls 200, cold 25.7s) and drives the SNAP-01/02 targets — the v1.4.3 hotfix's removal of ~4,192 fake-ref 404 lookups + dead-scope bulletin churn is acknowledged as a partial contribution, NOT a fix for the 25.7s cold recompute.
+  4. The fix is instance-agnostic (no company-prefix literals) and additive-only (plugin-namespace schema; disable/uninstall preserves data), shipped via continuous flag-gated BEAAA deploy bookended by the automated DO backup.
 **Plans**: TBD
 **UI hint**: yes
 
-### Phase 18: Off-Request Snapshot + Action-Card Re-Arch (flag-gated, LAST)
-**Goal**: Move the heavy Situation Room recompute off the request path so a cold view returns well under the 30s host-timeout cliff, then re-enable the Editor-Agent action-card compile safely behind `ACTION_CARDS_ENABLED` with no operation-issue notification storm.
-**Depends on**: Phase 16 (legibility) + Phase 17 (prose live). This is the LAST phase by operator lock — the prose/legibility work must land first so the off-request path is re-architecting a known-good, legible surface; re-enabling action-cards is what previously caused the 502 + BEAAA-2092 storm.
-**Requirements**: PERF-01, PERF-02, PERF-03
+### Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)
+**Goal**: Give agents a structured, machine-readable way to declare "blocked on a human decision X" so the deterministic engine honestly classifies it as AWAITING_HUMAN (needs-you) instead of conservatively parking it in Watch — the deep fix behind the BEAAA-972 confusion — and prove every blocked-no-edge class is classified truthfully across a full surface × terminal-kind matrix.
+**Depends on**: Phase 16 (consumes the honest, degrade-safe rollup — the structured-wait verdict must surface in a snapshot that actually loads). Reuses the superseded 16-18 verdict-wording shared-helper input where it informs the classification surface.
+**Requirements**: WAIT-01, WAIT-02, WAIT-03, WAIT-04
 **Success Criteria** (what must be TRUE):
-  1. The Situation Room snapshot recompute runs off the request path (precomputed / cached); a cold view returns well under the 30s host timeout (target p95 < ~5s, down from the live 25.7s near-cliff) and never 502s.
-  2. The Editor-Agent action-card compile runs off the snapshot request path and writes no operation-issue notification storm (no recurrence of BEAAA-2092).
-  3. `ACTION_CARDS_ENABLED` is safely toggleable at runtime: OFF degrades to the deterministic floor and the room still works; ON yields no snapshot 502 and no notification storm — both states ship via continuous flag-gated BEAAA deploy.
+  1. An agent can declare a human-wait through a STRUCTURED, machine-readable signal (not free prose the engine cannot parse) — the structured declaration is captured additively in the plugin namespace.
+  2. The deterministic engine classifies a structured human-wait as AWAITING_HUMAN (needs-you) and it surfaces in the Needs-you tier, no longer parked conservatively in Watch — the BEAAA-972 row reads needs-you everywhere.
+  3. Every blocked-no-edge class in the BEAAA-972 family is classified truthfully: blocked+agent-owned, blocked+human-owned, blocked+unowned, and structured-human-wait each resolve to their honest terminal kind.
+  4. The SC5 cross-surface consistency guard is extended into a FULL matrix — every surface × every terminal kind reads one consistent verdict — and `blocker-chain.ts` stays pure (determinism + AI-token grep guards pass; no AI introduced into the engine).
 **Plans**: TBD
 **UI hint**: yes
+
+### Phase 18: No rabbit-holes & plain-English
+**Goal**: Make every Clarity surface legible to a non-builder consuming Phase 17's truthful verdicts — "Open ↗" routes to the plain-English Clarity Reader instead of the raw classic page, no raw or partial machine identifier ever renders in human-facing text, and the honest divergence between the AI TL;DR and the engine verdict is surfaced as a "Looks done — close it?" action rather than hidden.
+**Depends on**: Phase 17 (consumes the truthful per-row verdicts so the plain-English surfaces and the "looks-done vs blocked" divergence read off honest classification). Reuses the superseded 16-18 input (focusLine-from-tldr enrichment, chat-chip humanization, verdict-wording helper).
+**Requirements**: LEG-01, LEG-02, LEG-03
+**Success Criteria** (what must be TRUE):
+  1. "Open ↗" routes to the Clarity Reader view (inline-resolved, plain-English) on every surface — never the raw classic Paperclip issue page (the wall of unresolved inline references).
+  2. ZERO raw or partial agent/UUID identifiers appear in any human-facing text on any of the four surfaces; every agent reference shows a human name or role. This extends NO_UUID_LEAK to partial-hash labels and builds on the v1.4.3 prefix-gate (the partial start) — the gate's contribution is acknowledged, not re-done wholesale, and a named regression guard fails the build on a partial-hash/short-hex leak.
+  3. A "Looks done — close it?" affordance appears whenever the AI TL;DR reads done but the deterministic engine still classifies the item as blocked — the divergence is surfaced as an explicit action, never silently hidden.
+  4. The legibility work stays degrade-safe and instance-agnostic (no company-prefix literals); enum/code tokens (e.g. `AWAITING_AGENT_STUCK`) are never shown as user-visible text.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 19: Action-cards async re-architecture (LAST, flag-gated)
+**Goal**: Move the Editor-Agent action-card compile off the snapshot request path and onto non-notifying operation-issues, then re-enable `ACTION_CARDS_ENABLED` behind a runtime flag once proven — bringing the grounded named-action prose (what unblocks this + who + ~when) live on needs-you rows without the snapshot 502 or the BEAAA-2092 notification storm.
+**Depends on**: Phases 16–18. By operator lock this is the LAST feature phase: snapshot perf (16), the truthful structured-wait engine (17), and the legible surfaces (18) must land first so the action-card re-arch targets a known-good, fast, legible surface. Slip-safe to v1.6 if it cannot land cleanly.
+**Requirements**: CARD-01, CARD-02, CARD-03
+**Success Criteria** (what must be TRUE):
+  1. The action-card compile runs OFF the request path (not inside the snapshot RPC) and writes non-notifying operation-issues — no "Someone updated" notification storm (no recurrence of BEAAA-2092).
+  2. `ACTION_CARDS_ENABLED` is re-enabled behind the flag once proven, and the Editor-Agent's grounded named-action prose (what unblocks this + who + ~when) renders live on needs-you rows with the stale→degrade floor intact.
+  3. The flag is runtime-safe and slip-safe: OFF degrades to the deterministic floor (the room still works); ON yields no snapshot 502 and no notification storm — both states ship via continuous flag-gated BEAAA deploy bookended by the automated DO backup.
+  4. The Editor-Agent stays within governance parity (standard caps, pause/terminate, audit) and the deterministic floor keeps zero AI dependency, so the surfaces render honestly when the Editor-Agent is down.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 20: Hygiene & honestly-green CI
+**Goal**: Make CI honestly green and the deploy bookend confirmed — the SC5 full-matrix coverage runs in CI, the known test-debt (7 CHAT/CTT traceability failures + the chat-watchdog timing flake) is resolved, the stale version label is refreshed, and automated DO backups are confirmed ON as the continuous-deploy bookend prerequisite.
+**Depends on**: Phase 17 (the SC5 full surface × terminal-kind matrix it codifies in CI). May run alongside the later feature phases; closes the milestone's test-debt and deploy-bookend gates.
+**Requirements**: HYG-01, HYG-02, HYG-03, HYG-04
+**Success Criteria** (what must be TRUE):
+  1. The SC5 full-matrix coverage (every surface × every terminal kind reads one consistent verdict) runs in CI as a standing guard.
+  2. The 7 CHAT/CTT REQUIREMENTS traceability test failures are resolved — re-pointed at the v1.0.0-REQUIREMENTS.md archive (the rows were archived there) or formally accepted — so the suite is honestly green, not green-by-skip.
+  3. The load-dependent chat-watchdog timing flake (`U7 WATCHDOG-FIRE-AND-FORGET`) is stabilized to a condition-based assertion (not a wall-clock threshold) — the known HYG-03 item flagged by the v1.4.3 hotfix.
+  4. The stale plugin-list version label is refreshed (continuing the v1.4.3 partial refresh) and automated DO backups are confirmed ON — the bookend that makes continuous flag-gated BEAAA deploy safe (version-bump BOTH package.json AND src/manifest.ts per DEPLOY-RUNBOOK).
+**Plans**: TBD
 
 ## Phase Details (v1.4.0)
 
@@ -197,15 +224,17 @@ Make every Clarity surface legible to a non-builder — plain English everywhere
 |-----------|--------|--------|---------|
 | v1.0.0 — v1 Final Internal | 1–9 (11 incl. decimals) | ✅ Complete | 2026-06-01 (v1.3.0) |
 | v1.4.0 — Truthful Situation Room | 10–15 | ✅ Complete | 2026-06-03 (v1.4.2) |
-| v1.5.0 — Truthful & Legible Situation Room | 16–18 | ▶ Active | — |
+| v1.5.0 — Truthful & Legible Situation Room | 16–20 | ▶ Active | — |
 
 ### v1.5.0 phase tracking
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 16. Legibility / No-Raw-Identifiers Pass | 0/TBD | Not started | - |
-| 17. Editor-Agent Prose Live | 0/TBD | Not started | - |
-| 18. Off-Request Snapshot + Action-Card Re-Arch | 0/TBD | Not started | - |
+| 16. Snapshot performance & honest loading | 0/TBD | Not started | - |
+| 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
+| 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
+| 19. Action-cards async re-architecture | 0/TBD | Not started | - |
+| 20. Hygiene & honestly-green CI | 0/TBD | Not started | - |
 
 ### v1.4.0 phase tracking
 
@@ -219,4 +248,4 @@ Make every Clarity surface legible to a non-builder — plain English everywhere
 | 15. Cockpit IA Redesign | 3/3 | Complete | 2026-06-03 |
 
 ---
-*Roadmap defined: 2026-05-07 · v1.0.0 milestone archived: 2026-06-01 · v1.4.0 milestone added 2026-06-01, shipped v1.4.2 2026-06-03 · v1.5.0 milestone added 2026-06-03 (Phases 16–18)*
+*Roadmap defined: 2026-05-07 · v1.0.0 milestone archived: 2026-06-01 · v1.4.0 milestone added 2026-06-01, shipped v1.4.2 2026-06-03 · v1.5.0 milestone added 2026-06-03; re-roadmapped 2026-06-03 from a 3-phase (16-18 LEG/PROSE/PERF) mis-scope to the locked 5-phase 16-20 structure (SNAP/WAIT/LEG/CARD/HYG) with the structured-human-wait centerpiece*
