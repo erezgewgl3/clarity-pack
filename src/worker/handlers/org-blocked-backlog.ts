@@ -171,9 +171,32 @@ export type OrgBlockedBacklog = {
   overflow: boolean;
 };
 
+/** Plan 16-02 (Wave A) — the shared blocker-edge memo value. A successful walk
+ *  carries its { edges, nodeMeta }; a thrown walk is stored as the
+ *  UNCLASSIFIED sentinel so the consumer emits the honest UNCLASSIFIED floor row
+ *  for that startId instead of re-walking (or dropping) it. Built ONCE in the
+ *  handler (situation-room.ts) over {blocked roots} ∪ {blocked agent focus} and
+ *  shared by BOTH builders. */
+export type SharedEdgeEntry =
+  | { edges: BlockerEdge[]; nodeMeta: Record<string, EdgeNodeMeta> }
+  | { unclassified: true; degradeReason: string };
+
+/** Plan 16-02 — the prefetch slice both builders read from when present. Each
+ *  field is OPTIONAL: when absent the builder falls back to its original RPC
+ *  path (degrade-safety + old fixtures keep working). */
+export type SnapshotPrefetch = {
+  /** Company-wide blocked issues (camelCase-mapped from the public.issues SELECT). */
+  blockedIssues?: IssueLike[];
+  /** uuid→display-name Map built ONCE from the public.agents SELECT. A missing
+   *  uuid yields null (NO_UUID_LEAK), NEVER the raw UUID. */
+  nameByUuid?: Map<string, string | null>;
+  /** startId→edge-graph memo, populated once across the blocked∪focus union. */
+  edgeGraph?: Map<string, SharedEdgeEntry>;
+};
+
 /** The structural ctx the builder accepts — stubbable in tests, satisfied at
  *  runtime by the widened SituationRoomCtx (Task 2). */
-export type OrgBlockedBacklogCtx = {
+export type OrgBlockedBacklogCtx = SnapshotPrefetch & {
   issues: {
     list(input: { companyId: string; status?: string }): Promise<unknown[]>;
     relations: {
@@ -368,16 +391,25 @@ export async function buildOrgBlockedBacklog(
   companyId: string,
   viewerUserId: string,
 ): Promise<OrgBlockedBacklog> {
-  // 1. List blocked issues (defensive status filter — <list_filter_note>).
+  // 1. List blocked issues. Plan 16-02 (Wave A) — when the handler supplied the
+  //    shared SQL prefetch (ctx.blockedIssues), read from it (one prefetched
+  //    SELECT replaces ctx.issues.list); otherwise fall back to the RPC list so
+  //    older fixtures + degrade-safety keep working. The prefetch SELECT itself
+  //    lives in situation-room.ts and is company-scoped `WHERE company_id = $1`
+  //    (parameterized, no prefix literal) — this file only CONSUMES those rows.
   let listed: unknown[];
-  try {
-    listed = await ctx.issues.list({ companyId, status: 'blocked' });
-  } catch (e) {
-    ctx.logger?.warn?.('org-blocked-backlog: issues.list failed', {
-      companyId,
-      err: (e as Error).message,
-    });
-    return { ...EMPTY };
+  if (Array.isArray(ctx.blockedIssues)) {
+    listed = ctx.blockedIssues;
+  } else {
+    try {
+      listed = await ctx.issues.list({ companyId, status: 'blocked' });
+    } catch (e) {
+      ctx.logger?.warn?.('org-blocked-backlog: issues.list failed', {
+        companyId,
+        err: (e as Error).message,
+      });
+      return { ...EMPTY };
+    }
   }
   const blocked = (Array.isArray(listed) ? listed : []).filter(
     (i): i is IssueLike =>
@@ -398,6 +430,33 @@ export async function buildOrgBlockedBacklog(
     if (!startId) continue;
     let edges: BlockerEdge[];
     let nodeMeta: Record<string, EdgeNodeMeta>;
+    // Plan 16-02 (Wave A) — read this issue's edges from the shared memo the
+    // handler built ONCE (no second relations walk). A memo miss falls back to a
+    // direct buildEdges (degrade-safety + old fixtures). A memo'd UNCLASSIFIED
+    // sentinel (a thrown walk during the prefetch) floors to the existing
+    // unclassifiedChain row — surfaced, not dropped.
+    const memo = ctx.edgeGraph?.get(startId);
+    if (memo && 'unclassified' in memo) {
+      paired.push({ chain: unclassifiedChain(startId, memo.degradeReason), issue, nodeMeta: {} });
+      continue;
+    }
+    if (memo) {
+      ({ edges, nodeMeta } = memo);
+      let chain: BlockerChainResult;
+      try {
+        chain = flattenBlockerChain({ startId, edges, nodeMeta, viewerUserId });
+      } catch (e) {
+        ctx.logger?.warn?.('org-blocked-backlog: flatten failed (UNCLASSIFIED row)', {
+          companyId,
+          startId,
+          err: (e as Error).message,
+        });
+        paired.push({ chain: unclassifiedChain(startId, 'flatten-failed'), issue, nodeMeta: {} });
+        continue;
+      }
+      paired.push({ chain, issue, nodeMeta });
+      continue;
+    }
     try {
       ({ edges, nodeMeta } = await buildEdges(ctx, companyId, startId));
     } catch (e) {
@@ -459,8 +518,13 @@ export async function buildOrgBlockedBacklog(
         : null);
 
   // The shared UUID→name map consumed by both ownerName and scrubHumanAction.
-  const nameByUuid = new Map<string, string | null>();
-  if (typeof ctx.agents?.get === 'function') {
+  // Plan 16-02 (Wave A) — when the handler supplied the prefetched nameByUuid
+  // (built ONCE from the public.agents SELECT), use it directly: NO per-uuid
+  // ctx.agents.get round-trips. A missing uuid still yields null (the existing
+  // NO_UUID_LEAK posture), NEVER the raw UUID. Falls back to the per-uuid RPC
+  // loop only when the prefetch is absent (old fixtures + degrade-safety).
+  const nameByUuid = ctx.nameByUuid ?? new Map<string, string | null>();
+  if (ctx.nameByUuid == null && typeof ctx.agents?.get === 'function') {
     const wanted = new Set<string>();
     for (const c of rankedChains) {
       // The issue OWNER → row.ownerName. Resolve ANY non-empty owner id (not

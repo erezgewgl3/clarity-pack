@@ -17,6 +17,74 @@ import { registerSituationRoomHandlers } from '../../src/worker/handlers/situati
 import { registerActiveViewerPing } from '../../src/worker/handlers/active-viewer-ping.ts';
 import { wrapHostFaithfulDb } from '../helpers/host-faithful-db.mjs';
 
+// Plan 16-02 (Wave A) — map the test's camelCase Issue fixtures to the live
+// snake_case public.issues projection the handler's prefetch SELECT returns. The
+// prefetch projects the OPEN status set (in_progress|in_review|blocked), a
+// superset of blocked, so one read serves BOTH the org-backlog blocked list and
+// the rollup per-agent focus. Rows from issuesByAgent carry their agentId as
+// assignee_agent_id (the grouping key); blockedIssues carry whatever they declare.
+function snakeIssueRows({ blockedIssues = [], issuesByAgent = {} }) {
+  const out = [];
+  const seen = new Set();
+  const push = (i, agentId) => {
+    const id = i.id ?? i.identifier ?? '';
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    out.push({
+      id,
+      identifier: i.identifier ?? id,
+      title: i.title ?? '',
+      status: i.status ?? 'blocked',
+      assignee_agent_id: i.assigneeAgentId ?? agentId ?? null,
+      assignee_user_id: i.assigneeUserId ?? null,
+      updated_at: i.updatedAt ?? null,
+    });
+  };
+  for (const i of blockedIssues) push(i, null);
+  for (const [agentId, list] of Object.entries(issuesByAgent)) {
+    for (const i of list) push(i, agentId);
+  }
+  return out;
+}
+
+// Plan 16-02 (Wave A) — map the camelCase roster fixture to the snake_case
+// public.agents projection the prefetch SELECT returns. Name resolution
+// (nameByUuid) now comes from THIS SELECT, so any agentsByUuid name fixture
+// (formerly served via agents.get) is folded in as an agent row — those uuids
+// ARE company agents the prefetch resolves names for.
+function snakeAgentRows(roster = [], agentsByUuid = {}) {
+  const out = [];
+  const seen = new Set();
+  for (const a of roster) {
+    const id = a.id ?? '';
+    if (!id) continue;
+    seen.add(id);
+    out.push({
+      id,
+      name: a.name ?? '',
+      role: a.role ?? null,
+      title: a.title ?? null,
+      last_heartbeat_at: a.lastHeartbeatAt ?? null,
+      status: a.status ?? null,
+      paused_at: a.pausedAt ?? null,
+    });
+  }
+  for (const [uuid, a] of Object.entries(agentsByUuid)) {
+    if (seen.has(uuid)) continue;
+    seen.add(uuid);
+    out.push({
+      id: uuid,
+      name: a?.name ?? '',
+      role: null,
+      title: null,
+      last_heartbeat_at: null,
+      status: null,
+      paused_at: null,
+    });
+  }
+  return out;
+}
+
 function makeCtx({
   snapshotRow = null,
   optedIn = true,
@@ -78,6 +146,20 @@ function makeCtx({
         }
         if (/situation_snapshots/.test(sql)) {
           return snapshotRow ? [snapshotRow] : [];
+        }
+        // Plan 16-02 (Wave A) — the situation.snapshot handler now PREFETCHES the
+        // blocked-issue list + the open per-agent issues + the roster via two
+        // public.issues / public.agents SELECTs (the prefetch supplants the RPC
+        // list/get fan-out). Serve the SAME fixtures through db.query, mapped from
+        // the test's camelCase shape to the live snake_case projection. When
+        // rosterThrows is set the test exercises the RPC-fallback path, so the
+        // agents SELECT throws too (the prefetch degrades → builders fall back).
+        if (/FROM public\.issues/i.test(sql)) {
+          return snakeIssueRows({ blockedIssues, issuesByAgent });
+        }
+        if (/FROM public\.agents/i.test(sql)) {
+          if (rosterThrows) throw new Error('agents prefetch boom');
+          return snakeAgentRows(roster, agentsByUuid);
         }
         return [];
       },
