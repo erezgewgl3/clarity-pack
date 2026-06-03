@@ -76,7 +76,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 **Plans**: 4 plans
 - [x] 16-01-PLAN.md — Wave-0: lock live snake_case columns + relations.get timeoutMs reachability; ship the hand-rolled mapBounded pool + withDeadline floor (+ tests)
 - [x] 16-02-PLAN.md — Wave A: collapse the N+1 fan-out — SQL-prefetch the blocked list/roster/names + compute the blocker BFS once shared across both builders; per-stage timing
-- [ ] 16-03-PLAN.md — Wave B: bound the irreducible relations.get with mapBounded + per-call deadline floor + overall snapshot budget; floor slow/hung rows to the deterministic UNCLASSIFIED line (degrade-safe, DoS-resistant)
+- [x] 16-03-PLAN.md — Wave B: bound the irreducible relations.get with mapBounded + per-call deadline floor + overall snapshot budget; floor slow/hung rows to the deterministic UNCLASSIFIED line (degrade-safe, DoS-resistant)
 - [ ] 16-04-PLAN.md — Wave C: serve-last-good SWR via the existing situation_snapshots table (viewer-invariant slice, per-call needsYou recompute, no cross-viewer leak) + the bookended live BEAAA cold/warm drill vs the 25.7s baseline
 **UI hint**: yes
 
@@ -234,7 +234,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 16. Snapshot performance & honest loading | 2/4 | In Progress|  |
+| 16. Snapshot performance & honest loading | 3/4 | In Progress|  |
 | 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
