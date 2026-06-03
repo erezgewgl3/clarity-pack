@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.5.0
-milestone_name: — Truthful & Legible Situation Room
-status: completed
-stopped_at: Phase 12 context gathered
+milestone_name: Truthful & Legible Situation Room
+status: executing
+stopped_at: Phase 16 complete — next is Phase 17 (structured human-wait centerpiece)
 last_updated: "2026-06-03T21:19:56.139Z"
 last_activity: 2026-06-03 -- Phase 16 marked complete
 progress:
