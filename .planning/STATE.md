@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: planning
-last_updated: "2026-06-03T07:24:09.070Z"
+last_updated: "2026-06-03T08:00:00.000Z"
 last_activity: 2026-06-03
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -14,6 +14,32 @@ progress:
 ---
 
 # State: Clarity Pack
+
+## ▶ v1.5.0 Truthful & Legible Situation Room — ROADMAP CREATED 2026-06-03 (Phases 16–18)
+
+Roadmap for the v1.5.0 milestone is written. 11 requirements mapped to 3 phases (continues numbering from Phase 15; phase dirs 01–15 untouched). Coverage 11/11, no orphans, no duplicates. Granularity: coarse.
+
+**Phase structure (legibility → prose live → off-request re-arch; PERF locked LAST + flag-gated):**
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 16. Legibility / No-Raw-Identifiers Pass | Plain English everywhere; kill partial agent-id hashes + bare UUIDs across all four surfaces; extend NO_UUID_LEAK to partial-hash labels; enrich focusLine from tldr_cache; verdict-wording parity Reader+SR | LEG-01, LEG-02, LEG-03, LEG-04, LEG-05 |
+| 17. Editor-Agent Prose Live | Pulse-header prose enrichment (deferred D-03) + grounded named-action row prose in production; stale→degrade floor intact | PROSE-01, PROSE-02, PROSE-03 |
+| 18. Off-Request Snapshot + Action-Card Re-Arch (flag-gated, LAST) | Recompute off the request path (kill the 25.7s cold near-cliff); re-enable ACTION_CARDS_ENABLED with no notification storm; runtime-toggleable | PERF-01, PERF-02, PERF-03 |
+
+**Critical sequencing (operator-locked):**
+
+- **Phase 18 (PERF) is LAST and flag-gated** (`ACTION_CARDS_ENABLED`). It depends on the legibility (16) + prose (17) work landing first — re-architecting a known-good, legible surface, not a moving target.
+- **Live driver:** cold snapshot is 25.7s today (no 502 with action-cards gated OFF, but ~4s under the 30s host-timeout cliff). Re-enabling action-cards synchronously caused the prior 502 + BEAAA-2092 notification storm (v1.4.1 hotfix gated it OFF). Phase 18 makes re-enable safe by moving compile off the request path.
+- **Phase 16 → 17 dependency:** the prose layer consumes Phase 16's legibility primitives (plain-English focusLine, scrubbed identifiers, verdict wording) so prose is legible + identifier-clean by construction.
+
+**Carried invariants in every phase's success criteria:** additive-only plugin-namespace schema (disable/uninstall preserves data); degrade-safe deterministic floor (no AI dependency — floor renders when the Editor-Agent is down); instance-agnostic (no company-prefix literals); Editor-Agent governance parity; continuous flag-gated BEAAA deploy (bookend = DO droplet backup; version-bump BOTH package.json AND src/manifest.ts per DEPLOY-RUNBOOK).
+
+**Next action:** `/gsd:plan-phase 16` (the legibility / no-raw-identifiers pass). Phase 17 prose work depends on Phase 16 primitives; Phase 18 PERF is locked LAST.
+
+Files: `.planning/ROADMAP.md` (v1.5.0 section + phase details, appended — v1.0.0/v1.4.0 sections preserved), `.planning/REQUIREMENTS.md` (traceability 11/11).
+
+---
 
 ## ▶ Phase 15 (Cockpit IA Redesign) — Plan 15-03 COMPLETE (wave 3, CAPSTONE) 2026-06-02
 

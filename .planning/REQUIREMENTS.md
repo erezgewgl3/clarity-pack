@@ -62,23 +62,28 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LEG-01 | — | Pending |
-| LEG-02 | — | Pending |
-| LEG-03 | — | Pending |
-| LEG-04 | — | Pending |
-| LEG-05 | — | Pending |
-| PROSE-01 | — | Pending |
-| PROSE-02 | — | Pending |
-| PROSE-03 | — | Pending |
-| PERF-01 | — | Pending |
-| PERF-02 | — | Pending |
-| PERF-03 | — | Pending |
+| LEG-01 | Phase 16 | Pending |
+| LEG-02 | Phase 16 | Pending |
+| LEG-03 | Phase 16 | Pending |
+| LEG-04 | Phase 16 | Pending |
+| LEG-05 | Phase 16 | Pending |
+| PROSE-01 | Phase 17 | Pending |
+| PROSE-02 | Phase 17 | Pending |
+| PROSE-03 | Phase 17 | Pending |
+| PERF-01 | Phase 18 | Pending |
+| PERF-02 | Phase 18 | Pending |
+| PERF-03 | Phase 18 | Pending |
 
 **Coverage:**
 - v1 requirements: 11 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 11 ⚠️
+- Mapped to phases: 11 ✓
+- Unmapped: 0
+
+**Phase rollup:**
+- Phase 16 — Legibility / No-Raw-Identifiers Pass: LEG-01, LEG-02, LEG-03, LEG-04, LEG-05 (5)
+- Phase 17 — Editor-Agent Prose Live: PROSE-01, PROSE-02, PROSE-03 (3)
+- Phase 18 — Off-Request Snapshot + Action-Card Re-Arch (flag-gated, LAST): PERF-01, PERF-02, PERF-03 (3)
 
 ---
 *Requirements defined: 2026-06-03*
-*Last updated: 2026-06-03 after milestone v1.5.0 definition*
+*Last updated: 2026-06-03 — roadmap created; 11/11 requirements mapped to Phases 16–18, no orphans*
