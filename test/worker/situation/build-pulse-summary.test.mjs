@@ -23,6 +23,11 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import { buildPulseSummary } from '../../../src/worker/situation/build-pulse-summary.ts';
+// IN-02 — the ONE shared view partition helper (tier-utils.ts). Importing it here
+// mechanically locks the pulse chip counts to the tier-strip partition: a future
+// engine reclassification that desyncs a chip label from its tier column fails a
+// test instead of silently shipping.
+import { visualTierOf } from '../../../src/ui/surfaces/situation-room/tier-utils.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -154,6 +159,76 @@ test('representative verdict set — all four counts at once', () => {
 test('degrade — empty employees + needsYou {count:0} -> all-zero floor', () => {
   const pulse = buildPulseSummary([], needsYou(0));
   assert.deepEqual(pulse, { needYou: 0, inMotion: 0, stuck: 0, selfClearing: 0 });
+});
+
+// --- IN-02: pulse chip ⇔ tier partition consistency --------------------------
+//
+// The Pulse chips and the tier strip are two views of the same engine verdicts.
+// These tests mechanically assert they agree, so a future classifyVerdict change
+// that (for example) reclassified AWAITING_AGENT_STUCK to a different tier can't
+// silently desync the "N stuck" chip from the Watch column it claims to summarize.
+
+test('IN-02 — every row counted in pulse.stuck (AWAITING_AGENT_STUCK) lands in the Watch tier', () => {
+  const rows = [
+    chainRow({ agentId: 'a', tier: 'watch', terminalKind: 'AWAITING_AGENT_STUCK', group: 'needs_you' }),
+    chainRow({ agentId: 'b', tier: 'watch', terminalKind: 'AWAITING_AGENT_STUCK', group: 'working' }),
+    chainRow({ agentId: 'c', tier: 'needs-you', terminalKind: 'AWAITING_HUMAN' }),
+    chainlessRow({ agentId: 'd', group: 'idle' }),
+  ];
+  const pulse = buildPulseSummary(rows, needsYou(0));
+  const stuckRows = rows.filter((r) => r.blockerChain?.terminalKind === 'AWAITING_AGENT_STUCK');
+  // The pulse count and the set it summarizes agree.
+  assert.equal(pulse.stuck, stuckRows.length, 'pulse.stuck counts every AWAITING_AGENT_STUCK row');
+  // EVERY stuck-counted row partitions into Watch — the chip never points at a
+  // row that renders outside the Watch column.
+  for (const r of stuckRows) {
+    assert.equal(visualTierOf(r), 'watch', `stuck row ${r.agentId} must be in the Watch tier`);
+  }
+});
+
+test('IN-02 — every row counted in pulse.selfClearing (SELF_RESOLVING) lands in the Watch tier', () => {
+  const rows = [
+    chainRow({ agentId: 'a', tier: 'watch', terminalKind: 'SELF_RESOLVING', group: 'working' }),
+    chainRow({ agentId: 'b', tier: 'watch', terminalKind: 'SELF_RESOLVING', group: 'idle' }),
+    chainRow({ agentId: 'c', tier: 'in-motion', terminalKind: 'AWAITING_AGENT_WORKING', group: 'working' }),
+  ];
+  const pulse = buildPulseSummary(rows, needsYou(0));
+  const selfRows = rows.filter((r) => r.blockerChain?.terminalKind === 'SELF_RESOLVING');
+  assert.equal(pulse.selfClearing, selfRows.length);
+  for (const r of selfRows) {
+    assert.equal(visualTierOf(r), 'watch', `self-clearing row ${r.agentId} must be in the Watch tier`);
+  }
+});
+
+test('IN-02 — every row counted in pulse.inMotion lands in the In-motion tier', () => {
+  const rows = [
+    chainRow({ agentId: 'a', tier: 'in-motion', terminalKind: 'AWAITING_AGENT_WORKING', group: 'working' }),
+    chainlessRow({ agentId: 'b', group: 'working' }),
+    chainlessRow({ agentId: 'c', group: 'idle' }), // NOT in motion
+    chainRow({ agentId: 'd', tier: 'watch', terminalKind: 'AWAITING_AGENT_STUCK' }), // NOT in motion
+  ];
+  const pulse = buildPulseSummary(rows, needsYou(0));
+  const inMotionRows = rows.filter(
+    (r) => r.blockerChain?.tier === 'in-motion' || (r.blockerChain == null && r.group === 'working'),
+  );
+  assert.equal(pulse.inMotion, inMotionRows.length);
+  for (const r of inMotionRows) {
+    assert.equal(visualTierOf(r), 'in-motion', `in-motion row ${r.agentId} must be in the In-motion tier`);
+  }
+});
+
+test('IN-02 — the Needs-you tier partition count agrees with the per-leaf needsYou.count on a deduped board', () => {
+  // On a board where every needs-you-tier row maps to a distinct leaf (no
+  // dedup collapse), the count of rows partitioned into Needs-you equals
+  // needsYou.count — the chip label and the tier column agree.
+  const rows = [
+    chainRow({ agentId: 'a', tier: 'needs-you', terminalKind: 'AWAITING_HUMAN' }),
+    chainRow({ agentId: 'b', tier: 'needs-you', terminalKind: 'UNOWNED' }),
+    chainRow({ agentId: 'c', tier: 'in-motion', terminalKind: 'AWAITING_AGENT_WORKING', group: 'working' }),
+  ];
+  const needsYouTierCount = rows.filter((r) => visualTierOf(r) === 'needs-you').length;
+  const pulse = buildPulseSummary(rows, needsYou(needsYouTierCount));
+  assert.equal(pulse.needYou, needsYouTierCount, 'needYou chip agrees with the Needs-you tier partition');
 });
 
 test('SC3/SC4 purity — buildPulseSummary source makes no ctx./await/fetch call', () => {
