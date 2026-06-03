@@ -155,7 +155,7 @@ Plans:
 | 12. Needs-You Triage | 3/3 | Complete    | 2026-06-02 |
 | 13. Editor-Agent Named Action | 3/3 | Complete   | 2026-06-02 |
 | 14. Do-It-Here Action Loop | 4/4 | Built (live-drill pending) | 2026-06-03 |
-| 15. Cockpit IA Redesign | 3/3 | Complete   | 2026-06-02 |
+| 15. Cockpit IA Redesign | 3/3 | Built (live-drill pending) | 2026-06-03 |
 
 ---
 *Roadmap defined: 2026-05-07 · v1.0.0 milestone archived: 2026-06-01 · v1.4.0 milestone added: 2026-06-01 (Phases 10–15)*
