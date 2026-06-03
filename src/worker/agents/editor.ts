@@ -56,6 +56,7 @@ import {
 // heartbeat must remain best-effort; no auto-resume). The view-driven SR data
 // handler (situation-room.ts) is the must-have primary trigger.
 import {
+  ACTION_CARDS_ENABLED,
   driveActionCardsStep,
   type ActionCardsCtx,
   type ActionCardSourceRow,
@@ -340,6 +341,9 @@ export async function handleEditorHeartbeat(
   // call driveActionCardsStep. Wrapped so ANY failure is logged and never
   // propagates — the heartbeat must remain best-effort; driveActionCardsStep
   // itself already never throws. No auto-resume (the step's paused-check owns it).
+  // v1.4.1 HOTFIX (BEAAA-2092) — action-card compile gated OFF; skip the
+  // heartbeat trigger entirely so no op issue is started/touched.
+  if (!ACTION_CARDS_ENABLED) return;
   try {
     const rollup = await buildEmployeesRollup(
       ctx as unknown as EmployeesRollupCtx,

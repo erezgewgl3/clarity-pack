@@ -58,6 +58,7 @@ import {
 // lives for the Reader. Degrade-safe (a throw → no cards → the row renders the
 // deterministic engine line); never blocks the snapshot.
 import {
+  ACTION_CARDS_ENABLED,
   driveActionCardsStep,
   type ActionCardsCtx,
   type ActionCardSourceRow,
@@ -175,7 +176,11 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
         // Drop rows with no usable leaf key (can't cache/dispatch them).
         .filter((r) => r.sourceIssueId.length > 0);
 
-      if (needsYouRows.length > 0) {
+      // v1.4.1 HOTFIX (BEAAA-2092) — gated OFF: do not compile on the snapshot
+      // request path (it blocked the RPC → 502 and churned the op issue →
+      // notification storm). cardsBySource stays {} → every row degrades to the
+      // deterministic engine line (D-12).
+      if (ACTION_CARDS_ENABLED && needsYouRows.length > 0) {
         const step = await driveActionCardsStep(ctx as unknown as ActionCardsCtx, {
           companyId,
           needsYouRows,

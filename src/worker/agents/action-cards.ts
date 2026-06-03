@@ -112,6 +112,24 @@ export type ActionCardsStepResult = {
   status: 'ready' | 'compiling' | 'paused' | 'unavailable';
 };
 
+/**
+ * v1.4.1 HOTFIX (BEAAA-2092) — action-card COMPILE is temporarily gated OFF.
+ *
+ * The synchronous compile that ran inside the situation.snapshot handler on
+ * every on-view recompute (a) blocked the request long enough to trip the 30s
+ * RPC timeout (502 "employees rollup failed"), and (b) wrote to the per-company
+ * operation issue on each recompute, generating a "Someone updated <op-issue>"
+ * notification storm (every 1-3s while the Situation Room is open).
+ *
+ * We gate the two CALL SITES (situation-room.ts snapshot + editor.ts heartbeat)
+ * on this flag rather than touching driveActionCardsStep, so the step + its unit
+ * tests stay intact. With the flag off, no op issue is started/polled, the
+ * snapshot returns immediately, and every row degrades to the deterministic
+ * engine line (Phase 13 D-12). Re-enable in the async re-architecture (compile
+ * off the request path; op issue must not raise user notifications).
+ */
+export const ACTION_CARDS_ENABLED: boolean = false;
+
 /** Cache surface/scope used for the content-hash recipe (deterministic, no clock). */
 const ACTION_CARDS_SURFACE = 'situation' as const;
 const ACTION_CARDS_SCOPE_PREFIX = 'action-cards:';
