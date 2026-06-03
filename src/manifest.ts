@@ -610,7 +610,20 @@ const manifest: PaperclipPluginManifestV1 = {
   // Result orphaned → "Compiling…" forever. Fix: consume-before-spawn in
   // driveTldrCompileStep (consumeExistingTldrOpResult). No schema, no dep change.
   // See: .planning/debug/reader-tldr-stuck-compiling.md
-  version: '1.4.3',
+  // 1.4.4 (hotfix — editor-heartbeat-db-churn). The Editor-Agent heartbeat
+  // dispatcher fired a per-event reconcile + handleEditorHeartbeat for EVERY
+  // issue/comment event instance-wide, and the plugin's own operation issues
+  // re-entered that path (caught only AFTER a reconcile + issues.get) —
+  // ~3.8 self-triggered heartbeats/sec on BEAAA. Fix: a per-company batch +
+  // debounce dispatcher (HeartbeatDispatcher) that reconciles ONCE per flush
+  // and a zero-DB recursion guard (a bounded in-memory set of the op-issue ids
+  // the plugin creates, dropped before any reconcile/DB call). Op-issue GC
+  // (the ~1,275 accumulated tldr-compile rows) is SPLIT to a follow-up: the SDK
+  // exposes no issues.delete and issues.update cannot set hidden_at, and the
+  // compile-bulletin job that would host the GC is dead-scope on this host
+  // (PR #6547). No schema change; additive, degrade-safe.
+  // See: .planning/debug/editor-heartbeat-db-churn.md
+  version: '1.4.4',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

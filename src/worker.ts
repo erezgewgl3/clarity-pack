@@ -22,6 +22,10 @@ import {
   type EditorAgentReconcileCtx,
   type EditorHeartbeatCtx,
 } from './worker/agents/editor.ts';
+// Debug editor-heartbeat-db-churn (v1.4.4) — Fix 1 (batch + debounce) + the
+// Fix-2 read-side short-circuit live in the dispatcher. The worker feeds host
+// events into it instead of running a per-event reconcile + heartbeat.
+import { HeartbeatDispatcher } from './worker/agents/heartbeat-dispatcher.ts';
 import { registerIssueReader, type IssueReaderCtx } from './worker/handlers/issue-reader.ts';
 import {
   registerAcChecklist,
@@ -456,46 +460,67 @@ const plugin = definePlugin({
       }
     });
 
-    // Heartbeat dispatcher. The host emits issue.created / issue.updated +
-    // issue.comment.created events; we bundle them per heartbeat-window into
-    // a synthetic payload and run handleEditorHeartbeat (which applies the
-    // self-loop filter, then calls compileTldr per affected issue).
+    // ---- Heartbeat dispatcher (batch + debounce) ---------------------------
     //
-    // SDK 2026.512.0 does NOT expose ctx.agents.onHeartbeat() as the plan
-    // pseudocode assumed. The event-driven dispatcher is the documented
-    // alternative and gives equivalent governance parity: pausing the agent
-    // in the classic admin panel halts ctx.agents.pause -> our event handler
-    // sees `agentStatus=paused` via reconcile-state caching (Phase 3 will
-    // formalize this; for 02-03 the failure-mode is: even if our worker
-    // tries to compile, the agent's own LLM call won't run because the
-    // adapter respects the paused state).
+    // Debug editor-heartbeat-db-churn (v1.4.4) — RC1 fix. The host emits
+    // issue.created / issue.updated + issue.comment.created events; the OLD
+    // wiring ran, FOR EVERY event in the WHOLE instance, a synchronous
+    // reconcileEditorAgent() (a host round-trip, no cache) + a single-event
+    // handleEditorHeartbeat(). The plugin's own operation issues generate
+    // events that re-entered that path (caught by isOwnOperationIssue only
+    // AFTER a reconcile + issues.get). Measured on BEAAA: ~3.8 self-triggered
+    // heartbeats/sec, each a reconcile + a get.
+    //
+    // The HeartbeatDispatcher restores the long-documented "bundle events per
+    // heartbeat-window" intent:
+    //   - Fix 2 (read short-circuit): an event whose entityId is a remembered
+    //     plugin-created operation issue (or whose actorType is 'plugin') is
+    //     DROPPED before any reconcile/DB call — a zero-DB recursion guard.
+    //   - Fix 1 (batch + debounce): surviving events accumulate per company and
+    //     flush on a ~12s debounce (or a 50-issue burst cap). Per flush:
+    //     reconcile ONCE (cached per company), dedupe issueIds, run ONE batched
+    //     handleEditorHeartbeat.
+    //
+    // Fix 4 (tags): the host PluginEvent carries NO top-level `tags` field
+    // (verified against @paperclipai/plugin-sdk@2026.512.0 types.d.ts — only
+    // actorId/actorType/entityId/entityType/companyId/payload). So the dead
+    // `tags:[]` of the old wiring had nothing host-carried to pass through; the
+    // honest defense-in-depth is the author_id check inside filterSelfLoopEvents
+    // PLUS the Fix-2 remembered-op-issue id short-circuit PLUS the cheap
+    // actorType==='plugin' drop above. The tag-based half of the self-loop
+    // filter remains for any FUTURE event source that does carry tags (e.g. a
+    // plugin-emitted event), but is not relied upon for the host issue events.
+    //
+    // Governance parity preserved: nothing here resumes/invokes an agent; a
+    // paused Editor-Agent still performs no LLM work downstream. The debounce is
+    // a local unref'd timer that only exists while events are pending.
+    const heartbeatDispatcher = new HeartbeatDispatcher({
+      resolveAgentId: (companyId) =>
+        reconcileEditorAgent(ctx as unknown as EditorAgentReconcileCtx, companyId),
+      runHeartbeat: (companyId, agentId, events) =>
+        handleEditorHeartbeat(ctx as unknown as EditorHeartbeatCtx, {
+          companyId,
+          agentId,
+          events,
+        }),
+      logger: ctx.logger,
+    });
+
     for (const evt of ['issue.created', 'issue.updated', 'issue.comment.created'] as const) {
       ctx.events.on(evt, async (event) => {
-        if (!event.entityId || !event.companyId) return;
+        // enqueue never throws (it swallows its own edge cases); a host event
+        // handler that throws would be logged by the host, but we keep this
+        // defensive try anyway so one malformed event can never wedge the bus.
         try {
-          // Re-resolve the agent for this event's company (idempotent).
-          const agentId = await reconcileEditorAgent(
-            ctx as unknown as EditorAgentReconcileCtx,
-            event.companyId,
-          );
-          if (!agentId) {
-            ctx.logger?.warn?.('Editor-Agent unresolved — skipping heartbeat', { companyId: event.companyId });
-            return;
-          }
-          await handleEditorHeartbeat(ctx as unknown as EditorHeartbeatCtx, {
+          heartbeatDispatcher.enqueue({
+            entityId: event.entityId,
+            entityType: event.entityType,
             companyId: event.companyId,
-            agentId,
-            events: [
-              {
-                author_id: event.actorId ?? null,
-                tags: [],
-                entity_type: event.entityType ?? 'issue',
-                entity_id: event.entityId,
-              },
-            ],
+            actorId: event.actorId,
+            actorType: event.actorType,
           });
         } catch (err) {
-          ctx.logger?.warn?.('Editor-Agent heartbeat handler threw', {
+          ctx.logger?.warn?.('Editor-Agent heartbeat enqueue threw', {
             event: evt,
             err: (err as Error).message,
           });

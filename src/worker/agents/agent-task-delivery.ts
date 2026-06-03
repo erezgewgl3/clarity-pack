@@ -85,6 +85,12 @@ type PluginIssueDocumentsClient = PluginIssuesClient['documents'];
 
 import { extractJsonObject, validateDraftStructure } from '../bulletin/compile-pass-1.ts';
 import type { LlmAdapter } from '../bulletin/compile-pass-1.ts';
+// Debug editor-heartbeat-db-churn (v1.4.4) — Fix 2. Every operation issue we
+// create/reuse is itself an `issue.created`/`issue.updated` host event that
+// re-enters the heartbeat dispatcher. Remembering its id here lets the
+// dispatcher drop those self-events BEFORE any reconcile/DB round-trip (a
+// zero-DB recursion guard layered on top of the durable originKind backstop).
+import { rememberOwnOperationIssue } from './op-issue-set.ts';
 
 /** The operation-issue originKind namespace. The agent matches on this prefix. */
 export const OPERATION_ORIGIN_KIND_PREFIX = 'plugin:clarity-pack:operation:';
@@ -425,6 +431,14 @@ export async function startAgentTask(
         `kind=${opts.operationKind} originId=${opts.operationId} assignee=${opts.agentId}`,
     );
   }
+
+  // Debug editor-heartbeat-db-churn (v1.4.4) — Fix 2. Remember this op issue's
+  // id (whether freshly created OR reused) so the heartbeat dispatcher drops the
+  // `issue.created`/`issue.updated` self-events it generates BEFORE any
+  // reconcile/DB round-trip. Refreshing the TTL on a reuse keeps a long-lived
+  // in-flight op suppressed for its whole life. The durable `isOwnOperationIssue`
+  // originKind guard still backstops a worker restart (set is empty after boot).
+  rememberOwnOperationIssue(issue.id);
 
   // 3. Wake the agent now — FIRE-AND-FORGET. requestWakeup is unreliable on
   //    this host (paperclipai@2026.525.0): it times out after 30s and scope-
