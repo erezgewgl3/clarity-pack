@@ -88,6 +88,14 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 **Locked value boundary**: the read-time "zero rabbit-holes" guarantee (inline ref resolution, blocker-chain flatten, deliverable preview) is synchronous/local and MUST remain untouched. The fix targets only the PROACTIVE COMPILATION machinery (TL;DR/bulletin/action-cards): proactive compile must be PULL-based + SCOPED + SWR-served, never PUSH-based + instance-wide. KEEP scheduled proactivity (daily bulletin cron + bounded warm-on-heartbeat for awaiting-you rows). Action-cards stays gated OFF (its re-enable remains Phase 19).
 **Requirements**: LOOP-01, LOOP-02, LOOP-03, LOOP-04, LOOP-05, LOOP-06
 **UI hint**: no (worker-tier architecture; no new surfaces)
+**Plans**: 6 plans
+Plans:
+- [ ] 16.1-01-PLAN.md — Wave 1: additive migration 0017 (own_operation_issues + wake_ledger + wake_kill_switch) + three durable repos
+- [ ] 16.1-02-PLAN.md — Wave 2: wake-governor (throughput + kill-switch) + durable provenance write + requestWakeup removal in the delivery path
+- [ ] 16.1-03-PLAN.md — Wave 3: observe-only ingress + opt-in/active-company scope gate + lazy company seed + company.created/chat-bridge dispositions + dispatcher disposition
+- [ ] 16.1-04-PLAN.md — Wave 4: bounded warm-on-heartbeat (<=5 SWR-stale awaiting-you TL;DRs) + scope-gated/governed bulletin cron
+- [ ] 16.1-05-PLAN.md — Wave 5: storm-safety CI test + no-wake static gate + opt-in-ingress test + LOOP-06 read-time no-touch regression guard
+- [ ] 16.1-06-PLAN.md — Wave 6: two-source version bump + rebuild + bookended live BEAAA reinstall & no-storm drill (LOOP-07)
 
 ### Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)
 **Goal**: Give agents a structured, machine-readable way to declare "blocked on a human decision X" so the deterministic engine honestly classifies it as AWAITING_HUMAN (needs-you) instead of conservatively parking it in Watch — the deep fix behind the BEAAA-972 confusion — and prove every blocked-no-edge class is classified truthfully across a full surface × terminal-kind matrix.
