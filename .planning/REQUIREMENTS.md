@@ -19,6 +19,16 @@
 - [x] **SNAP-02**: The cold snapshot recompute no longer approaches the 30s cliff (the live 25.7s near-miss is eliminated); the employees rollup is degrade-safe (a slow/failed sub-read floors to the deterministic line, never blocks the view).
 - [x] **SNAP-03**: Confirm-first step — verify whether the room still 502s now that action-cards are gated, and record the cold/warm snapshot timings as the phase baseline. (Done 2026-06-03: no 502, 6/6 snapshot calls 200, cold 25.7s — drives SNAP-01/02.)
 
+### Editor-Agent loop elimination & wake governor — URGENT make-safe (Phase 16.1)
+
+- [ ] **LOOP-01**: Event handlers perform NO agent wakeups — observe-only ingress. Every agent run originates from the agent's own heartbeat/cron pulling a durable queue, not from a `requestWakeup`/dispatch fired inside an event handler.
+- [ ] **LOOP-02**: The loop is broken by construction — a Clarity-authored "operation" can never re-enter and re-trigger Clarity's own event-reactive compilation, with provenance that survives a worker restart (no in-memory-only guard as the primary defense).
+- [ ] **LOOP-03**: A durable, env-controlled GLOBAL wake-rate governor + kill-switch bounds agent wakeups by THROUGHPUT (max N/min), trips on volume (not just consecutive failures), and survives restart.
+- [ ] **LOOP-04**: Event ingress is gated on opt-in / active-company scope at the subscription, before any host call or work — "default OFF" actually throttles the worker, not just the UI.
+- [ ] **LOOP-05**: Falsifiable storm-safety test — a simulated burst of issue/comment events (including the plugin's own op-issue + agent result writes) across a simulated worker restart asserts bounded agent-wakes/min and zero self-trigger recursion.
+- [ ] **LOOP-06**: The read-time "zero rabbit-holes" guarantee is regression-proofed — inline ref resolution, blocker-chain flatten, and deliverable preview remain fully functional and untouched by the loop fix.
+- [ ] **LOOP-07**: Live make-safe verification — the corrected build is reinstalled on BEAAA (bookended by a verified DO snapshot) and a live drill proves that creating/changing an issue and dispatching an agent task does NOT produce a CPU storm or multi-agent wake cascade (Clarity worker stays near-idle; wakes stay within the governor ceiling; no 502).
+
 ### Structured human-wait + truthful verdicts — CENTERPIECE (Phase 17)
 
 - [ ] **WAIT-01**: Agents have a STRUCTURED way to declare "blocked on a human decision X" (a machine-readable signal, not free prose the engine cannot parse).
@@ -61,6 +71,13 @@
 | SNAP-01 | Phase 16 | Complete |
 | SNAP-02 | Phase 16 | Complete |
 | SNAP-03 | Phase 16 | Complete |
+| LOOP-01 | Phase 16.1 | Pending |
+| LOOP-02 | Phase 16.1 | Pending |
+| LOOP-03 | Phase 16.1 | Pending |
+| LOOP-04 | Phase 16.1 | Pending |
+| LOOP-05 | Phase 16.1 | Pending |
+| LOOP-06 | Phase 16.1 | Pending |
+| LOOP-07 | Phase 16.1 | Pending |
 | WAIT-01 | Phase 17 | Pending |
 | WAIT-02 | Phase 17 | Pending |
 | WAIT-03 | Phase 17 | Pending |

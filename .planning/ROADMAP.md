@@ -57,6 +57,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 **Reusable input:** `.planning/phases/_superseded-legibility-16-18-misscope/` holds the OLD 16-18 mis-scope's research / patterns / plans (verdict-wording shared helper, focusLine-from-tldr enrichment, chat-chip humanization). That work is sound legibility/prose input — Phases 17 and 18 should mine it rather than start from scratch.
 
 - [x] **Phase 16: Snapshot performance & honest loading** — cockpit loads fast (snapshot well under the 30s timeout, target p95 < ~5s, never 502s); eliminate the 25.7s cold recompute near-cliff; employees rollup degrade-safe. Confirm-first baseline already recorded. FIRST. (completed 2026-06-03)
+- [ ] **Phase 16.1: Editor-Agent loop elimination & wake governor (URGENT — make Clarity safe to run)** — INSERTED 2026-06-04 after a production incident: installing Clarity made the live BEAAA instance unusable (every issue/agent/task change drove CPU up + woke 4-5 agents). Root cause = a closed positive-feedback loop (event-reactive op-issue creation + `requestWakeup` whose own writes re-enter the instance-wide event subscription). Eliminate the loop by construction, add a durable throughput wake-governor + kill-switch, and gate ingress on opt-in/scope — while leaving the read-time "zero rabbit-holes" guarantee untouched. Hard prerequisite to reinstalling Clarity on BEAAA; blocks 17–20.
 - [ ] **Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)** — a machine-readable "blocked on a human decision X" signal so the deterministic engine classifies AWAITING_HUMAN instead of parking in Watch (the deep BEAAA-972 fix); every blocked-no-edge class classified truthfully; SC5 extended to a full surface × terminal-kind matrix.
 - [ ] **Phase 18: No rabbit-holes & plain-English** — "Open ↗" routes to the Clarity Reader (not the raw classic page); ZERO raw/partial agent/UUID ids in human-facing text everywhere; "Looks done — close it?" affordance when the AI TL;DR reads done but the engine still says blocked.
 - [ ] **Phase 19: Action-cards async re-architecture (LAST, flag-gated)** — action-card compile off the request path writing non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; Editor named-action prose live on needs-you rows; runtime-safe + slip-safe to v1.6.
@@ -79,6 +80,14 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 - [x] 16-03-PLAN.md — Wave B: bound the irreducible relations.get with mapBounded + per-call deadline floor + overall snapshot budget; floor slow/hung rows to the deterministic UNCLASSIFIED line (degrade-safe, DoS-resistant)
 - [x] 16-04-PLAN.md — Wave C: serve-last-good SWR via the existing situation_snapshots table (viewer-invariant slice, per-call needsYou recompute, no cross-viewer leak) + the bookended live BEAAA cold/warm drill vs the 25.7s baseline
 **UI hint**: yes
+
+### Phase 16.1: Editor-Agent loop elimination & wake governor (URGENT — make Clarity safe to run)
+**Goal**: Make Clarity Pack safe to run on the live instance by eliminating the event-amplification feedback loop that made BEAAA unusable — so that installing Clarity and changing/creating any issue, agent, or task does NOT drive a self-sustaining storm of agent wakeups.
+**Depends on**: Phase 16 (reuses the SWR serve-last-good cache so the shift from push-reactive to pull/lazy compilation has near-zero user-visible latency cost).
+**Why now**: Production incident 2026-06-04 — Clarity uninstalled because every change spun 4-5 agents and pinned host CPU. Same storm class recurred across v0.6.5 / v1.4.1 (BEAAA-2092) / bulletin 2-min runaway / v1.4.4 despite repeated filter hardening → strategy shifts from mitigate-with-filters to eliminate-the-loop-by-construction. This is a hard prerequisite to reinstalling Clarity; 17–20 cannot ship onto a plugin that bricks the box.
+**Locked value boundary**: the read-time "zero rabbit-holes" guarantee (inline ref resolution, blocker-chain flatten, deliverable preview) is synchronous/local and MUST remain untouched. The fix targets only the PROACTIVE COMPILATION machinery (TL;DR/bulletin/action-cards): proactive compile must be PULL-based + SCOPED + SWR-served, never PUSH-based + instance-wide. KEEP scheduled proactivity (daily bulletin cron + bounded warm-on-heartbeat for awaiting-you rows). Action-cards stays gated OFF (its re-enable remains Phase 19).
+**Requirements**: LOOP-01, LOOP-02, LOOP-03, LOOP-04, LOOP-05, LOOP-06
+**UI hint**: no (worker-tier architecture; no new surfaces)
 
 ### Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)
 **Goal**: Give agents a structured, machine-readable way to declare "blocked on a human decision X" so the deterministic engine honestly classifies it as AWAITING_HUMAN (needs-you) instead of conservatively parking it in Watch — the deep fix behind the BEAAA-972 confusion — and prove every blocked-no-edge class is classified truthfully across a full surface × terminal-kind matrix.
@@ -235,6 +244,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
+| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 0/TBD | Not started | - |
 | 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
