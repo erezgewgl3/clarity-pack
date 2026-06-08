@@ -94,7 +94,7 @@ Plans:
 - [x] 16.1-02-PLAN.md — Wave 2: wake-governor (throughput + kill-switch) + durable provenance write + requestWakeup removal in the delivery path
 - [x] 16.1-03-PLAN.md — Wave 3: observe-only ingress + opt-in/active-company scope gate + lazy company seed + company.created/chat-bridge dispositions + dispatcher disposition
 - [x] 16.1-04-PLAN.md — Wave 4: bounded warm-on-heartbeat (<=5 SWR-stale awaiting-you TL;DRs) + scope-gated/governed bulletin cron
-- [ ] 16.1-05-PLAN.md — Wave 5: storm-safety CI test + no-wake static gate + opt-in-ingress test + LOOP-06 read-time no-touch regression guard
+- [x] 16.1-05-PLAN.md — Wave 5: storm-safety CI test + no-wake static gate + opt-in-ingress test + LOOP-06 read-time no-touch regression guard
 - [ ] 16.1-06-PLAN.md — Wave 6: two-source version bump + rebuild + bookended live BEAAA reinstall & no-storm drill (LOOP-07)
 
 ### Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)
@@ -252,7 +252,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
-| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 4/6 | In Progress|  |
+| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 5/6 | In Progress|  |
 | 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
