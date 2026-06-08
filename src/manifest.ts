@@ -623,7 +623,26 @@ const manifest: PaperclipPluginManifestV1 = {
   // compile-bulletin job that would host the GC is dead-scope on this host
   // (PR #6547). No schema change; additive, degrade-safe.
   // See: .planning/debug/editor-heartbeat-db-churn.md
-  version: '1.4.5',
+  //
+  // 1.5.0 (Phase 16.1 — editor-agent loop elimination + durable wake governor;
+  // first shipped phase of the v1.5.0 "Truthful & Legible Situation Room"
+  // milestone). Eliminates the 2026-06-04 event-amplification storm BY
+  // CONSTRUCTION: ingress event handlers are observe-only (no requestWakeup /
+  // reconcile / pause / resume inside any ctx.events.on body — guarded by the
+  // region-scoped static CI gate test/loop/no-wake-from-ingress.test.mjs);
+  // own-operation issues are recorded in a durable provenance table so the
+  // plugin's own writes never re-enter the wake path across a restart; agent
+  // wakes are bounded by a durable throughput governor + version-scoped
+  // kill-switch (CLARITY_WAKE_CEILING_PER_MIN default 6); and ingress + crons
+  // are gated on opt-in scope (default OFF = zero host work). The read-time
+  // zero-rabbit-holes path (Reader inline ref resolution + transitive
+  // blocker-chain flatten) is left UNTOUCHED (LOOP-06 no-touch guard: the
+  // read-time regression suite stays green + a phase-wide diff confirms zero
+  // edits to the no-touch source list). Two-source version bump (this literal
+  // + package.json) is byte-identical so the kill-switch version-scoping reads
+  // the shipped build's version. See:
+  //   .planning/phases/16.1-editor-agent-loop-elimination-wake-governor/
+  version: '1.5.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
