@@ -24,6 +24,11 @@ import type {
   PluginDatabaseClient,
   PluginLogger,
 } from '@paperclipai/plugin-sdk';
+// Phase 16.1 Plan 16.1-03 (D-12): an opt-in toggle changes who is opted in, so
+// the lazy-seeded opted-in-company set must be refreshed. Invalidate it after a
+// successful write so the next ingress invocation re-seeds (rather than waiting
+// out the TTL).
+import { invalidateOptedInCache } from '../opted-in-company-set.ts';
 
 export type SetOptInCtx = {
   logger?: PluginLogger;
@@ -51,6 +56,8 @@ export function registerSetOptIn(ctx: SetOptInCtx): void {
       'INSERT INTO plugin_clarity_pack_cdd6bda4bd.clarity_user_prefs (user_id, opted_in_at) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET opted_in_at = EXCLUDED.opted_in_at',
       [userId, optedInAt],
     );
+    // D-12 — the opt-in set just changed; force a re-seed on the next ingress.
+    invalidateOptedInCache();
     const result: SetOptInResult = { userId, optedInAt };
     return result;
   });

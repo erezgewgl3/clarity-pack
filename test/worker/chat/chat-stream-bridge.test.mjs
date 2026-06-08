@@ -21,20 +21,30 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
 import { registerChatStreamBridge } from '../../../src/worker/streams/chat-stream-bridge.ts';
+import { invalidateOptedInCache } from '../../../src/worker/opted-in-company-set.ts';
 import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
 
 // makeCtx captures ctx.events.on subscriptions and ctx.streams.emit calls.
 // `chatTopicIssueIds` is the set of issue ids that getChatTopicByIssueId
 // treats as chat topics. `comments` is what ctx.issues.listComments returns.
 // `listCommentsThrows` makes the re-fetch fail.
+//
+// Phase 16.1 Plan 16.1-03: the bridge now scope-gates on the opted-in-company
+// set (L-5 disposition #2). The bridge's seed runs two pure plugin-namespace
+// SELECTs (clarity_user_prefs -> opted-in user_ids, clarity_agent_owners ->
+// company_ids). To exercise the EMIT path the test must opt the event company
+// in; `optedInCompanyIds` drives those two seed queries. Each test invalidates
+// the module-level set first so the seed re-reads against THIS ctx's db.
 function makeCtx({
   chatTopicIssueIds = [],
   comments = [],
   listCommentsThrows = false,
+  optedInCompanyIds = ['co-1'],
 } = {}) {
   const subscriptions = new Map();
   const emitCalls = [];
   const topicSet = new Set(chatTopicIssueIds);
+  const optedInSet = new Set(optedInCompanyIds);
 
   const ctx = {
     logger: { warn() {}, info() {} },
@@ -66,6 +76,14 @@ function makeCtx({
             ? [{ topic_id: 'CHT-1', company_id: params[0], issue_id: issueId }]
             : [];
         }
+        // opted-in-company-set lazy seed (Plan 16.1-03).
+        if (/clarity_user_prefs/i.test(sql)) {
+          // One synthetic opted-in user per opted-in company.
+          return Array.from(optedInSet).map((_, i) => ({ user_id: `u-${i}` }));
+        }
+        if (/clarity_agent_owners/i.test(sql)) {
+          return Array.from(optedInSet).map((company_id) => ({ company_id }));
+        }
         return [];
       },
       async execute() {
@@ -78,6 +96,10 @@ function makeCtx({
   ctx.db = wrapHostFaithfulDb(ctx.db);
   return ctx;
 }
+
+// The opted-in-company set is module-level state; reset it before each test so
+// each test's ctx.db drives a fresh lazy seed.
+test.beforeEach(() => invalidateOptedInCache());
 
 function commentEvent(overrides = {}) {
   return {

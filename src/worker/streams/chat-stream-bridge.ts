@@ -31,6 +31,16 @@ import type {
   IssueComment,
 } from '@paperclipai/plugin-sdk';
 import { getChatTopicByIssueId, type ChatTopicsRepoCtx } from '../db/chat-topics-repo.ts';
+// Phase 16.1 Plan 16.1-03 (L-5 disposition #2): the chat bridge does SSE
+// re-emit only (NO wake), but it ran unscoped host work (a getChatTopicByIssueId
+// SELECT + a listComments re-fetch) for EVERY instance-wide comment event. Gate
+// it on the opted-in-company scope for cost parity with the ingress handler
+// (D-13). ensureSeeded runs lazily in handler scope (never boot — L-3).
+import {
+  ensureSeeded,
+  isCompanyOptedIn,
+  type OptedInCompanySetCtx,
+} from '../opted-in-company-set.ts';
 
 export type ChatStreamBridgeCtx = ChatTopicsRepoCtx & {
   events: PluginEventsClient;
@@ -65,6 +75,13 @@ export function registerChatStreamBridge(ctx: ChatStreamBridgeCtx): void {
     const companyId = event.companyId;
 
     try {
+      // L-5 scope gate (cost parity): no SSE bridge work for out-of-scope
+      // companies. This is NOT a wake — it must not match any forbidden
+      // wake token (Plan 05 static gate); ctx.streams.emit below is an SSE
+      // publish, not an agent wake.
+      await ensureSeeded(ctx as unknown as OptedInCompanySetCtx);
+      if (!isCompanyOptedIn(companyId)) return;
+
       // Relay only chat-topic comments (T-04-11).
       const topic = await getChatTopicByIssueId(ctx, companyId, issueId);
       if (!topic) return;

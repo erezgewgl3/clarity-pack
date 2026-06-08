@@ -237,6 +237,23 @@ import {
   registerAgentResumeHeartbeat,
   type AgentResumeHeartbeatCtx,
 } from './worker/handlers/agent-resume-heartbeat.ts';
+// Phase 16.1 Plan 16.1-03 (LOOP-01 / LOOP-02 / LOOP-04) — the ingress
+// loop-break. ensureSeeded + isCompanyOptedIn are the lazy-seeded opt-in scope
+// gate (D-12/D-13); isOwnOperationIssue is the durable restart-safe provenance
+// check (D-04). Both run at ingress BEFORE any host call. invalidateOptedInCache
+// is wired below so an opt-in change refreshes the company set.
+import {
+  ensureSeeded,
+  isCompanyOptedIn,
+  type OptedInCompanySetCtx,
+} from './worker/opted-in-company-set.ts';
+import {
+  isOwnOperationIssue,
+  type OwnOperationIssuesRepoCtx,
+} from './worker/db/own-operation-issues-repo.ts';
+// The in-memory fast-path cache that fronts the durable provenance read. Kept as
+// a zero-DB pre-check; the durable isOwnOperationIssue is authoritative (D-04).
+import { isRememberedOwnOperationIssue } from './worker/agents/op-issue-set.ts';
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -449,8 +466,16 @@ const plugin = definePlugin({
 
     // Reconcile on company creation so new companies get the Editor-Agent
     // without a plugin restart.
+    //
+    // Phase 16.1 Plan 16.1-03 (L-5 disposition #1): reconcileEditorAgent is NOT
+    // a wake, but it IS unscoped host work (a host round-trip) that previously
+    // ran for EVERY company on the instance regardless of opt-in. Gate it on the
+    // opted-in-company scope (D-13) — a company nobody has opted into never gets
+    // a reconcile. ensureSeeded runs in handler scope (lazy, never boot — L-3).
     ctx.events.on('company.created', async (event) => {
       try {
+        await ensureSeeded(ctx as unknown as OptedInCompanySetCtx);
+        if (!isCompanyOptedIn(event.companyId)) return; // out-of-scope — no host work
         await reconcileEditorAgent(ctx as unknown as EditorAgentReconcileCtx, event.companyId);
       } catch (err) {
         ctx.logger?.warn?.('Editor-Agent reconcile failed on company.created', {
@@ -494,6 +519,15 @@ const plugin = definePlugin({
     // Governance parity preserved: nothing here resumes/invokes an agent; a
     // paused Editor-Agent still performs no LLM work downstream. The debounce is
     // a local unref'd timer that only exists while events are pending.
+    //
+    // Phase 16.1 Plan 16.1-03 (Open Q #4 — disposition (b)): the ingress event
+    // handler below NO LONGER feeds this dispatcher. The dispatcher is retained
+    // as the agent's own pull-side batching primitive (used by the native
+    // heartbeat path, not event-triggered) AND, deliberately, as the Plan 05
+    // Task 1 gate-scope anchor: its runHeartbeat/handleEditorHeartbeat config
+    // keys must stay in MODULE scope, OUTSIDE every ctx.events.on body, so the
+    // handler-body-scoped static no-wake gate does not false-positive on them.
+    // Do NOT move this constructor into an event handler.
     const heartbeatDispatcher = new HeartbeatDispatcher({
       resolveAgentId: (companyId) =>
         reconcileEditorAgent(ctx as unknown as EditorAgentReconcileCtx, companyId),
@@ -505,22 +539,74 @@ const plugin = definePlugin({
         }),
       logger: ctx.logger,
     });
+    // Retained-but-not-event-fed (disposition (b)): reference it so the module
+    // scope binding is not flagged dead while the ingress handler stays
+    // observe-only. The native heartbeat path owns the actual dispatch.
+    void heartbeatDispatcher;
 
+    // ---- Phase 16.1 Plan 16.1-03 — OBSERVE-ONLY ingress (loop-break) --------
+    //
+    // THE 2026-06-04 LOOP. The OLD wiring fed every instance-wide issue/comment
+    // event into heartbeatDispatcher.enqueue, whose flush ran reconcile +
+    // handleEditorHeartbeat — host work + a wake of the Editor-Agent. Clarity's
+    // own op-issue writes re-entered that path; the in-memory op-issue guard was
+    // empty after a restart, so a self-sustaining wake storm (~3.8/sec) ignited.
+    //
+    // THE FIX (D-02/D-04/D-13). This handler is now OBSERVE-ONLY. The dispatcher
+    // is NEVER fed from ingress (disposition (b), Open Q #4): no enqueue, no
+    // reconcile, no runHeartbeat/handleEditorHeartbeat, no requestWakeup, no
+    // ctx.agents.* reachable from this body. The Editor-Agent's own native
+    // heartbeat (the compile-bulletin scheduled job, which reconciles + pulls per
+    // company at cycle start) is the SOLE dispatch path. The HeartbeatDispatcher
+    // constructor above stays in MODULE scope, outside every ctx.events.on body,
+    // so Plan 05 Task 1's handler-body-scoped static gate does not false-positive
+    // on its runHeartbeat/handleEditorHeartbeat config keys.
+    //
+    // Short-circuit order — ALL before any host call (D-04/D-13):
+    //   (1) scope gate (LOOP-04): companyId not in the lazy-seeded opted-in set
+    //       -> return; zero host work for out-of-scope companies.
+    //   (2) provenance gate (LOOP-02): a Clarity-authored op-issue (durable
+    //       own_operation_issues row) -> return; the restart-safe loop-break,
+    //       authoritative over the in-memory fast-path set (D-04).
+    //   (3) surviving events are OBSERVED only (a structured log line — the
+    //       lightweight durable-namespace dirty-marker is intentionally NOT a new
+    //       table here; the native heartbeat already pulls open issues, so no
+    //       enqueue-to-wake is needed). This carries NO wake.
     for (const evt of ['issue.created', 'issue.updated', 'issue.comment.created'] as const) {
       ctx.events.on(evt, async (event) => {
-        // enqueue never throws (it swallows its own edge cases); a host event
-        // handler that throws would be logged by the host, but we keep this
-        // defensive try anyway so one malformed event can never wedge the bus.
+        // A throwing host event handler would be logged by the host, but we keep
+        // this defensive try so one malformed event can never wedge the bus.
         try {
-          heartbeatDispatcher.enqueue({
-            entityId: event.entityId,
-            entityType: event.entityType,
-            companyId: event.companyId,
-            actorId: event.actorId,
-            actorType: event.actorType,
+          const companyId = event.companyId;
+          const entityId = event.entityId;
+          if (!companyId || !entityId) return;
+
+          // (1) opt-in / active-company scope gate (LOOP-04). ensureSeeded runs
+          // lazily in handler scope (never boot — L-3); membership is then a
+          // pure in-memory test (zero per-event DB call).
+          await ensureSeeded(ctx as unknown as OptedInCompanySetCtx);
+          if (!isCompanyOptedIn(companyId)) return; // out-of-scope — no host work
+
+          // (2) durable own-operation provenance check (LOOP-02 / D-04). The
+          // in-memory fast-path may run first, but the durable read is
+          // authoritative — it survives a restart (the empty-on-restart set was
+          // the loop's restart-window bypass). A Clarity-authored op-issue is
+          // dropped here BEFORE any further work.
+          if (isRememberedOwnOperationIssue(entityId)) return; // fast-path cache
+          if (await isOwnOperationIssue(ctx as unknown as OwnOperationIssuesRepoCtx, companyId, entityId)) {
+            return; // durable provenance — own write, drop
+          }
+
+          // (3) OBSERVE-ONLY. A surviving event is a real, in-scope, non-own
+          // change. We record an observation marker (log) and do NOTHING that
+          // could wake an agent. The native heartbeat pull picks up the work.
+          ctx.logger?.info?.('clarity ingress: observed in-scope event (observe-only)', {
+            event: evt,
+            companyId,
+            entityId,
           });
         } catch (err) {
-          ctx.logger?.warn?.('Editor-Agent heartbeat enqueue threw', {
+          ctx.logger?.warn?.('clarity ingress: observe-only handler threw', {
             event: evt,
             err: (err as Error).message,
           });
