@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
-stopped_at: Phase 16.1 context gathered
-last_updated: "2026-06-08T14:29:25.440Z"
-last_activity: 2026-06-08 -- Phase 16.1 planning complete
+stopped_at: Completed 16.1-01-PLAN.md
+last_updated: "2026-06-08T15:02:35.431Z"
+last_activity: 2026-06-08
 progress:
   total_phases: 12
   completed_phases: 5
   total_plans: 33
-  completed_plans: 25
+  completed_plans: 26
   percent: 42
 ---
 
@@ -681,14 +681,14 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 16 — snapshot-performance-honest-loading
+**Current Focus:** Phase 16.1 — editor-agent-loop-elimination-wake-governor
 
 ## Current Position
 
-Phase: 16 — COMPLETE
-Plan: 1 of 4
+Phase: 16.1 (editor-agent-loop-elimination-wake-governor) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-06-08 -- Phase 16.1 planning complete
+Last activity: 2026-06-08
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1403,7 +1403,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 85%
+**Progress:** [████████░░] 79%
 
 ## Performance Metrics
 
@@ -1436,6 +1436,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 13 P03 | ~25 min | 2 tasks | 4 files (2 created) — needs-you row named-action render + degrade; 71/71 row+banner tests, tsc clean |
 | Phase 16 P01 | ~12m | 2 tasks | 3 files |
 | Phase 16 P02 | ~40m | 3 tasks | 6 files |
+| Phase 16.1 P01 | 25m | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -1527,9 +1528,9 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-08T13:37:11.810Z
+**Last session:** 2026-06-08T15:02:35.360Z
 
-**Stopped at:** Phase 16.1 context gathered
+**Stopped at:** Completed 16.1-01-PLAN.md
 
 **Plan 11-02 decisions:**
 

@@ -90,7 +90,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 **UI hint**: no (worker-tier architecture; no new surfaces)
 **Plans**: 6 plans
 Plans:
-- [ ] 16.1-01-PLAN.md — Wave 1: additive migration 0017 (own_operation_issues + wake_ledger + wake_kill_switch) + three durable repos
+- [x] 16.1-01-PLAN.md — Wave 1: additive migration 0017 (own_operation_issues + wake_ledger + wake_kill_switch) + three durable repos
 - [ ] 16.1-02-PLAN.md — Wave 2: wake-governor (throughput + kill-switch) + durable provenance write + requestWakeup removal in the delivery path
 - [ ] 16.1-03-PLAN.md — Wave 3: observe-only ingress + opt-in/active-company scope gate + lazy company seed + company.created/chat-bridge dispositions + dispatcher disposition
 - [ ] 16.1-04-PLAN.md — Wave 4: bounded warm-on-heartbeat (<=5 SWR-stale awaiting-you TL;DRs) + scope-gated/governed bulletin cron
@@ -252,7 +252,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
-| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 0/TBD | Not started | - |
+| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 1/6 | In Progress|  |
 | 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
