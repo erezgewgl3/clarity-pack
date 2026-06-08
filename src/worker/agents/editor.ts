@@ -64,7 +64,24 @@ import {
 import {
   buildEmployeesRollup,
   type EmployeesRollupCtx,
+  type SituationEmployeeRow,
 } from '../situation/build-employees-rollup.ts';
+// Phase 16.1 Plan 16.1-04 (D-10/D-11/D-13/LOOP-03/LOOP-04) — the bounded
+// warm-on-heartbeat. selectAwaitingYouIssueIds picks the awaiting-you set (D-10);
+// checkAndRecordWake gates each warm against the throughput ceiling + kill-switch
+// (LOOP-03); ensureSeeded/isCompanyOptedIn scopes the warm to opted-in companies
+// (LOOP-04/D-13). Staleness is checked against the per-row tldrs cache
+// (getTldrByScope, already imported) — A2 resolution — NOT situation_snapshots.
+import { selectAwaitingYouIssueIds } from '../situation/awaiting-you-selector.ts';
+import {
+  checkAndRecordWake,
+  type WakeGovernorCtx,
+} from './wake-governor.ts';
+import {
+  ensureSeeded,
+  isCompanyOptedIn,
+  type OptedInCompanySetCtx,
+} from '../opted-in-company-set.ts';
 
 // Stable agent key — referenced by manifest agents[] AND every reconcile call.
 export const EDITOR_AGENT_KEY = 'editor-agent';
@@ -377,6 +394,230 @@ export async function handleEditorHeartbeat(
       reason: (e as Error).message,
     });
   }
+}
+
+// ===========================================================================
+// Phase 16.1 Plan 16.1-04 (D-10 / D-11 / D-13 / LOOP-03 / LOOP-04) — the bounded
+// warm-on-heartbeat. Scheduled proactivity is PRESERVED under the new pull model:
+// the heartbeat warms at most N SWR-stale awaiting-you TL;DRs per OPTED-IN
+// company, gated by the wake-governor (throughput ceiling + kill-switch). This is
+// the legitimate pull path the wake-governor was built for (Plan 16.1-02) — it
+// does NOT requestWakeup; it creates op-issues the agent pulls on its native
+// heartbeat. Both the cap AND the governor-gate-before-each-warm are proven
+// behaviorally by test/worker/agents/bounded-warm.test.mjs (W-3).
+// ===========================================================================
+
+/**
+ * The default bounded-warm cap (rows warmed per heartbeat per company), used when
+ * CLARITY_WARM_MAX_ROWS is absent / non-positive / not finite (D-11). A small cap
+ * keeps the warm bounded so it can never become an unbounded compile loop
+ * (T-161-16) — the wake-governor is a second, durable ceiling on top of this.
+ */
+export const DEFAULT_WARM_MAX_ROWS = 5;
+
+/**
+ * The SWR freshness window for a per-row TL;DR (ms). A cached TL;DR whose
+ * generated_at is within this window is FRESH and is SKIPPED by the warm (D-11);
+ * only stale (older, or absent) rows count toward the cap. Matches the warm's
+ * "only SWR-stale entries warmed" contract. 5 minutes is conservative — long
+ * enough that a freshly-compiled TL;DR is not re-warmed on the very next
+ * heartbeat, short enough that an awaiting-you row is refreshed within a few
+ * heartbeats once it goes stale.
+ */
+export const WARM_FRESHNESS_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * Read CLARITY_WARM_MAX_ROWS (D-11), env-tunable cap. Coerce via Number; fall
+ * back to DEFAULT_WARM_MAX_ROWS when absent, NaN, or non-positive — a malformed
+ * override must never silently unbound the warm (mirrors the wake-governor
+ * ceiling reader's safe-default discipline).
+ */
+export function readWarmMaxRows(): number {
+  const raw = process.env.CLARITY_WARM_MAX_ROWS;
+  if (raw === undefined || raw === '') return DEFAULT_WARM_MAX_ROWS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_WARM_MAX_ROWS;
+  return Math.floor(n);
+}
+
+/**
+ * True when a cached TL;DR row is FRESH (within the SWR window) for the warm's
+ * purposes. A null row (no TL;DR cached yet) is NOT fresh — it is the most
+ * warm-worthy case. A row with an unparseable generated_at is treated as stale
+ * (warm it) rather than silently fresh (skip), so a malformed timestamp can never
+ * suppress a legitimately-needed warm. Pure helper; exported for unit testing.
+ */
+export function isTldrFresh(row: { generated_at?: string } | null, now: number): boolean {
+  if (!row || !row.generated_at) return false;
+  const gen = Date.parse(row.generated_at);
+  if (!Number.isFinite(gen)) return false;
+  return now - gen <= WARM_FRESHNESS_WINDOW_MS;
+}
+
+/** The ctx slice runBoundedWarm needs directly (staleness read + governor gate).
+ *  WakeGovernorCtx already carries the optional logger the warm logs through. */
+export type BoundedWarmCtx = TldrCacheCtxLike & WakeGovernorCtx;
+
+/** The db slice getTldrByScope needs (declared locally to keep the warm ctx narrow). */
+type TldrCacheCtxLike = Parameters<typeof getTldrByScope>[0];
+
+/**
+ * The warm-compile seam — the per-row action that creates the op-issue the agent
+ * pulls. Injectable so the behavioral test can count compiles directly without
+ * spinning the full op-issue/document machinery; the production default
+ * ({@link defaultWarmCompile}) drives one TL;DR compile step.
+ */
+export type WarmCompileFn = (issueId: string, companyId: string) => Promise<void>;
+
+/**
+ * Run the bounded warm for ONE company over the rollup the heartbeat already
+ * built (D-10/D-11/LOOP-03). Pure of any company-iteration / opt-in / rollup-
+ * fetch logic — the caller ({@link runHeartbeatBoundedWarm}) does the scope gate
+ * and rollup fetch; this function does the cap + skip-fresh + governor-gate, which
+ * is exactly the W-3 behavioral surface.
+ *
+ * Flow per heartbeat, per company:
+ *   1. selectAwaitingYouIssueIds(rows) → the awaiting-you candidate ids (D-10).
+ *   2. For each candidate, read the PER-ROW tldrs cache (getTldrByScope, A2). A
+ *      FRESH row (within WARM_FRESHNESS_WINDOW_MS) is SKIPPED (D-11) and does NOT
+ *      count toward the cap; a stale/absent row is a warm candidate.
+ *   3. Take at most readWarmMaxRows() stale candidates (D-11, env-tunable).
+ *   4. Before each warm, call checkAndRecordWake(ctx, companyId) — if it returns
+ *      false (kill-switch engaged / over ceiling) SKIP that warm (LOOP-03). Each
+ *      warm is gated independently, so a mid-batch trip suppresses the rest.
+ *   5. warmCompile(issueId, companyId) creates the op-issue the agent pulls. NO
+ *      requestWakeup (D-05 deleted it; the native heartbeat is the only dispatch).
+ *
+ * Returns the count of warms actually ATTEMPTED (governor-allowed compiles
+ * dispatched) — used by the caller for logging and by the test for assertions.
+ * Best-effort: a warmCompile throw is logged and does NOT abort the batch.
+ */
+export async function runBoundedWarm(
+  ctx: BoundedWarmCtx,
+  companyId: string,
+  rows: SituationEmployeeRow[],
+  warmCompile: WarmCompileFn,
+  now: number = Date.now(),
+): Promise<number> {
+  const candidates = selectAwaitingYouIssueIds(rows);
+  const maxRows = readWarmMaxRows();
+
+  // Collect up to maxRows STALE candidates (skip-fresh, D-11). Staleness is read
+  // against the per-row tldrs cache (A2) — NOT situation_snapshots.
+  const stale: string[] = [];
+  for (const issueId of candidates) {
+    if (stale.length >= maxRows) break;
+    let cached: TldrRow | null = null;
+    try {
+      cached = await getTldrByScope(ctx, 'issue', issueId);
+    } catch (e) {
+      // A failed cache read → treat as stale (warm it) rather than silently
+      // skip — degrade toward freshness, never toward staleness suppression.
+      ctx.logger?.info?.('bounded-warm: tldr-cache staleness read failed (treating as stale)', {
+        companyId,
+        issueId,
+        reason: (e as Error).message,
+      });
+      cached = null;
+    }
+    if (isTldrFresh(cached, now)) continue; // FRESH — skip, no cap consumption
+    stale.push(issueId);
+  }
+
+  let warmed = 0;
+  for (const issueId of stale) {
+    // Governor gate BEFORE each warm (LOOP-03). A false return means the wake
+    // ceiling is exceeded or the durable kill-switch is engaged — SKIP this warm
+    // (and, since the governor engages the switch on overflow, the next
+    // checkAndRecordWake in this loop short-circuits false too).
+    const allowed = await checkAndRecordWake(ctx, companyId);
+    if (!allowed) {
+      ctx.logger?.info?.('bounded-warm: warm suppressed by wake-governor', {
+        companyId,
+        issueId,
+      });
+      continue;
+    }
+    try {
+      await warmCompile(issueId, companyId);
+      warmed += 1;
+    } catch (e) {
+      ctx.logger?.info?.('bounded-warm: warm compile skipped (non-fatal)', {
+        companyId,
+        issueId,
+        reason: (e as Error).message,
+      });
+    }
+  }
+  return warmed;
+}
+
+/** ctx the heartbeat-level bounded warm needs: scope-seed + rollup + warm. */
+export type HeartbeatBoundedWarmCtx = BoundedWarmCtx &
+  OptedInCompanySetCtx &
+  EmployeesRollupCtx;
+
+/**
+ * The heartbeat entry point for the bounded warm (D-13 / LOOP-04). For the given
+ * company: pass through the OPT-IN SCOPE GATE first (ensureSeeded +
+ * isCompanyOptedIn) — a company nobody has opted into is warmed ZERO rows, so
+ * default OFF and a single opt-out throttle the warm exactly like ingress. If
+ * opted in, build the rollup (viewer-agnostic; the engine needsYou verdict drives
+ * the awaiting-you set) and run the bounded warm over it.
+ *
+ * The warm-compile seam defaults to {@link defaultWarmCompile}. Best-effort: any
+ * failure is logged and NEVER propagates — the heartbeat must stay best-effort.
+ */
+export async function runHeartbeatBoundedWarm(
+  ctx: HeartbeatBoundedWarmCtx & TldrViewDriverCtx,
+  companyId: string,
+  warmCompile?: WarmCompileFn,
+): Promise<void> {
+  try {
+    // LOOP-04 / D-13 — the SAME scope gate that wraps ingress now wraps the warm.
+    await ensureSeeded(ctx);
+    if (!isCompanyOptedIn(companyId)) return;
+
+    const rollup = await buildEmployeesRollup(
+      ctx as unknown as EmployeesRollupCtx,
+      companyId,
+      '', // viewer-agnostic — the engine needsYou verdict drives awaiting-you
+    );
+    const compile: WarmCompileFn =
+      warmCompile ??
+      ((issueId, cId) =>
+        // ctx structurally satisfies the warm-compile driver; the cast bridges
+        // the two compatible-but-distinct logger method shapes in the intersection
+        // (WakeGovernorCtx's (msg,meta?) vs the compile driver's (...unknown[])).
+        defaultWarmCompile(
+          ctx as unknown as TldrViewDriverCtx & { issues: Pick<PluginIssuesClient, 'get'> },
+          issueId,
+          cId,
+        ));
+    await runBoundedWarm(ctx, companyId, rollup.employees, compile);
+  } catch (e) {
+    ctx.logger?.info?.('bounded-warm: heartbeat warm skipped (non-fatal)', {
+      companyId,
+      reason: (e as Error).message,
+    });
+  }
+}
+
+/**
+ * The production warm-compile seam: drive ONE TL;DR compile step for an
+ * awaiting-you issue. This creates (or reuses) the tldr-compile OPERATION ISSUE
+ * the Editor-Agent pulls on its native heartbeat — it does NOT requestWakeup
+ * (D-05 removed the fire-and-forget wake; the native pull is the only dispatch).
+ * Best-effort: the inputs are read tolerantly and a failure surfaces as a thrown
+ * error the caller logs and skips.
+ */
+async function defaultWarmCompile(
+  ctx: TldrViewDriverCtx & { issues: Pick<PluginIssuesClient, 'get'> },
+  issueId: string,
+  companyId: string,
+): Promise<void> {
+  const inputs = await readTldrInputs(ctx.issues, issueId, companyId);
+  await driveTldrCompileStep(ctx, { issueId, companyId, inputs });
 }
 
 /**

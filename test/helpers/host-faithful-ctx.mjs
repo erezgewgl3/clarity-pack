@@ -156,6 +156,16 @@ export function makeHostFaithfulCompileCtx({
   const fakeDb = {
     namespace: 'plugin_clarity_pack_cdd6bda4bd',
     async query(sql, params) {
+      // Phase 16.1 Plan 16.1-04 — the bulletin cron passes through the opt-in
+      // scope gate (isCompanyOptedIn). Seed every test company as opted-in so the
+      // cron compiles; the gate is exercised independently in the bounded-warm +
+      // opted-in-company-set suites.
+      if (/clarity_user_prefs/i.test(sql)) {
+        return [{ user_id: 'opted-in-user' }];
+      }
+      if (/clarity_agent_owners/i.test(sql)) {
+        return companies.map((c) => ({ company_id: c.id }));
+      }
       // getNextDueAtForCompany
       if (/SELECT next_due_at/i.test(sql)) {
         // Prefer a live in-memory row (bootstrap writes one) over the seed map.

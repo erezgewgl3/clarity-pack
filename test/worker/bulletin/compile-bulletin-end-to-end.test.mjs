@@ -23,6 +23,12 @@ import test from 'node:test';
 import { registerCompileBulletinJob } from '../../../src/worker/jobs/compile-bulletin.ts';
 import { resetCircuitBreakerState } from '../../../src/worker/agents/circuit-breaker.ts';
 import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
+// Phase 16.1 Plan 16.1-04 — reset the module-level opted-in-company set between
+// tests so the freshly-seeded scope (from each ctx's clarity_user_prefs /
+// clarity_agent_owners query) is re-read rather than served stale from the TTL.
+import { invalidateOptedInCache } from '../../../src/worker/opted-in-company-set.ts';
+
+test.beforeEach(() => invalidateOptedInCache());
 
 const JOB_EVENT = {
   jobKey: 'compile-bulletin',
@@ -88,6 +94,17 @@ function makeFakeCtx({
     db: {
       namespace: 'plugin_clarity_pack_cdd6bda4bd',
       async query(sql, params) {
+        // Phase 16.1 Plan 16.1-04 — the bulletin cron now passes through the
+        // opt-in scope gate (isCompanyOptedIn). Seed every test company as
+        // opted-in so the cron compiles (the gate is exercised separately in the
+        // bounded-warm + opted-in-company-set suites). clarity_user_prefs returns
+        // a synthetic opted-in user; clarity_agent_owners maps it to each company.
+        if (/clarity_user_prefs/i.test(sql)) {
+          return [{ user_id: 'opted-in-user' }];
+        }
+        if (/clarity_agent_owners/i.test(sql)) {
+          return companies.map((c) => ({ company_id: c.id }));
+        }
         // getNextDueAtForCompany — v0.6.6 (Bug 1): prefer a LIVE in-memory row
         // (the schedule pointer the job advances) over the static seed map, so
         // a second fire observes the freshly-advanced future `next_due_at`.

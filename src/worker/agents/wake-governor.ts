@@ -30,6 +30,8 @@
 // read, but the durable read is the authoritative restart backstop; this file
 // keeps the durable read as the sole source for simplicity and correctness.
 
+import type { PluginDatabaseClient } from '@paperclipai/plugin-sdk';
+
 import {
   appendWake,
   countTrailingWakes,
@@ -53,19 +55,31 @@ const RATE_WINDOW_SECONDS = 60;
 const PRUNE_WINDOW_SECONDS = 120;
 
 /**
- * The narrow ctx slice this service needs — a db with query+execute (the shape
- * the wake-ledger + wake-kill-switch repos require) plus an optional logger.
- * Pick-style so .mjs tests can hand a plain object without the full host ctx.
+ * The ctx slice this service needs — the host PluginDatabaseClient (the SAME
+ * shape the wake-ledger + wake-kill-switch repos require, including `namespace`)
+ * plus an optional logger.
+ *
+ * Phase 16.1 Plan 16.1-04 — `db` is the full PluginDatabaseClient, NOT a narrow
+ * `{query;execute}` Pick. Plan 16.1-02 typed it as a narrow Pick, which type-
+ * checked the governor in isolation but produced 5x TS2345 the moment the repos
+ * (which require the full client, with `namespace`) were called — deferred to
+ * this plan, the one that wires the governor's caller. Every production caller
+ * (the heartbeat/cron pull path in editor.ts + compile-bulletin.ts) already
+ * carries the full host `ctx.db`, so requiring it here costs the caller nothing
+ * and lets the structural type-check pass. .mjs tests still hand a plain object
+ * (Node's type-stripping loader does not enforce the structural type at runtime).
  */
 export type WakeGovernorCtx = {
-  db: {
-    query<T>(sql: string, params: unknown[]): Promise<T[]>;
-    execute(sql: string, params: unknown[]): Promise<unknown>;
-  };
+  db: PluginDatabaseClient;
+  // `meta?: Record<string, unknown>` matches the host PluginLogger signature so a
+  // full production ctx (compile-bulletin / editor heartbeat) satisfies this
+  // structurally; a narrower `unknown` would be contravariantly incompatible with
+  // PluginLogger. .mjs tests hand a plain {info,warn,error} object (runtime
+  // type-stripping does not enforce this).
   logger?: {
-    info?: (msg: string, meta?: unknown) => void;
-    warn?: (msg: string, meta?: unknown) => void;
-    error?: (msg: string, meta?: unknown) => void;
+    info?: (msg: string, meta?: Record<string, unknown>) => void;
+    warn?: (msg: string, meta?: Record<string, unknown>) => void;
+    error?: (msg: string, meta?: Record<string, unknown>) => void;
   };
 };
 

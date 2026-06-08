@@ -19,6 +19,11 @@ import test from 'node:test';
 
 import { registerCompileBulletinJob } from '../../../src/worker/jobs/compile-bulletin.ts';
 import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
+// Phase 16.1 Plan 16.1-04 — reset the module-level opted-in set between tests so
+// the per-test seed is re-read (not served stale by the 60s TTL).
+import { invalidateOptedInCache } from '../../../src/worker/opted-in-company-set.ts';
+
+test.beforeEach(() => invalidateOptedInCache());
 
 // Build a fake job ctx. `nextDueByCompany` maps companyId -> ISO string (or
 // null). `query` returns next_due_at rows for getNextDueAtForCompany;
@@ -33,6 +38,15 @@ function makeCtx({ companies = [], nextDueByCompany = {}, throwForCompany = null
       namespace: 'plugin_clarity_pack_cdd6bda4bd',
       async query(sql, params) {
         dbCalls.push({ kind: 'query', sql, params });
+        // Phase 16.1 Plan 16.1-04 — opt-in scope-gate seed: every test company is
+        // opted-in so the cron exercises its compile/bootstrap/gate logic (the
+        // scope gate itself is proven in the dedicated suites).
+        if (/clarity_user_prefs/i.test(sql)) {
+          return [{ user_id: 'opted-in-user' }];
+        }
+        if (/clarity_agent_owners/i.test(sql)) {
+          return companies.map((c) => ({ company_id: c.id }));
+        }
         if (/next_due_at/i.test(sql) && /SELECT/i.test(sql)) {
           const companyId = params?.[0];
           if (throwForCompany && companyId === throwForCompany) {

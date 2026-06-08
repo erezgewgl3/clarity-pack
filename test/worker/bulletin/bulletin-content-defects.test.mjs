@@ -32,6 +32,11 @@ import { handleEditorHeartbeat } from '../../../src/worker/agents/editor.ts';
 import { registerCompileBulletinJob } from '../../../src/worker/jobs/compile-bulletin.ts';
 import { resetCircuitBreakerState } from '../../../src/worker/agents/circuit-breaker.ts';
 import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
+// Phase 16.1 Plan 16.1-04 — reset the module-level opted-in-company set so the
+// per-test COU seed is re-read rather than served stale by the TTL.
+import { invalidateOptedInCache } from '../../../src/worker/opted-in-company-set.ts';
+
+test.beforeEach(() => invalidateOptedInCache());
 
 /** A real UUID — the shape the host's `agents.pause` requires. */
 const EDITOR_UUID = '11111111-1111-4111-8111-111111111111';
@@ -358,6 +363,14 @@ function makeThrowingCtx({ throwAt = 'max_cycle' } = {}) {
     },
     db: wrapHostFaithfulDb({
       async query(sql, params) {
+        // Phase 16.1 Plan 16.1-04 — opt-in scope gate seed: COU is opted-in so
+        // the bulletin cron compiles (gate exercised in dedicated suites).
+        if (/clarity_user_prefs/i.test(sql)) {
+          return [{ user_id: 'opted-in-user' }];
+        }
+        if (/clarity_agent_owners/i.test(sql)) {
+          return [{ company_id: 'COU' }];
+        }
         if (/SELECT next_due_at/i.test(sql)) {
           // Prefer a live in-memory row so the schedule-pointer advance is
           // observable; fall back to the PAST seed for the first fire.

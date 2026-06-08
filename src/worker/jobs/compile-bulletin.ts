@@ -94,7 +94,19 @@ import {
 // editor-agent', the value of the unrelated EDITOR_AGENT_ID_TAG) made every
 // ctx.agents.managed.reconcile() throw "reconcile failed" — the compile-bulletin
 // job silently bailed before compiling. Surfaced by the Plan 03-05 drill.
-import { EDITOR_AGENT_KEY, drainTldrOperations } from '../agents/editor.ts';
+import {
+  EDITOR_AGENT_KEY,
+  drainTldrOperations,
+  runHeartbeatBoundedWarm,
+} from '../agents/editor.ts';
+// Phase 16.1 Plan 16.1-04 (LOOP-03 / LOOP-04 / D-13) — the bulletin cron is the
+// SOLE native pull/dispatch path (Plan 16.1-03 disposition (b)). It must pass
+// through the SAME opt-in scope gate (isCompanyOptedIn) AND the wake-governor
+// (checkAndRecordWake) that wrap ingress — so default OFF and the durable
+// kill-switch throttle the cron, not only the UI. ensureSeeded lazily seeds the
+// opted-in set on the first valid (job-scope) invocation.
+import { ensureSeeded, isCompanyOptedIn } from '../opted-in-company-set.ts';
+import { checkAndRecordWake } from '../agents/wake-governor.ts';
 // Plan 03-06 — production LLM invocation via the operation-issue handoff
 // (Path (d)). The compile prompt is delivered as the body of an operation issue
 // ASSIGNED to the Editor-Agent; the agent reads it and files the BulletinDraft
@@ -340,6 +352,17 @@ export type CompileForCompanyOptions = {
    * untouched.
    */
   force?: boolean;
+  /**
+   * Phase 16.1 Plan 16.1-04 (LOOP-03) — the wake-governor gate, injected by the
+   * cron caller. Called ONCE right before the op-issue-creating START dispatch
+   * (startAgentTask) — the bulletin's legitimate wake origin. A `false` return
+   * (trailing-60s throughput over ceiling, or the durable kill-switch engaged)
+   * SKIPS the compile this tick: the daily schedule pointer is left untouched so
+   * the next due tick retries once the governor recovers / the operator clears the
+   * switch. Optional + defensively read: a caller (force/on-demand path, older
+   * tests) that omits it dispatches ungated, exactly as before.
+   */
+  wakeGovernor?: (companyId: string) => Promise<boolean>;
 };
 
 /** Quick task 260528-nns — discriminated outcome of a single-company compile. */
@@ -1005,6 +1028,27 @@ export async function compileBulletinForCompany(
       };
     }
 
+    // Phase 16.1 Plan 16.1-04 (LOOP-03) — WAKE-GOVERNOR GATE at the wake origin.
+    // The START dispatch below creates an op-issue the Editor-Agent pulls (the
+    // bulletin's legitimate wake). Gate it through the injected wake-governor: a
+    // `false` return (over the trailing-60s ceiling, or the durable kill-switch
+    // engaged) SKIPS the compile this tick. CRITICAL: leave the daily schedule
+    // pointer untouched (no advanceScheduleForCompany) so the next due tick
+    // retries once the governor recovers — a throttled tick is NOT a consumed
+    // cycle. force/on-demand and older callers that omit wakeGovernor dispatch
+    // ungated (the gate is opt-in via the option).
+    if (opts.wakeGovernor) {
+      const allowed = await opts.wakeGovernor(company.id);
+      if (!allowed) {
+        ctx.logger?.info?.(
+          `compile-bulletin: cycle ${cycleNumber} compile suppressed by wake-governor ` +
+            `(over ceiling or kill-switch engaged); schedule pointer left for retry`,
+          { companyId: company.id },
+        );
+        return { kind: 'skipped', reason: 'wake-governor throttle: compile suppressed this tick' };
+      }
+    }
+
     // START — idempotency-search + create the operation issue + wake the agent.
     // One invocation's worth of host calls.
     const operationId = `cycle-${cycleNumber}`;
@@ -1213,7 +1257,26 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
       return;
     }
 
+    // Phase 16.1 Plan 16.1-04 (LOOP-04 / D-13) — lazily seed the opted-in set on
+    // this valid (job-scope) invocation BEFORE the per-company loop, so the scope
+    // gate below is a zero-DB in-memory membership test per company. A seed
+    // failure leaves the set fail-CLOSED (empty) — the cron warms/compiles
+    // nothing rather than everything.
+    try {
+      await ensureSeeded(ctx);
+    } catch (e) {
+      ctx.logger?.warn?.('compile-bulletin: opted-in seed failed (scope gate fail-closed)', {
+        err: (e as Error).message,
+      });
+    }
+
     for (const company of companies) {
+      // Phase 16.1 Plan 16.1-04 (LOOP-04 / D-13) — OPT-IN SCOPE GATE. The bulletin
+      // cron is the sole native pull path; a company nobody has opted into gets
+      // ZERO cron work (no compile, no warm) — default OFF throttles the cron, not
+      // only the UI. This is the SAME gate that wraps ingress (Plan 16.1-03).
+      if (!isCompanyOptedIn(company.id)) continue;
+
       // Per-company isolation: compileBulletinForCompany never throws (its own
       // catch-all returns a 'failed' result), so one company cannot abort the
       // loop.
@@ -1226,7 +1289,32 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
       // though the marker was already consumed. When no marker is set, force is
       // false — byte-identical to the prior inline cron body (due-gate enforced).
       const force = await consumeForceRequest(ctx, company.id);
-      await compileBulletinForCompany(ctx, company, { now, bulletinTz, force });
+
+      // Phase 16.1 Plan 16.1-04 (LOOP-03) — the bulletin compile is governed by
+      // the wake-governor at its op-issue-creating/wake step INSIDE
+      // compileBulletinForCompany (gated right before startAgentTask), NOT here
+      // around the whole call. That placement is deliberate: the every-minute cron
+      // mostly returns not-due / pending / bootstrap WITHOUT creating an op-issue,
+      // so recording a wake on every tick would burn ledger budget for no actual
+      // wake. The governor is injected so the start dispatch passes through
+      // checkAndRecordWake exactly when (and only when) a wake genuinely happens —
+      // the bulletin CRON STRING is unchanged.
+      await compileBulletinForCompany(ctx, company, {
+        now,
+        bulletinTz,
+        force,
+        wakeGovernor: (companyId) => checkAndRecordWake(ctx, companyId),
+      });
+
+      // Phase 16.1 Plan 16.1-04 (D-10/D-11/LOOP-03/LOOP-04) — bounded warm-on-
+      // heartbeat. The bulletin cron is the native pull path, so it is the right
+      // place to warm at most N SWR-stale awaiting-you TL;DRs per opted-in company.
+      // runHeartbeatBoundedWarm re-checks the scope gate and gates each warm
+      // through the wake-governor; it is best-effort (never throws).
+      await runHeartbeatBoundedWarm(
+        ctx as unknown as Parameters<typeof runHeartbeatBoundedWarm>[0],
+        company.id,
+      );
 
       // Delivery-layer rework (2026-05-28) — §9.2 TL;DR cross-tick drainer.
       // Consume any in-flight tldr-compile operation results the heartbeat's

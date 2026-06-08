@@ -22,6 +22,11 @@ import test from 'node:test';
 import { registerCompileBulletinJob } from '../../../src/worker/jobs/compile-bulletin.ts';
 import { resetCircuitBreakerState } from '../../../src/worker/agents/circuit-breaker.ts';
 import { makeHostFaithfulCompileCtx } from '../../helpers/host-faithful-ctx.mjs';
+// Phase 16.1 Plan 16.1-04 — reset the module-level opted-in-company set between
+// tests so each ctx's freshly-seeded scope is re-read (not served stale by TTL).
+import { invalidateOptedInCache } from '../../../src/worker/opted-in-company-set.ts';
+
+test.beforeEach(() => invalidateOptedInCache());
 
 const JOB_EVENT = {
   jobKey: 'compile-bulletin',
