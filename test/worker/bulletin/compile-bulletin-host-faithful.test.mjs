@@ -161,7 +161,10 @@ test('host-faithful: the compile prompt rides an operation issue assigned to the
   assert.equal(op.originKind, 'plugin:clarity-pack:operation:bulletin-compile', 'operation originKind');
   assert.equal(op.surfaceVisibility, 'plugin_operation', 'operation issue is off the classic human board');
   assert.equal(op.assigneeAgentId, h.resolvedAgentId, 'operation issue assigned to the resolved Editor-Agent UUID');
-  assert.ok(h.wakeups.length >= 1, 'the Editor-Agent was woken via requestWakeup');
+  // Phase 16.1 Plan 16.1-02 (D-05) — the fire-and-forget requestWakeup is DELETED
+  // from the delivery path; the agent's native heartbeat pull finds the assigned
+  // operation issue via "Step 3 — Get Assignments". No event-reactive wake fires.
+  assert.equal(h.wakeups.length, 0, 'NO requestWakeup — native heartbeat pull is the only dispatch (D-05)');
 });
 
 // ---- Case 5 — logger-metadata drop (catalogue item 5) ----------------------

@@ -76,7 +76,12 @@
 //     companyId)` → IssueDocumentSummary[]; `get(issueId, key, companyId)` →
 //     IssueDocument | null (IssueDocument has a `body` string).
 
-import type { PluginIssuesClient, PluginLogger, IssueComment } from '@paperclipai/plugin-sdk';
+import type {
+  PluginIssuesClient,
+  PluginLogger,
+  IssueComment,
+  PluginDatabaseClient,
+} from '@paperclipai/plugin-sdk';
 
 // PluginIssueDocumentsClient is not re-exported from the SDK's index barrel
 // (only `PluginIssuesClient` is) — reach it through the `documents` member of
@@ -91,6 +96,13 @@ import type { LlmAdapter } from '../bulletin/compile-pass-1.ts';
 // dispatcher drop those self-events BEFORE any reconcile/DB round-trip (a
 // zero-DB recursion guard layered on top of the durable originKind backstop).
 import { rememberOwnOperationIssue } from './op-issue-set.ts';
+// Phase 16.1 Plan 16.1-02 (D-03/D-04) — the DURABLE own-operation provenance
+// write. Recorded the moment an op-issue is created/reused so the ingress event
+// gate (Plan 05) can suppress Clarity's own writes even after a worker restart
+// (the in-memory set empties on boot — the 2026-06-04 loop-storm failure mode).
+// The in-memory rememberOwnOperationIssue above stays as a non-authoritative
+// fast-path cache; THIS is the authoritative guard.
+import { recordOwnOperationIssue } from '../db/own-operation-issues-repo.ts';
 
 /** The operation-issue originKind namespace. The agent matches on this prefix. */
 export const OPERATION_ORIGIN_KIND_PREFIX = 'plugin:clarity-pack:operation:';
@@ -167,9 +179,15 @@ const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
  * document poll.
  */
 export type AgentTaskDeliveryCtx = {
-  issues: Pick<PluginIssuesClient, 'list' | 'create' | 'requestWakeup' | 'listComments'> & {
+  // Phase 16.1 Plan 16.1-02 (D-05) — `requestWakeup` is no longer part of this
+  // slice: the fire-and-forget wake block is deleted (the native heartbeat pull
+  // is the only dispatch). `db` is now required so the durable own-operation
+  // provenance write (recordOwnOperationIssue, D-03/D-04) can run at op-issue
+  // creation/reuse.
+  issues: Pick<PluginIssuesClient, 'list' | 'create' | 'listComments'> & {
     documents: Pick<PluginIssueDocumentsClient, 'list' | 'get'>;
   };
+  db: PluginDatabaseClient;
   logger?: PluginLogger;
 };
 
@@ -440,27 +458,22 @@ export async function startAgentTask(
   // originKind guard still backstops a worker restart (set is empty after boot).
   rememberOwnOperationIssue(issue.id);
 
-  // 3. Wake the agent now — FIRE-AND-FORGET. requestWakeup is unreliable on
-  //    this host (paperclipai@2026.525.0): it times out after 30s and scope-
-  //    errors in worker→host calls. This delivery path fires on every
-  //    TL;DR / bulletin compile, so AWAITing it was the storm source — each
-  //    compile burst stacked up to 30s-per-call of blocked worker→host channel.
-  //    The next heartbeat picks the operation issue up regardless (native
-  //    wake), so we keep the call (harmless when it works) but NEVER await it.
-  const wakeIssueId = issue.id;
-  void Promise.resolve()
-    .then(() =>
-      ctx.issues.requestWakeup(wakeIssueId, opts.companyId, {
-        reason: `clarity-pack ${opts.operationKind}`,
-        idempotencyKey: opts.operationId,
-      }),
-    )
-    .catch((e) =>
-      ctx.logger?.warn?.(
-        `agent-task-delivery: requestWakeup non-fatal for issue ${wakeIssueId} ` +
-          `(heartbeat will still pick it up): ${(e as Error).message}`,
-      ),
-    );
+  // Phase 16.1 Plan 16.1-02 (D-03/D-04) — DURABLE own-operation provenance.
+  // Recorded for BOTH the create branch (:419) AND the reuse branch (issue is
+  // assigned by here in either case), beside the in-memory fast-path above. This
+  // is the AUTHORITATIVE guard the ingress event gate reads (isOwnOperationIssue)
+  // before any wake — and unlike the in-memory set it survives a worker restart,
+  // closing the empty-on-restart hole behind the 2026-06-04 loop storm. The
+  // ON CONFLICT DO NOTHING insert makes re-recording a reused op a server-side
+  // no-op. Awaited so a same-tick re-entrant own-write cannot race the write.
+  await recordOwnOperationIssue(ctx, opts.companyId, issue.id);
+
+  // Phase 16.1 Plan 16.1-02 (D-05) — the fire-and-forget requestWakeup block is
+  // REMOVED. The native heartbeat pull is the only dispatch: the next heartbeat
+  // finds the assigned operation issue via "Step 3 — Get Assignments" and runs
+  // it. requestWakeup was the loop-storm wake source (event-reactive wakes that
+  // re-entered the bus); severing it here is the source-level half of LOOP-01/
+  // LOOP-02. Plan 05's static no-wake-from-ingress gate re-asserts this build-wide.
 
   return { operationIssueId: issue.id, reused };
 }

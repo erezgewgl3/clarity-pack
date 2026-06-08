@@ -102,6 +102,10 @@ function makeFakeCtx({ existing = [], commentScript = [], documentScript = null 
     listComments: [],
     documentsGet: [],
     documentsList: [],
+    // Phase 16.1 Plan 16.1-02 (D-03) — captures the durable own-operation
+    // provenance INSERTs (recordOwnOperationIssue) so a test can prove the write
+    // fires on the create/reuse branch.
+    provenanceWrites: [],
   };
   let createdSeq = 0;
   let commentPollIndex = 0;
@@ -156,6 +160,22 @@ function makeFakeCtx({ existing = [], commentScript = [], documentScript = null 
           const summary = docSummaries.find((s) => s.key === key) ?? { key };
           return { ...summary, issueId, body: docBodies[key] };
         },
+      },
+    },
+    // Phase 16.1 Plan 16.1-02 — startAgentTask now writes durable own-operation
+    // provenance (recordOwnOperationIssue → ctx.db.execute INSERT ... ON CONFLICT
+    // DO NOTHING). The host-faithful ctx contract: query = SELECT-only returning
+    // rows; execute = namespace DML returning rowCount only.
+    db: {
+      namespace: 'plugin_clarity_pack_cdd6bda4bd',
+      async query() {
+        return [];
+      },
+      async execute(sql, params) {
+        if (/own_operation_issues/i.test(sql) && /insert/i.test(sql)) {
+          calls.provenanceWrites.push({ companyId: params[0], issueId: params[1] });
+        }
+        return { rowCount: 1 };
       },
     },
   };
@@ -221,7 +241,15 @@ test('deliverAgentTask: happy path — create + wakeup + result document at key 
 
   assert.equal(result, draft, 'resolves the raw JSON string from the result document');
   assert.equal(calls.create.length, 1, 'one operation issue created');
-  assert.equal(calls.requestWakeup.length, 1, 'the agent is woken once');
+  // Phase 16.1 Plan 16.1-02 (D-05) — the fire-and-forget requestWakeup block is
+  // DELETED; the native heartbeat pull is the only dispatch. No wake fires.
+  assert.equal(calls.requestWakeup.length, 0, 'no requestWakeup — native heartbeat pull only (D-05)');
+  // Phase 16.1 Plan 16.1-02 (D-03) — durable provenance is written at creation.
+  assert.equal(
+    calls.provenanceWrites.length,
+    1,
+    'recordOwnOperationIssue wrote the op-issue to durable provenance once',
+  );
   assert.ok(calls.documentsGet.length >= 2, 'documents.get polled at least twice');
   // the PRIMARY get keys EXACTLY on compile-result.
   assert.equal(
@@ -264,21 +292,20 @@ test('deliverAgentTask: REGRESSION (Plan 03-09) — a BulletinDraft whose editor
   );
 });
 
-// ---- Test 1c — Plan 250529 DE-BLOCK: startAgentTask never awaits the wake --
+// ---- Test 1c — Phase 16.1 Plan 16.1-02 (D-05): startAgentTask fires NO wake ---
 
-test('startAgentTask: DE-BLOCK — a never-resolving requestWakeup must NOT prevent startAgentTask from resolving { operationIssueId } (2026-05-29)', async () => {
-  // requestWakeup is the bulletin/TL;DR storm source — it fires on EVERY compile
-  // delivery and is unreliable on paperclipai@2026.525.0 (30s timeout / scope
-  // errors). With the prior `await ctx.issues.requestWakeup(...)`, a hung wake
-  // stalled the whole delivery up to 30s and congested the worker→host channel
-  // during compile bursts. Fire-and-forget: the operation issue is created and
-  // returned immediately; the next heartbeat picks it up regardless.
+test('startAgentTask: D-05 — the requestWakeup block is removed; startAgentTask creates the op-issue, writes durable provenance, and fires ZERO wakes', async () => {
+  // The requestWakeup block was the bulletin/TL;DR storm source — an
+  // event-reactive wake that re-entered the host event bus and (with the
+  // in-memory-only guards) re-triggered the agent's own writes. Plan 16.1-02
+  // deletes it entirely (D-05): the native heartbeat pull is the only dispatch.
+  // startAgentTask still creates/reuses the op-issue and now records durable
+  // own-operation provenance (D-03) — but it never wakes.
   const { ctx, calls } = makeFakeCtx({ existing: [] });
-  // Replace requestWakeup with a hang that still records the call (so we can
-  // prove the call is KEPT, just not awaited).
-  ctx.issues.requestWakeup = (issueId, companyId, options) => {
-    calls.requestWakeup.push({ issueId, companyId, options });
-    return new Promise(() => {}); // never resolves (host hang)
+  // Sabotage requestWakeup: if any residual call site fires it, this throws and
+  // the test fails — a hard guard that the wake path is gone.
+  ctx.issues.requestWakeup = () => {
+    throw new Error('requestWakeup must NOT be called — the wake block is deleted (D-05)');
   };
 
   const before = Date.now();
@@ -288,14 +315,16 @@ test('startAgentTask: DE-BLOCK — a never-resolving requestWakeup must NOT prev
   assert.equal(result.operationIssueId, 'op-1', 'resolves the created operation issue id');
   assert.equal(result.reused, false, 'a fresh operation issue was created');
   assert.equal(calls.create.length, 1, 'one operation issue created');
+  assert.equal(calls.requestWakeup.length, 0, 'ZERO wakes — the requestWakeup block is gone (D-05)');
   assert.equal(
-    calls.requestWakeup.length,
+    calls.provenanceWrites.length,
     1,
-    'requestWakeup is still invoked (kept, just not awaited)',
+    'durable own-operation provenance is recorded at creation (D-03)',
   );
+  assert.equal(calls.provenanceWrites[0].issueId, 'op-1', 'provenance carries the created op-issue id');
   assert.ok(
-    elapsed < 40,
-    `startAgentTask must NOT await requestWakeup (elapsed=${elapsed}ms; threshold=40ms)`,
+    elapsed < 60,
+    `startAgentTask resolves promptly without any wake round-trip (elapsed=${elapsed}ms)`,
   );
 });
 
@@ -448,10 +477,13 @@ test('deliverAgentTask: the created issue carries assigneeAgentId, originKind, s
     created.description.includes(RESULT_DELIVERY_INSTRUCTION),
     'the description appends the exact RESULT_DELIVERY_INSTRUCTION constant',
   );
+  // Phase 16.1 Plan 16.1-02 (D-05) — no wake fires; the durable provenance write
+  // carries the created issue id instead (D-03).
+  assert.equal(calls.requestWakeup.length, 0, 'no requestWakeup — the wake block is deleted (D-05)');
   assert.equal(
-    calls.requestWakeup[0].issueId,
+    calls.provenanceWrites[0].issueId,
     'op-1',
-    'requestWakeup is called with the created issue id',
+    'durable provenance is recorded with the created issue id (D-03)',
   );
 });
 

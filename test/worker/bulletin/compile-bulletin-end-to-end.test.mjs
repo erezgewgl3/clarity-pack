@@ -479,7 +479,9 @@ test('e2e (03-06): job compiles + publishes through the REAL deliveryLlmAdapter'
   assert.equal(operationIssues.length, 1, 'exactly one bulletin-compile operation issue created');
   assert.equal(operationIssues[0].assigneeAgentId, 'editor-agent-uuid', 'operation issue assigned to the Editor-Agent');
   assert.equal(operationIssues[0].surfaceVisibility, 'plugin_operation', 'operation issue is off the human board');
-  assert.ok(wakeups.length >= 1, 'the agent was woken via requestWakeup');
+  // Phase 16.1 Plan 16.1-02 (D-05) — the requestWakeup block is deleted; the
+  // native heartbeat pull picks up the assigned operation issue. No wake fires.
+  assert.equal(wakeups.length, 0, 'NO requestWakeup — native heartbeat pull is the only dispatch (D-05)');
 });
 
 test('e2e (03-06): a paused agent that cannot resume → no hang, no publish', async () => {
