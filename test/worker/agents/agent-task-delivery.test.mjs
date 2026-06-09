@@ -241,9 +241,12 @@ test('deliverAgentTask: happy path — create + wakeup + result document at key 
 
   assert.equal(result, draft, 'resolves the raw JSON string from the result document');
   assert.equal(calls.create.length, 1, 'one operation issue created');
-  // Phase 16.1 Plan 16.1-02 (D-05) — the fire-and-forget requestWakeup block is
-  // DELETED; the native heartbeat pull is the only dispatch. No wake fires.
-  assert.equal(calls.requestWakeup.length, 0, 'no requestWakeup — native heartbeat pull only (D-05)');
+  // Phase 16.1 Plan 16.1-07 (LOOP-07) — the GOVERNED wake is RE-INTRODUCED. The
+  // fake db's query returns [] for the kill-switch + trailing-count reads, so the
+  // governor ALLOWS the wake — exactly one fires at op-issue creation, restoring
+  // write-capable normal_model dispatch (supersedes the D-05 zero-wake assumption).
+  assert.equal(calls.requestWakeup.length, 1, 'exactly one governed requestWakeup fired (LOOP-07)');
+  assert.equal(calls.requestWakeup[0].issueId, 'op-1', 'the governed wake targets the created op-issue');
   // Phase 16.1 Plan 16.1-02 (D-03) — durable provenance is written at creation.
   assert.equal(
     calls.provenanceWrites.length,
@@ -292,40 +295,71 @@ test('deliverAgentTask: REGRESSION (Plan 03-09) — a BulletinDraft whose editor
   );
 });
 
-// ---- Test 1c — Phase 16.1 Plan 16.1-02 (D-05): startAgentTask fires NO wake ---
+// ---- Test 1c — Phase 16.1 Plan 16.1-07 (LOOP-07): startAgentTask fires ONE governed wake ---
 
-test('startAgentTask: D-05 — the requestWakeup block is removed; startAgentTask creates the op-issue, writes durable provenance, and fires ZERO wakes', async () => {
-  // The requestWakeup block was the bulletin/TL;DR storm source — an
-  // event-reactive wake that re-entered the host event bus and (with the
-  // in-memory-only guards) re-triggered the agent's own writes. Plan 16.1-02
-  // deletes it entirely (D-05): the native heartbeat pull is the only dispatch.
-  // startAgentTask still creates/reuses the op-issue and now records durable
-  // own-operation provenance (D-03) — but it never wakes.
+test('startAgentTask: LOOP-07 — startAgentTask creates the op-issue, writes durable provenance, then fires EXACTLY ONE governed wake (supersedes D-05)', async () => {
+  // LOOP-07 RE-INTRODUCES the wake (governed). D-05 deleted it on the assumption
+  // the native heartbeat would pull op-issues; it does not — undispatched op-issues
+  // fall to the recovery sweep (status_only / write-blocked) so TL;DRs never
+  // persist. The wake is now gated by checkAndRecordWake and lives ONLY here at
+  // op-issue creation. The fake db query returns [] for the kill-switch +
+  // trailing-count reads, so the governor ALLOWS the wake — exactly one fires.
+  // Order: durable provenance is recorded FIRST (D-03), then the governed wake.
   const { ctx, calls } = makeFakeCtx({ existing: [] });
-  // Sabotage requestWakeup: if any residual call site fires it, this throws and
-  // the test fails — a hard guard that the wake path is gone.
-  ctx.issues.requestWakeup = () => {
-    throw new Error('requestWakeup must NOT be called — the wake block is deleted (D-05)');
-  };
 
-  const before = Date.now();
   const result = await startAgentTask(ctx, BASE_OPTS);
-  const elapsed = Date.now() - before;
 
   assert.equal(result.operationIssueId, 'op-1', 'resolves the created operation issue id');
   assert.equal(result.reused, false, 'a fresh operation issue was created');
   assert.equal(calls.create.length, 1, 'one operation issue created');
-  assert.equal(calls.requestWakeup.length, 0, 'ZERO wakes — the requestWakeup block is gone (D-05)');
+  assert.equal(calls.requestWakeup.length, 1, 'EXACTLY ONE governed wake fired (LOOP-07)');
+  assert.equal(calls.requestWakeup[0].issueId, 'op-1', 'the wake targets the created op-issue');
+  assert.equal(calls.requestWakeup[0].companyId, COMPANY_ID, 'the wake carries the company id');
   assert.equal(
     calls.provenanceWrites.length,
     1,
     'durable own-operation provenance is recorded at creation (D-03)',
   );
   assert.equal(calls.provenanceWrites[0].issueId, 'op-1', 'provenance carries the created op-issue id');
-  assert.ok(
-    elapsed < 60,
-    `startAgentTask resolves promptly without any wake round-trip (elapsed=${elapsed}ms)`,
+});
+
+test('startAgentTask: LOOP-07 — a thrown requestWakeup (host rejection) is NON-FATAL; startAgentTask still returns the op-issue id', async () => {
+  // The wake is a best-effort restore of write-capable dispatch; the recovery
+  // sweep / next heartbeat is the backstop. A host rejection must be caught +
+  // logged and NOT rethrown — startAgentTask still returns the created op-issue id.
+  const { ctx, calls } = makeFakeCtx({ existing: [] });
+  ctx.issues.requestWakeup = () => {
+    throw new Error('simulated host rejection of requestWakeup');
+  };
+
+  const result = await startAgentTask(ctx, BASE_OPTS);
+
+  assert.equal(result.operationIssueId, 'op-1', 'the op-issue id is still returned despite the thrown wake');
+  assert.equal(result.reused, false, 'a fresh operation issue was created');
+  assert.equal(calls.create.length, 1, 'one operation issue created');
+  assert.equal(
+    calls.provenanceWrites.length,
+    1,
+    'durable provenance is still recorded (the wake throw is downstream and non-fatal)',
   );
+});
+
+test('startAgentTask: LOOP-07 — when the governor SUPPRESSES the wake (kill-switch engaged), the op-issue is still created and ZERO wakes fire', async () => {
+  // Degrade-safe: a fake db whose wake_kill_switch read returns engaged makes
+  // checkAndRecordWake short-circuit to false — no wake, but the op-issue is still
+  // created (the recovery sweep covers it, no worse than today).
+  const { ctx, calls } = makeFakeCtx({ existing: [] });
+  const baseQuery = ctx.db.query.bind(ctx.db);
+  ctx.db.query = async (sql, params) => {
+    if (/wake_kill_switch/.test(sql)) return [{ engaged: true }];
+    return baseQuery(sql, params);
+  };
+
+  const result = await startAgentTask(ctx, BASE_OPTS);
+
+  assert.equal(result.operationIssueId, 'op-1', 'the op-issue is still created (degrade-safe)');
+  assert.equal(calls.create.length, 1, 'one operation issue created');
+  assert.equal(calls.requestWakeup.length, 0, 'the governor suppressed the wake — ZERO requestWakeup');
 });
 
 // ---- Test 2 — idempotency -------------------------------------------------
@@ -477,9 +511,10 @@ test('deliverAgentTask: the created issue carries assigneeAgentId, originKind, s
     created.description.includes(RESULT_DELIVERY_INSTRUCTION),
     'the description appends the exact RESULT_DELIVERY_INSTRUCTION constant',
   );
-  // Phase 16.1 Plan 16.1-02 (D-05) — no wake fires; the durable provenance write
-  // carries the created issue id instead (D-03).
-  assert.equal(calls.requestWakeup.length, 0, 'no requestWakeup — the wake block is deleted (D-05)');
+  // Phase 16.1 Plan 16.1-07 (LOOP-07) — exactly one governed wake fires at
+  // creation (the fake db allows it); the durable provenance write carries the
+  // created issue id (D-03) and is written BEFORE the wake.
+  assert.equal(calls.requestWakeup.length, 1, 'exactly one governed requestWakeup fired (LOOP-07)');
   assert.equal(
     calls.provenanceWrites[0].issueId,
     'op-1',

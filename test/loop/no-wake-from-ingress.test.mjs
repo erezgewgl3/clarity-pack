@@ -152,13 +152,42 @@ test('LOOP-01 static: the module-scope HeartbeatDispatcher wiring exists and is 
   }
 });
 
-test('LOOP-01 static: agent-task-delivery.ts contains ZERO requestWakeup (proves D-05 delivery-path severance)', () => {
+test('LOOP-07 static: agent-task-delivery.ts contains EXACTLY ONE governed requestWakeup (supersedes the D-05 zero invariant)', () => {
+  // LOOP-07 supersedes D-05's "zero requestWakeup in the delivery path" invariant.
+  // D-05 deleted the wake entirely on the assumption the Editor-Agent's native
+  // heartbeat would pull op-issues; it does not — undispatched op-issues fall to
+  // Paperclip's recovery sweep (status_only / write-blocked) so TL;DRs never
+  // persist. The delivery path now LEGITIMATELY carries EXACTLY ONE GOVERNED wake
+  // at op-issue creation in startAgentTask (gated by checkAndRecordWake). This is
+  // NOT a storm regression: the wake lives outside every ctx.events.on handler
+  // body (agent-task-delivery.ts has no ingress region at all), so the recursion
+  // edge (event-ingress -> wake) the region-scoped gate above protects stays
+  // absent. We assert (1) exactly one requestWakeup( call site, and (2) it is
+  // GOVERNED — a checkAndRecordWake( token appears BEFORE it in the source.
+  //
+  // The matching `requestWakeup` token in the AgentTaskDeliveryCtx.issues Pick
+  // member (`'requestWakeup'`) is a TYPE-position string literal, not a call site,
+  // so we count call sites (`requestWakeup(`) specifically — exactly one.
   const stripped = stripComments(readFileSync(DELIVERY_TS, 'utf8'));
-  const count = stripped.split('requestWakeup').length - 1;
+
+  const callSites = stripped.split('requestWakeup(').length - 1;
   assert.equal(
-    count,
-    0,
-    'agent-task-delivery.ts must not contain requestWakeup — native heartbeat pull is the only dispatch (D-05)',
+    callSites,
+    1,
+    'agent-task-delivery.ts must contain EXACTLY ONE requestWakeup( call site — the governed creation-time wake (LOOP-07)',
+  );
+
+  // The wake is GOVERNED: checkAndRecordWake( must appear before the requestWakeup(
+  // call in the stripped source (the call lives inside the `if (allowed)` branch).
+  const govAt = stripped.indexOf('checkAndRecordWake(');
+  const wakeAt = stripped.indexOf('requestWakeup(');
+  assert.ok(
+    govAt !== -1,
+    'agent-task-delivery.ts must call checkAndRecordWake( — the wake is governed, not raw (LOOP-07)',
+  );
+  assert.ok(
+    govAt < wakeAt,
+    'checkAndRecordWake( must precede requestWakeup( — the wake is gated through the governor (LOOP-07)',
   );
 });
 
