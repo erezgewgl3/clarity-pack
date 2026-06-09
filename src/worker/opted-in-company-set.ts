@@ -19,7 +19,8 @@
 // company_id). The seed therefore runs in two pure plugin-namespace SELECTs:
 //   (a) SELECT user_id FROM clarity_user_prefs WHERE opted_in_at IS NOT NULL
 //   (b) SELECT DISTINCT company_id FROM clarity_agent_owners
-//         WHERE owner_user_id = ANY($1)   -- the opted-in user_id list
+//         WHERE owner_user_id = ANY($1::text[])  -- opted-in user_id list,
+//         bound as a Postgres array-LITERAL string (v0.6.5 Bug 2 redux).
 // Both are ctx.db.query (SELECT-only); NEITHER is a host call (no ctx.companies
 // / ctx.agents / ctx.http). This is invocation-scope-safe — the same query class
 // the circuit-breaker / owner-resolver already run in handler scope.
@@ -47,6 +48,7 @@
 // shorthand on any class field.
 
 import type { PluginDatabaseClient, PluginLogger } from '@paperclipai/plugin-sdk';
+import { toPgTextArrayLiteral } from './db/tldr-cache.ts';
 
 /** The ctx subset the seed needs: a SELECT-capable db + an optional logger. */
 export type OptedInCompanySetCtx = {
@@ -99,11 +101,17 @@ export async function ensureSeeded(ctx: OptedInCompanySetCtx): Promise<void> {
       // (b) map opted-in user_ids -> companies via the durable
       // clarity_agent_owners table (migration 0013). Pure plugin-namespace
       // SELECT, NO host call. This is the concrete W-2 / L-2 mechanism.
+      // v0.6.5 Bug 2 (redux): the host db bridge serializes a raw JS array
+      // param lossily (a single-element array arrives as a scalar, so a bare
+      // `= ANY($1)` fails on the live host — confirmed on the 16.1 LOOP-07
+      // drill: `params: local-board`). Bind a Postgres array-LITERAL string
+      // through a `$1::text[]` cast instead — the same hardened pattern
+      // tldr-cache / action-cards / chat-topics already use.
       const ownerRows = await ctx.db.query<{ company_id: string }>(
         `SELECT DISTINCT company_id
          FROM plugin_clarity_pack_cdd6bda4bd.clarity_agent_owners
-         WHERE owner_user_id = ANY($1)`,
-        [userIds],
+         WHERE owner_user_id = ANY($1::text[])`,
+        [toPgTextArrayLiteral(userIds)],
       );
       for (const row of ownerRows) {
         if (typeof row.company_id === 'string' && row.company_id.length > 0) {

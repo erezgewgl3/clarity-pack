@@ -72,6 +72,36 @@ test('W-2: an opted-in user whose company is in clarity_agent_owners IS in the s
   assert.equal(isCompanyOptedIn('c-other'), false, 'a non-mapped company is absent');
 });
 
+test('the owners seed binds a Postgres array-literal string through a ::text[] cast (v0.6.5 Bug 2 redux — host array binding is lossy)', async () => {
+  // Regression guard for the live 16.1 LOOP-07 drill failure: a bare
+  // `= ANY($1)` with a raw JS array param is serialized lossily by the host db
+  // bridge (a 1-element array arrived as the scalar `local-board`), so the
+  // query failed and the gate could never resolve a company. The fix binds a
+  // Postgres array-LITERAL string through a `$1::text[]` cast. This test pins
+  // BOTH halves of that contract — the prior fake (substring SQL match only)
+  // did not exercise param shape, which is exactly why the bug shipped.
+  invalidateOptedInCache();
+  const { ctx, calls } = makeCtx(
+    [{ user_id: 'local-board' }],
+    [{ company_id: 'c1' }],
+  );
+  await ensureSeeded(ctx);
+  const ownersCall = calls.find((c) => c.sql.includes('clarity_agent_owners'));
+  assert.ok(ownersCall, 'the owners seed query ran');
+  assert.match(
+    ownersCall.sql,
+    /ANY\(\$1::text\[\]\)/,
+    'owners query must bind via a $1::text[] cast (bare ANY($1) fails on the live host)',
+  );
+  const bound = ownersCall.params[0];
+  assert.equal(
+    typeof bound,
+    'string',
+    'param must be a Postgres array-literal STRING, not a raw JS array',
+  );
+  assert.equal(bound, '{"local-board"}', 'param is the {"..."} array-literal');
+});
+
 test('opted-in user with NO owners row yields an empty set (documented mapping limitation)', async () => {
   invalidateOptedInCache();
   const { ctx } = makeCtx(
