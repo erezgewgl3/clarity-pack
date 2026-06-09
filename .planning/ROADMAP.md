@@ -96,7 +96,7 @@ Plans:
 - [x] 16.1-04-PLAN.md — Wave 4: bounded warm-on-heartbeat (<=5 SWR-stale awaiting-you TL;DRs) + scope-gated/governed bulletin cron
 - [x] 16.1-05-PLAN.md — Wave 5: storm-safety CI test + no-wake static gate + opt-in-ingress test + LOOP-06 read-time no-touch regression guard
 - [ ] 16.1-06-PLAN.md — Wave 6: two-source version bump + rebuild + bookended live BEAAA reinstall & no-storm drill (LOOP-07)
-- [ ] 16.1-07-PLAN.md — Wave 1 (gap closure, LOOP-07): re-introduce a single GOVERNED requestWakeup at op-issue creation (checkAndRecordWake) to restore write-capable normal_model dispatch; governed-wake + kill-switch-degrade tests; storm-safety regression; two-source bump 1.5.0 -> 1.5.1
+- [x] 16.1-07-PLAN.md — Wave 1 (gap closure, LOOP-07): re-introduce a single GOVERNED requestWakeup at op-issue creation (checkAndRecordWake) to restore write-capable normal_model dispatch; governed-wake + kill-switch-degrade tests; storm-safety regression; two-source bump 1.5.0 -> 1.5.1
 
 ### Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)
 **Goal**: Give agents a structured, machine-readable way to declare "blocked on a human decision X" so the deterministic engine honestly classifies it as AWAITING_HUMAN (needs-you) instead of conservatively parking it in Watch — the deep fix behind the BEAAA-972 confusion — and prove every blocked-no-edge class is classified truthfully across a full surface × terminal-kind matrix.
@@ -253,7 +253,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
-| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 5/6 | In Progress|  |
+| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 6/7 | In Progress|  |
 | 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |

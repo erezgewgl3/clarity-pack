@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
-stopped_at: Planned 16.1-07-PLAN.md (LOOP-07 gap closure — plan-checker PASSED)
-last_updated: "2026-06-09T00:00:00.000Z"
+stopped_at: Completed 16.1-01-PLAN.md
+last_updated: "2026-06-09T13:50:04.379Z"
 last_activity: 2026-06-09
 progress:
   total_phases: 12
   completed_phases: 5
   total_plans: 34
-  completed_plans: 30
+  completed_plans: 31
   percent: 42
 ---
 
@@ -694,9 +694,9 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 ## Current Position
 
 Phase: 16.1 (editor-agent-loop-elimination-wake-governor) — EXECUTING
-Plan: 6 of 6
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-06-08
+Last activity: 2026-06-09
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1449,6 +1449,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 16.1 P03 | 40m | 2 tasks | 6 files |
 | Phase 16.1 P04 | 31m | 2 tasks | 12 files |
 | Phase 16.1 P05 | ~30m | 3 tasks | 3 files |
+| Phase 16.1 P07 | ~30m | 3 tasks | 8 files (1 created) — LOOP-07 gap closure: governed requestWakeup at op-issue creation; suite 2702 pass / 7 pre-existing-fail; v1.5.0→1.5.1 |
 
 ## Accumulated Context
 
@@ -1487,6 +1488,8 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 22. **Chat-topic watchdog is defensive-only** (Plan 04.1-01) - the assigned employee-agent leaves chat-topic issues at `in_progress` after a successful run (PROBE-OQ1-STATUS AGENT-LEAVES-IN-PROGRESS, 2026-05-20); there is no agent-set status the watchdog must override on every poll. Plan 04.1-04's `topic-watchdog.ts` is a defensive sweep that flips status from `done`/`cancelled`/`blocked` back to `in_progress` ONLY when something else (the host's disposition-recovery service per the OQ3 attempt-2 evidence) has parked the topic terminally. `topicStuck` (Plan 04.1-04) triggers ONLY when the watchdog has attempted N≥2 flips in the last M poll cycles without success — CTT-05 is the steady-state path; CTT-06 banner is last-resort only.
 
 23. **Phase 4.1 chat UI surface evolved across four iterative drill cycles** (Plan 04.1-10) - the final shipped UI is `clarity-pack-0.8.3.tgz` (sha256 `fd3919c2…eda38`); Plan 04.1-10 SUPERSEDES Plans 04.1-06 + 04.1-08 + 04.1-09 in the UI surface lineage. Version trail: 0.7.8 (pre-4.1) → 0.8.0 (04.1-06 initial UI, deprecated) → 0.8.1 (04.1-08 redesign, deprecated) → 0.8.2 (04.1-09 first gap closure, deprecated) → **0.8.3 (04.1-10 final, APPROVED-WITH-FOLLOWUPS 2026-05-21)**. Worker-tier handlers from Plans 04.1-02..04.1-05 + spike findings from 04.1-01 are unchanged across the chain. None of 04.1-06/08/09 ever produced SUMMARY files — each flowed into the next iteration; the lineage section in `04.1-10-SUMMARY.md` is the trail of record. Pattern locked for future phases: **when a drill finding doesn't block but surfaces a small set of orthogonal UX gaps, file each cycle as a standalone gap-closure plan rather than re-opening the prior plan.** Operator can roll back exactly one step on a failed drill. Cost: ~4 drill cycles × ~15min each in a single afternoon — consistent with `feedback_gsd-velocity-recalibration` (iterative drill is the rhythm, not a planning failure). 5 polish followups from the 04.1-10 drill filed to memory `phase-4.2-deferred-from-4.1`.
+
+24. **LOOP-07 = governed wake at op-issue CREATION, never deletion** (Plan 16.1-07) — D-05 (16.1-02) over-corrected by DELETING `requestWakeup` from `agent-task-delivery.ts` on the assumption the Editor-Agent's native heartbeat would pull op-issues. It does not: undispatched op-issues fall to Paperclip's periodic recovery sweep, dispatched under `recoveryAssigneeAdapterOverrides("status_only")` (`modelProfile:cheap`, `allowDocumentUpdates:false`, `resumeRequiresNormalModel:true`), and `routes/issues.js` then HARD-REJECTS (403/422) every document write — so the Editor-Agent computes correct TL;DRs but can NEVER persist them. The fix re-introduces a SINGLE GOVERNED `requestWakeup` at op-issue creation in `startAgentTask` (after `recordOwnOperationIssue`, before return), gated by `checkAndRecordWake` (the 16.1-02 wake-governor), restoring write-capable `normal_model` dispatch via `issue-assignment-wakeup`. Storm-severance stays intact: the wake lives ONLY in `startAgentTask` (a bounded creation path), never in any `ctx.events.on` ingress handler, so the recursion edge (ingress→wake) the storm needed stays absent. Degrade-safe: when the governor suppresses (kill-switch / over ceiling) the op-issue is STILL created — the recovery sweep covers it (no worse than today). Non-fatal: a thrown wake is caught + logged, never rethrown. Two-source bump v1.5.0→1.5.1 (host reads `dist/manifest.js`; kill-switch version-scope reads `manifest.version`). Ships ready for bookended BEAAA reinstall + live LOOP-07 re-drill.
 
 15. **Standing-number SQL is column-bound to a live-introspected schema** (Plan 03-10) - the 5 `STANDING_NUMBER_SLOTS` are agent-operations metrics (`open_issues`, `completed_7d`, `blocked_issues`, `agent_spend_mtd`, `budget_used_pct`) over `public.issues`/`public.companies`; every column is verified present by a live `\d` introspection capture (`03-10-SCHEMA-FINDINGS.md §2`), never extrapolated from the host repo or a CRM mental model. Paperclip has no customer/revenue/sales data — the original CRM-model slots (MRR, cold-email reply rate, refunds) referenced columns that do not exist. Per 03-CONTEXT.md line 92 only the registry SHAPE + BULL-05 (SQL-derived, grep-able, never LLM-generated) are locked; the specific numbers are planner's discretion. The local host-faithful test suite returns canned `db.query` results and CANNOT catch schema drift — a live Countermoves drill is the only valid proof.
 
@@ -1540,9 +1543,9 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-08T16:23:53.755Z
+**Last session:** 2026-06-09T13:50:04.342Z
 
-**Stopped at:** Completed 16.1-01-PLAN.md
+**Stopped at:** Completed 16.1-07-PLAN.md (LOOP-07 gap closure — governed wake at op-issue creation, v1.5.1). Next: bookended BEAAA reinstall (DO snapshot) + live LOOP-07 re-drill (TL;DRs must persist; storm must stay absent).
 
 **Plan 11-02 decisions:**
 
