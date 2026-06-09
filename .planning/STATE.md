@@ -3,18 +3,26 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
-stopped_at: Completed 16.1-01-PLAN.md
-last_updated: "2026-06-08T16:24:23.947Z"
-last_activity: 2026-06-08
+stopped_at: Planned 16.1-07-PLAN.md (LOOP-07 gap closure — plan-checker PASSED)
+last_updated: "2026-06-09T00:00:00.000Z"
+last_activity: 2026-06-09
 progress:
   total_phases: 12
   completed_phases: 5
-  total_plans: 33
+  total_plans: 34
   completed_plans: 30
   percent: 42
 ---
 
 # State: Clarity Pack
+
+## ▶ Phase 16.1 — LOOP-07 gap plan READY 2026-06-09
+
+The storm fix (16.1-01..06) is live on BEAAA v1.5.0 and PASSES storm-safety, but the LOOP-07 drill surfaced a write-dispatch gap: Plan 16.1-02 (D-05) deleted `requestWakeup` entirely, so the Editor-Agent's op-issues fall to Paperclip's `status_only` recovery sweep (`allowDocumentUpdates:false`) → TL;DRs compute but can't persist; surfaces show raw task numbers.
+
+**Gap plan created:** `16.1-07-PLAN.md` (3 tasks, 1 wave, requirements: [LOOP-07]) — re-introduce a SINGLE GOVERNED `requestWakeup` at op-issue creation in `startAgentTask`, gated through `checkAndRecordWake` (the wake-governor 16.1 already shipped). Restores write-capable normal_model dispatch; storm-severed by construction (ingress stays observe-only + provenance-gated). Two-source version bump 1.5.0 → 1.5.1. Plan-checker PASSED (iteration 2; in-loop fix: re-pointed the whole-file D-05 `no-wake-from-ingress` assertion from "zero" to "exactly one, governed").
+
+**Next action:** `/gsd:execute-phase 16.1 --gaps` — then bookended BEAAA reinstall (DO snapshot first) + live LOOP-07 re-drill (TL;DRs must persist while CPU stays near-idle and wakes stay within the governor ceiling).
 
 ## ▶ v1.5.0 Truthful & Legible Situation Room — RE-ROADMAPPED 2026-06-03 (Phases 16–20)
 
