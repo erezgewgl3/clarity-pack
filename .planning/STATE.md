@@ -22,7 +22,7 @@ The storm fix (16.1-01..06) is live on BEAAA v1.5.0 and PASSES storm-safety, but
 
 **Gap plan created:** `16.1-07-PLAN.md` (3 tasks, 1 wave, requirements: [LOOP-07]) — re-introduce a SINGLE GOVERNED `requestWakeup` at op-issue creation in `startAgentTask`, gated through `checkAndRecordWake` (the wake-governor 16.1 already shipped). Restores write-capable normal_model dispatch; storm-severed by construction (ingress stays observe-only + provenance-gated). Two-source version bump 1.5.0 → 1.5.1. Plan-checker PASSED (iteration 2; in-loop fix: re-pointed the whole-file D-05 `no-wake-from-ingress` assertion from "zero" to "exactly one, governed").
 
-**Next action:** `/gsd:execute-phase 16.1 --gaps` — then bookended BEAAA reinstall (DO snapshot first) + live LOOP-07 re-drill (TL;DRs must persist while CPU stays near-idle and wakes stay within the governor ceiling).
+**Next action:** Plan 16.1-07 (LOOP-07 governed-wake gap closure) is DONE — v1.5.1 built, full suite green (governed-wake + kill-switch-degrade tests pass; storm gates unchanged). Next is the **bookended BEAAA reinstall of v1.5.1** (DO snapshot first) + **live LOOP-07 re-drill** in a LOCAL window: confirm Editor-Agent TL;DRs PERSIST (plain-English surfaces, not raw task numbers) AND the storm stays absent (worker near-idle, wakes within the governor ceiling). This re-drill is also the real completion gate for Plan 16.1-06 (the ship/drill plan, still without a SUMMARY).
 
 ## ▶ v1.5.0 Truthful & Legible Situation Room — RE-ROADMAPPED 2026-06-03 (Phases 16–20)
 
