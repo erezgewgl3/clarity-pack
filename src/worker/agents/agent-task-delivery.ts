@@ -103,6 +103,11 @@ import { rememberOwnOperationIssue } from './op-issue-set.ts';
 // The in-memory rememberOwnOperationIssue above stays as a non-authoritative
 // fast-path cache; THIS is the authoritative guard.
 import { recordOwnOperationIssue } from '../db/own-operation-issues-repo.ts';
+// Phase 16.1 Plan 16.1-07 (LOOP-07) — the throughput wake-governor. The
+// creation-time wake re-introduced below is gated through checkAndRecordWake so
+// it is bounded by the trailing-60s ceiling + durable kill-switch. DO NOT edit
+// the governor here — only CALL it.
+import { checkAndRecordWake } from './wake-governor.ts';
 
 /** The operation-issue originKind namespace. The agent matches on this prefix. */
 export const OPERATION_ORIGIN_KIND_PREFIX = 'plugin:clarity-pack:operation:';
@@ -179,12 +184,15 @@ const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
  * document poll.
  */
 export type AgentTaskDeliveryCtx = {
-  // Phase 16.1 Plan 16.1-02 (D-05) — `requestWakeup` is no longer part of this
-  // slice: the fire-and-forget wake block is deleted (the native heartbeat pull
-  // is the only dispatch). `db` is now required so the durable own-operation
-  // provenance write (recordOwnOperationIssue, D-03/D-04) can run at op-issue
-  // creation/reuse.
-  issues: Pick<PluginIssuesClient, 'list' | 'create' | 'listComments'> & {
+  // Phase 16.1 Plan 16.1-07 (LOOP-07) — `requestWakeup` is RE-ADDED to this slice.
+  // D-05 (16.1-02) deleted it on the assumption the Editor-Agent's native
+  // heartbeat would pull op-issues; it does not — undispatched op-issues fall to
+  // Paperclip's recovery sweep (status_only / write-blocked) so TL;DRs never
+  // persist. The wake is now RE-INTRODUCED but GOVERNED (checkAndRecordWake) and
+  // lives ONLY at op-issue creation in startAgentTask — never in an ingress
+  // handler. `db` is required for both the durable own-operation provenance write
+  // (recordOwnOperationIssue, D-03/D-04) AND the wake-governor (WakeGovernorCtx).
+  issues: Pick<PluginIssuesClient, 'list' | 'create' | 'listComments' | 'requestWakeup'> & {
     documents: Pick<PluginIssueDocumentsClient, 'list' | 'get'>;
   };
   db: PluginDatabaseClient;
@@ -468,12 +476,56 @@ export async function startAgentTask(
   // no-op. Awaited so a same-tick re-entrant own-write cannot race the write.
   await recordOwnOperationIssue(ctx, opts.companyId, issue.id);
 
-  // Phase 16.1 Plan 16.1-02 (D-05) — the fire-and-forget requestWakeup block is
-  // REMOVED. The native heartbeat pull is the only dispatch: the next heartbeat
-  // finds the assigned operation issue via "Step 3 — Get Assignments" and runs
-  // it. requestWakeup was the loop-storm wake source (event-reactive wakes that
-  // re-entered the bus); severing it here is the source-level half of LOOP-01/
-  // LOOP-02. Plan 05's static no-wake-from-ingress gate re-asserts this build-wide.
+  // Phase 16.1 Plan 16.1-07 (LOOP-07) — the GOVERNED creation-time wake. D-05
+  // deleted requestWakeup entirely on the assumption the Editor-Agent's native
+  // heartbeat would pull op-issues; it does NOT — undispatched op-issues fall to
+  // Paperclip's periodic recovery sweep, which dispatches them under
+  // recoveryAssigneeAdapterOverrides("status_only") (modelProfile:cheap,
+  // allowDocumentUpdates:false, resumeRequiresNormalModel:true). routes/issues.js
+  // then HARD-REJECTS (403/422) any document/deliverable write from such runs, so
+  // the Editor-Agent computes correct TL;DRs but can NEVER persist them — the
+  // entire plain-English layer is non-functional live (surfaces fall back to raw
+  // task numbers). The fix re-introduces a SINGLE GOVERNED requestWakeup HERE at
+  // op-issue creation (after the provenance write, before return) — NEVER in an
+  // ingress handler — restoring prompt normal_model (write-capable) dispatch via
+  // issue-assignment-wakeup so TL;DRs persist.
+  //
+  // STORM-SEVERANCE STAYS INTACT. The storm recursion edge is event-ingress ->
+  // wake -> agent write -> re-enters ingress -> wake. After LOOP-01/02/05 ingress
+  // is observe-only + opt-in-scoped + provenance-gated (Clarity's own writes are
+  // dropped at isOwnOperationIssue). This wake lives in startAgentTask (a
+  // deliberate, bounded creation path — warm <=5/company + on-demand), outside
+  // every handler body, so the recursion edge stays absent. The provenance write
+  // ABOVE runs FIRST, so an own-write this wake triggers is already recorded
+  // before it can re-enter ingress.
+  //
+  // DEGRADE-SAFE. The wake is gated by checkAndRecordWake (trailing-60s ceiling,
+  // default 6/min + durable kill-switch). If the governor suppresses it
+  // (kill-switch engaged / over ceiling) the op-issue is STILL created — the
+  // recovery sweep covers it (status_only), i.e. no worse than today. A thrown
+  // requestWakeup (host rejection) is caught + logged and NOT rethrown (the next
+  // heartbeat / recovery sweep is the backstop).
+  const allowed = await checkAndRecordWake(ctx, opts.companyId);
+  if (allowed) {
+    try {
+      await ctx.issues.requestWakeup(issue.id, opts.companyId, {
+        reason: 'clarity-pack:operation:' + opts.operationKind,
+        idempotencyKey: opts.operationId,
+      });
+    } catch (e) {
+      // Non-fatal — the next heartbeat / recovery sweep is the backstop.
+      ctx.logger?.warn?.(
+        `agent-task-delivery: governed requestWakeup failed for op-issue ${issue.id} ` +
+          `(${opts.operationKind}/${opts.operationId}): ${(e as Error).message} — ` +
+          `left for next heartbeat / recovery sweep (non-fatal)`,
+      );
+    }
+  } else {
+    ctx.logger?.info?.(
+      `agent-task-delivery: wake suppressed by governor — op-issue ${issue.id} ` +
+        `left for recovery sweep (degrade-safe, kill-switch or ceiling)`,
+    );
+  }
 
   return { operationIssueId: issue.id, reused };
 }
