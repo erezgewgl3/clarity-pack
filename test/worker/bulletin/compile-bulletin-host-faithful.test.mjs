@@ -166,10 +166,15 @@ test('host-faithful: the compile prompt rides an operation issue assigned to the
   assert.equal(op.originKind, 'plugin:clarity-pack:operation:bulletin-compile', 'operation originKind');
   assert.equal(op.surfaceVisibility, 'plugin_operation', 'operation issue is off the classic human board');
   assert.equal(op.assigneeAgentId, h.resolvedAgentId, 'operation issue assigned to the resolved Editor-Agent UUID');
-  // Phase 16.1 Plan 16.1-02 (D-05) — the fire-and-forget requestWakeup is DELETED
-  // from the delivery path; the agent's native heartbeat pull finds the assigned
-  // operation issue via "Step 3 — Get Assignments". No event-reactive wake fires.
-  assert.equal(h.wakeups.length, 0, 'NO requestWakeup — native heartbeat pull is the only dispatch (D-05)');
+  // Phase 16.1 Plan 16.1-07 (LOOP-07) — the GOVERNED wake is RE-INTRODUCED at
+  // op-issue creation (gated by checkAndRecordWake). D-05 deleted it on the
+  // assumption the native heartbeat would pull op-issues; it does not —
+  // undispatched op-issues fall to the status_only recovery sweep (write-blocked)
+  // so TL;DRs never persist. The host-faithful db's kill-switch + trailing-count
+  // reads are empty, so the governor ALLOWS exactly one wake — restoring
+  // write-capable normal_model dispatch. Storm-severance is intact (the wake is in
+  // startAgentTask, outside every ingress handler).
+  assert.equal(h.wakeups.length, 1, 'exactly one GOVERNED requestWakeup fired at op-issue creation (LOOP-07)');
 });
 
 // ---- Case 5 — logger-metadata drop (catalogue item 5) ----------------------

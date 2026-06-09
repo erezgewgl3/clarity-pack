@@ -496,9 +496,13 @@ test('e2e (03-06): job compiles + publishes through the REAL deliveryLlmAdapter'
   assert.equal(operationIssues.length, 1, 'exactly one bulletin-compile operation issue created');
   assert.equal(operationIssues[0].assigneeAgentId, 'editor-agent-uuid', 'operation issue assigned to the Editor-Agent');
   assert.equal(operationIssues[0].surfaceVisibility, 'plugin_operation', 'operation issue is off the human board');
-  // Phase 16.1 Plan 16.1-02 (D-05) — the requestWakeup block is deleted; the
-  // native heartbeat pull picks up the assigned operation issue. No wake fires.
-  assert.equal(wakeups.length, 0, 'NO requestWakeup — native heartbeat pull is the only dispatch (D-05)');
+  // Phase 16.1 Plan 16.1-07 (LOOP-07) — the GOVERNED wake is RE-INTRODUCED at
+  // op-issue creation (gated by checkAndRecordWake). The fake db's kill-switch +
+  // trailing-count reads are empty, so the governor ALLOWS exactly one wake —
+  // restoring write-capable normal_model dispatch so the TL;DR/bulletin persists
+  // (supersedes the D-05 zero-wake assumption that stranded op-issues on the
+  // status_only recovery sweep).
+  assert.equal(wakeups.length, 1, 'exactly one GOVERNED requestWakeup fired at op-issue creation (LOOP-07)');
 });
 
 test('e2e (03-06): a paused agent that cannot resume → no hang, no publish', async () => {
