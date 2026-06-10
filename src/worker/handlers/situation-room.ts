@@ -88,6 +88,16 @@ import {
   type ActionCardSourceRow,
 } from '../agents/action-cards.ts';
 import type { ActionCard } from '../../shared/types.ts';
+// Plan 17-02 Task 1 (WAIT-02 / SC5) — the per-company structured-wait prefetch.
+// ONE company-scoped SELECT in buildSnapshotPrefetch builds the waitMap
+// (Map<issue_id, row>) that feeds applyStructuredWait on all three root-meta
+// write sites. Degrade-safe: a thrown wait SELECT defaults to an empty waitMap
+// (no wait merged → the conservative engine floor) and does NOT abort the
+// prefetch — the wait is an enhancement, not a prerequisite.
+import {
+  listClarityHumanWaitsForCompany,
+  type ClarityHumanWaitRow,
+} from '../db/clarity-human-wait-repo.ts';
 
 // Plan 07-03 Task 2 + Plan 08-01 Task 3 — widen the ctx with the SDK clients the
 // builders need (mirror ResolveRefsCtx in resolve-refs.ts:76-83). org-blocked-
@@ -240,6 +250,11 @@ type SnapshotPrefetchBundle = {
   issuesById: Map<string, PrefetchIssue>;
   nameByUuid: Map<string, string | null>;
   edgeGraph: Map<string, SharedEdgeEntry>;
+  // Plan 17-02 Task 1 (WAIT-02 / SC5) — the persisted structured human-waits for
+  // this company, keyed by issue_id. Built ONCE per snapshot and threaded into
+  // BOTH builders' ctx so applyStructuredWait merges the IDENTICAL wait at every
+  // root-meta write site (kills the BEAAA-972 cross-surface divergence).
+  waitMap: Map<string, ClarityHumanWaitRow>;
 };
 
 /** The empty backlog shape — used when the builder throws so the rest of the
@@ -328,6 +343,28 @@ async function buildSnapshotPrefetch(
       err: (e as Error).message,
     });
     return null;
+  }
+
+  // Plan 17-02 Task 1 (WAIT-02 / SC5 / T-17-06) — ONE company-scoped SELECT for
+  // the persisted structured human-waits, turned into a Map<issue_id, row>.
+  // DEGRADE-SAFE, distinct from the issues/agents SELECTs above: those two are
+  // prerequisites (a throw → null bundle → RPC fallback), but the wait is an
+  // ENHANCEMENT. A thrown wait SELECT must NOT abort the prefetch — it defaults
+  // to an EMPTY waitMap (no wait merged anywhere → the conservative engine floor,
+  // never a false needs-you). One bounded `WHERE company_id = $1` SELECT per
+  // snapshot inherits the Phase-16 prefetch degrade discipline.
+  const waitMap = new Map<string, ClarityHumanWaitRow>();
+  try {
+    const waitRows = await listClarityHumanWaitsForCompany(ctx, companyId);
+    for (const w of Array.isArray(waitRows) ? waitRows : []) {
+      if (w && typeof w.issue_id === 'string' && w.issue_id) waitMap.set(w.issue_id, w);
+    }
+  } catch (e) {
+    ctx.logger?.warn?.('situation.snapshot: human-wait prefetch failed (empty waitMap, continuing)', {
+      companyId,
+      err: (e as Error).message,
+    });
+    // waitMap stays empty — no wait merged → conservative floor. NOT a null bundle.
   }
 
   const issues = (Array.isArray(issueRows) ? issueRows : []).map(mapIssueRow).filter((i) => i.id);
@@ -428,7 +465,7 @@ async function buildSnapshotPrefetch(
     edgeGraph.set(startId, { edges: result.edges, nodeMeta: result.nodeMeta });
   });
 
-  return { blockedIssues, roster: agents, issuesByAgentId, issuesById, nameByUuid, edgeGraph };
+  return { blockedIssues, roster: agents, issuesByAgentId, issuesById, nameByUuid, edgeGraph, waitMap };
 }
 
 /**
@@ -474,6 +511,10 @@ async function computeViewerInvariantSlice(
         blockedIssues: prefetch.blockedIssues,
         nameByUuid: prefetch.nameByUuid,
         edgeGraph: prefetch.edgeGraph,
+        // Plan 17-02 Task 1 (WAIT-02 / SC5) — the ONE waitMap threaded into BOTH
+        // builders' ctx so applyStructuredWait merges the IDENTICAL wait on every
+        // root-meta write site.
+        waitMap: prefetch.waitMap,
       }
     : {};
 

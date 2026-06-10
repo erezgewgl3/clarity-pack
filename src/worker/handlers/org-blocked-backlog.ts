@@ -192,6 +192,13 @@ export type SnapshotPrefetch = {
   nameByUuid?: Map<string, string | null>;
   /** startId→edge-graph memo, populated once across the blocked∪focus union. */
   edgeGraph?: Map<string, SharedEdgeEntry>;
+  /** Plan 17-02 (WAIT-02 / SC5) — issue_id→persisted structured human-wait,
+   *  built ONCE in the situation-room prefetch and threaded into BOTH builders so
+   *  applyStructuredWait merges the IDENTICAL wait at every root-meta write site
+   *  (kills the BEAAA-972 cross-surface divergence). Absent → no wait merged
+   *  (conservative engine floor). The value shape is the repo's ClarityHumanWaitRow
+   *  subset applyStructuredWait reads ({ owner_user_id, decision_one_liner }). */
+  waitMap?: Map<string, { owner_user_id: string; decision_one_liner: string }>;
 };
 
 /** The structural ctx the builder accepts — stubbable in tests, satisfied at
