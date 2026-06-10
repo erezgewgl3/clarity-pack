@@ -57,7 +57,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 **Reusable input:** `.planning/phases/_superseded-legibility-16-18-misscope/` holds the OLD 16-18 mis-scope's research / patterns / plans (verdict-wording shared helper, focusLine-from-tldr enrichment, chat-chip humanization). That work is sound legibility/prose input — Phases 17 and 18 should mine it rather than start from scratch.
 
 - [x] **Phase 16: Snapshot performance & honest loading** — cockpit loads fast (snapshot well under the 30s timeout, target p95 < ~5s, never 502s); eliminate the 25.7s cold recompute near-cliff; employees rollup degrade-safe. Confirm-first baseline already recorded. FIRST. (completed 2026-06-03)
-- [ ] **Phase 16.1: Editor-Agent loop elimination & wake governor (URGENT — make Clarity safe to run)** — INSERTED 2026-06-04 after a production incident: installing Clarity made the live BEAAA instance unusable (every issue/agent/task change drove CPU up + woke 4-5 agents). Root cause = a closed positive-feedback loop (event-reactive op-issue creation + `requestWakeup` whose own writes re-enter the instance-wide event subscription). Eliminate the loop by construction, add a durable throughput wake-governor + kill-switch, and gate ingress on opt-in/scope — while leaving the read-time "zero rabbit-holes" guarantee untouched. Hard prerequisite to reinstalling Clarity on BEAAA; blocks 17–20.
+- [x] **Phase 16.1: Editor-Agent loop elimination & wake governor (URGENT — make Clarity safe to run)** — INSERTED 2026-06-04 after a production incident: installing Clarity made the live BEAAA instance unusable (every issue/agent/task change drove CPU up + woke 4-5 agents). Root cause = a closed positive-feedback loop (event-reactive op-issue creation + `requestWakeup` whose own writes re-enter the instance-wide event subscription). Eliminate the loop by construction, add a durable throughput wake-governor + kill-switch, and gate ingress on opt-in/scope — while leaving the read-time "zero rabbit-holes" guarantee untouched. Hard prerequisite to reinstalling Clarity on BEAAA; blocks 17–20. (completed 2026-06-10)
 - [ ] **Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)** — a machine-readable "blocked on a human decision X" signal so the deterministic engine classifies AWAITING_HUMAN instead of parking in Watch (the deep BEAAA-972 fix); every blocked-no-edge class classified truthfully; SC5 extended to a full surface × terminal-kind matrix.
 - [ ] **Phase 18: No rabbit-holes & plain-English** — "Open ↗" routes to the Clarity Reader (not the raw classic page); ZERO raw/partial agent/UUID ids in human-facing text everywhere; "Looks done — close it?" affordance when the AI TL;DR reads done but the engine still says blocked.
 - [ ] **Phase 19: Action-cards async re-architecture (LAST, flag-gated)** — action-card compile off the request path writing non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; Editor named-action prose live on needs-you rows; runtime-safe + slip-safe to v1.6.
@@ -95,7 +95,7 @@ Plans:
 - [x] 16.1-03-PLAN.md — Wave 3: observe-only ingress + opt-in/active-company scope gate + lazy company seed + company.created/chat-bridge dispositions + dispatcher disposition
 - [x] 16.1-04-PLAN.md — Wave 4: bounded warm-on-heartbeat (<=5 SWR-stale awaiting-you TL;DRs) + scope-gated/governed bulletin cron
 - [x] 16.1-05-PLAN.md — Wave 5: storm-safety CI test + no-wake static gate + opt-in-ingress test + LOOP-06 read-time no-touch regression guard
-- [ ] 16.1-06-PLAN.md — Wave 6: two-source version bump + rebuild + bookended live BEAAA reinstall & no-storm drill (LOOP-07)
+- [x] 16.1-06-PLAN.md — Wave 6: two-source version bump + rebuild + bookended live BEAAA reinstall & no-storm drill (LOOP-07)
 - [x] 16.1-07-PLAN.md — Wave 1 (gap closure, LOOP-07): re-introduce a single GOVERNED requestWakeup at op-issue creation (checkAndRecordWake) to restore write-capable normal_model dispatch; governed-wake + kill-switch-degrade tests; storm-safety regression; two-source bump 1.5.0 -> 1.5.1
 
 ### Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)
@@ -107,7 +107,14 @@ Plans:
   2. The deterministic engine classifies a structured human-wait as AWAITING_HUMAN (needs-you) and it surfaces in the Needs-you tier, no longer parked conservatively in Watch — the BEAAA-972 row reads needs-you everywhere.
   3. Every blocked-no-edge class in the BEAAA-972 family is classified truthfully: blocked+agent-owned, blocked+human-owned, blocked+unowned, and structured-human-wait each resolve to their honest terminal kind.
   4. The SC5 cross-surface consistency guard is extended into a FULL matrix — every surface × every terminal kind reads one consistent verdict — and `blocker-chain.ts` stays pure (determinism + AI-token grep guards pass; no AI introduced into the engine).
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 17-01-PLAN.md — Wave 1: foundation — migration 0018 + clarity-human-wait-repo + engine nodeMeta fields/priority-0 leaf branch (D-07/D-08) + generic founder resolution + engine verdict test
+- [ ] 17-02-PLAN.md — Wave 2: SC5 single shared applyStructuredWait helper + per-company waitMap prefetch + identical merge at all three root-meta write sites + parity test (the BEAAA-972 anti-regression)
+- [ ] 17-03-PLAN.md — Wave 2: Editor-Agent high-precision human-wait detection (D-03) riding the existing heartbeat governance; upsert/self-clear (D-04); polishTldr voice (D-05); no new wake path
+- [ ] 17-04-PLAN.md — Wave 1: Reader fold-ins — breadcrumb drop mission goal + link-only-routable (D-11/D-12) + ref-card lead plain-English/demote codes (D-13)
+- [ ] 17-05-PLAN.md — Wave 3: SC5 full matrix — structured-wait wins-over-agent case + 4 surfaces × 8 terminal kinds (WAIT-03/WAIT-04); engine purity green
+- [ ] 17-06-PLAN.md — Wave 4: two-source version bump (1.5.1→1.6.0) + rebuild + bookended live BEAAA reinstall & drill (BEAAA-972 reads needs-you everywhere; no storm)
 **UI hint**: yes
 
 ### Phase 18: No rabbit-holes & plain-English
@@ -253,8 +260,8 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
-| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 6/7 | In Progress|  |
-| 17. Structured human-wait + truthful verdicts | 0/TBD | Not started | - |
+| 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 7/7 | Complete   | 2026-06-10 |
+| 17. Structured human-wait + truthful verdicts | 0/6 | Not started | - |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
 | 20. Hygiene & honestly-green CI | 0/TBD | Not started | - |
