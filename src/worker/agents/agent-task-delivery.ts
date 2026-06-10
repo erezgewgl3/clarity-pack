@@ -117,7 +117,8 @@ export type OperationKind =
   | 'bulletin-compile'
   | 'tldr-compile'
   | 'bulletin-gloss'
-  | 'action-cards';
+  | 'action-cards'
+  | 'human-wait-detect';
 
 /**
  * The EXACT issue-document key the agent is instructed to file its result
@@ -282,6 +283,26 @@ function isResultComment(body: string, operationKind: OperationKind): boolean {
     // which throws on it → pollAgentTaskResult never returns 'ready' → the
     // readback HANGS forever (status:'pending'). Mirrors the 'bulletin-gloss'
     // branch exactly.
+    if (body.length > 8000) return false;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(extractJsonObject(body));
+    } catch {
+      return false;
+    }
+    return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+  }
+  if (operationKind === 'human-wait-detect') {
+    // Phase 17 Plan 17-03 (WAIT-01, D-03) — the human-wait detection result is a
+    // STRICT JSON { isHumanWait: boolean, decisionOneLiner: string | null }
+    // object. Structure only: it must parse to a non-array object of a sane
+    // size. detectAndPersistHumanWait re-parses + validates each field
+    // DEFENSIVELY (garbage / missing isHumanWait → treated as a negative
+    // detection → self-clear), so accept any JSON object body here. WITHOUT this
+    // branch the payload would fall through to the `bulletin-compile`
+    // BulletinDraft validator below, which throws on it → pollAgentTaskResult
+    // never returns 'ready' → the readback HANGS forever (status:'pending').
+    // Mirrors the 'bulletin-gloss' / 'action-cards' branches exactly (GOTCHA 1).
     if (body.length > 8000) return false;
     let parsed: unknown;
     try {
