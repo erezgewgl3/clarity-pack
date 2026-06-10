@@ -70,8 +70,36 @@ const ANCESTRY_MAX_DEPTH = 8;
 const EXCERPT_MAX = 280;
 const COMMENT_DETAIL_MAX = 120;
 
-export type AncestryNode = { id: string; title: string; url: string } | null;
+// 17-04 (D-11/D-12) — each segment now declares whether it is safe to LINK.
+//   - `url` is a prefix-LESS canonical (the issue IDENTIFIER for the parent);
+//     the worker stays INSTANCE-AGNOSTIC and breadcrumb.tsx prepends
+//     /<companyPrefix>/issues/ (17-RESEARCH Area 7, Option (b)). `url` may be
+//     null for segments with no confirmed host route.
+//   - `routable: true` ONLY for the issue/parent segment (the sole confirmed
+//     host route). project/goal segments are `routable: false` → the UI renders
+//     them as plain, non-clickable text (zero 404, zero dead links).
+export type AncestryNode = { id: string; title: string; url: string | null; routable: boolean } | null;
 export type Ancestry = { project: AncestryNode; milestone: AncestryNode; parent: AncestryNode };
+
+// 17-04 (D-11) — a goal/project/parent breadcrumb LABEL must be a short nav
+// hint, never a paragraph. The root company-mission goal's title IS the whole
+// 1k+ char mission (BEAAA-828 pathology); a title past this bound is treated as
+// the mission dump and dropped (goal) or truncated (project/parent).
+const ANCESTRY_LABEL_MAX = 80;
+
+// A goal whose title runs past the label bound is the company-mission root
+// (its `goal.title` is the entire mission paragraph) — never a useful nav
+// target. Detected by length only, so it stays instance-agnostic (no company
+// name/prefix literal, no goal-kind field which the SDK does not expose).
+function isMissionDumpTitle(title: string): boolean {
+  return title.trim().length > ANCESTRY_LABEL_MAX;
+}
+
+// Truncate any other long label (project/parent) to a short breadcrumb hint.
+function shortLabel(title: string): string {
+  const t = title.trim();
+  return t.length > ANCESTRY_LABEL_MAX ? `${t.slice(0, ANCESTRY_LABEL_MAX - 1)}…` : t;
+}
 
 export type ActivityEvent = {
   kind: 'comment';
@@ -372,8 +400,13 @@ async function deriveAncestry(
         const parentKey = p.key ?? p.id;
         ancestry.parent = {
           id: p.id,
-          title: p.title,
-          url: `/issues/${parentKey}`,
+          title: shortLabel(p.title),
+          // 17-04 (D-12) — prefix-LESS canonical: the issue IDENTIFIER only.
+          // breadcrumb.tsx prepends /<companyPrefix>/issues/ at render time so
+          // the worker stays instance-agnostic. This is the ONLY routable
+          // segment (confirmed host route /<companyPrefix>/issues/<identifier>).
+          url: parentKey,
+          routable: true,
         };
       }
     } catch {
@@ -390,8 +423,11 @@ async function deriveAncestry(
         const p = project as unknown as { id: string; title?: string; name?: string };
         ancestry.project = {
           id: p.id,
-          title: p.title ?? p.name ?? projectId,
-          url: `/projects/${p.id}`,
+          title: shortLabel(p.title ?? p.name ?? projectId),
+          // 17-04 (D-12) — no confirmed /projects/<id> host route → not
+          // routable. The UI renders this as plain non-clickable text (no 404).
+          url: null,
+          routable: false,
         };
       }
     } catch {
@@ -408,11 +444,21 @@ async function deriveAncestry(
       const goal = await ctx.goals.get(goalId, companyId);
       if (goal) {
         const g = goal as unknown as { id: string; title?: string };
-        ancestry.milestone = {
-          id: g.id,
-          title: g.title ?? goalId,
-          url: `/goals/${g.id}`,
-        };
+        const goalTitle = g.title ?? goalId;
+        // 17-04 (D-11) — DROP the root company-mission goal entirely: its title
+        // is the whole 1k+ char mission paragraph (BEAAA-828 pathology), never
+        // a useful nav target ("I know what the company does"). Leave
+        // ancestry.milestone null so it never reaches the breadcrumb. Any OTHER
+        // (non-root) goal renders as a short, plain-text (non-routable) label —
+        // there is no confirmed /goals/<id> host route.
+        if (!isMissionDumpTitle(goalTitle)) {
+          ancestry.milestone = {
+            id: g.id,
+            title: shortLabel(goalTitle),
+            url: null,
+            routable: false,
+          };
+        }
       }
     } catch {
       // Goal unreachable.
