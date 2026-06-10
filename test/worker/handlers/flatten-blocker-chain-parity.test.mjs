@@ -74,7 +74,7 @@ function makeBacklogCtx(relations) {
   };
 }
 
-test('SC5 — walkBlockerChain nodeMeta key set === buildEdges nodeMeta key set (incl. assigneeAgentId + agentState)', async () => {
+test('SC5 — walkBlockerChain nodeMeta key set === buildEdges nodeMeta key set (incl. assigneeAgentId + agentState + structuredWait*)', async () => {
   const { relations } = makeRelationsFixture();
 
   const walk = await walkBlockerChain(makeIssuesClient(relations), 'co-1', 'i-root');
@@ -96,6 +96,27 @@ test('SC5 — walkBlockerChain nodeMeta key set === buildEdges nodeMeta key set 
     // The new fields must be present in BOTH.
     assert.ok(walkKeys.includes('assigneeAgentId'), 'walk nodeMeta carries assigneeAgentId');
     assert.ok(walkKeys.includes('agentState'), 'walk nodeMeta carries agentState');
+    // Plan 17-02 Task 3 (WAIT-02 / SC5) — the two structured-wait fields gained
+    // by BOTH nodeMeta shapes must stay in LOCKSTEP. If one builder gained them
+    // but the other did not, the same issue would read a different verdict across
+    // the Reader and the Situation Room (the BEAAA-972 divergence) — this widened
+    // same-shape assertion is the guard that pins them equal.
+    assert.ok(
+      walkKeys.includes('structuredWaitOwnerUserId'),
+      'walk nodeMeta carries structuredWaitOwnerUserId',
+    );
+    assert.ok(
+      walkKeys.includes('structuredWaitOneLiner'),
+      'walk nodeMeta carries structuredWaitOneLiner',
+    );
+    assert.ok(
+      builtKeys.includes('structuredWaitOwnerUserId'),
+      'built nodeMeta carries structuredWaitOwnerUserId',
+    );
+    assert.ok(
+      builtKeys.includes('structuredWaitOneLiner'),
+      'built nodeMeta carries structuredWaitOneLiner',
+    );
   }
 });
 
