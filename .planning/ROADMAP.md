@@ -113,7 +113,7 @@ Plans:
 - [x] 17-02-PLAN.md — Wave 2: SC5 single shared applyStructuredWait helper + per-company waitMap prefetch + identical merge at all three root-meta write sites + parity test (the BEAAA-972 anti-regression)
 - [x] 17-03-PLAN.md — Wave 2: Editor-Agent high-precision human-wait detection (D-03) riding the existing heartbeat governance; upsert/self-clear (D-04); polishTldr voice (D-05); no new wake path
 - [x] 17-04-PLAN.md — Wave 1: Reader fold-ins — breadcrumb drop mission goal + link-only-routable (D-11/D-12) + ref-card lead plain-English/demote codes (D-13)
-- [ ] 17-05-PLAN.md — Wave 3: SC5 full matrix — structured-wait wins-over-agent case + 4 surfaces × 8 terminal kinds (WAIT-03/WAIT-04); engine purity green
+- [x] 17-05-PLAN.md — Wave 3: SC5 full matrix — structured-wait wins-over-agent case + 4 surfaces × 8 terminal kinds (WAIT-03/WAIT-04); engine purity green
 - [ ] 17-06-PLAN.md — Wave 4: two-source version bump (1.5.1→1.6.0) + rebuild + bookended live BEAAA reinstall & drill (BEAAA-972 reads needs-you everywhere; no storm)
 **UI hint**: yes
 
@@ -261,7 +261,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
 | 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 7/7 | Complete   | 2026-06-10 |
-| 17. Structured human-wait + truthful verdicts | 4/6 | In Progress|  |
+| 17. Structured human-wait + truthful verdicts | 5/6 | In Progress|  |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
 | 20. Hygiene & honestly-green CI | 0/TBD | Not started | - |

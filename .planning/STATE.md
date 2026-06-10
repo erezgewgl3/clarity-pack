@@ -4,13 +4,13 @@ milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
 stopped_at: Phase 17 context gathered
-last_updated: "2026-06-10T22:37:10.328Z"
+last_updated: "2026-06-10T22:43:48.725Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 12
   completed_phases: 6
   total_plans: 40
-  completed_plans: 36
+  completed_plans: 37
   percent: 50
 ---
 
@@ -26,10 +26,10 @@ The v1.5.0 CENTERPIECE. Research + pattern-map + planner + plan-checker complete
 - **17-04** (W1, Reader-only, parallel) — breadcrumb drop-mission + issues-only links (D-11/D-12) + ref-card de-coding (D-13)
 - **17-02** (W2) — ✅ **COMPLETE 2026-06-11** — the SC5 **single `applyStructuredWait` helper** (`src/worker/situation/apply-structured-wait.ts`) + one per-company `waitMap` prefetch (degrade-safe; enhancement-not-prerequisite) threaded into both SR builders + IDENTICAL merge at all 3 root-meta sites (Reader builds its OWN per-request waitMap; SR backlog merges via a clone-safe `mergeRootWait` since `buildEdges` writes no root entry) + widened parity test. `tsc --noEmit` clean; 1300/1300 worker+shared tests pass. WAIT-02/03/04 ✅. Commits c750e0f, 0e055c7, 045c647.
 - **17-03** (W2) — ✅ **COMPLETE 2026-06-11** — Editor-Agent high-precision detection (D-03) + upsert/self-clear (D-04) + `polishTldr` voice (D-05). `detectAndPersistHumanWait` (`human-wait-detect.ts`) wired as a governed heartbeat sibling of the TL;DR compile (reuses the fetched comments; NO new wake path); new `human-wait-detect` OperationKind + `isResultComment` readback branch (GOTCHA 1 — else the poll hangs on the BulletinDraft validator); content-hash idempotency short-circuit; degrade-safe (not-ready poll / null founder / Editor down → no row → conservative floor). `tsc --noEmit` clean; 57/57 delivery+heartbeat+engine+parity tests pass. WAIT-01/WAIT-02 producer ✅. Commits d8ab989, faae261.
-- **17-05** (W3) — SC5 full matrix: structured-wait-wins + 4 surfaces × 8 kinds; determinism + AI-token purity guards stay green
+- **17-05** (W3) — ✅ **COMPLETE 2026-06-11** — SC5 full matrix. Extended `test/worker/blocked-no-edge-verdict-consistency.test.mjs` from 3 cases × 2 surfaces to a 4th `structured-human-wait → AWAITING_HUMAN` case that WINS over a present agent assignee (D-07), fed through the REAL 17-02 merge path (waitMap → `walkBlockerChain` / `ctx.waitMap`), PLUS a table-driven 4-surface (reader/sr/bulletin/chat) × 8-kind matrix asserting one consistent verdict per cell at the producer boundary (render parity = Phase 20). Test-only: `blocker-chain.ts` untouched; determinism + AI-token purity guards green. 16/16 verdict-consistency + 21/21 engine-purity pass. WAIT-03/WAIT-04 ✅. Commits a7a362a, 7c595c7.
 - **17-06** (W4, `autonomous:false`) — two-source bump **1.5.1 → 1.6.0** + rebuild + bookended live BEAAA reinstall & no-storm/needs-you drill
 
-**Next action:** continue `/gsd:execute-phase 17` — Wave 3 plan **17-05** (SC5 full matrix: structured-wait-wins + 4 surfaces × 8 kinds; determinism + AI-token purity guards stay green) is next. Plans 17-01, 17-02, 17-03, 17-04 are complete (4 of 6 SUMMARYs on disk). The structured-wait pipeline is now end-to-end: 17-03's producer (`detectAndPersistHumanWait`) WRITES the `clarity_human_waits` rows, 17-02's three merge sites (single `applyStructuredWait` helper) feed them into `nodeMeta`, and 17-01's priority-0 engine branch classifies them `AWAITING_HUMAN`. 17-05 verifies that verdict agrees across all four surfaces; 17-06 (autonomous:false) does the two-source bump + bookended live BEAAA drill.
+**Next action:** continue `/gsd:execute-phase 17` — Wave 4 plan **17-06** (`autonomous:false`: two-source version bump + rebuild + bookended live BEAAA reinstall & no-storm/needs-you drill) is the LAST plan. Plans 17-01..17-05 are complete (5 of 6 SUMMARYs on disk). The structured-wait pipeline is end-to-end AND verdict-consistent: 17-03's producer (`detectAndPersistHumanWait`) WRITES the `clarity_human_waits` rows, 17-02's three merge sites (single `applyStructuredWait` helper) feed them into `nodeMeta`, 17-01's priority-0 engine branch classifies them `AWAITING_HUMAN`, and 17-05's full 4×8 matrix pins every surface to one verdict (anti-regression for the BEAAA-972 class). 17-06 does the two-source bump + bookended live BEAAA drill.
 
 ## ▶ Phase 16.1 — LOOP-07 gap plan READY 2026-06-09
 
@@ -711,7 +711,7 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 ## Current Position
 
 Phase: 17 (structured-human-wait-truthful-verdicts-centerpiece) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-06-10
 
@@ -1428,7 +1428,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 90%
+**Progress:** [█████████░] 93%
 
 ## Performance Metrics
 
@@ -1563,7 +1563,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-10T22:37:10.302Z
+**Last session:** 2026-06-10T22:43:48.706Z
 
 **Stopped at:** Phase 17 context gathered
 
