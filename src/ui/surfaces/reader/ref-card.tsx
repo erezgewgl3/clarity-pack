@@ -19,25 +19,32 @@ import * as React from 'react';
 import { useHostLocation } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { RefCardData } from '../../../shared/types.ts';
-import { StatePill, type StatePillState } from '../../primitives/state-pill.tsx';
 import { SafeMarkdown } from '../../primitives/safe-markdown.tsx';
 // Plan 07-04 Task 3 (D-I31-03) — the prefix the excerpt's SafeMarkdown uses to
 // chip-ify in-quote PREFIX-NNN refs (derived once in AnchoredToCards, threaded
 // to each RefCard). Instance-agnostic; broad fallback when no prefix.
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
 
-function statusToPill(status: RefCardData['status']): StatePillState {
+// 17-04 (D-13) — translate the task-tracker status codes into plain English.
+// The old `statusToPill` emitted code-chip vocabulary (`Stuck`/`Standby`) that
+// read like plumbing, not "just tell me what's going on". Returns a plain-word
+// label (or null to drop the chip entirely for neutral/unknown states) plus a
+// stable class suffix for host-CSS colouring. No raw status code reaches the UI.
+function statusToWords(
+  status: RefCardData['status'],
+): { label: string; tone: string } | null {
   switch (status) {
     case 'in_progress':
-      return 'Working';
+      return { label: 'in progress', tone: 'progress' };
     case 'blocked':
-      return 'Stuck';
+      return { label: 'needs attention', tone: 'attention' };
     case 'done':
-      return 'Standby';
+      return { label: 'done', tone: 'done' };
     case 'todo':
-      return 'Standby';
+      return { label: 'not started', tone: 'neutral' };
     default:
-      return 'Standby';
+      // Unknown/neutral status → drop the chip rather than show a code word.
+      return null;
   }
 }
 
@@ -76,12 +83,25 @@ export function RefCard({
   card: RefCardData;
   companyPrefix?: string | null;
 }): React.ReactElement {
+  // 17-04 (D-13) — plain-English first, machine codes demoted but recoverable.
+  const status = statusToWords(card.status);
   return (
+    // data-ref-id keeps BEAAA-NNN recoverable for search/citation even though it
+    // no longer leads the header (sketch skill: ID legible but secondary).
     <li className="clarity-ref-card" data-ref-id={card.id}>
       <header className="clarity-ref-card-header">
-        <span className="clarity-ref-card-id">{card.id}</span>
+        {/* Title LEADS (bright sans) — "just tell me what's going on". */}
         <strong className="clarity-ref-card-title">{card.title}</strong>
-        <StatePill state={statusToPill(card.status)} age={0} />
+        {/* ID demoted to a recessed mono secondary tag — still legible. */}
+        <span className="clarity-ref-card-id clarity-ref-card-id--demoted">{card.id}</span>
+        {/* Status as plain words (no code-chip); dropped entirely when neutral. */}
+        {status ? (
+          <span
+            className={`clarity-ref-card-status clarity-ref-card-status--${status.tone}`}
+          >
+            {status.label}
+          </span>
+        ) : null}
       </header>
       <p className="clarity-ref-card-owner">Owner: {card.ownerUserId ?? 'unassigned'}</p>
       {card.excerpt === null ? (
