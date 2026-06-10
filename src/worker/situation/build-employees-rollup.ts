@@ -38,6 +38,10 @@ import {
 // identically to the Reader (flatten-blocker-chain.walkBlockerChain). NO new
 // host fetch — focusIssue + the agent's heartbeat are already in hand.
 import { resolveAgentState } from './agent-liveness.ts';
+// Plan 17-02 Task 2 (WAIT-02 / SC5) — the SINGLE shared merge helper, called
+// IDENTICALLY here, in flatten-blocker-chain.ts, and in org-blocked-backlog.ts so
+// the structured wait is merged on EVERY path (kills the BEAAA-972 divergence).
+import { applyStructuredWait } from './apply-structured-wait.ts';
 // Plan 09-01 Task 1 — R2 worker-tier group bucket. The pure classifier maps
 // state → {needs_you|working|idle}; the UI groups BY this field and renders the
 // worker sort verbatim WITHIN each group (no client-side grouping/re-sort).
@@ -448,7 +452,19 @@ async function buildOneEmployeeRow(
           status: rootStatus,
           assigneeAgentId: rootAssigneeAgentId,
           agentState: rootAgentState,
+          // Plan 17-02 (SC5) — init null; applyStructuredWait below merges the wait.
+          structuredWaitOwnerUserId: null,
+          structuredWaitOneLiner: null,
         };
+      }
+      // Plan 17-02 Task 2 (WAIT-02 / SC5) — merge the persisted structured wait
+      // onto the ROOT (focus) node via the SHARED helper, IDENTICALLY to the other
+      // two root-meta write sites. Runs whether or not the root entry was injected
+      // above (it may already exist from a deeper graph); the helper is a no-op when
+      // no wait exists for this issue. nodeMeta is the local clone (`{ ...memo.nodeMeta }`)
+      // so the shared memo is never mutated. ctx.waitMap is threaded by 17-02 Task 1.
+      if (ctx.waitMap && nodeMeta[focusIssue.id]) {
+        applyStructuredWait(nodeMeta, focusIssue.id, ctx.waitMap);
       }
       const chain = flattenBlockerChain({ startId: focusIssue.id, edges, nodeMeta, viewerUserId });
       const picked = pickTopChains([chain], 1)[0];

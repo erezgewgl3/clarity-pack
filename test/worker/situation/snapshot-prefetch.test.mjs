@@ -56,6 +56,7 @@ function makeCtx({ issueRows = [], agentRows = [], relations = {}, optedIn = tru
     issuesListInputs: [], // every issues.list input
     agentsList: 0, // agents.list call count
     stageLogs: [], // every snap.stage log payload
+    waitSelectSql: [], // Plan 17-02 — every clarity_human_waits prefetch SELECT
   };
 
   const ctx = {
@@ -107,6 +108,15 @@ function makeCtx({ issueRows = [], agentRows = [], relations = {}, optedIn = tru
         // SELECTs" round-trip-count contract still measures only the public.*
         // prefetch reads. Return [] → a cache miss → synchronous recompute path.
         if (/situation_snapshots/.test(sql)) return [];
+        // Plan 17-02 (WAIT-02) — the structured human-wait prefetch is a
+        // plugin-NAMESPACE read (clarity_human_waits), distinct from the public.*
+        // N+1-collapse round-trip contract this suite measures. Track it on its own
+        // spy and exclude it from dbQuerySql (same posture as situation_snapshots),
+        // so "exactly TWO public.* prefetch SELECTs" stays the public-read contract.
+        if (/clarity_human_waits/.test(sql)) {
+          spies.waitSelectSql.push(sql);
+          return [];
+        }
         spies.dbQuerySql.push(sql);
         if (/FROM public\.issues/i.test(sql)) return issueRows;
         if (/FROM public\.agents/i.test(sql)) return agentRows;
@@ -154,6 +164,12 @@ test('prefetch — issues exactly TWO db.query calls (one public.issues, one pub
   // Company-scoped + parameterized: $1 placeholder, no prefix literal.
   assert.match(issuesSelects[0], /company_id = \$1/);
   assert.match(agentsSelects[0], /company_id = \$1/);
+  // Plan 17-02 (WAIT-02 / T-17-04) — exactly ONE structured-wait SELECT per
+  // company per snapshot, company-scoped (WHERE company_id = $1, no cross-company
+  // merge). The waitMap built from it feeds applyStructuredWait on all three
+  // root-meta write sites (SC5).
+  assert.equal(bag.spies.waitSelectSql.length, 1, 'exactly one clarity_human_waits SELECT');
+  assert.match(bag.spies.waitSelectSql[0], /company_id = \$1/);
 });
 
 // ---------------------------------------------------------------------------

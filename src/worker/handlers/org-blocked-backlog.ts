@@ -47,6 +47,10 @@ import {
 // engine reads no clock; the worker resolves working/stuck here and injects the
 // string into nodeMeta.
 import { resolveAgentState } from '../situation/agent-liveness.ts';
+// Plan 17-02 Task 2 (WAIT-02 / SC5) — the SINGLE shared merge helper. Called
+// IDENTICALLY here, in flatten-blocker-chain.ts, and in build-employees-rollup.ts
+// so a wait merged on one path is merged on ALL paths (kills BEAAA-972 divergence).
+import { applyStructuredWait } from '../situation/apply-structured-wait.ts';
 
 // Bound the per-issue blocker walk (mirrors the snapshot job's
 // MAX_CHAIN_DEPTH at situation-snapshot.ts:39).
@@ -63,6 +67,12 @@ type EdgeNodeMeta = {
   status: string;
   assigneeAgentId: string | null;
   agentState: 'working' | 'stuck' | null;
+  // Plan 17-02 Task 2 (WAIT-02 / SC5) — the persisted structured human-wait
+  // facts merged onto the ROOT node by applyStructuredWait. Kept in LOCKSTEP with
+  // WalkOutput.nodeMeta (flatten-blocker-chain.ts) — the parity test pins them
+  // equal. The engine's priority-0 AWAITING_HUMAN branch (17-01) reads these.
+  structuredWaitOwnerUserId: string | null;
+  structuredWaitOneLiner: string | null;
 };
 
 // Plan 11-06 Task 2 (IN-03 / SC5) — the SINGLE relation-node projection shape both
@@ -375,6 +385,12 @@ export async function buildEdges(
         status: blocker.status ?? 'awaiting',
         assigneeAgentId,
         agentState,
+        // Plan 17-02 (SC5) — initialized to null on every node; the structured
+        // wait is merged onto the ROOT node only, via applyStructuredWait at the
+        // buildOrgBlockedBacklog flatten site (the wait grounds in the blocked
+        // root issue, not its blockers).
+        structuredWaitOwnerUserId: null,
+        structuredWaitOneLiner: null,
       };
       if (!visited.has(toId) && depth + 1 <= MAX_CHAIN_DEPTH) {
         queue.push({ id: toId, depth: depth + 1 });
@@ -424,6 +440,37 @@ export async function buildOrgBlockedBacklog(
   );
   const total = blocked.length;
 
+  // Plan 17-02 Task 2 (WAIT-02 / SC5) — merge the persisted structured human-wait
+  // onto the ROOT issue's nodeMeta before flattening, via the SHARED helper
+  // (IDENTICAL to flatten-blocker-chain.ts + build-employees-rollup.ts). buildEdges
+  // does NOT write a root-meta entry (only blocker TARGETS), and the empty-edges
+  // blocked root is exactly the BEAAA-972 divergence point, so we ENSURE the root
+  // entry exists here. The memo nodeMeta is SHARED across the snapshot — never
+  // mutate it in place; clone the root entry before applying the wait.
+  const mergeRootWait = (
+    nodeMeta: Record<string, EdgeNodeMeta>,
+    rootId: string,
+  ): Record<string, EdgeNodeMeta> => {
+    if (!ctx.waitMap || !rootId) return nodeMeta;
+    // Shallow-clone the map + ensure a root entry (init the two wait fields null,
+    // mirroring the literal at every other site). Cloning keeps the shared memo
+    // pristine for the next consumer (SC5 — the wait is per-snapshot deterministic).
+    const merged: Record<string, EdgeNodeMeta> = { ...nodeMeta };
+    merged[rootId] = nodeMeta[rootId]
+      ? { ...nodeMeta[rootId], structuredWaitOwnerUserId: null, structuredWaitOneLiner: null }
+      : {
+          ownerUserId: null,
+          etaIso: null,
+          status: 'blocked',
+          assigneeAgentId: null,
+          agentState: null,
+          structuredWaitOwnerUserId: null,
+          structuredWaitOneLiner: null,
+        };
+    applyStructuredWait(merged, rootId, ctx.waitMap);
+    return merged;
+  };
+
   // 2. Flatten each blocked issue to one Terminal, keeping the source-issue
   //    pairing so the ranked top-CAP rows carry their metadata.
   // Plan 14-04 Task 2 — also keep each issue's nodeMeta so the per-row emit can
@@ -455,7 +502,9 @@ export async function buildOrgBlockedBacklog(
       continue;
     }
     if (memo) {
-      ({ edges, nodeMeta } = memo);
+      ({ edges } = memo);
+      // SC5 — clone-and-merge the root structured-wait (never mutate the shared memo).
+      nodeMeta = mergeRootWait(memo.nodeMeta, startId);
       let chain: BlockerChainResult;
       try {
         chain = flattenBlockerChain({ startId, edges, nodeMeta, viewerUserId });
@@ -486,6 +535,8 @@ export async function buildOrgBlockedBacklog(
       paired.push({ chain: unclassifiedChain(startId, 'relations-walk-failed'), issue, nodeMeta: {} });
       continue;
     }
+    // SC5 — merge the root structured-wait (buildEdges wrote no root entry).
+    nodeMeta = mergeRootWait(nodeMeta, startId);
     let chain: BlockerChainResult;
     try {
       chain = flattenBlockerChain({ startId, edges, nodeMeta, viewerUserId });

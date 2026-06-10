@@ -39,11 +39,24 @@ import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 // so the Reader panel classifies an agent-owned leaf identically to the
 // Situation Room (SC5 — both BFS builders agree on the nodeMeta shape).
 import { resolveAgentState } from '../situation/agent-liveness.ts';
+// Plan 17-02 Task 2 (WAIT-02 / SC5) — the SINGLE shared merge helper, called
+// IDENTICALLY here, in build-employees-rollup.ts, and in org-blocked-backlog.ts so
+// the structured wait is merged on EVERY path (kills the BEAAA-972 divergence).
+import { applyStructuredWait } from '../situation/apply-structured-wait.ts';
 // Plan 11-06 Task 2 (IN-03) — the SINGLE relation-node projection shape, declared
 // once in org-blocked-backlog.ts and shared by both BFS walkers so the SC5
 // "two builders agree" claim is honest at the type level (replaces this file's
 // triple `as unknown as {...}` casts).
 import type { RelationNodeProjection } from './org-blocked-backlog.ts';
+// Plan 17-02 Task 2 (WAIT-02 / SC5) — the Reader path builds its OWN per-company
+// waitMap (it does NOT go through the situation-room prefetch) and threads it into
+// walkBlockerChain so the same blocked issue reads the IDENTICAL verdict on the
+// Reader and the Situation Room. The merge itself is the shared applyStructuredWait
+// helper (called inside walkBlockerChain) — never inline-duplicated.
+import {
+  listClarityHumanWaitsForCompany,
+  type ClarityHumanWaitRow,
+} from '../db/clarity-human-wait-repo.ts';
 
 const MAX_CHAIN_DEPTH = 6;
 
@@ -100,6 +113,12 @@ type WalkOutput = {
       status: string;
       assigneeAgentId: string | null;
       agentState: 'working' | 'stuck' | null;
+      // Plan 17-02 Task 2 (WAIT-02 / SC5) — the persisted structured human-wait
+      // facts merged onto the ROOT node by applyStructuredWait. Kept in LOCKSTEP
+      // with EdgeNodeMeta (org-blocked-backlog.ts) — the parity test pins them
+      // equal. The engine's priority-0 AWAITING_HUMAN branch (17-01) reads these.
+      structuredWaitOwnerUserId: string | null;
+      structuredWaitOneLiner: string | null;
     }
   >;
 };
@@ -122,9 +141,26 @@ export function registerFlattenBlockerChain(ctx: FlattenBlockerChainCtx): void {
       });
     }
 
+    // Plan 17-02 Task 2 (WAIT-02 / SC5 / T-17-06) — build the per-company
+    // structured-wait map for this Reader call. DEGRADE-SAFE: a thrown SELECT (or
+    // an absent ctx.db) yields an empty map → no wait merged → the conservative
+    // engine floor (the verdict is computed from node state alone), never a 502.
+    // One bounded `WHERE company_id = $1` SELECT per Reader request.
+    const waitMap = new Map<string, ClarityHumanWaitRow>();
+    try {
+      const waitRows = await listClarityHumanWaitsForCompany(ctx, companyId);
+      for (const w of Array.isArray(waitRows) ? waitRows : []) {
+        if (w && typeof w.issue_id === 'string' && w.issue_id) waitMap.set(w.issue_id, w);
+      }
+    } catch (e) {
+      ctx.logger?.warn?.('flatten-blocker-chain: human-wait prefetch failed (empty waitMap)', {
+        err: (e as Error).message,
+      });
+    }
+
     let walk: WalkOutput;
     try {
-      walk = await walkBlockerChain(ctx.issues, companyId, startId);
+      walk = await walkBlockerChain(ctx.issues, companyId, startId, waitMap);
     } catch (e) {
       // Plan 11-02 (D-10/TAX-03) — a thrown relations walk is UNCLASSIFIED, not
       // EXTERNAL: the walk FAILED, so we cannot honestly claim the blocker is
@@ -303,6 +339,12 @@ export async function walkBlockerChain(
   issues: PluginIssuesClient,
   companyId: string,
   startId: string,
+  // Plan 17-02 Task 2 (WAIT-02 / SC5) — the per-company structured-wait map. The
+  // Reader handler builds it from listClarityHumanWaitsForCompany (ctx.db) and
+  // threads it here so applyStructuredWait merges the IDENTICAL wait the Situation
+  // Room path merges from its prefetched waitMap. Optional → old callers/tests and
+  // a degrade path (no db) classify from node state alone (conservative floor).
+  waitMap?: Map<string, { owner_user_id: string; decision_one_liner: string }>,
 ): Promise<WalkOutput> {
   const edges: BlockerEdge[] = [];
   const nodeMeta: WalkOutput['nodeMeta'] = {};
@@ -357,7 +399,16 @@ export async function walkBlockerChain(
         status: rootStatus,
         assigneeAgentId,
         agentState,
+        // Plan 17-02 (SC5) — init null; applyStructuredWait below merges the wait.
+        structuredWaitOwnerUserId: null,
+        structuredWaitOneLiner: null,
       };
+      // Plan 17-02 Task 2 (WAIT-02 / SC5) — merge the persisted structured wait
+      // onto the ROOT node via the SHARED helper, IDENTICALLY to the two Situation
+      // Room write sites. No-op when no wait exists for this issue (conservative
+      // floor) or when no waitMap was threaded (degrade path). Inside the try so a
+      // best-effort failure leaves the root meta as-built (prior behavior).
+      if (waitMap) applyStructuredWait(nodeMeta, startId, waitMap);
     }
   } catch {
     // Best-effort: leave the root meta absent (prior behavior). The walk below
@@ -434,6 +485,10 @@ export async function walkBlockerChain(
         status: b.status ?? 'awaiting',
         assigneeAgentId,
         agentState,
+        // Plan 17-02 (SC5) — null on every blocker node; the wait grounds in the
+        // ROOT issue only and is merged there via applyStructuredWait.
+        structuredWaitOwnerUserId: null,
+        structuredWaitOneLiner: null,
       };
       if (!visited.has(toId) && depth + 1 <= MAX_CHAIN_DEPTH) {
         queue.push({ id: toId, depth: depth + 1 });
