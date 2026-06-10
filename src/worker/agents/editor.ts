@@ -50,6 +50,13 @@ import {
   operationOriginKind,
   type AgentTaskDeliveryCtx,
 } from './agent-task-delivery.ts';
+// Phase 17 Plan 17-03 (WAIT-01/WAIT-02) — the structured-human-wait PRODUCER. A
+// sibling step of the TL;DR compile in the per-issue heartbeat loop: it reads the
+// SAME comments already fetched, runs HIGH-PRECISION detection through the
+// existing op-issue layer, and upserts (or self-clears, D-04) the
+// clarity_human_waits row the SC5 merge sites (17-02) consume. Rides the existing
+// heartbeat governance — adds NO new wake path / schedule / subscription.
+import { detectAndPersistHumanWait } from './human-wait-detect.ts';
 // Plan 13-02 (D-06 secondary trigger) — the Editor-Agent heartbeat is the
 // parity secondary trigger for action-card generation, mirroring TL;DR. It is
 // BEST-EFFORT and wrapped so a failure is logged and NEVER propagates (the
@@ -328,6 +335,23 @@ export async function handleEditorHeartbeat(
         });
       }
       // else: not ready in this invocation — drainTldrOperations consumes it later.
+
+      // Plan 17-03 (WAIT-01/WAIT-02) — SIBLING detection step. Runs AFTER the
+      // TL;DR compile, over the SAME `comments` already fetched (no second
+      // listComments), through the SAME op-issue delivery layer (new
+      // operationKind human-wait-detect, auto-excluded by the isOwnOperationIssue
+      // guard above). Rides the existing heartbeat pull + wake-governor + opt-in
+      // gate + self-loop filter (Phase 16.1, no-storm) — NO new wake path. It is
+      // the LAST statement in the per-issue try: a throw inside detection is
+      // caught by the per-issue catch below and logged WITHOUT aborting the loop
+      // or undoing the TL;DR compile that already completed.
+      await detectAndPersistHumanWait(ctx, {
+        agentId: payload.agentId,
+        companyId: payload.companyId,
+        issueId,
+        issue,
+        comments,
+      });
     } catch (err) {
       // Defect C (2026-05-17 v0.6.2 re-drill). This catch is the per-ISSUE
       // skip path of the HEARTBEAT TL;DR dispatcher — NOT the bulletin
