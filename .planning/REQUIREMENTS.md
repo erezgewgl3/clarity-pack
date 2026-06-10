@@ -34,7 +34,7 @@
 - [x] **WAIT-01**: Agents have a STRUCTURED way to declare "blocked on a human decision X" (a machine-readable signal, not free prose the engine cannot parse).
 - [x] **WAIT-02**: The deterministic engine classifies a structured human-wait as AWAITING_HUMAN (needs-you), instead of conservatively parking it in Watch — the deep fix behind the BEAAA-972 confusion.
 - [x] **WAIT-03**: Every blocked-no-edge class is classified truthfully (the BEAAA-972 family: blocked+agent-owned, blocked+human-owned, blocked+unowned, structured-human-wait).
-- [ ] **WAIT-04**: The SC5 cross-surface consistency guard is extended into a FULL matrix (every surface × every terminal kind reads one consistent verdict).
+- [x] **WAIT-04**: The SC5 cross-surface consistency guard is extended into a FULL matrix (every surface × every terminal kind reads one consistent verdict).
 
 ### No rabbit-holes & plain-English (Phase 18)
 
@@ -81,7 +81,7 @@
 | WAIT-01 | Phase 17 | Complete |
 | WAIT-02 | Phase 17 | Complete |
 | WAIT-03 | Phase 17 | Complete |
-| WAIT-04 | Phase 17 | Pending |
+| WAIT-04 | Phase 17 | Complete |
 | LEG-01 | Phase 18 | Pending |
 | LEG-02 | Phase 18 | Pending |
 | LEG-03 | Phase 18 | Pending |

@@ -4,13 +4,13 @@ milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
 stopped_at: Phase 17 context gathered
-last_updated: "2026-06-10T22:07:26.794Z"
+last_updated: "2026-06-10T22:24:26.735Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 12
   completed_phases: 6
   total_plans: 40
-  completed_plans: 34
+  completed_plans: 35
   percent: 50
 ---
 
@@ -24,12 +24,12 @@ The v1.5.0 CENTERPIECE. Research + pattern-map + planner + plan-checker complete
 
 - **17-01** (W1) — migration 0018 + `clarity-human-wait-repo` + engine field/priority-0 branch (D-07/D-08) + `founder-resolution` (D-06)
 - **17-04** (W1, Reader-only, parallel) — breadcrumb drop-mission + issues-only links (D-11/D-12) + ref-card de-coding (D-13)
-- **17-02** (W2) — the SC5 **single `applyStructuredWait` helper** + one `waitMap` prefetch + identical merge at all 3 root-meta sites + parity test (the BEAAA-972 anti-regression)
+- **17-02** (W2) — ✅ **COMPLETE 2026-06-11** — the SC5 **single `applyStructuredWait` helper** (`src/worker/situation/apply-structured-wait.ts`) + one per-company `waitMap` prefetch (degrade-safe; enhancement-not-prerequisite) threaded into both SR builders + IDENTICAL merge at all 3 root-meta sites (Reader builds its OWN per-request waitMap; SR backlog merges via a clone-safe `mergeRootWait` since `buildEdges` writes no root entry) + widened parity test. `tsc --noEmit` clean; 1300/1300 worker+shared tests pass. WAIT-02/03/04 ✅. Commits c750e0f, 0e055c7, 045c647.
 - **17-03** (W2) — Editor-Agent high-precision detection (D-03) + upsert/self-clear (D-04) + `polishTldr` voice (D-05)
 - **17-05** (W3) — SC5 full matrix: structured-wait-wins + 4 surfaces × 8 kinds; determinism + AI-token purity guards stay green
 - **17-06** (W4, `autonomous:false`) — two-source bump **1.5.1 → 1.6.0** + rebuild + bookended live BEAAA reinstall & no-storm/needs-you drill
 
-**Next action:** `/gsd:execute-phase 17`. `/clear` first for a fresh context window (resume-work restores from HANDOFF.json if needed). The #1 landmine the executor must respect: the SC5 single-shared-helper parity (17-02) — no write site may merge the wait independently, or it reproduces the exact BEAAA-972 cross-surface divergence this phase exists to kill.
+**Next action:** continue `/gsd:execute-phase 17` — Wave 2 plan **17-03** (Editor-Agent high-precision detection + upsert/self-clear + `polishTldr` voice) is next; it WRITES the `clarity_human_waits` rows that 17-02's three merge sites now consume. Plans 17-01, 17-02, 17-04 are complete (3 of 6 SUMMARYs on disk). The SC5 single-shared-helper parity landmine is now CLOSED by construction (17-02): all three root-meta sites delegate to the one `applyStructuredWait` helper, pinned by the widened `flatten-blocker-chain-parity.test.mjs` same-shape assertion.
 
 ## ▶ Phase 16.1 — LOOP-07 gap plan READY 2026-06-09
 
@@ -711,7 +711,7 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 ## Current Position
 
 Phase: 17 (structured-human-wait-truthful-verdicts-centerpiece) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-06-10
 
@@ -1428,7 +1428,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 85%
+**Progress:** [█████████░] 88%
 
 ## Performance Metrics
 
@@ -1562,7 +1562,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-10T22:06:56.551Z
+**Last session:** 2026-06-10T22:22:42.573Z
 
 **Stopped at:** Phase 17 context gathered
 
