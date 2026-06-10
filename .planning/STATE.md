@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
-stopped_at: Phase 17 planned (6 plans, plan-checker PASS)
-last_updated: "2026-06-10T18:46:44.222Z"
+stopped_at: Phase 17 context gathered
+last_updated: "2026-06-10T21:54:14.034Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 12
   completed_phases: 6
   total_plans: 40
-  completed_plans: 32
+  completed_plans: 33
   percent: 50
 ---
 
@@ -21,6 +21,7 @@ progress:
 The v1.5.0 CENTERPIECE. Research + pattern-map + planner + plan-checker complete. RESEARCH.md confirmed the work is **composition, not invention**: the engine change is two optional `nodeMeta` fields + ONE leaf-cascade branch (~`blocker-chain.ts:305`) reusing `AWAITING_HUMAN` (no 9th kind, no AI in the engine); migration **0018** mirrors `0015_action_cards`; the Editor-Agent populator rides the existing Phase-16.1 heartbeat (no new wake path). D-12 host-route question RESOLVED: only `/<companyPrefix>/issues/<id>` routes — goals/projects render as plain text (zero dead links).
 
 **6 plans, 4 waves** (plan-checker PASS, all 12 dimensions):
+
 - **17-01** (W1) — migration 0018 + `clarity-human-wait-repo` + engine field/priority-0 branch (D-07/D-08) + `founder-resolution` (D-06)
 - **17-04** (W1, Reader-only, parallel) — breadcrumb drop-mission + issues-only links (D-11/D-12) + ref-card de-coding (D-13)
 - **17-02** (W2) — the SC5 **single `applyStructuredWait` helper** + one `waitMap` prefetch + identical merge at all 3 root-meta sites + parity test (the BEAAA-972 anti-regression)
@@ -705,12 +706,12 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 16.1 — editor-agent-loop-elimination-wake-governor
+**Current Focus:** Phase 17 — structured-human-wait-truthful-verdicts-centerpiece
 
 ## Current Position
 
-Phase: 16.1 (editor-agent-loop-elimination-wake-governor) — EXECUTING
-Plan: 3 of 7
+Phase: 17 (structured-human-wait-truthful-verdicts-centerpiece) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
 Last activity: 2026-06-10
 
@@ -1427,7 +1428,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 91%
+**Progress:** [████████░░] 83%
 
 ## Performance Metrics
 
@@ -1466,6 +1467,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 16.1 P04 | 31m | 2 tasks | 12 files |
 | Phase 16.1 P05 | ~30m | 3 tasks | 3 files |
 | Phase 16.1 P07 | ~30m | 3 tasks | 8 files (1 created) — LOOP-07 gap closure: governed requestWakeup at op-issue creation; suite 2702 pass / 7 pre-existing-fail; v1.5.0→1.5.1 |
+| Phase 17 P01 | ~25m | 3 tasks | 5 files (4 created) — WAIT-01/02/03 foundation: additive clarity_human_waits table (migration 0018) + repo, priority-0 AWAITING_HUMAN engine branch (D-07 wins over agent; D-08 reuses kind), generic founder resolver; 28/28 engine+verdict tests pass (determinism + AI-token purity green); commits 1de5f0b/14c221c/d4cad98/3ac0f35 |
 
 ## Accumulated Context
 

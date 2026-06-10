@@ -109,7 +109,7 @@ Plans:
   4. The SC5 cross-surface consistency guard is extended into a FULL matrix — every surface × every terminal kind reads one consistent verdict — and `blocker-chain.ts` stays pure (determinism + AI-token grep guards pass; no AI introduced into the engine).
 **Plans**: 6 plans
 Plans:
-- [ ] 17-01-PLAN.md — Wave 1: foundation — migration 0018 + clarity-human-wait-repo + engine nodeMeta fields/priority-0 leaf branch (D-07/D-08) + generic founder resolution + engine verdict test
+- [x] 17-01-PLAN.md — Wave 1: foundation — migration 0018 + clarity-human-wait-repo + engine nodeMeta fields/priority-0 leaf branch (D-07/D-08) + generic founder resolution + engine verdict test
 - [ ] 17-02-PLAN.md — Wave 2: SC5 single shared applyStructuredWait helper + per-company waitMap prefetch + identical merge at all three root-meta write sites + parity test (the BEAAA-972 anti-regression)
 - [ ] 17-03-PLAN.md — Wave 2: Editor-Agent high-precision human-wait detection (D-03) riding the existing heartbeat governance; upsert/self-clear (D-04); polishTldr voice (D-05); no new wake path
 - [ ] 17-04-PLAN.md — Wave 1: Reader fold-ins — breadcrumb drop mission goal + link-only-routable (D-11/D-12) + ref-card lead plain-English/demote codes (D-13)
@@ -261,7 +261,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
 | 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 7/7 | Complete   | 2026-06-10 |
-| 17. Structured human-wait + truthful verdicts | 0/6 | Not started | - |
+| 17. Structured human-wait + truthful verdicts | 1/6 | In Progress|  |
 | 18. No rabbit-holes & plain-English | 0/TBD | Not started | - |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
 | 20. Hygiene & honestly-green CI | 0/TBD | Not started | - |
