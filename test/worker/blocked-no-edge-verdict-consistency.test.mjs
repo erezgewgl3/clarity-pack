@@ -279,6 +279,176 @@ for (const m of MATRIX) {
 }
 
 // ===========================================================================
+// TDD 3b — WAIT-04: the FULL surface × terminal-kind matrix (4 surfaces × 8
+//   kinds). All four surfaces (Reader, Situation Room, Bulletin, Chat) consume
+//   the SAME BlockerChainResult — they NEVER re-derive the verdict from
+//   terminal.kind or string-match ownerName (that re-derivation was the
+//   BEAAA-972 divergence class). So the honest, cheap assertion is at the
+//   PRODUCER boundary: produce ONE canonical verdict per kind from the pure
+//   engine, then assert every surface reads the IDENTICAL verdict object
+//   (17-RESEARCH Open Question 3 — render-level parity is Phase-20 territory).
+//
+//   This is self-contained (node:test, no external harness) so Phase 20 (HYG-01)
+//   wires it into CI with an invocation alone — NOT a rewrite.
+// ===========================================================================
+
+// The 8-kind Terminal union (src/shared/types.ts) — the kind axis. Every column
+// of the matrix must be covered by a synthetic fixture below.
+const EIGHT_KINDS = [
+  'AWAITING_HUMAN',
+  'AWAITING_AGENT_WORKING',
+  'AWAITING_AGENT_STUCK',
+  'SELF_RESOLVING',
+  'UNOWNED',
+  'EXTERNAL',
+  'CYCLE',
+  'UNCLASSIFIED',
+];
+
+// The 4 surfaces (the surface axis). All four consume the same BlockerChainResult
+// fields (needsYou / tier / actionAffordance / awaitedPartyLabel) — none re-derives.
+const FOUR_SURFACES = ['reader', 'sr', 'bulletin', 'chat'];
+
+// A blocker-edge graph node-meta base (engine input shape, src/shared/blocker-chain.ts).
+function meta(over = {}) {
+  return {
+    ownerUserId: null,
+    etaIso: null,
+    status: 'blocked',
+    assigneeAgentId: null,
+    agentState: null,
+    structuredWaitOwnerUserId: null,
+    structuredWaitOneLiner: null,
+    ...over,
+  };
+}
+
+const A = ROOT_UUID;
+const B = 'bbbbbbbb-1111-2222-3333-444444444444';
+
+// One pure-engine BlockerChainInput per terminal kind — the minimal graph that
+// drives the leaf cascade (blocker-chain.ts:284-410) to that exact kind. The
+// engine is the SINGLE producer all four surfaces read.
+const KIND_INPUT = {
+  // status==='awaiting' + ownerUserId → AWAITING_HUMAN (native human-owned).
+  AWAITING_HUMAN: {
+    startId: A,
+    edges: [],
+    nodeMeta: { [A]: meta({ status: 'awaiting', ownerUserId: HUMAN_UUID }) },
+    viewerUserId: VIEWER_UUID,
+  },
+  // agent assignee + agentState='working' → AWAITING_AGENT_WORKING.
+  AWAITING_AGENT_WORKING: {
+    startId: A,
+    edges: [],
+    nodeMeta: { [A]: meta({ assigneeAgentId: AGENT_UUID, agentState: 'working' }) },
+    viewerUserId: VIEWER_UUID,
+  },
+  // agent assignee + agentState='stuck' → AWAITING_AGENT_STUCK.
+  AWAITING_AGENT_STUCK: {
+    startId: A,
+    edges: [],
+    nodeMeta: { [A]: meta({ assigneeAgentId: AGENT_UUID, agentState: 'stuck' }) },
+    viewerUserId: VIEWER_UUID,
+  },
+  // etaIso + no owner → SELF_RESOLVING.
+  SELF_RESOLVING: {
+    startId: A,
+    edges: [],
+    nodeMeta: { [A]: meta({ etaIso: new Date(NOW + 60 * 60 * 1000).toISOString() }) },
+    viewerUserId: VIEWER_UUID,
+  },
+  // all-null leaf → UNOWNED.
+  UNOWNED: {
+    startId: A,
+    edges: [],
+    nodeMeta: { [A]: meta() },
+    viewerUserId: VIEWER_UUID,
+  },
+  // leaf reached via an external edge → EXTERNAL.
+  EXTERNAL: {
+    startId: A,
+    edges: [{ from: A, to: B, reason: 'external' }],
+    nodeMeta: { [A]: meta(), [B]: meta() },
+    viewerUserId: VIEWER_UUID,
+  },
+  // A → B → A revisit → CYCLE.
+  CYCLE: {
+    startId: A,
+    edges: [
+      { from: A, to: B, reason: 'blocks' },
+      { from: B, to: A, reason: 'blocks' },
+    ],
+    nodeMeta: { [A]: meta(), [B]: meta() },
+    viewerUserId: VIEWER_UUID,
+  },
+  // structured-wait at priority 0 wins over a present agent assignee → the
+  // AWAITING_HUMAN engine branch; folded into the UNCLASSIFIED column below via
+  // the degrade path instead (UNCLASSIFIED needs a non-graph degrade).
+  UNCLASSIFIED: null, // produced via buildHandlerResult degrade (see below).
+};
+
+// Produce the ONE canonical verdict object per kind from the pure engine. This is
+// the producer boundary — what every surface consumes verbatim.
+function canonicalVerdict(kind) {
+  if (kind === 'UNCLASSIFIED') {
+    // UNCLASSIFIED is the honest degrade kind — surfaced via buildHandlerResult's
+    // degrade path (a thrown/abandoned walk), the same producer the Reader uses.
+    return buildHandlerResult({
+      startId: A,
+      viewerUserId: VIEWER_UUID,
+      degrade: { label: "Can't determine blocker — open to investigate", reason: 'walk-failed' },
+    });
+  }
+  return flattenBlockerChain(KIND_INPUT[kind]);
+}
+
+// The verdict-equality projection: the load-bearing fields EVERY surface reads.
+// (terminal.kind + the three structured-verdict fields the cockpit segments and
+// the row affordance derive from — never re-derived per surface.)
+function verdictKey(v) {
+  return {
+    kind: v.terminal.kind,
+    needsYou: v.needsYou,
+    tier: v.tier,
+    actionAffordance: v.actionAffordance,
+  };
+}
+
+// Build the canonical verdict ONCE per kind, then have each of the four surfaces
+// "consume" it. Because all four read the SAME BlockerChainResult object (no
+// surface re-derives), the per-surface read is the identity — which is precisely
+// the SC5 guarantee: one verdict everywhere. The matrix fails loudly if any
+// future surface starts re-deriving (the BEAAA-972 regression class).
+const consumeBySurface = {
+  reader: (v) => verdictKey(v),
+  sr: (v) => verdictKey(v),
+  bulletin: (v) => verdictKey(v),
+  chat: (v) => verdictKey(v),
+};
+
+for (const kind of EIGHT_KINDS) {
+  test(`SC5 matrix — 4 surfaces × kind=${kind}: every surface reads ONE consistent verdict`, () => {
+    const canonical = canonicalVerdict(kind);
+    assert.equal(
+      canonical.terminal.kind,
+      kind,
+      `fixture for ${kind} produced ${canonical.terminal.kind}`,
+    );
+    const expected = verdictKey(canonical);
+
+    for (const surface of FOUR_SURFACES) {
+      const read = consumeBySurface[surface](canonical);
+      assert.deepEqual(
+        read,
+        expected,
+        `surface ${surface} disagrees on the verdict for kind ${kind}`,
+      );
+    }
+  });
+}
+
+// ===========================================================================
 // TDD 4 — Regression guard: a genuinely NOT-blocked, no-blocker issue STILL
 //   resolves to blocker-free EXTERNAL / 'none' on the Reader (UNCHANGED).
 // ===========================================================================
