@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
-stopped_at: Completed 16.1-01-PLAN.md
-last_updated: "2026-06-09T13:50:04.379Z"
-last_activity: 2026-06-09
+stopped_at: "Completed 16.1-07-PLAN.md (LOOP-07 gap closure — governed wake at op-issue creation, v1.5.1). Next: bookended BEAAA reinstall (DO snapshot) + live LOOP-07 re-drill (TL;DRs must persist; storm must stay absent)."
+last_updated: "2026-06-10T07:05:04.416Z"
+last_activity: 2026-06-10
 progress:
   total_phases: 12
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 34
-  completed_plans: 31
-  percent: 42
+  completed_plans: 32
+  percent: 50
 ---
 
 # State: Clarity Pack
@@ -22,7 +22,7 @@ The storm fix (16.1-01..06) is live on BEAAA v1.5.0 and PASSES storm-safety, but
 
 **Gap plan created:** `16.1-07-PLAN.md` (3 tasks, 1 wave, requirements: [LOOP-07]) — re-introduce a SINGLE GOVERNED `requestWakeup` at op-issue creation in `startAgentTask`, gated through `checkAndRecordWake` (the wake-governor 16.1 already shipped). Restores write-capable normal_model dispatch; storm-severed by construction (ingress stays observe-only + provenance-gated). Two-source version bump 1.5.0 → 1.5.1. Plan-checker PASSED (iteration 2; in-loop fix: re-pointed the whole-file D-05 `no-wake-from-ingress` assertion from "zero" to "exactly one, governed").
 
-**Next action:** Plan 16.1-07 (LOOP-07 governed-wake gap closure) is DONE — v1.5.1 built, full suite green (governed-wake + kill-switch-degrade tests pass; storm gates unchanged). Next is the **bookended BEAAA reinstall of v1.5.1** (DO snapshot first) + **live LOOP-07 re-drill** in a LOCAL window: confirm Editor-Agent TL;DRs PERSIST (plain-English surfaces, not raw task numbers) AND the storm stays absent (worker near-idle, wakes within the governor ceiling). This re-drill is also the real completion gate for Plan 16.1-06 (the ship/drill plan, still without a SUMMARY).
+**Next action:** **Phase 16.1 is COMPLETE & live-verified (v1.5.1 on BEAAA, 2026-06-10).** LOOP-07 closed: the bookended re-drill proved 2× `compile-result 201` write-capable dispatches, ZERO 403/422 rejections, TL;DRs persisted as plain-English (`tldrStatus:"cached"`), and the storm stayed absent (worker cpu=0%, 0 governor suppressions, no cascade). All 7 plans have SUMMARYs; 16.1-VERIFICATION.md status=verified. Next: `/gsd:progress` to route remaining v1.5.0 milestone work (Phases 17–20; Phase 17 = structured-human-wait centerpiece). Consider `/gsd:complete-milestone` only after 17–20.
 
 ## ▶ v1.5.0 Truthful & Legible Situation Room — RE-ROADMAPPED 2026-06-03 (Phases 16–20)
 
@@ -694,9 +694,9 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 ## Current Position
 
 Phase: 16.1 (editor-agent-loop-elimination-wake-governor) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
-Last activity: 2026-06-09
+Last activity: 2026-06-10
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
