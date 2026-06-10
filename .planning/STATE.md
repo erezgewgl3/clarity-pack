@@ -4,13 +4,13 @@ milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
 stopped_at: Phase 17 context gathered
-last_updated: "2026-06-10T22:24:26.735Z"
+last_updated: "2026-06-10T22:37:10.328Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 12
   completed_phases: 6
   total_plans: 40
-  completed_plans: 35
+  completed_plans: 36
   percent: 50
 ---
 
@@ -25,11 +25,11 @@ The v1.5.0 CENTERPIECE. Research + pattern-map + planner + plan-checker complete
 - **17-01** (W1) — migration 0018 + `clarity-human-wait-repo` + engine field/priority-0 branch (D-07/D-08) + `founder-resolution` (D-06)
 - **17-04** (W1, Reader-only, parallel) — breadcrumb drop-mission + issues-only links (D-11/D-12) + ref-card de-coding (D-13)
 - **17-02** (W2) — ✅ **COMPLETE 2026-06-11** — the SC5 **single `applyStructuredWait` helper** (`src/worker/situation/apply-structured-wait.ts`) + one per-company `waitMap` prefetch (degrade-safe; enhancement-not-prerequisite) threaded into both SR builders + IDENTICAL merge at all 3 root-meta sites (Reader builds its OWN per-request waitMap; SR backlog merges via a clone-safe `mergeRootWait` since `buildEdges` writes no root entry) + widened parity test. `tsc --noEmit` clean; 1300/1300 worker+shared tests pass. WAIT-02/03/04 ✅. Commits c750e0f, 0e055c7, 045c647.
-- **17-03** (W2) — Editor-Agent high-precision detection (D-03) + upsert/self-clear (D-04) + `polishTldr` voice (D-05)
+- **17-03** (W2) — ✅ **COMPLETE 2026-06-11** — Editor-Agent high-precision detection (D-03) + upsert/self-clear (D-04) + `polishTldr` voice (D-05). `detectAndPersistHumanWait` (`human-wait-detect.ts`) wired as a governed heartbeat sibling of the TL;DR compile (reuses the fetched comments; NO new wake path); new `human-wait-detect` OperationKind + `isResultComment` readback branch (GOTCHA 1 — else the poll hangs on the BulletinDraft validator); content-hash idempotency short-circuit; degrade-safe (not-ready poll / null founder / Editor down → no row → conservative floor). `tsc --noEmit` clean; 57/57 delivery+heartbeat+engine+parity tests pass. WAIT-01/WAIT-02 producer ✅. Commits d8ab989, faae261.
 - **17-05** (W3) — SC5 full matrix: structured-wait-wins + 4 surfaces × 8 kinds; determinism + AI-token purity guards stay green
 - **17-06** (W4, `autonomous:false`) — two-source bump **1.5.1 → 1.6.0** + rebuild + bookended live BEAAA reinstall & no-storm/needs-you drill
 
-**Next action:** continue `/gsd:execute-phase 17` — Wave 2 plan **17-03** (Editor-Agent high-precision detection + upsert/self-clear + `polishTldr` voice) is next; it WRITES the `clarity_human_waits` rows that 17-02's three merge sites now consume. Plans 17-01, 17-02, 17-04 are complete (3 of 6 SUMMARYs on disk). The SC5 single-shared-helper parity landmine is now CLOSED by construction (17-02): all three root-meta sites delegate to the one `applyStructuredWait` helper, pinned by the widened `flatten-blocker-chain-parity.test.mjs` same-shape assertion.
+**Next action:** continue `/gsd:execute-phase 17` — Wave 3 plan **17-05** (SC5 full matrix: structured-wait-wins + 4 surfaces × 8 kinds; determinism + AI-token purity guards stay green) is next. Plans 17-01, 17-02, 17-03, 17-04 are complete (4 of 6 SUMMARYs on disk). The structured-wait pipeline is now end-to-end: 17-03's producer (`detectAndPersistHumanWait`) WRITES the `clarity_human_waits` rows, 17-02's three merge sites (single `applyStructuredWait` helper) feed them into `nodeMeta`, and 17-01's priority-0 engine branch classifies them `AWAITING_HUMAN`. 17-05 verifies that verdict agrees across all four surfaces; 17-06 (autonomous:false) does the two-source bump + bookended live BEAAA drill.
 
 ## ▶ Phase 16.1 — LOOP-07 gap plan READY 2026-06-09
 
@@ -711,7 +711,7 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 ## Current Position
 
 Phase: 17 (structured-human-wait-truthful-verdicts-centerpiece) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-06-10
 
@@ -1428,7 +1428,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 88%
+**Progress:** [█████████░] 90%
 
 ## Performance Metrics
 
@@ -1469,6 +1469,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 16.1 P07 | ~30m | 3 tasks | 8 files (1 created) — LOOP-07 gap closure: governed requestWakeup at op-issue creation; suite 2702 pass / 7 pre-existing-fail; v1.5.0→1.5.1 |
 | Phase 17 P01 | ~25m | 3 tasks | 5 files (4 created) — WAIT-01/02/03 foundation: additive clarity_human_waits table (migration 0018) + repo, priority-0 AWAITING_HUMAN engine branch (D-07 wins over agent; D-08 reuses kind), generic founder resolver; 28/28 engine+verdict tests pass (determinism + AI-token purity green); commits 1de5f0b/14c221c/d4cad98/3ac0f35 |
 | Phase 17 P04 | 30m | 3 tasks | 3 files |
+| Phase 17 P03 | ~35m | 2 tasks | 3 files (1 created) — WAIT-01/02 producer: detectAndPersistHumanWait (high-precision detect D-03 + upsert/self-clear D-04 + polishTldr voice D-05) wired as a governed heartbeat sibling (no new wake path); human-wait-detect OperationKind + isResultComment readback branch (GOTCHA 1); 57/57 delivery+heartbeat+engine+parity tests pass; commits d8ab989/faae261 |
 
 ## Accumulated Context
 
@@ -1562,7 +1563,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-10T22:22:42.573Z
+**Last session:** 2026-06-10T22:37:10.302Z
 
 **Stopped at:** Phase 17 context gathered
 
