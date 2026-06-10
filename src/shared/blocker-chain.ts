@@ -35,6 +35,16 @@ export type BlockerChainInput = {
       // every pre-11-01 caller type-clean and falls through to UNOWNED.
       assigneeAgentId?: string | null;
       agentState?: 'working' | 'stuck' | null;
+      // Plan 17-01 (D-07) — founder user id when a structured human-wait exists
+      // for this node. When set, the leaf cascade emits AWAITING_HUMAN at
+      // priority 0, winning over status==='awaiting' AND assigneeAgentId. The
+      // worker (Plan 17-02 prefetch) injects this from the clarity_human_waits
+      // row; the engine reads it as a pure field. Optional + defaulting to null
+      // keeps every pre-17 caller type-clean exactly as assigneeAgentId? does.
+      structuredWaitOwnerUserId?: string | null;
+      // Plan 17-01 (D-05) — the polished decision one-liner for the
+      // AWAITING_HUMAN label ("<owner> to decide: <one-liner>"). Optional.
+      structuredWaitOneLiner?: string | null;
     }
   >;
   viewerUserId: string;
@@ -299,6 +309,22 @@ export function flattenBlockerChain(input: BlockerChainInput): BlockerChainResul
         const terminal: Terminal = {
           kind: 'EXTERNAL',
           label: `External (${current})`,
+        };
+        return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
+      }
+      // Plan 17-01 (D-07) — a STRUCTURED human-wait beats BOTH status==='awaiting'
+      // AND assigneeAgentId. The Editor-Agent named the actual decision awaiting a
+      // specific person; that is the truthful needs-you (the core BEAAA-972 fix).
+      // It ranks at priority 0 — ABOVE the native awaiting branch below. D-08:
+      // REUSE the existing AWAITING_HUMAN kind (no 9th kind), so classifyVerdict /
+      // pickTopChains / the Terminal union are untouched. Pure field reads only.
+      if (meta?.structuredWaitOwnerUserId != null) {
+        const terminal: Terminal = {
+          kind: 'AWAITING_HUMAN',
+          userId: meta.structuredWaitOwnerUserId,
+          label: meta.structuredWaitOneLiner
+            ? `${meta.structuredWaitOwnerUserId} to decide: ${meta.structuredWaitOneLiner}`
+            : `${meta.structuredWaitOwnerUserId} to act on ${current}`,
         };
         return makeResult({ startId: input.startId, pathIds, terminal, isStale: false, leafId: current });
       }
