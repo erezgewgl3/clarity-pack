@@ -31,12 +31,14 @@ import {
   buildHandlerResult,
 } from '../../src/worker/handlers/flatten-blocker-chain.ts';
 import { buildEmployeesRollup } from '../../src/worker/situation/build-employees-rollup.ts';
+import { flattenBlockerChain } from '../../src/shared/blocker-chain.ts';
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 const ROOT_UUID = '99999999-7777-2222-3333-444444444444';
 const AGENT_UUID = 'ffffffff-1111-2222-3333-444444444444';
 const HUMAN_UUID = 'aaaaaaaa-1111-2222-3333-555555555555';
+const FOUNDER_UUID = 'cccccccc-9999-8888-7777-666666666666';
 const VIEWER_UUID = 'dddddddd-aaaa-bbbb-cccc-eeeeeeeeeeee';
 const NOW = Date.now();
 
@@ -60,7 +62,7 @@ function makeReaderIssues({ root, relations = {} }) {
 // Situation-Room-path ctx (EmployeesRollupCtx): agents.list + issues.list +
 // issues.get + issues.relations.get + agents.get.
 // ---------------------------------------------------------------------------
-function makeRollupCtx({ root }) {
+function makeRollupCtx({ root, waitMap = null }) {
   // STALE heartbeat (>10 min = 2x the 5-min running window) so the rollup
   // classifies state='blocked' (a fresh heartbeat would be 'running' and skip the
   // blocker-chain build). A stale heartbeat also resolves agentState='stuck' →
@@ -73,6 +75,12 @@ function makeRollupCtx({ root }) {
   };
   return {
     logger: { warn() {}, info() {} },
+    // Plan 17-05 Task 1 (WAIT-03 / D-07) — the per-company structured-wait map the
+    // Situation Room threads through its prefetch (17-02). build-employees-rollup
+    // reads ctx.waitMap and calls the SHARED applyStructuredWait merge, so feeding
+    // it here exercises the REAL 17-02 merge path (not a hand-set nodeMeta field).
+    // null on the existing cases (no wait) → conservative engine floor unchanged.
+    waitMap: waitMap ?? undefined,
     issues: {
       async list(input) {
         // The agent's only open issue is the blocked root.
@@ -96,7 +104,8 @@ function makeRollupCtx({ root }) {
       },
       async get(uuid) {
         if (uuid === AGENT_UUID) return { name: 'Drill Agent' };
-        if (uuid === HUMAN_UUID) return { name: 'Eric' };
+        if (uuid === HUMAN_UUID) return { name: 'Operator' };
+        if (uuid === FOUNDER_UUID) return { name: 'Founder' };
         return null;
       },
     },
@@ -116,6 +125,32 @@ function blockedAgentOwnedRoot() {
     lastActivityAt: new Date(NOW - 30 * 60 * 1000).toISOString(),
     lastHeartbeatAt: new Date(NOW - 60 * 1000).toISOString(),
   };
+}
+
+// Plan 17-05 Task 1 (WAIT-03 / D-07) — a blocked root that carries BOTH a present
+// agent assignee AND a structured human-wait (a clarity_human_waits row whose
+// owner is the founder). The structured wait MUST WIN → AWAITING_HUMAN; the agent
+// assignee must NOT hide the human decision. This is the core BEAAA-972 fix.
+//
+// The root reuses blockedAgentOwnedRoot() so the agent assignee is unambiguously
+// present (assigneeAgentId = AGENT_UUID, stale heartbeat → would resolve to
+// AWAITING_AGENT_STUCK on its own — the wait has to override that).
+function blockedWithStructuredWaitRoot() {
+  return blockedAgentOwnedRoot();
+}
+
+// The per-company structured-wait map keyed by issue_id, in the SAME shape the
+// 17-02 prefetch / Reader build produces ({ owner_user_id, decision_one_liner }
+// — a subset of ClarityHumanWaitRow). Feeding this through walkBlockerChain
+// (Reader) and ctx.waitMap (SR rollup) exercises the REAL applyStructuredWait
+// merge helper at both write sites, not a hand-set nodeMeta field.
+function structuredWaitMap() {
+  return new Map([
+    [
+      ROOT_UUID,
+      { owner_user_id: FOUNDER_UUID, decision_one_liner: 'Approve the auth-service cutover window' },
+    ],
+  ]);
 }
 
 // ===========================================================================
@@ -190,16 +225,32 @@ const MATRIX = [
     }),
     expectKind: 'UNOWNED',
   },
+  // Plan 17-05 Task 1 (WAIT-03 / D-07) — the 4th blocked-no-edge class: a
+  // structured human-wait that WINS even though an agent assignee is present.
+  // `waitMap` is threaded into BOTH paths so the REAL applyStructuredWait merge
+  // (17-02) runs; the engine's priority-0 branch (17-01) emits AWAITING_HUMAN.
+  {
+    name: 'structured-human-wait (wins over agent assignee)',
+    root: () => blockedWithStructuredWaitRoot(),
+    waitMap: () => structuredWaitMap(),
+    expectKind: 'AWAITING_HUMAN',
+  },
 ];
 
 for (const m of MATRIX) {
   test(`SC5 consistency — ${m.name}: Reader path === Situation-Room path === ${m.expectKind}`, async () => {
     const rootR = m.root();
     const rootSR = m.root();
+    // Two independent maps so neither path can accidentally share mutable state
+    // (mirrors production: the Reader builds its own waitMap; the SR threads the
+    // prefetched one). undefined on the non-wait cases → conservative floor.
+    const waitMapR = m.waitMap ? m.waitMap() : undefined;
+    const waitMapSR = m.waitMap ? m.waitMap() : null;
 
-    // Reader path.
+    // Reader path. Thread the waitMap as the 4th walkBlockerChain arg exactly as
+    // the Reader handler does (the merge is the shared applyStructuredWait).
     const issues = makeReaderIssues({ root: rootR });
-    const walk = await walkBlockerChain(issues, 'co-1', ROOT_UUID);
+    const walk = await walkBlockerChain(issues, 'co-1', ROOT_UUID, waitMapR);
     const readerResult = buildHandlerResult({
       startId: ROOT_UUID,
       viewerUserId: VIEWER_UUID,
@@ -209,7 +260,9 @@ for (const m of MATRIX) {
     // Situation-Room path — the REAL production path (buildEmployeesRollup is
     // where the root-meta injection lives, mirroring walkBlockerChain). The
     // emitted row's blockerChain.terminalKind is the SR verdict for this issue.
-    const srCtx = makeRollupCtx({ root: rootSR });
+    // ctx.waitMap is threaded by the prefetch (17-02); feed it here so the SR
+    // merge fires through the same shared helper.
+    const srCtx = makeRollupCtx({ root: rootSR, waitMap: waitMapSR });
     const { employees } = await buildEmployeesRollup(srCtx, 'co-1', VIEWER_UUID);
     const srRow = employees.find((e) => e.blockerChain != null);
     assert.ok(srRow, `Situation-Room produced a blockerChain row for ${m.name}`);
