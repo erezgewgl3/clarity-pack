@@ -3,18 +3,32 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
-stopped_at: Phase 17 context gathered
+stopped_at: Phase 17 planned (6 plans, plan-checker PASS)
 last_updated: "2026-06-10T18:46:44.222Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 12
   completed_phases: 6
-  total_plans: 34
+  total_plans: 40
   completed_plans: 32
   percent: 50
 ---
 
 # State: Clarity Pack
+
+## ▶ Phase 17 — PLANNED 2026-06-10 (6 plans, plan-checker PASS)
+
+The v1.5.0 CENTERPIECE. Research + pattern-map + planner + plan-checker complete. RESEARCH.md confirmed the work is **composition, not invention**: the engine change is two optional `nodeMeta` fields + ONE leaf-cascade branch (~`blocker-chain.ts:305`) reusing `AWAITING_HUMAN` (no 9th kind, no AI in the engine); migration **0018** mirrors `0015_action_cards`; the Editor-Agent populator rides the existing Phase-16.1 heartbeat (no new wake path). D-12 host-route question RESOLVED: only `/<companyPrefix>/issues/<id>` routes — goals/projects render as plain text (zero dead links).
+
+**6 plans, 4 waves** (plan-checker PASS, all 12 dimensions):
+- **17-01** (W1) — migration 0018 + `clarity-human-wait-repo` + engine field/priority-0 branch (D-07/D-08) + `founder-resolution` (D-06)
+- **17-04** (W1, Reader-only, parallel) — breadcrumb drop-mission + issues-only links (D-11/D-12) + ref-card de-coding (D-13)
+- **17-02** (W2) — the SC5 **single `applyStructuredWait` helper** + one `waitMap` prefetch + identical merge at all 3 root-meta sites + parity test (the BEAAA-972 anti-regression)
+- **17-03** (W2) — Editor-Agent high-precision detection (D-03) + upsert/self-clear (D-04) + `polishTldr` voice (D-05)
+- **17-05** (W3) — SC5 full matrix: structured-wait-wins + 4 surfaces × 8 kinds; determinism + AI-token purity guards stay green
+- **17-06** (W4, `autonomous:false`) — two-source bump **1.5.1 → 1.6.0** + rebuild + bookended live BEAAA reinstall & no-storm/needs-you drill
+
+**Next action:** `/gsd:execute-phase 17`. `/clear` first for a fresh context window (resume-work restores from HANDOFF.json if needed). The #1 landmine the executor must respect: the SC5 single-shared-helper parity (17-02) — no write site may merge the wait independently, or it reproduces the exact BEAAA-972 cross-surface divergence this phase exists to kill.
 
 ## ▶ Phase 16.1 — LOOP-07 gap plan READY 2026-06-09
 

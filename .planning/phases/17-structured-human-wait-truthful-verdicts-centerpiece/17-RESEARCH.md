@@ -464,22 +464,25 @@ For D-06, run the inverse: `SELECT owner_user_id FROM plugin_clarity_pack_cdd6bd
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Primary-human tie-break when multiple owners exist for a company.**
    - What we know: `clarity_agent_owners` can hold multiple `(agent_id, owner_user_id)` rows per company.
    - What's unclear: which `owner_user_id` is "the founder" if two distinct humans claimed agents.
    - Recommendation: for v1.5.0 single-operator, pick the distinct owner (there is one); if >1, take the earliest `set_at` or the most-frequent. Planner decides; document the rule. Low risk on BEAAA (solo).
+   - **RESOLVED (plan 17-01/T3):** deterministic solo-operator default — take the single owner; if >1 distinct `owner_user_id`, pick earliest `set_at` (else lexicographically smallest), documented in a code comment in `founder-resolution.ts`.
 
 2. **Staleness sweep cadence for D-04 self-clear.**
    - What we know: re-derive each compile clears a wait when the Editor revisits the issue.
    - What's unclear: an issue the Editor never revisits (no new comments) could strand a wait.
    - Recommendation: add a TTL on read (treat a wait older than N minutes as expired) OR a per-company sweep in the prefetch. Mirror `WARM_FRESHNESS_WINDOW_MS`.
+   - **RESOLVED (plan 17-03/T1):** detection rides the existing heartbeat with a `content_hash` cache-hit short-circuit (mirrors `prepareTldrCompile`); self-clear on negative/non-blocked re-derive; the un-revisited-issue sweep follows the `WARM_FRESHNESS_WINDOW_MS` pattern already in `editor.ts:427`.
 
 3. **SC5 matrix encoding for the Bulletin + Chat surfaces.**
    - What we know: Reader + SR are exercised today via their worker builders; Bulletin/Chat read the same verdict object.
    - What's unclear: whether to assert at the verdict-object boundary (cheap, recommended) or render each UI.
    - Recommendation: assert `BlockerChainResult` equality at the producer boundary for all 4 surfaces (they all consume the same engine output) — render-level tests are heavier and Phase-20-territory.
+   - **RESOLVED (plan 17-05/T2):** assert verdict-object equality at the PRODUCER boundary for all 4 surfaces; render-level coverage deferred to Phase 20's CI codification (matches D-10).
 
 ---
 
