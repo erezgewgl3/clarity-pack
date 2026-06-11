@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
-status: executing
-stopped_at: Phase 17 context gathered
-last_updated: "2026-06-10T22:43:48.725Z"
-last_activity: 2026-06-10
+status: phase-17-complete
+stopped_at: Phase 17 COMPLETE — v1.6.0 live on BEAAA, verified-with-rider
+last_updated: "2026-06-11T08:14:52.141Z"
+last_activity: 2026-06-11
 progress:
   total_phases: 12
-  completed_phases: 6
+  completed_phases: 8
   total_plans: 40
-  completed_plans: 37
-  percent: 50
+  completed_plans: 40
+  percent: 67
 ---
 
 # State: Clarity Pack
@@ -27,9 +27,13 @@ The v1.5.0 CENTERPIECE. Research + pattern-map + planner + plan-checker complete
 - **17-02** (W2) — ✅ **COMPLETE 2026-06-11** — the SC5 **single `applyStructuredWait` helper** (`src/worker/situation/apply-structured-wait.ts`) + one per-company `waitMap` prefetch (degrade-safe; enhancement-not-prerequisite) threaded into both SR builders + IDENTICAL merge at all 3 root-meta sites (Reader builds its OWN per-request waitMap; SR backlog merges via a clone-safe `mergeRootWait` since `buildEdges` writes no root entry) + widened parity test. `tsc --noEmit` clean; 1300/1300 worker+shared tests pass. WAIT-02/03/04 ✅. Commits c750e0f, 0e055c7, 045c647.
 - **17-03** (W2) — ✅ **COMPLETE 2026-06-11** — Editor-Agent high-precision detection (D-03) + upsert/self-clear (D-04) + `polishTldr` voice (D-05). `detectAndPersistHumanWait` (`human-wait-detect.ts`) wired as a governed heartbeat sibling of the TL;DR compile (reuses the fetched comments; NO new wake path); new `human-wait-detect` OperationKind + `isResultComment` readback branch (GOTCHA 1 — else the poll hangs on the BulletinDraft validator); content-hash idempotency short-circuit; degrade-safe (not-ready poll / null founder / Editor down → no row → conservative floor). `tsc --noEmit` clean; 57/57 delivery+heartbeat+engine+parity tests pass. WAIT-01/WAIT-02 producer ✅. Commits d8ab989, faae261.
 - **17-05** (W3) — ✅ **COMPLETE 2026-06-11** — SC5 full matrix. Extended `test/worker/blocked-no-edge-verdict-consistency.test.mjs` from 3 cases × 2 surfaces to a 4th `structured-human-wait → AWAITING_HUMAN` case that WINS over a present agent assignee (D-07), fed through the REAL 17-02 merge path (waitMap → `walkBlockerChain` / `ctx.waitMap`), PLUS a table-driven 4-surface (reader/sr/bulletin/chat) × 8-kind matrix asserting one consistent verdict per cell at the producer boundary (render parity = Phase 20). Test-only: `blocker-chain.ts` untouched; determinism + AI-token purity guards green. 16/16 verdict-consistency + 21/21 engine-purity pass. WAIT-03/WAIT-04 ✅. Commits a7a362a, 7c595c7.
-- **17-06** (W4, `autonomous:false`) — two-source bump **1.5.1 → 1.6.0** + rebuild + bookended live BEAAA reinstall & no-storm/needs-you drill
+- **17-06** (W4, `autonomous:false`) — ✅ **COMPLETE 2026-06-11** — two-source bump **1.5.1 → 1.6.0** (package.json + src/manifest.ts byte-identical, dist/manifest.js carries it) + clean rebuild + **live BEAAA reinstall** (`status=ready version=1.6.0`, migration 0018 accepted) + live drill. Task 1 (green gate + bump + rebuild) and Task 2 (bookended live install) complete; Task 3 (drill) **PARTIAL** — no-storm + no-false-positive + Reader-foldins(worker) PASS live, the live-POSITIVE structured-wait demo deferred (env-gated, code-proven by 17-05). fail2ban tripped mid-upload → waited out + redeployed single-connection. Commits a7ead17, + SUMMARY/VERIFICATION docs.
 
-**Next action:** continue `/gsd:execute-phase 17` — Wave 4 plan **17-06** (`autonomous:false`: two-source version bump + rebuild + bookended live BEAAA reinstall & no-storm/needs-you drill) is the LAST plan. Plans 17-01..17-05 are complete (5 of 6 SUMMARYs on disk). The structured-wait pipeline is end-to-end AND verdict-consistent: 17-03's producer (`detectAndPersistHumanWait`) WRITES the `clarity_human_waits` rows, 17-02's three merge sites (single `applyStructuredWait` helper) feed them into `nodeMeta`, 17-01's priority-0 engine branch classifies them `AWAITING_HUMAN`, and 17-05's full 4×8 matrix pins every surface to one verdict (anti-regression for the BEAAA-972 class). 17-06 does the two-source bump + bookended live BEAAA drill.
+**Phase 17 VERDICT (gsd-verifier, independent suite run 44/44 + 4/4 parity):** WAIT-01..04 = **4/4 verified in codebase**, no code gaps, status `verified-with-rider`. 17-VERIFICATION.md on disk. The centerpiece — one structured needs-you signal consistent across all four surfaces by construction (the deep BEAAA-972 fix) — is fully present and live.
+
+**Open rider (human verification, NOT a code gap):** demonstrate a live POSITIVE structured-wait reading needs-you on all four surfaces. Deferred because (a) the historical BEAAA-972 has moved out of a blocked-awaiting state on the live org, (b) surfaces are per-user opt-in gated (`editor.pause-status`→OPT_IN_REQUIRED for the pseudo-user), and (c) the Editor detector only wakes via the 16.1-governed path on op-issue activity (correctly dormant on a quiet queue, worker 0% CPU). Re-drill from Eric's opted-in browser session when a current issue is genuinely blocked on his decision (or he authorizes seeding one).
+
+**Next action:** Phase 17 (v1.5.0 centerpiece) is complete and live. Route remaining v1.5.0 work with `/gsd:progress` — next is **Phase 18** (LEG — legible-for-non-builders, consumes Phase 17's truthful verdicts; "Open ↗" routes to the Clarity Reader, no raw machine identifiers in human text, "looks-done vs blocked" divergence surfaced). Phase 19 (CARD action-cards, flag-gated, LOCKED last) and Phase 20 (HYG — CI test-debt incl. the 7 pre-existing 04/04.1 traceability gates as HYG-02, + deploy-bookend) remain. Consider `/gsd:complete-milestone` only after 18–20.
 
 ## ▶ Phase 16.1 — LOOP-07 gap plan READY 2026-06-09
 
@@ -712,8 +716,8 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 Phase: 17 (structured-human-wait-truthful-verdicts-centerpiece) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
-Last activity: 2026-06-10
+Status: Phase complete — ready for verification
+Last activity: 2026-06-11
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1427,7 +1431,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Progress:** [█████████░] 93%
 
 ## Performance Metrics
