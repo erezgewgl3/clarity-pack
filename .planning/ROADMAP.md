@@ -126,7 +126,11 @@ Plans:
   2. ZERO raw or partial agent/UUID identifiers appear in any human-facing text on any of the four surfaces; every agent reference shows a human name or role. This extends NO_UUID_LEAK to partial-hash labels and builds on the v1.4.3 prefix-gate (the partial start) — the gate's contribution is acknowledged, not re-done wholesale, and a named regression guard fails the build on a partial-hash/short-hex leak.
   3. A "Looks done — close it?" affordance appears whenever the AI TL;DR reads done but the deterministic engine still classifies the item as blocked — the divergence is surfaced as an explicit action, never silently hidden.
   4. The legibility work stays degrade-safe and instance-agnostic (no company-prefix literals); enum/code tokens (e.g. `AWAITING_AGENT_STUCK`) are never shown as user-visible text.
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 18-01-PLAN.md — LEG-01: live host deep-link probe + buildReaderHref single-source helper + re-point all 5 Open↗ sites
+- [ ] 18-02-PLAN.md — LEG-02: "an agent" scrub fallback + inverted/anchored NO_UUID_LEAK guards + humanized chat chips + read-time re-scrub
+- [ ] 18-03-PLAN.md — LEG-03: deterministic done-regex + batched O(1) needs-you read + confirm-gated "Looks done — close it?" affordance (Reader + SR)
+- [ ] 18-04-PLAN.md — two-source version bump + bookended BEAAA install + live drill (the phase acceptance)
 **UI hint**: yes
 
 ### Phase 19: Action-cards async re-architecture (LAST, flag-gated)
