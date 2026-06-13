@@ -1,7 +1,7 @@
 # Phase 18: No rabbit-holes & plain-English — Specification
 
 **Created:** 2026-06-13
-**Ambiguity score:** 0.17 (gate: ≤ 0.20)
+**Ambiguity score:** 0.14 (gate: ≤ 0.20)
 **Requirements:** 3 locked
 
 ## Goal
@@ -16,7 +16,7 @@ Current state grounding (scouted 2026-06-13):
 
 - **LEG-01 (rabbit-hole routing):** Every "Open ↗" navigates to `/<companyPrefix>/issues/<id>` — the **raw classic Paperclip issue page** (the wall of unresolved inline references). Sites: `src/ui/surfaces/reader/live-blocker-panel.tsx:171`, `src/ui/surfaces/situation-room/employee-row.tsx:238/453/508`, `src/ui/surfaces/situation-room/blocked-backlog-expander.tsx:62`, `src/ui/surfaces/bulletin/lineage-footer.tsx:48`, `src/ui/surfaces/_shared/reply-in-place.tsx:227`. None land the user on the Clarity Reader tab. (Phase 17 D-12 confirmed only `/<companyPrefix>/issues/<id>` routes — whether the host can deep-link a specific *tab* is the one open HOW/research item for discuss-phase.)
 - **LEG-02 (raw/partial id leak):** `src/shared/scrub-human-action.ts` still emits `agent#${uuid.slice(0,8)}` as its last-resort fallback (lines 65, 66, 71, 78, 86). That partial hash is exactly the leak LEG-02 forbids ("zero raw **or partial**"). The A1 decision to render the literal "an agent" was specced in the superseded Phase-16 misscope (`.planning/phases/_superseded-legibility-16-18-misscope/`) but **never executed** — those 4 plans are reusable input, not shipped code. Chat `CHT-<8>` topic chips and `run·<8>` fragments bypass the scrub pipeline entirely and render raw hex. The live anchor: Reader BEAAA-972 reads "AWAITING AGENT STUCK — CEO stuck on agent#04fcac7c is stuck".
-- **LEG-03 (honest divergence):** No "looks done vs blocked" affordance exists anywhere. It is brand new and depends on Phase 17's now-shipped truthful verdicts and the existing AI TL;DR cache.
+- **LEG-03 (honest divergence):** No "looks done vs blocked" affordance exists anywhere. It is brand new and depends on Phase 17's now-shipped truthful verdicts and the existing AI TL;DR cache. **Perf-relevant reality:** the SR rollup (`build-employees-rollup.ts:384-390`) computes `focusLine` from `polishTldr(focusIssue.title)` — the issue *title* — and reads **no `tldr_cache` at all** on the snapshot path today. So computing the SR-row "TL;DR says done" signal introduces a `tldr_cache` read that does not exist now, landing in the exact path Phase 16 hardened from 25.7s → 2.0s cold (SWR serve-last-good + bounded pool + deadline floor; warm ~492ms). This is the one genuine performance risk in the phase and is constrained below.
 
 The verdict pipeline already has a clean "one engine → one scrub → one verdict" architecture (Phase 11 + v1.4.2 + Phase 17), so these fixes land at identified boundaries (scrub fallback, Open↗ nav targets, a new divergence affordance) — not a redesign. The visual mockup contract is unchanged.
 
@@ -36,6 +36,7 @@ The verdict pipeline already has a clean "one engine → one scrub → one verdi
    - Current: No divergence affordance exists; a "done"-reading TL;DR on a still-blocked item is silently inconsistent
    - Target: On the **Reader** (next to the TL;DR) AND the **Situation Room needs-you row**, surface a "Looks done — close it?" affordance when the TL;DR done-signal contradicts the engine's blocked verdict. Clicking opens a confirm ("Close as done" / "Keep blocked") — it **never auto-closes**. Degrade-safe: when no TL;DR exists or the engine verdict is absent, the affordance simply does not appear (no false prompt)
    - Acceptance: a test fixture where TL;DR=done + engine=blocked renders the affordance on both Reader and SR; the affordance is absent when TL;DR and engine agree, and absent when either input is missing; clicking does not mutate issue state without an explicit confirm selection
+   - Perf bound: the SR-row TL;DR-done signal is fetched as a SINGLE batched `tldr_cache` read scoped to the needs-you set only (O(1) queries, not O(rows)), degrade-wrapped — a missing/slow read yields no affordance, never a blocked or slowed render
 
 ## Boundaries
 
@@ -61,6 +62,7 @@ The verdict pipeline already has a clean "one engine → one scrub → one verdi
 
 - **Additive-only plugin-namespace schema** — disable/uninstall preserves data (coexistence guarantee #3/#6); no destructive migration for the persisted re-scrub.
 - **Degrade-safe deterministic floor** — every new affordance/scrub renders correctly when the Editor-Agent/TL;DR cache is absent; no AI token in `blocker-chain.ts` (determinism + AI-token grep guards stay green).
+- **Performance non-regression (snapshot hot path)** — Phase 18 must NOT materially regress the Phase-16 snapshot budget: cold p95 < ~5s (never 502), warm recompute < ~500ms (~492ms baseline). LEG-03's SR-row TL;DR-done signal — which the snapshot does not fetch today — must be a SINGLE batched `tldr_cache` read scoped to the needs-you set only (O(1) queries, not per-row, not all employees), degrade-wrapped so a missing/slow read drops the affordance rather than slowing or blocking the render. LEG-02(e) read-time re-scrub must not introduce new DB fetches on the snapshot path (regex over already-fetched strings only).
 - **Instance-agnostic** — no company-prefix literals; routing uses `companyPrefix` from host context.
 - **Scoped CSS gate** — any new styling passes `check-css-scope.mjs`; bundle-size gate respected.
 - **Host tab deep-link feasibility is unverified** — whether `/<companyPrefix>/issues/<id>` can target the Clarity Reader tab is a discuss-phase/research HOW item; LEG-01's locked fallback (issue page + Reader auto-selected) bounds the risk.
@@ -77,6 +79,8 @@ The verdict pipeline already has a clean "one engine → one scrub → one verdi
 - [ ] The "Looks done — close it?" affordance appears on BOTH the Reader and the SR needs-you row when TL;DR=done contradicts engine=blocked
 - [ ] The affordance is absent when TL;DR and engine agree, and absent when either input is missing (no false prompt)
 - [ ] The affordance never mutates issue state without an explicit "Close as done" confirm selection
+- [ ] A before/after BEAAA snapshot timing shows warm recompute stays < ~500ms with LEG-03 active; the needs-you TL;DR-done fetch issues O(1) batched queries (not O(rows)), confirmed by query count
+- [ ] LEG-02(e) read-time re-scrub adds zero new DB fetches on the snapshot path (verified: regex runs over already-fetched strings only)
 
 ## Ambiguity Report
 
@@ -84,9 +88,9 @@ The verdict pipeline already has a clean "one engine → one scrub → one verdi
 |--------------------|-------|------|--------|--------------------------------------------------------------|
 | Goal Clarity       | 0.85  | 0.75 | ✓      | Reader-tab bar + LEG-03 confirm-action both pinned           |
 | Boundary Clarity   | 0.85  | 0.70 | ✓      | Chat chips IN, persisted re-scrub IN, 4 sites, Reader+SR     |
-| Constraint Clarity | 0.78  | 0.65 | ✓      | Invariants known; host tab-deeplink feasibility = HOW item   |
-| Acceptance Criteria| 0.80  | 0.70 | ✓      | Guard-inversion + Open↗ drill + confirm-not-auto-close       |
-| **Ambiguity**      | 0.17  | ≤0.20| ✓      | Gate passed round 1                                          |
+| Constraint Clarity | 0.88  | 0.65 | ✓      | Perf non-regression now explicit (batched O(1) needs-you read); host tab-deeplink = HOW item |
+| Acceptance Criteria| 0.85  | 0.70 | ✓      | Guard-inversion + Open↗ drill + confirm-not-auto-close + warm-recompute timing |
+| **Ambiguity**      | 0.14  | ≤0.20| ✓      | Gate passed round 1; perf guard added post-gate (Eric flag)  |
 
 Status: ✓ = met minimum, ⚠ = below minimum (planner treats as assumption)
 
@@ -97,6 +101,7 @@ Status: ✓ = met minimum, ⚠ = below minimum (planner treats as assumption)
 | 1 | Researcher | LEG-01 bar — land on Reader tab vs issue page, which surfaces? | Land on Reader tab, ALL 4 sites (Reader/SR/backlog/Bulletin), with issue-page+Reader-auto-select fallback |
 | 1 | Researcher/Boundary | LEG-02 breadth — which optional extras in scope? | Chat id-fragment chips IN **and** persisted-string re-scrub on read IN (atop the locked core: "an agent" fallback + 4-surface render-scrub + guard extension) |
 | 1 | Researcher/Failure | LEG-03 surfaces + action verb? | Reader **and** SR needs-you row; non-destructive confirm ("Close as done"/"Keep blocked"), never auto-close |
+| post-gate | Failure Analyst (Eric) | Will the SPEC cause a perf regression? | SR snapshot reads NO tldr_cache today (focusLine = polished title); LEG-03 must batch the needs-you TL;DR-done read O(1), degrade-wrapped; explicit perf non-regression constraint + warm-recompute<500ms acceptance added |
 
 ---
 
