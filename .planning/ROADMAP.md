@@ -127,7 +127,7 @@ Plans:
   3. A "Looks done — close it?" affordance appears whenever the AI TL;DR reads done but the deterministic engine still classifies the item as blocked — the divergence is surfaced as an explicit action, never silently hidden.
   4. The legibility work stays degrade-safe and instance-agnostic (no company-prefix literals); enum/code tokens (e.g. `AWAITING_AGENT_STUCK`) are never shown as user-visible text.
 **Plans**: 4 plans
-- [ ] 18-01-PLAN.md — LEG-01: live host deep-link probe + buildReaderHref single-source helper + re-point all 5 Open↗ sites
+- [x] 18-01-PLAN.md — LEG-01: live host deep-link probe + buildReaderHref single-source helper + re-point all 5 Open↗ sites
 - [x] 18-02-PLAN.md — LEG-02: "an agent" scrub fallback + inverted/anchored NO_UUID_LEAK guards + humanized chat chips + read-time re-scrub
 - [x] 18-03-PLAN.md — LEG-03: deterministic done-regex + batched O(1) needs-you read + confirm-gated "Looks done — close it?" affordance (Reader + SR)
 - [ ] 18-04-PLAN.md — two-source version bump + bookended BEAAA install + live drill (the phase acceptance)
@@ -266,7 +266,7 @@ Plans:
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
 | 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 7/7 | Complete   | 2026-06-10 |
 | 17. Structured human-wait + truthful verdicts | 6/6 | Complete   | 2026-06-11 |
-| 18. No rabbit-holes & plain-English | 2/4 | In Progress|  |
+| 18. No rabbit-holes & plain-English | 3/4 | In Progress|  |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
 | 20. Hygiene & honestly-green CI | 0/TBD | Not started | - |
 
