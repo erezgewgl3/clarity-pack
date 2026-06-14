@@ -169,6 +169,36 @@ test('sanitizeHref: javascript:/data:/vbscript: (and obfuscated case/whitespace 
   assert.equal(sanitizeHref('vbscript:msgbox(1)'), null);
 });
 
+test('T1-A: hrefs carrying an unfilled <…> template placeholder are rejected (null) — no repeating 404', () => {
+  // The literal angle-bracket placeholder left in a deliverable/ref URL by an
+  // agent (the BEAAA `/api/issues/<weekly-issue-id>#document-<weekly-doc-key>`
+  // 404 loop). A raw `<`/`>` is invalid in a URI (RFC 3986 §2) so it can never
+  // resolve — Clarity must never emit it as a live anchor.
+  assert.equal(sanitizeHref('/api/issues/<weekly-issue-id>#document-<weekly-doc-key>'), null);
+  assert.equal(sanitizeHref('/issues/<id>'), null);
+  assert.equal(sanitizeHref('https://example.com/<placeholder>'), null);
+  assert.equal(sanitizeHref('/a>b'), null);
+  // Real (filled-in) links are unaffected — no angle brackets.
+  assert.equal(sanitizeHref('/BEAAA/issues/BEAAA-933'), '/BEAAA/issues/BEAAA-933');
+  assert.equal(sanitizeHref('https://example.com/x'), 'https://example.com/x');
+});
+
+test('T1-A: a markdown link with a <…> placeholder href downgrades to inert text (no fetchable link)', () => {
+  const blocks = parseMarkdownBlocks(
+    'see the [weekly report](/api/issues/<weekly-issue-id>#document-<weekly-doc-key>)',
+  );
+  // No span anywhere carries the placeholder href as a live link.
+  assert.equal(
+    allSpans(blocks).some((s) => s.type === 'link'),
+    false,
+    'placeholder-href link must NOT become a live anchor',
+  );
+  // The human-readable label still survives as plain text.
+  const text = allSpans(blocks).map((s) => s.text ?? '').join('');
+  assert.equal(text.includes('weekly report'), true);
+  assert.equal(text.includes('<weekly-issue-id>'), false, 'placeholder URL is dropped, not rendered');
+});
+
 test('XSS: [x](javascript:alert(1)) does NOT yield a live javascript: href', () => {
   const blocks = parseMarkdownBlocks('click [x](javascript:alert(1))');
   const link = allSpans(blocks).find((s) => s.type === 'link');
