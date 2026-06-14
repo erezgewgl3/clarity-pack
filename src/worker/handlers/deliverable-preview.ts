@@ -65,6 +65,28 @@ const IMAGE_EXTENSIONS = [
   '.gif',
   '.webp',
 ] as const;
+// T1-B (no-rabbit-holes, 2026-06-15) — plain-text-family deliverables that
+// preview inline as monospace text (no parse, no external dep). Closes the
+// "Preview unavailable — open in classic Paperclip" gap for the common text
+// formats agents actually attach (.csv exports, .json configs, .log dumps,
+// .yaml/.toml/.ini manifests). Office binaries (.docx/.pptx) genuinely cannot
+// preview inline without a heavy dependency and stay on the honest placeholder.
+const TEXT_EXTENSIONS = [
+  '.txt',
+  '.text',
+  '.csv',
+  '.tsv',
+  '.json',
+  '.log',
+  '.yaml',
+  '.yml',
+  '.xml',
+  '.toml',
+  '.ini',
+  '.diff',
+  '.patch',
+] as const;
+const TEXT_MAX_BYTES = 2_000_000; // 2 MB inline-text ceiling (mirrors xlsx chokepoint intent).
 const MAX_ROWS_PER_SHEET = 1_000; // Defense-in-depth (per Task 1 action).
 
 export type DeliverablePreviewCtx = OptInGuardDataCtx & {
@@ -82,6 +104,8 @@ export type DeliverablePreviewResult =
   | { kind: 'pdf-embed'; body: string; mimeType: 'application/pdf' }
   | { kind: 'md'; body: string }
   | { kind: 'img'; body: string; mimeType: string }
+  // T1-B — plain-text-family inline preview (rendered in a <pre> by the UI).
+  | { kind: 'text'; body: string; truncated?: boolean }
   | { kind: 'placeholder'; reason: string }
   | { error: string; sizeBytes?: number };
 
@@ -214,6 +238,25 @@ export function registerDeliverablePreview(ctx: DeliverablePreviewCtx): void {
       return { kind: 'md' as const, body };
     }
 
+    // ---- plain-text-family branch (T1-B) ----------------------------------
+    // .txt/.csv/.json/.log/.yaml/.toml/… preview inline as monospace text.
+    // Text deliverables are stored raw (like markdown); we surface the body
+    // verbatim with a size guard so a runaway log dump can't blow the bundle.
+    if ((TEXT_EXTENSIONS as readonly string[]).includes(ext)) {
+      // Byte-length guard mirrors the xlsx chokepoint intent: cap inline text
+      // and flag truncation honestly rather than streaming megabytes into the
+      // page. Measured on the UTF-8 byte length the UI would render.
+      const byteLen = Buffer.byteLength(body, 'utf-8');
+      if (byteLen > TEXT_MAX_BYTES) {
+        // Truncate to the ceiling at a char boundary (chars ≈ bytes for the
+        // ASCII-dominant text formats here; the cap is a soft guard, not a
+        // security boundary).
+        const truncated = body.slice(0, TEXT_MAX_BYTES);
+        return { kind: 'text' as const, body: truncated, truncated: true };
+      }
+      return { kind: 'text' as const, body };
+    }
+
     // ---- pdf branch -------------------------------------------------------
     // Return body (base64 from documents.get) + mimeType. UI decodes locally
     // into a Blob URL. See header note on the URL-vs-body fix.
@@ -315,9 +358,15 @@ export function registerDeliverablePreview(ctx: DeliverablePreviewCtx): void {
     }
 
     // ---- fall-through: unknown extension ----------------------------------
+    // T1-B — name the extension so the operator sees an HONEST reason rather
+    // than an opaque "not available". Office binaries (.docx/.pptx) genuinely
+    // need a heavy dependency to render in-plugin; the named reason makes the
+    // limitation legible instead of a dead-end.
     return {
       kind: 'placeholder' as const,
-      reason: 'Preview not available for this file type',
+      reason: ext
+        ? `Inline preview isn't available for ${ext} files yet — open in classic Paperclip.`
+        : 'Inline preview isn\'t available for this file type — open in classic Paperclip.',
     };
   });
 }

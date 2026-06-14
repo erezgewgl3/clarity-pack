@@ -1724,6 +1724,29 @@
   max-height: 50vh;
 }
 
+/* T1-B — plain-text-family deliverable inline preview (.txt/.csv/.json/…). */
+[data-clarity-surface] .clarity-deliverable-text-pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  max-height: 50vh;
+  border: 1px solid var(--clarity-line, var(--clarity-border, #2a2a2a));
+  border-radius: 6px;
+  background: var(--clarity-bg-1, rgba(255, 255, 255, 0.02));
+  color: var(--clarity-fg, inherit);
+  font-family: var(--clarity-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  tab-size: 2;
+}
+
+[data-clarity-surface] .clarity-deliverable-text-truncated {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--clarity-fg-dim, #8a8a8a);
+}
+
 [data-clarity-surface] .clarity-deliverable-xlsx-scroll table {
   border-collapse: collapse;
   width: 100%;

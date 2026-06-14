@@ -406,6 +406,41 @@ test('deliverable.preview: unknown extension -> { kind: placeholder, reason }', 
   assert.equal(result.kind, 'placeholder');
   assert.equal(typeof result.reason, 'string');
   assert.ok(result.reason.length > 0);
+  // T1-B — the reason now NAMES the extension so the limitation is legible.
+  assert.ok(result.reason.includes('.xyz'), 'placeholder reason names the extension');
+});
+
+// ---- T1-B — plain-text-family inline preview -----------------------------
+
+test('deliverable.preview: .txt/.csv/.json/.log/.yaml -> { kind: text, body } (inline)', async () => {
+  const cases = {
+    'notes.txt': 'hello world',
+    'export.csv': 'a,b,c\n1,2,3',
+    'config.json': '{"k":"v"}',
+    'run.log': 'INFO booted',
+    'manifest.yaml': 'name: clarity',
+  };
+  for (const [key, content] of Object.entries(cases)) {
+    const ctx = makeCtx({ documents: { [`issue-1|${key}`]: { body: content } } });
+    registerDeliverablePreview(ctx);
+    const result = await ctx._handlers.get('deliverable.preview')(
+      previewParams({ documentKey: key }),
+    );
+    assert.equal(result.kind, 'text', `${key} routes to text`);
+    assert.equal(result.body, content, `${key} body surfaced verbatim`);
+  }
+});
+
+test('deliverable.preview: oversize text (>2MB) -> { kind: text, truncated: true }', async () => {
+  const big = 'x'.repeat(2_500_000);
+  const ctx = makeCtx({ documents: { 'issue-1|huge.log': { body: big } } });
+  registerDeliverablePreview(ctx);
+  const result = await ctx._handlers.get('deliverable.preview')(
+    previewParams({ documentKey: 'huge.log' }),
+  );
+  assert.equal(result.kind, 'text');
+  assert.equal(result.truncated, true);
+  assert.ok(result.body.length < big.length, 'body is truncated below the cap');
 });
 
 // ---- Test 11 — DOCUMENT NOT FOUND degrade --------------------------------

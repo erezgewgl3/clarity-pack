@@ -80,6 +80,7 @@ test('U7: switch on data.kind covers all five kinds + placeholder', () => {
     "'pdf-embed'",
     "'md'",
     "'img'",
+    "'text'",
     "'placeholder'",
   ]) {
     assert.ok(
@@ -93,10 +94,30 @@ test('U8: error fallback renders the load-bearing visible string', () => {
   // "Preview unavailable — open in classic Paperclip." is the contract
   // string the operator sees on any { error } envelope or unknown kind.
   // Em-dash is the literal character used in src; assertion uses the same.
+  // T1-B — this literal is now the DEFAULT branch of deliverableErrorReason();
+  // it must still be present in source.
   assert.match(
     read(),
     /Preview unavailable — open in classic Paperclip\./,
   );
+});
+
+test('U13 (T1-B): the text kind renders the body in a <pre> (inline text preview)', () => {
+  const src = read();
+  assert.ok(src.includes("case 'text'"), 'text case present in dispatch switch');
+  assert.match(src, /<pre[\s\S]*?\{data\.body\}/, 'text body rendered inside <pre>');
+});
+
+test('U14 (T1-B): error reasons are mapped per-code, not a single opaque line', () => {
+  const src = read();
+  // The mapping function exists and distinguishes the common failure modes so
+  // the operator sees an honest reason (too-large vs parse-fail vs read-fail).
+  assert.match(src, /function deliverableErrorReason/);
+  assert.ok(src.includes('DELIVERABLE_TOO_LARGE'), 'too-large is given a specific reason');
+  assert.ok(src.includes('PARSE_FAILED'), 'parse-failure is given a specific reason');
+  assert.ok(src.includes('READ_FAILED'), 'read-failure is given a specific reason');
+  // The error branch calls the mapper (no single hard-coded opaque line).
+  assert.match(src, /deliverableErrorReason\(data\.error/);
 });
 
 // U9 + U10 pin the GAP-DIST-04-NOT-RENDERING (2026-05-26) fix: the

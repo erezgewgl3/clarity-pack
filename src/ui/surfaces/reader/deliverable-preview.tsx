@@ -89,8 +89,38 @@ type DeliverablePreviewResult =
   | { kind: 'pdf-embed'; body: string; mimeType: string }
   | { kind: 'md'; body: string }
   | { kind: 'img'; body: string; mimeType: string }
+  // T1-B — plain-text-family inline preview (rendered in a <pre>).
+  | { kind: 'text'; body: string; truncated?: boolean }
   | { kind: 'placeholder'; reason: string }
   | { error: string; sizeBytes?: number };
+
+/**
+ * T1-B (no-rabbit-holes, 2026-06-15) — map the worker's structured error code
+ * to a plain-English, honest reason instead of one opaque
+ * "Preview unavailable" line for every failure. The operator can now tell a
+ * too-large deliverable from a parse failure from a transient read error.
+ */
+function deliverableErrorReason(
+  code: string,
+  sizeBytes?: number,
+): string {
+  switch (code) {
+    case 'DELIVERABLE_TOO_LARGE': {
+      const mb = sizeBytes ? Math.round((sizeBytes / 1_000_000) * 10) / 10 : null;
+      return mb
+        ? `This deliverable is too large to preview inline (${mb} MB) — open in classic Paperclip.`
+        : 'This deliverable is too large to preview inline — open in classic Paperclip.';
+    }
+    case 'PARSE_FAILED':
+      return "This deliverable couldn't be parsed for inline preview — open in classic Paperclip.";
+    case 'XLSM_REJECTED':
+      return 'Macro-enabled spreadsheets (.xlsm) are not previewed for safety — open in classic Paperclip.';
+    case 'READ_FAILED':
+      return "Couldn't load this deliverable just now — try again, or open in classic Paperclip.";
+    default:
+      return 'Preview unavailable — open in classic Paperclip.';
+  }
+}
 
 /**
  * Hotfix 2026-05-26 (rc.8): decode base64 body to a Blob URL so `<embed>`
@@ -312,7 +342,7 @@ export function DeliverablePreview({
   } else if ('error' in data) {
     body = (
       <div className="clarity-deliverable-fallback">
-        Preview unavailable — open in classic Paperclip.
+        {deliverableErrorReason(data.error, data.sizeBytes)}
       </div>
     );
   } else {
@@ -337,6 +367,21 @@ export function DeliverablePreview({
         // raw HTML in the markdown body is rendered as text, never injected
         // (T-05-04-05 mitigation). Honors check-a11y R3.
         body = <ReactMarkdown>{data.body}</ReactMarkdown>;
+        break;
+      case 'text':
+        // T1-B — plain-text-family deliverable. Rendered as a React text node
+        // inside <pre> (no innerHTML, no markdown parse) so any literal markup
+        // is inert. A truncation notice keeps the cap honest.
+        body = (
+          <div className="clarity-deliverable-text" data-clarity-region="deliverable-text">
+            <pre className="clarity-deliverable-text-pre">{data.body}</pre>
+            {data.truncated && (
+              <p className="clarity-deliverable-text-truncated">
+                Preview truncated — open in classic Paperclip for the full file.
+              </p>
+            )}
+          </div>
+        );
         break;
       case 'img':
         body = blobUrl ? (
