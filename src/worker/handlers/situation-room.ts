@@ -555,6 +555,10 @@ async function computeViewerInvariantSlice(
           issues: ctx.issues,
           agents: ctx.agents,
           logger: ctx.logger,
+          // Plan 18-03 Task 2 (LEG-03) — thread the SELECT-only db client so the
+          // rollup can issue the ONE batched tldr_cache read behind the needs-you
+          // `looksDone` flag. Degrade-wrapped inside the rollup; absent → no flag.
+          db: ctx.db,
           ...sharedPrefetch,
           ...(prefetch
             ? {

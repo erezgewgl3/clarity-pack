@@ -68,6 +68,16 @@ import {
   sortActionItemsByLeverage,
   type LeverageInputRow,
 } from './leverage.ts';
+// Plan 18-03 Task 2 (LEG-03) — the awaiting-you set selector + the batched
+// tldr_cache read + the deterministic done-regex. Together they attach a SINGLE,
+// degrade-wrapped `looksDone` flag onto the needs-you rows from ONE batched read
+// (landmine #1: one query, not per-row), keeping focusLine untouched (landmine
+// #10) and the deterministic engine untouched (landmine #6 — verdict is read,
+// never computed).
+import { selectAwaitingYouIssueIds } from './awaiting-you-selector.ts';
+import { getTldrBodiesByScopeIds } from '../db/tldr-cache.ts';
+import { looksDone } from '../../shared/looks-done.ts';
+import type { PluginDatabaseClient } from '@paperclipai/plugin-sdk';
 
 export type AgeBucket = 'fresh' | 'aging' | 'stale';
 
@@ -177,6 +187,15 @@ export type SituationEmployeeRow = {
   } | null;
   /** 0 for v1.2.0 — informational; deferred per Open Question #3. */
   doneTodayCount: number;
+  /** Plan 18-03 Task 2 (LEG-03 / D-05/D-06/D-07) — the honest-divergence flag:
+   *  true ONLY when this row is needs-you (blockerChain.needsYou === true) AND the
+   *  row's cached TL;DR body reads as an explicit completion claim (looksDone). It
+   *  drives the confirm-gated "Looks done — close it?" affordance on the SR
+   *  needs-you row. Sourced from a SINGLE batched, degrade-wrapped tldr_cache read
+   *  (a throw/slow read or absent db → the flag is simply never set, focusLine
+   *  intact). Optional + defaults absent so old fixtures and the degrade path are
+   *  unaffected; absent is read as false. */
+  looksDone?: boolean;
   /** Plan 13-02 (D-13) — the Editor-Agent action card for this needs-you row,
    *  attached by the situation.snapshot handler AFTER the rollup (a fresh card
    *  → the ActionCard; stale/absent/degrade → null so the UI falls back to the
@@ -234,6 +253,12 @@ export type EmployeesRollupCtx = OrgBlockedBacklogCtx & {
    *  AND the leaf is in-company, REPLACES the multi-hop leaf ctx.issues.get;
    *  falls back to the RPC only for a leaf NOT in the prefetch. */
   issuesById?: Map<string, IssueLike>;
+  /** Plan 18-03 Task 2 (LEG-03) — the SELECT-only db client used for the ONE
+   *  batched tldr_cache read (getTldrBodiesByScopeIds) that powers the needs-you
+   *  `looksDone` flag. OPTIONAL: when absent (old fixtures / a degrade path) the
+   *  flag is simply never set — focusLine and the engine are untouched. The
+   *  handler (situation-room.ts) threads ctx.db here. */
+  db?: Pick<PluginDatabaseClient, 'query'>;
 };
 
 /** Loosely-typed projections — read camelCase (07-01 proved the real shape). */
@@ -744,6 +769,46 @@ export async function buildEmployeesRollup(
       return degradeSafeRow(agent);
     }
   });
+
+  // Plan 18-03 Task 2 (LEG-03 / D-05/D-06/D-07) — the honest-divergence done-flag.
+  // AFTER the per-agent fan-out (NOT inside the per-row loop — landmine #1): build
+  // the needs-you issue set ONCE (selectAwaitingYouIssueIds reads the engine
+  // verdict that is already on every row), issue ONE batched tldr_cache read for
+  // the whole set (getTldrBodiesByScopeIds — `= ANY`, O(1) queries), and for each
+  // needs-you row whose cached TL;DR body reads as done (looksDone) attach
+  // `looksDone: true`. DEGRADE-WRAPPED (landmine #2): a throw, a slow read, or an
+  // absent db yields no flag — focusLine is untouched and the render never blocks
+  // or slows. The verdict (needsYou) is READ, never computed (landmine #6: no
+  // blocker-chain.ts edit); focusLine = polishTldr(title) is UNCHANGED (landmine
+  // #10: LEG-03 adds a SEPARATE flag, not a focusLine source change).
+  if (ctx.db && typeof ctx.db.query === 'function') {
+    try {
+      const needsYouIssueIds = selectAwaitingYouIssueIds(rows);
+      if (needsYouIssueIds.length > 0) {
+        const bodies = await getTldrBodiesByScopeIds(
+          { db: ctx.db as PluginDatabaseClient },
+          'issue',
+          needsYouIssueIds,
+        );
+        for (const r of rows) {
+          const chain = r.blockerChain;
+          if (!chain || chain.needsYou !== true) continue;
+          const issueId = chain.targetIssueUuid ?? chain.leafIssueUuid ?? null;
+          if (typeof issueId !== 'string' || issueId.length === 0) continue;
+          const body = bodies.get(issueId);
+          if (body != null && looksDone(body)) {
+            r.looksDone = true;
+          }
+        }
+      }
+    } catch (e) {
+      // Degrade-safe — drop the flag entirely; never block/slow the snapshot.
+      ctx.logger?.warn?.('build-employees-rollup: looksDone batch read failed', {
+        companyId,
+        err: (e as Error).message,
+      });
+    }
+  }
 
   // Deterministic sort (LOCKED): blocked → stale → idle → reviewing → running;
   // oldest-first within blocked/stale/idle, most-recent-first within
