@@ -36,6 +36,7 @@ import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { StatePill } from '../../primitives/state-pill.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
+import { buildReaderHref } from '../../primitives/reader-href.ts';
 import { useResolvedUserId } from '../../primitives/use-resolved-user-id.ts';
 import { useHostNavigation } from '../../primitives/use-host-navigation.ts';
 
@@ -221,7 +222,8 @@ function LiveBlockerPanelWithCompany({
   // paperclip-issue-url-pattern memory — NOT /<prefix>/<id>).
   const openIssue = React.useCallback(() => {
     if (!companyPrefix) return;
-    nav.navigate(`/${companyPrefix}/issues/${issueId}`);
+    // LEG-01: funnel through buildReaderHref (Tier-2 fallback today; one-line upgrade).
+    nav.navigate(buildReaderHref(companyPrefix, issueId));
   }, [nav, companyPrefix, issueId]);
 
   // Plan 14-03 — the 'reply' affordance no longer navigates to chat; it mounts the

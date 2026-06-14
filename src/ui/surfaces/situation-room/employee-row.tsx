@@ -43,6 +43,7 @@ import { formatAge } from '../../primitives/state-pill-format.ts';
 import { useToast } from '../../primitives/toast.tsx';
 import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { buildChatDeepLink } from '../chat/deep-link.mjs';
+import { buildReaderHref } from '../../primitives/reader-href.ts';
 import { OwnerPickerPopover } from './owner-picker-popover.tsx';
 import { LooksDoneAffordance } from './looks-done-affordance.tsx';
 import { visualTierOf } from './tier-utils.ts';
@@ -242,7 +243,10 @@ export function EmployeeRow({
   const openIssue = React.useCallback(
     (issueId: string | null) => {
       if (!issueId) return;
-      navigate(`/${companyPrefix}/issues/${issueId}`);
+      // LEG-01: funnel through buildReaderHref (Tier-2 fallback today; one-line upgrade).
+      // Re-points ONLY the issue-open path; openChatWithOwner/assignWork keep
+      // buildChatDeepLink (chat target /chat#h=… — landmine #8, untouched).
+      navigate(buildReaderHref(companyPrefix, issueId));
     },
     [companyPrefix, navigate],
   );

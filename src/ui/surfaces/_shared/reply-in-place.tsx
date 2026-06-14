@@ -31,6 +31,7 @@ import * as React from 'react';
 import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { useToast } from '../../primitives/toast.tsx';
+import { buildReaderHref } from '../../primitives/reader-href.ts';
 
 /** The situation.replyAndResume action result (wave 1 — 14-01 worker contract). */
 type ReplyResult =
@@ -224,7 +225,8 @@ export function ReplyInPlace({
     const openIssue = (): void => {
       if (!leafIssueId) return;
       // Open↗ uses the HUMAN identifier, never the UUID (paperclip-issue-url-pattern).
-      navigate(`/${companyPrefix}/issues/${leafIssueId}`);
+      // LEG-01: funnel through buildReaderHref (Tier-2 fallback today; one-line upgrade).
+      navigate(buildReaderHref(companyPrefix, leafIssueId));
     };
     return (
       <div className="clarity-reply-in-place" data-reachable="false">

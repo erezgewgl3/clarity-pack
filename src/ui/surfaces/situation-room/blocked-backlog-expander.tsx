@@ -21,6 +21,7 @@ import { useHostLocation, useHostNavigation } from '@paperclipai/plugin-sdk/ui/h
 
 import { isReplyReachable } from '../../../shared/reply-reachable.ts';
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
+import { buildReaderHref } from '../../primitives/reader-href.ts';
 import { formatAge } from '../../primitives/state-pill-format.ts';
 import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { OwnerPickerPopover } from './owner-picker-popover.tsx';
@@ -59,7 +60,8 @@ export function BlockedBacklogExpander({
 
   const openIssue = (identifier: string): void => {
     if (!identifier) return;
-    navigate(`/${companyPrefix}/issues/${identifier}`);
+    // LEG-01: funnel through buildReaderHref (Tier-2 fallback today; one-line upgrade).
+    navigate(buildReaderHref(companyPrefix, identifier));
   };
 
   return (

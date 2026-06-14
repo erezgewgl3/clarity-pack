@@ -50,8 +50,11 @@ test('wires usePluginAction(situation.replyAndResume)', () => {
 test('reachable===false branch renders the named action + Open↗ at /<prefix>/issues/<leafIssueId>', () => {
   // The early-return on !reachable.
   assert.match(CODE, /if\s*\(\s*!reachable\s*\)/);
-  // Open↗ uses the HUMAN key (leafIssueId), never the UUID.
-  assert.match(CODE, /navigate\(`\/\$\{companyPrefix\}\/issues\/\$\{leafIssueId\}`\)/);
+  // Plan 18-01 (LEG-01): Open↗ now funnels through buildReaderHref (the single
+  // Tier-1/Tier-2 decision site) — no longer an inline /issues/${ template. It
+  // still passes the HUMAN key (leafIssueId), never the UUID.
+  assert.match(CODE, /navigate\(buildReaderHref\(companyPrefix,\s*leafIssueId\)\)/);
+  assert.doesNotMatch(CODE, /\/issues\/\$\{leafIssueId\}/, 'no inline issue path — funnel through buildReaderHref');
   // The Open↗ button label.
   assert.match(CODE, /Open ↗/);
 });

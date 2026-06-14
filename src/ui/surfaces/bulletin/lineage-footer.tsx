@@ -28,6 +28,7 @@ import * as React from 'react';
 import { useHostLocation, useHostNavigation } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { extractCompanyPrefixFromPathname } from '../../primitives/use-resolved-company-id.ts';
+import { buildReaderHref } from '../../primitives/reader-href.ts';
 import { buildChatDeepLink } from '../chat/deep-link.mjs';
 import type { LineageThread } from '../../../shared/types.ts';
 
@@ -45,7 +46,8 @@ export function LineageFooter(props: LineageFooterProps): React.ReactElement | n
 
   const openIssue = (identifier: string | null | undefined): void => {
     if (!identifier) return;
-    navigate(`/${companyPrefix}/issues/${identifier}`);
+    // LEG-01: funnel through buildReaderHref (Tier-2 fallback today; one-line upgrade).
+    navigate(buildReaderHref(companyPrefix, identifier));
   };
 
   const openChatWithOwner = (ownerAgentId: string | null | undefined): void => {

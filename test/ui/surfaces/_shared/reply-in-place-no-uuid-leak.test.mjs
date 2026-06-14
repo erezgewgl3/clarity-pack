@@ -69,8 +69,12 @@ test('NO_UUID_LEAK — no *Uuid field interpolated into a template literal that 
 // ---------------------------------------------------------------------------
 
 test('Open↗ navigates with the HUMAN leafIssueId, NOT a UUID', () => {
-  assert.match(CODE, /navigate\(`\/\$\{companyPrefix\}\/issues\/\$\{leafIssueId\}`\)/);
-  // The nav URL never embeds the UUID.
+  // Plan 18-01 (LEG-01): Open↗ funnels through buildReaderHref(companyPrefix,
+  // leafIssueId) — the HUMAN key is the second arg, never a UUID.
+  assert.match(CODE, /navigate\(buildReaderHref\(companyPrefix,\s*leafIssueId\)\)/);
+  // The nav target never embeds the UUID — neither inline nor through the helper.
+  assert.doesNotMatch(CODE, /buildReaderHref\(companyPrefix,\s*leafIssueUuid\)/);
+  assert.doesNotMatch(CODE, /buildReaderHref\(companyPrefix,\s*mutationIssueUuid\)/);
   assert.doesNotMatch(CODE, /issues\/\$\{leafIssueUuid\}/);
   assert.doesNotMatch(CODE, /issues\/\$\{mutationIssueUuid\}/);
 });
