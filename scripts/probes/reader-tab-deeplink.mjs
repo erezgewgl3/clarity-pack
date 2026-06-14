@@ -44,7 +44,20 @@
 //   src/manifest.ts:786), which is instance-independent.
 //
 // ============================================================================
-// TIER1_HONORED=DEFERRED  (winning carrier: NONE — Tier-2 fallback ships now)
+// TIER1_HONORED=false  (winning carrier: NONE — Tier-2 fallback is FINAL)
+// RE-PROBED LIVE 2026-06-15 on BEAAA v1.7.1 (Reader rendering restored), via the
+// operator browser through the tunnel. Result on issue BEAAA-972:
+//   baseline (no carrier)      → host default tab = Chat; Clarity Reader NOT active
+//   /issues/<id>?tab=clarity-reader → Reader NOT auto-selected (carrier ignored)
+//   /issues/<id>#tab=clarity-reader → Reader NOT auto-selected (carrier ignored)
+// Conclusion: the host honors NEITHER carrier. Tier-1 is closed BY CONSTRUCTION
+// (host mounts ReaderView only when its detailTab is already active; Clarity cannot
+// self-select a host-owned tab — 18-RESEARCH finding C). buildReaderHref's Tier-2
+// return (/<prefix>/issues/<id>) is FINAL; there is no one-line upgrade available.
+// ACCEPTED SHORTFALL (SPEC line 28): Open↗ lands on the issue's default tab and the
+// Clarity Reader is ONE CLICK away, not the terminal auto-landing. Making it auto-land
+// requires a HOST feature (host honoring ?tab=/#tab=, or a detailTab defaultTab hint) —
+// a future ask to the Paperclip host team, not an in-plugin fix.
 // ============================================================================
 // VERDICT (2026-06-14, continuation executor, checkpoint resume-signal = "tier2"):
 //   The live deep-link probe COULD NOT BE RUN — the entire Clarity Pack UI was
