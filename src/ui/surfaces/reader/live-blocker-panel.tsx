@@ -125,7 +125,21 @@ function blockerLine(data: BlockerChainResult): string {
   return rescrubPersisted(line);
 }
 
-export function LiveBlockerPanel({ issueId }: { issueId: string }): React.ReactElement | null {
+export function LiveBlockerPanel({
+  issueId,
+  onVerdict,
+}: {
+  issueId: string;
+  /** Plan 18-03 Task 3 (LEG-03) — OPTIONAL upward report of the leaf verdict the
+   *  panel already fetched, so the Reader index can compute the honest-divergence
+   *  flag (looksDone(tldr.body) AND needsYou) WITHOUT a second flatten-blocker-chain
+   *  fetch (the panel is the single owner of that read; this just lifts its result
+   *  up). Reports { needsYou, leafIssueId, leafIssueUuid }; null when no live
+   *  blocker exists. Absent callback → no behavior change (pre-18-03 callers). */
+  onVerdict?: (
+    verdict: { needsYou: boolean; leafIssueId: string | null; leafIssueUuid: string | null } | null,
+  ) => void;
+}): React.ReactElement | null {
   const { companyId, loading: companyLoading } = useResolvedCompanyId();
   const { userId, loading: userIdLoading } = useResolvedUserId();
 
@@ -139,6 +153,7 @@ export function LiveBlockerPanel({ issueId }: { issueId: string }): React.ReactE
       issueId={issueId}
       companyId={companyId}
       viewerUserId={userId}
+      onVerdict={onVerdict}
     />
   );
 }
@@ -149,10 +164,14 @@ function LiveBlockerPanelWithCompany({
   issueId,
   companyId,
   viewerUserId,
+  onVerdict,
 }: {
   issueId: string;
   companyId: string;
   viewerUserId: string;
+  onVerdict?: (
+    verdict: { needsYou: boolean; leafIssueId: string | null; leafIssueUuid: string | null } | null,
+  ) => void;
 }): React.ReactElement | null {
   // Plan 11-07 (WR-02) — host navigation + wakeup dispatch for the wired
   // affordances. companyPrefix is parsed from the pathname (detail-tab slots
@@ -173,6 +192,27 @@ function LiveBlockerPanelWithCompany({
     viewerUserId,
     companyId,
   });
+
+  // Plan 18-03 Task 3 (LEG-03) — report the leaf verdict upward (no second fetch).
+  // The Reader index combines this needsYou with looksDone(tldr.body) to decide
+  // whether to show the honest-divergence affordance. Reported in an effect (never
+  // during render). The leaf HUMAN id is the open issue ONLY for a single-hop
+  // chain (CR-01 honest degrade — same rule the reply branch uses); the dispatch
+  // UUID is data.targetIssueUuid (NO_UUID_LEAK — an arg, not rendered).
+  const onVerdictRef = React.useRef(onVerdict);
+  onVerdictRef.current = onVerdict;
+  React.useEffect(() => {
+    if (!onVerdictRef.current) return;
+    if (!data) {
+      onVerdictRef.current(null);
+      return;
+    }
+    onVerdictRef.current({
+      needsYou: data.needsYou === true,
+      leafIssueId: data.pathIds.length <= 1 ? issueId : null,
+      leafIssueUuid: data.targetIssueUuid ?? null,
+    });
+  }, [data, issueId]);
 
   // Plan 11-07 (WR-02) — the action handlers. EVERY handler performs a REAL
   // effect (navigation or a worker dispatch); the targetAgentUuid/targetIssueUuid

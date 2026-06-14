@@ -44,6 +44,7 @@ import { useToast } from '../../primitives/toast.tsx';
 import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { buildChatDeepLink } from '../chat/deep-link.mjs';
 import { OwnerPickerPopover } from './owner-picker-popover.tsx';
+import { LooksDoneAffordance } from './looks-done-affordance.tsx';
 import { visualTierOf } from './tier-utils.ts';
 
 /** DOM id stamped on the row root so the needs-you banner's [Assign first] can
@@ -123,6 +124,11 @@ export type SituationEmployeeRow = {
     /** Plan 11-04 (D-09) — set only on an honest UNCLASSIFIED degrade. */
     degradeReason?: string;
   } | null;
+  /** Plan 18-03 Task 3 (LEG-03 / D-05/D-06/D-07) — the honest-divergence flag,
+   *  set by the worker rollup (Task 2) ONLY when this row is needs-you AND its
+   *  cached TL;DR reads as done. Drives the confirm-gated "Looks done — close it?"
+   *  affordance. Optional + defaults absent (absent = false); degrade-safe. */
+  looksDone?: boolean;
   // Plan 13-03 (D-13/D-14) — the Editor-Agent named-action card for this leaf,
   // attached by the situation.snapshot handler ONLY when fresh (13-02); null/
   // absent when stale or not yet generated → the row degrades to the
@@ -464,6 +470,22 @@ export function EmployeeRow({
                   </button>
                 )}
               </>
+            )}
+            {/* Plan 18-03 Task 3 (LEG-03) — the honest-divergence affordance. The
+             *  worker rollup set row.looksDone ONLY when this needs-you row's
+             *  cached TL;DR reads done while the engine still says blocked. Render
+             *  the confirm-gated "Looks done — close it?" beside the row's normal
+             *  action cluster. Degrade-safe: absent flag OR no leaf to close → no
+             *  affordance (no false prompt). leafIssueUuid is dispatch-only
+             *  (NO_UUID_LEAK); leafIssueId is the only displayed key. */}
+            {row.looksDone === true && chain.leafIssueId && (
+              <LooksDoneAffordance
+                leafIssueId={chain.leafIssueId}
+                leafIssueUuid={chain.leafIssueUuid ?? undefined}
+                companyId={companyId}
+                userId={userId}
+                onClosed={() => onAssignSuccess()}
+              />
             )}
           </div>
         </>

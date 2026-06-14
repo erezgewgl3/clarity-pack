@@ -56,6 +56,12 @@ import { useOptIn } from '../../primitives/use-opt-in.ts';
 import { EnableClarityCta } from '../../components/enable-clarity-cta.tsx';
 
 import { TldrStrip } from './tldr-strip.tsx';
+// Plan 18-03 Task 3 (LEG-03) — the deterministic done-regex + the confirm-gated
+// honest-divergence affordance. The Reader already has data.tldr.body in hand
+// (no new DB read); the needsYou verdict is lifted up from LiveBlockerPanel's
+// existing fetch via its onVerdict callback.
+import { looksDone } from '../../../shared/looks-done.ts';
+import { LooksDoneAffordance } from '../situation-room/looks-done-affordance.tsx';
 // Plan 04.2-01 (RCB-01) — the Reader-header Continue-in-chat primitive.
 import { ContinueInChatButton } from './continue-in-chat-button.tsx';
 // Plan 04.2-01 (RCB-06) — the Reader-header reverse-topics list.
@@ -261,6 +267,18 @@ function ReaderViewReady({
     filterToAssignee: string | null;
   } | null>(null);
 
+  // Plan 18-03 Task 3 (LEG-03) — the leaf blocker verdict lifted up from
+  // LiveBlockerPanel's EXISTING flatten-blocker-chain fetch (no second Reader DB
+  // read). Combined with looksDone(data.tldr.body) below to gate the confirm-
+  // gated "Looks done — close it?" affordance: shown ONLY when the TL;DR reads
+  // done AND the engine still says a person must act (needsYou). Null until the
+  // panel reports → degrade-safe (no verdict yet → no affordance).
+  const [blockerVerdict, setBlockerVerdict] = React.useState<{
+    needsYou: boolean;
+    leafIssueId: string | null;
+    leafIssueUuid: string | null;
+  } | null>(null);
+
   // Quick fix 260524-s2y (rc.6) — SDK 2026.512.0 has no manifest-side
   // `actions[].invalidates` field (verified: PaperclipPluginManifestV1 has
   // no `actions:` key; SDK type tree contains zero `invalidat*` occurrences).
@@ -405,6 +423,29 @@ function ReaderViewReady({
       <SectionErrorBoundary name="tldr" resetKey={entityId}>
         <TldrStrip tldr={data.tldr} status={data.tldrStatus} truncated={data.tldrTruncated} />
       </SectionErrorBoundary>
+      {/* Plan 18-03 Task 3 (LEG-03) — the confirm-gated honest-divergence
+          affordance, beside the TL;DR. Shown ONLY when the TL;DR body reads done
+          (looksDone) AND the engine still says a person must act
+          (blockerVerdict.needsYou) AND a leaf id is available to close. Degrade-
+          safe: missing TL;DR body OR no verdict yet OR agreeing inputs → absent
+          (no false prompt). No new Reader DB read — data.tldr.body is in hand and
+          the verdict is lifted from the panel's existing fetch. leafIssueUuid is
+          dispatch-only (NO_UUID_LEAK); leafIssueId is the only displayed key. */}
+      {looksDone(data.tldr?.body) &&
+      blockerVerdict?.needsYou === true &&
+      blockerVerdict.leafIssueId ? (
+        <SectionErrorBoundary name="looks-done" resetKey={entityId}>
+          <div className="clarity-reader-looks-done" data-clarity-region="reader-looks-done">
+            <LooksDoneAffordance
+              leafIssueId={blockerVerdict.leafIssueId}
+              leafIssueUuid={blockerVerdict.leafIssueUuid ?? undefined}
+              companyId={companyId}
+              userId={userId}
+              onClosed={() => { void refresh(); }}
+            />
+          </div>
+        </SectionErrorBoundary>
+      ) : null}
       {/* 003-C on-you banner (sketch 003 lines 81-88 + usage line 308). The
           relocated LiveBlockerPanel renders full-width in the column directly
           under the briefing. LiveBlockerPanel already returns null when there
@@ -413,7 +454,7 @@ function ReaderViewReady({
           level full-width placement when it IS present. */}
       <div className="clarity-reader-onyou">
         <SectionErrorBoundary name="live-blocker" resetKey={entityId}>
-          <LiveBlockerPanel issueId={entityId} />
+          <LiveBlockerPanel issueId={entityId} onVerdict={setBlockerVerdict} />
         </SectionErrorBoundary>
       </div>
       <div className="clarity-reader-column">

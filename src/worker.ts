@@ -215,6 +215,15 @@ import {
   registerSituationReplyAndResume,
   type SituationReplyAndResumeCtx,
 } from './worker/handlers/situation-reply-and-resume.ts';
+// Plan 18-03 (LEG-03) — situation.closeAsDone: the confirm-gated close mutation
+// behind the "Looks done — close it?" affordance. Flips the leaf issue to
+// status='done' via ctx.issues.update (operator-attributed), reusing the SR
+// assign-owner privilege boundary (A7) + the already-declared issues.update
+// capability. Never fires without the operator's explicit "Close as done".
+import {
+  registerSituationCloseAsDone,
+  type SituationCloseAsDoneCtx,
+} from './worker/handlers/situation-close-as-done.ts';
 // Plan 09-02 (R4 / R7) — agents.pauseHeartbeat (Stand down) + issues.requestWakeup
 // (Wake): the two real write paths the actionable cockpit's idle/stale + blocked-
 // owned rows dispatch. No new capability (agents.pause + issues.wakeup already
@@ -418,6 +427,14 @@ const plugin = definePlugin({
     // opt-in-guard + the reply-resume repo). The fire-and-forget requestWakeup
     // carries idempotencyKey:messageUuid.
     registerSituationReplyAndResume(ctx as unknown as SituationReplyAndResumeCtx);
+
+    // ---- Plan 18-03 (LEG-03) — situation.closeAsDone -----------------------
+    // The confirm-gated close mutation behind the honest-divergence affordance.
+    // Flips the blocker leaf to status='done' via ctx.issues.update with the
+    // operator as the audit actor — ONLY after the operator explicitly selects
+    // "Close as done" in the UI (never auto-closes). Same ctx clients + privilege
+    // boundary as situation.assignOwner (issues.update + db for the opt-in-guard).
+    registerSituationCloseAsDone(ctx as unknown as SituationCloseAsDoneCtx);
 
     // ---- Plan 09-02 (R1 / BLOCKER 1) — situation.artifacts handler REMOVED ---
     // The dead AgentCard grid was situation.artifacts' only consumer; both the
