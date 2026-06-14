@@ -59,7 +59,7 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 - [x] **Phase 16: Snapshot performance & honest loading** — cockpit loads fast (snapshot well under the 30s timeout, target p95 < ~5s, never 502s); eliminate the 25.7s cold recompute near-cliff; employees rollup degrade-safe. Confirm-first baseline already recorded. FIRST. (completed 2026-06-03)
 - [x] **Phase 16.1: Editor-Agent loop elimination & wake governor (URGENT — make Clarity safe to run)** — INSERTED 2026-06-04 after a production incident: installing Clarity made the live BEAAA instance unusable (every issue/agent/task change drove CPU up + woke 4-5 agents). Root cause = a closed positive-feedback loop (event-reactive op-issue creation + `requestWakeup` whose own writes re-enter the instance-wide event subscription). Eliminate the loop by construction, add a durable throughput wake-governor + kill-switch, and gate ingress on opt-in/scope — while leaving the read-time "zero rabbit-holes" guarantee untouched. Hard prerequisite to reinstalling Clarity on BEAAA; blocks 17–20. (completed 2026-06-10)
 - [x] **Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)** — a machine-readable "blocked on a human decision X" signal so the deterministic engine classifies AWAITING_HUMAN instead of parking in Watch (the deep BEAAA-972 fix); every blocked-no-edge class classified truthfully; SC5 extended to a full surface × terminal-kind matrix. (completed 2026-06-11)
-- [ ] **Phase 18: No rabbit-holes & plain-English** — "Open ↗" routes to the Clarity Reader (not the raw classic page); ZERO raw/partial agent/UUID ids in human-facing text everywhere; "Looks done — close it?" affordance when the AI TL;DR reads done but the engine still says blocked.
+- [x] **Phase 18: No rabbit-holes & plain-English** — "Open ↗" routes to the Clarity Reader (not the raw classic page); ZERO raw/partial agent/UUID ids in human-facing text everywhere; "Looks done — close it?" affordance when the AI TL;DR reads done but the engine still says blocked. (completed 2026-06-14)
 - [ ] **Phase 19: Action-cards async re-architecture (LAST, flag-gated)** — action-card compile off the request path writing non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; Editor named-action prose live on needs-you rows; runtime-safe + slip-safe to v1.6.
 - [ ] **Phase 20: Hygiene & honestly-green CI** — SC5 full-matrix in CI; fix the 7 CHAT/CTT traceability failures; stabilize the chat-watchdog timing flake; refresh the version label; confirm automated DO backups (the continuous-deploy bookend).
 
@@ -130,7 +130,7 @@ Plans:
 - [x] 18-01-PLAN.md — LEG-01: live host deep-link probe + buildReaderHref single-source helper + re-point all 5 Open↗ sites
 - [x] 18-02-PLAN.md — LEG-02: "an agent" scrub fallback + inverted/anchored NO_UUID_LEAK guards + humanized chat chips + read-time re-scrub
 - [x] 18-03-PLAN.md — LEG-03: deterministic done-regex + batched O(1) needs-you read + confirm-gated "Looks done — close it?" affordance (Reader + SR)
-- [ ] 18-04-PLAN.md — two-source version bump + bookended BEAAA install + live drill (the phase acceptance)
+- [x] 18-04-PLAN.md — two-source version bump + bookended BEAAA install + live drill (the phase acceptance)
 **UI hint**: yes
 
 ### Phase 19: Action-cards async re-architecture (LAST, flag-gated)
@@ -266,7 +266,7 @@ Plans:
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
 | 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 7/7 | Complete   | 2026-06-10 |
 | 17. Structured human-wait + truthful verdicts | 6/6 | Complete   | 2026-06-11 |
-| 18. No rabbit-holes & plain-English | 3/4 | In Progress|  |
+| 18. No rabbit-holes & plain-English | 4/4 | Complete   | 2026-06-14 |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
 | 20. Hygiene & honestly-green CI | 0/TBD | Not started | - |
 
