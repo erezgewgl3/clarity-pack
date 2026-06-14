@@ -642,7 +642,25 @@ const manifest: PaperclipPluginManifestV1 = {
   // + package.json) is byte-identical so the kill-switch version-scoping reads
   // the shipped build's version. See:
   //   .planning/phases/16.1-editor-agent-loop-elimination-wake-governor/
-  version: '1.7.1',
+  //
+  // 1.7.2 (no-rabbit-holes hardening pass, 2026-06-15 — Tier-1 fixes T1-A..D +
+  // Phase-20 HYG-02). Four in-plugin "no rabbit holes" fixes, all additive and
+  // degrade-safe (no schema, no new capability, no perf-floor change):
+  //   - T1-A: sanitizeHref rejects unfilled `<…>` placeholder hrefs so an
+  //     unresolved-reference link can never become a fetchable 404-loop;
+  //     downgrades to inert text (Reader/issue console).
+  //   - T1-B: deliverable.preview gains an inline plain-text-family previewer
+  //     (.txt/.csv/.json/.log/.yaml/…) + per-code legible error reasons +
+  //     extension-named placeholder — closes "Preview unavailable" for common
+  //     text deliverables.
+  //   - T1-C: the Situation Room Watch-tier stuck row names the human action
+  //     ("assign an owner to unblock") instead of the "— agent stuck" dead-end.
+  //   - T1-D: every surface export is wrapped in a top-level ClaritySurfaceBoundary
+  //     (honest "Clarity is unavailable" banner instead of a blank frame / the
+  //     host's generic pill) + a dependency-free, opt-in-exempt worker liveness
+  //     probe (clarity-pack/health) for ops detection of a crashed worker.
+  // Two-source version bump (this literal + package.json) is byte-identical.
+  version: '1.7.2',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
