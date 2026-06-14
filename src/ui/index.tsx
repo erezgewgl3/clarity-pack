@@ -37,11 +37,24 @@ injectClarityStyles(bulletinCss, 'data-clarity-pack-bulletin-styles');
 injectClarityStyles(chatCss, 'data-clarity-pack-chat-styles');
 injectClarityStyles(archiveCss, 'data-clarity-pack-archive-styles');
 
-export { ReaderView } from './surfaces/reader/index.tsx';
-export { SituationRoom } from './surfaces/situation-room/index.tsx';
-export { BulletinPage } from './surfaces/bulletin/index.tsx';
-export { ChatPage } from './surfaces/chat/index.tsx';
-export { SettingsPage } from './surfaces/settings/index.tsx';
+// T1-D (no-rabbit-holes self-health, 2026-06-15) — every surface export is
+// wrapped in a top-level ClaritySurfaceBoundary so a render-time throw degrades
+// to an honest "Clarity is unavailable" banner instead of bubbling to the
+// host's generic pill or (in the BEAAA blank-UI incident) showing nothing. The
+// host mounts the wrapped component; the inner surface is byte-unchanged.
+import { withClarityBoundary } from './primitives/clarity-surface-boundary.tsx';
+import { ReaderView as ReaderViewInner } from './surfaces/reader/index.tsx';
+import { SituationRoom as SituationRoomInner } from './surfaces/situation-room/index.tsx';
+import { BulletinPage as BulletinPageInner } from './surfaces/bulletin/index.tsx';
+import { ChatPage as ChatPageInner } from './surfaces/chat/index.tsx';
+import { SettingsPage as SettingsPageInner } from './surfaces/settings/index.tsx';
 // Plan 05-08 (D-15) — Archive full-view page mounts at /<companyPrefix>/archive
 // via the manifest's `clarity-archive` page-slot (exportName: 'ArchivePage').
-export { ArchivePage } from './surfaces/archive/archive-page.tsx';
+import { ArchivePage as ArchivePageInner } from './surfaces/archive/archive-page.tsx';
+
+export const ReaderView = withClarityBoundary(ReaderViewInner, 'Reader');
+export const SituationRoom = withClarityBoundary(SituationRoomInner, 'Situation Room');
+export const BulletinPage = withClarityBoundary(BulletinPageInner, 'Daily Bulletin');
+export const ChatPage = withClarityBoundary(ChatPageInner, 'Employee Chat');
+export const SettingsPage = withClarityBoundary(SettingsPageInner, 'Clarity settings');
+export const ArchivePage = withClarityBoundary(ArchivePageInner, 'Archive');

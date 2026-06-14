@@ -217,7 +217,26 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // (deliverable-preview.tsx is the dominant heavyweight); until then, one modest
 // bump beats crippling the capstone IA. The 740 kB sanity ceiling is RAISED to
 // the new 745 kB ceiling here — the SheetJS sentinel check stays the real guard.
-const UI_BUNDLE_BYTES_CEILING = 745 * 1024; // 745 kB = 762,880 bytes
+// Bumped 2026-06-15 from 745 → 761 kB (Phase 18 LEG UI additions that shipped
+// in v1.7.1 without a ceiling bump + the no-rabbit-holes hardening pass, no
+// SheetJS): the v1.7.1 build on disk was already 769,661 bytes — Phase 18 added
+// the LooksDoneAffordance + reply-in-place/needs-you LEG-03 render paths and the
+// activity-actor scrub UI without retuning this ceiling (the gate was red at
+// ship; recalibrated here). The 2026-06-15 hardening pass then added: the T1-D
+// top-level ClaritySurfaceBoundary + withClarityBoundary HOC (honest
+// surface-unavailable banner) + its scoped CSS, the T1-B plain-text deliverable
+// previewer (<pre> render + per-code error-reason mapping) + its scoped CSS, and
+// the T1-A/T1-C tiny string/guard deltas. The built bundle went 769,661 →
+// 775,471 bytes. Verified zero SheetJS sentinels (XLSX/SheetJS/!ref all 0 in the
+// UI bundle — the SheetJS leak check below is the REAL bloat guard and stays
+// clean), so the delta is legitimate feature code. Recalibrated per the
+// long-standing empirical precedent (Plan 05-04 / 05-11 / 07-* / 08-02 / 15-*):
+//   ceil((775,471 + 3,072) / 1024) = 761 kB (779,264 bytes), ~3.7 kB headroom.
+// DURABLE LEVER (unchanged): the dominant heavyweight remains react-markdown in
+// deliverable-preview.tsx; a lazy-load/replacement audit would reclaim far more
+// than these cumulative bumps add. Until that audit, one honest bump beats
+// crippling a legitimate feature; the SheetJS sentinel check is the real guard.
+const UI_BUNDLE_BYTES_CEILING = 761 * 1024; // 761 kB = 779,264 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

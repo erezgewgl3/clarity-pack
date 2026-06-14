@@ -40,6 +40,10 @@ import {
   type CompaniesResolveCtx,
 } from './worker/handlers/companies-resolve.ts';
 // Plan 02-04 Task 1 — opt-in handlers.
+// T1-D (no-rabbit-holes self-health, 2026-06-15) — a dependency-free worker
+// liveness probe (opt-in-exempt, zero-DB). Ops/host can hit it to detect a
+// crashed/not-ready worker (the BEAAA blank-UI incident's root class).
+import { registerClarityHealth, type ClarityHealthCtx } from './worker/handlers/clarity-health.ts';
 import { registerGetOptIn, type GetOptInCtx } from './worker/handlers/get-opt-in.ts';
 import { registerSetOptIn, type SetOptInCtx } from './worker/handlers/set-opt-in.ts';
 import {
@@ -273,6 +277,8 @@ const plugin = definePlugin({
     registerGetOptIn(ctx as unknown as GetOptInCtx);
     registerSetOptIn(ctx as unknown as SetOptInCtx);
     registerGetInstanceConfig(ctx as unknown as GetInstanceConfigCtx);
+    // T1-D — opt-in-exempt worker liveness probe (clarity-pack/health).
+    registerClarityHealth(ctx as unknown as ClarityHealthCtx);
 
     // ---- Plan 02-02 data handlers (now wrapped with opt-in-guard) -----------
     registerResolveRefs(ctx as unknown as ResolveRefsCtx);
