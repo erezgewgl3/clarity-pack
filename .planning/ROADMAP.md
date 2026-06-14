@@ -266,7 +266,7 @@ Plans:
 | 16. Snapshot performance & honest loading | 4/4 | Complete   | 2026-06-03 |
 | 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 7/7 | Complete   | 2026-06-10 |
 | 17. Structured human-wait + truthful verdicts | 6/6 | Complete   | 2026-06-11 |
-| 18. No rabbit-holes & plain-English | 4/4 | Complete   | 2026-06-14 |
+| 18. No rabbit-holes & plain-English | 4/4 | Complete    | 2026-06-14 |
 | 19. Action-cards async re-architecture | 0/TBD | Not started | - |
 | 20. Hygiene & honestly-green CI | 0/TBD | Not started | - |
 
