@@ -33,6 +33,8 @@ import {
   useHostNavigation,
 } from '@paperclipai/plugin-sdk/ui/hooks';
 
+import { humanizeChatChip } from '../../../shared/scrub-human-action.ts';
+
 import { ArchivedTopicsPill } from './archived-topics-pill.tsx';
 
 /** A chat topic as chat.topics returns it. */
@@ -72,14 +74,18 @@ type TopicsResult =
   | null;
 
 /**
- * Derive the CHT-NN label from a topic. The worker exposes a topicId; if it
- * is already CHT-shaped use it verbatim, otherwise fall back to a short slug.
+ * Derive the chip label from a topic. The worker exposes a topicId; if it is
+ * already CHT-shaped (a legitimate ordinal) use it verbatim. Plan 18-02
+ * (LEG-02 / D-09): a non-ordinal topicId NO LONGER renders the raw
+ * `id.slice(0,8)` hex slice (a machine token a non-builder can't read) — it
+ * resolves to the human topic title via the single-sourced humanizeChatChip.
  */
 export function chtLabel(topic: ChatTopic): string {
   const id = topic.topicId ?? '';
-  if (/^CHT-\d+$/i.test(id)) return id.toUpperCase();
-  if (/^\d+$/.test(id)) return `CHT-${id}`;
-  return id ? id.slice(0, 8).toUpperCase() : 'CHT-—';
+  if (/^CHT-\d+$/i.test(id)) return id.toUpperCase(); // real ordinal — keep
+  if (/^\d+$/.test(id)) return `CHT-${id}`; // numeric ordinal — keep
+  // D-09 — never the raw hex slice; show the topic title.
+  return humanizeChatChip({ kind: 'topic', title: topic.title, topicId: id });
 }
 
 export function TopicStrip({

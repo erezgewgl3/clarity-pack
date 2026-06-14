@@ -52,6 +52,7 @@ import {
   usePluginStream,
 } from '@paperclipai/plugin-sdk/ui/hooks';
 
+import { humanizeChatChip } from '../../../shared/scrub-human-action.ts';
 import { deriveLiveness, usePoll, type LivenessState } from '../../primitives/use-poll.ts';
 // Plan 05-06 Task 1 (D-11) — Pin/Unpin success path swaps inline setFeedback
 // for the bottom-right clarity-pack toast (silent-toggle invariant). The hook
@@ -1117,8 +1118,13 @@ function RuntimeNoiseStructuredRow({ row }: { row: SectionRow }): React.ReactEle
       return (
         <div className="runtime-noise-comment-row">
           <span className="runtime-noise-comment-row-label">{label}</span>
+          {/* Plan 18-02 (LEG-02 / D-09) — never render the raw runId hex slice.
+              Resolve to the run's agent name/role when the payload carries one
+              (A4: today the run_link row carries runId + title but NOT an agent
+              name — the name lives on agent_link rows), else the plain-English
+              "an agent" fallback. The optional · title suffix is preserved. */}
           <span className="clarity-ref-chip" data-clarity-noise-chip="run">
-            run · {(row.runId ?? '').slice(0, 8)}
+            run · {humanizeChatChip({ kind: 'run', agentName: row.name, title: row.title })}
             {row.title ? ` · ${row.title}` : ''}
           </span>
         </div>
