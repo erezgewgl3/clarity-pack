@@ -11,7 +11,16 @@
 // check) can hit to confirm the worker process is alive and answering the
 // bridge.
 //
-//   POST /api/plugins/<id>/data/clarity-pack/health  ->  { ok: true, ts }
+//   POST /api/plugins/<id>/data/clarity.health  ->  { data: { ok: true, ts } }
+//
+// KEY SHAPE (live-verified on BEAAA 2026-06-15): the host data REST route
+// matches a SINGLE path segment after `/data/`, so a handler key MUST be
+// dotted/bare (`clarity.health`), NOT slash-namespaced. A slash key like
+// `clarity-pack/health` parses to `/data/clarity-pack/health` and 404s ("API
+// route not found") on the REST path — it is only reachable via the in-app
+// usePluginData bridge, which defeats the whole point of a curl-able ops probe.
+// (The legacy `clarity-pack/get-instance-config` exempt key has this same REST
+// blind spot; it survives only because it's bridge-invoked at boot.)
 //
 // Deliberately NOT opt-in gated (a liveness probe must answer regardless of the
 // caller's prefs) and deliberately carries NO version literal — version is
@@ -28,8 +37,11 @@ export type ClarityHealthCtx = {
   data: Pick<PluginDataClient, 'register'>;
 };
 
-/** The handler key. Exempt from opt-in-guard by registering directly. */
-export const CLARITY_HEALTH_KEY = 'clarity-pack/health';
+/** The handler key. Dotted/bare (single REST path segment) so it is reachable
+ *  via `POST /api/plugins/<id>/data/clarity.health` for an ops liveness curl —
+ *  a slash key would 404 on that route (see header). Exempt from opt-in-guard
+ *  by registering directly. */
+export const CLARITY_HEALTH_KEY = 'clarity.health';
 
 export function registerClarityHealth(ctx: ClarityHealthCtx): void {
   // Registered directly (NOT through wrapDataHandler) so it bypasses the

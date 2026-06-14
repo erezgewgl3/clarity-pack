@@ -660,7 +660,17 @@ const manifest: PaperclipPluginManifestV1 = {
   //     host's generic pill) + a dependency-free, opt-in-exempt worker liveness
   //     probe (clarity-pack/health) for ops detection of a crashed worker.
   // Two-source version bump (this literal + package.json) is byte-identical.
-  version: '1.7.2',
+  //
+  // 1.7.3 (T1-D follow-up, 2026-06-15): the worker liveness probe's handler key
+  // changed from the slash-namespaced `clarity-pack/health` to the dotted,
+  // single-segment `clarity.health`. Live verification on BEAAA v1.7.2 found the
+  // host data REST route matches only ONE path segment after `/data/`, so a
+  // slash key 404s ("API route not found") on a `curl` — defeating the probe's
+  // purpose as an ops-pollable liveness endpoint. The dotted key is reachable at
+  // `POST /api/plugins/<id>/data/clarity.health` (mirrors issue.reader, which
+  // 200s on that route). 1.7.2 is superseded by 1.7.3 (no separate 1.7.2 deploy
+  // is relied upon downstream; this keeps one build per version literal).
+  version: '1.7.3',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

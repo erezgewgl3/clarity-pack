@@ -20,17 +20,20 @@ function makeCtx() {
   };
 }
 
-test('clarity-health: registers under the clarity-pack/health key', () => {
+test('clarity-health: registers under a dotted single-segment key (REST-reachable)', () => {
   const ctx = makeCtx();
   registerClarityHealth(ctx);
-  assert.equal(CLARITY_HEALTH_KEY, 'clarity-pack/health');
-  assert.equal(typeof ctx._handlers.get('clarity-pack/health'), 'function');
+  // Dotted/bare — a slash key 404s on the host data REST route (live-verified
+  // on BEAAA 2026-06-15); the key MUST stay single-segment to be curl-able.
+  assert.equal(CLARITY_HEALTH_KEY, 'clarity.health');
+  assert.doesNotMatch(CLARITY_HEALTH_KEY, /\//, 'health key must not contain a slash (REST single-segment route)');
+  assert.equal(typeof ctx._handlers.get('clarity.health'), 'function');
 });
 
 test('clarity-health: returns { ok: true, ts } — a liveness signal', async () => {
   const ctx = makeCtx();
   registerClarityHealth(ctx);
-  const result = await ctx._handlers.get('clarity-pack/health')({});
+  const result = await ctx._handlers.get(CLARITY_HEALTH_KEY)({});
   assert.equal(result.ok, true);
   assert.equal(typeof result.ts, 'number');
 });
@@ -41,7 +44,7 @@ test('clarity-health: answers regardless of opt-in (no userId / no prefs lookup)
   // params (no userId) must still return ok.
   const ctx = makeCtx();
   registerClarityHealth(ctx);
-  const result = await ctx._handlers.get('clarity-pack/health')({});
+  const result = await ctx._handlers.get(CLARITY_HEALTH_KEY)({});
   assert.equal(result.error, undefined, 'liveness probe must not be opt-in gated');
   assert.equal(result.ok, true);
 });
