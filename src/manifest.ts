@@ -642,7 +642,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // + package.json) is byte-identical so the kill-switch version-scoping reads
   // the shipped build's version. See:
   //   .planning/phases/16.1-editor-agent-loop-elimination-wake-governor/
-  version: '1.6.0',
+  version: '1.7.0',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
