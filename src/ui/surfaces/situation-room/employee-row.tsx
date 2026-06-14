@@ -515,7 +515,13 @@ export function EmployeeRow({
             <span className="clarity-employee-chain-prefix">{`└ `}</span>
             <span className="clarity-employee-chain-action">
               {showAssign
-                ? `${chain.leafIssueId ?? 'this issue'} — agent stuck`
+                ? /* T1-C (no-rabbit-holes, 2026-06-15) — a Watch-tier stuck row
+                   *  must terminate in a NAMED HUMAN ACTION, not a "— agent stuck"
+                   *  dead-end that forces the operator to drill in. showAssign ⇔
+                   *  actionAffordance==='assign', so the resolving action is
+                   *  literally "assign an owner" (the OwnerPickerPopover mounted
+                   *  below). State the stall honestly AND name the action. */
+                  `${chain.leafIssueId ?? 'this issue'} — agent stuck · assign an owner to unblock`
                 : `waiting on ${rescrubPersisted(chain.awaitedPartyLabel)}`}
             </span>
             {chain.leafIssueId && !showAssign && (

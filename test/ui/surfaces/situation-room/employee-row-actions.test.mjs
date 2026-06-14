@@ -212,6 +212,30 @@ test('CR-01 behavioral guard — a terminal whose label embeds a raw UUID scrubs
 });
 
 // ---------------------------------------------------------------------------
+// T1-C (no-rabbit-holes, 2026-06-15) — a Watch-tier stuck row must terminate
+// in a NAMED HUMAN ACTION, not a bare "— agent stuck" dead-end.
+// ---------------------------------------------------------------------------
+
+test('T1-C — the Watch-tier stuck label names the human action (assign an owner), not a dead-end', () => {
+  // The previous render produced `${leaf} — agent stuck` with no next step.
+  // The fix keeps the honest stall but names the resolving action so the row
+  // never forces a drill-in. The OwnerPickerPopover (the assign affordance) is
+  // mounted in the same showAssign branch — asserted elsewhere in this file.
+  assert.match(
+    ROW,
+    /agent stuck · assign an owner to unblock/,
+    'Watch-tier stuck row must name the assign-an-owner action',
+  );
+  // The bare dead-end string (terminating in "agent stuck" with nothing after)
+  // must NOT survive as the rendered label.
+  assert.doesNotMatch(
+    ROW,
+    /\$\{chain\.leafIssueId \?\? 'this issue'\} — agent stuck`/,
+    'the bare "— agent stuck" dead-end template literal must be gone',
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Plan 09-04 — the popover→action→handler wiring (the checker's blocker)
 // ---------------------------------------------------------------------------
 
