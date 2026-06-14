@@ -66,7 +66,11 @@ test('passes leafIssueUuid (mutation id) AND leafIssueId (display) from the chai
 });
 
 test('passes awaitedPartyLabel + decisionOptions from the chain / actionCard', () => {
-  assert.match(CODE, /awaitedPartyLabel=\{chain\.awaitedPartyLabel\}/);
+  // Plan 18-02 (LEG-02e) — the display string is threaded from chain
+  // .awaitedPartyLabel, now wrapped in the read-time rescrubPersisted pass
+  // (cleans any historical persisted leak with zero new fetches). The intent
+  // (sourced from the chain, not fabricated) is unchanged.
+  assert.match(CODE, /awaitedPartyLabel=\{rescrubPersisted\(chain\.awaitedPartyLabel\)\}/);
   assert.match(CODE, /decisionOptions=\{row\.actionCard\?\.decisionOptions\s*\?\?\s*null\}/);
 });
 

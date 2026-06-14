@@ -38,6 +38,7 @@ import { usePluginAction } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
 import { isReplyReachable } from '../../../shared/reply-reachable.ts';
+import { rescrubPersisted } from '../../../shared/scrub-human-action.ts';
 import { formatAge } from '../../primitives/state-pill-format.ts';
 import { useToast } from '../../primitives/toast.tsx';
 import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
@@ -334,7 +335,10 @@ export function EmployeeRow({
 
       {row.focusLine && (
         <p className="clarity-employee-focus">
-          {row.focusLine}
+          {/* Plan 18-02 (LEG-02e) — read-time re-scrub over the already-fetched
+              focusLine (it is derived from a title that may historically embed an
+              id). Pure regex over an in-memory string — zero new DB fetches. */}
+          {rescrubPersisted(row.focusLine)}
           {row.focusIssueId && (
             <span className="clarity-employee-focus-ref">{` (${row.focusIssueId})`}</span>
           )}
@@ -362,9 +366,13 @@ export function EmployeeRow({
             const estWords = card ? estBucketLabel(card.estBucket) : null;
             return card ? (
               <div className="clarity-employee-chain clarity-employee-chain-action-card">
-                <p className="clarity-employee-named-action">{card.namedAction}</p>
+                {/* Plan 18-02 (LEG-02e) — read-time re-scrub over the already-in-hand
+                    Editorial action-card display strings (namedAction / awaitedParty).
+                    Worker scrubs on write; this additionally cleans any historical
+                    persisted leak. Pure regex over in-memory strings — zero new fetches. */}
+                <p className="clarity-employee-named-action">{rescrubPersisted(card.namedAction)}</p>
                 <p className="clarity-employee-await">
-                  {`waiting on ${card.awaitedParty}${estWords ? ` · ${estWords}` : ''}`}
+                  {`waiting on ${rescrubPersisted(card.awaitedParty)}${estWords ? ` · ${estWords}` : ''}`}
                   {chain.leafIssueId && (
                     <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
                   )}
@@ -376,7 +384,7 @@ export function EmployeeRow({
                 <span className="clarity-employee-chain-action">
                   {showAssign
                     ? `${chain.leafIssueId ?? 'this issue'} has no owner`
-                    : `waiting on ${chain.awaitedPartyLabel}`}
+                    : `waiting on ${rescrubPersisted(chain.awaitedPartyLabel)}`}
                 </span>
                 {chain.leafIssueId && !showAssign && (
                   <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
@@ -415,8 +423,10 @@ export function EmployeeRow({
               <ReplyInPlace
                 leafIssueId={chain.leafIssueId}
                 leafIssueUuid={chain.leafIssueUuid}
-                awaitedPartyLabel={chain.awaitedPartyLabel}
-                namedAction={row.actionCard?.namedAction ?? `waiting on ${chain.awaitedPartyLabel}`}
+                /* Plan 18-02 (LEG-02e) — read-time re-scrub over the already-in-hand
+                 * display strings before they reach the shared primitive. Zero new fetches. */
+                awaitedPartyLabel={rescrubPersisted(chain.awaitedPartyLabel)}
+                namedAction={rescrubPersisted(row.actionCard?.namedAction ?? `waiting on ${chain.awaitedPartyLabel}`)}
                 decisionOptions={row.actionCard?.decisionOptions ?? null}
                 needsDurabilityFlip={chain.needsDurabilityFlip}
                 reachable={isReplyReachable(chain.terminalKind)}
@@ -480,7 +490,7 @@ export function EmployeeRow({
             <span className="clarity-employee-chain-action">
               {showAssign
                 ? `${chain.leafIssueId ?? 'this issue'} — agent stuck`
-                : `waiting on ${chain.awaitedPartyLabel}`}
+                : `waiting on ${rescrubPersisted(chain.awaitedPartyLabel)}`}
             </span>
             {chain.leafIssueId && !showAssign && (
               <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>

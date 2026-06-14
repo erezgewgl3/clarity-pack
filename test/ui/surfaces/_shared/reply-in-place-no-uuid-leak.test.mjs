@@ -31,6 +31,12 @@ const SRC = readFileSync(
 );
 const CODE = stripComments(SRC);
 
+// Plan 18-02 (LEG-02c) — the ANCHORED partial-hash guard, imported from the
+// runtime so guard + runtime never drift. Anchored to `agent#` only (never a
+// blanket /[0-9a-f]{8,}/ — false-positives on git SHAs / hex colors, landmine #5).
+const { PARTIAL_HEX_RE } = await import('../../../../src/shared/scrub-human-action.ts');
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 const LEAK_FIELDS = ['leafIssueUuid', 'targetAgentUuid', 'targetIssueUuid', 'mutationIssueUuid'];
 
 // ---------------------------------------------------------------------------
@@ -86,4 +92,24 @@ test('mutationIssueUuid is consumed ONLY as the dispatch arg leafIssueUuid', () 
   assert.match(CODE, /leafIssueUuid:\s*mutationIssueUuid/, 'dispatch arg use is present (legitimate)');
   // It is read into a plain const, never inside a render expression.
   assert.match(CODE, /const mutationIssueUuid = leafIssueUuid \?\? leafIssueId/);
+});
+
+// ---------------------------------------------------------------------------
+// Plan 18-02 (LEG-02c) — ANCHORED partial-hash + bare-UUID guard on the source.
+// ReplyInPlace renders awaitedPartyLabel/leafIssueId (human strings); neither a
+// raw UUID nor an `agent#<hex{6,}>` partial hash may appear in the source.
+// ---------------------------------------------------------------------------
+
+test('NO_UUID_LEAK anchored — reply-in-place source carries no agent#<hex> partial hash', () => {
+  assert.doesNotMatch(CODE, PARTIAL_HEX_RE, 'reply-in-place source leaks an agent#<hex> partial hash');
+});
+
+test('NO_UUID_LEAK anchored — reply-in-place source carries no bare UUID literal', () => {
+  assert.doesNotMatch(CODE, UUID_RE, 'reply-in-place source leaks a bare UUID literal');
+});
+
+test('NO_UUID_LEAK anchored — the imported anchor is meaningful (matches the leak, not a git SHA / hex color)', () => {
+  assert.match('agent#04fcac7c', PARTIAL_HEX_RE);
+  assert.doesNotMatch('deadbeef', PARTIAL_HEX_RE);
+  assert.doesNotMatch('#0E0D0A', PARTIAL_HEX_RE);
 });

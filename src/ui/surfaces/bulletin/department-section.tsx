@@ -11,6 +11,8 @@
 
 import * as React from 'react';
 
+import { rescrubPersisted } from '../../../shared/scrub-human-action.ts';
+
 export type DepartmentItem = {
   title: string;
   timeText: string;
@@ -30,6 +32,11 @@ export type DepartmentSectionProps = {
 export function DepartmentSection(props: DepartmentSectionProps): React.ReactElement {
   const items = props.items ?? [];
   const isEmpty = items.length === 0;
+  // Plan 18-02 (LEG-02e) — read-time re-scrub over the already-fetched editorial
+  // prose (the Editor-Agent's persisted bulletin body, e.g. tldr/narrative text
+  // that may HISTORICALLY embed a partial hash or bare UUID). Pure regex over an
+  // in-memory string — ZERO new DB fetches; idempotent over already-clean prose.
+  const editorialSummary = rescrubPersisted(props.editorialSummary ?? '');
   return (
     <section className="clarity-bulletin-department-section" data-clarity-region="department">
       <header className="clarity-bulletin-ops-head">
@@ -41,13 +48,13 @@ export function DepartmentSection(props: DepartmentSectionProps): React.ReactEle
 
       {isEmpty ? (
         <div className="clarity-bulletin-quiet">
-          {props.editorialSummary?.trim()
-            ? props.editorialSummary
+          {editorialSummary?.trim()
+            ? editorialSummary
             : 'Quiet day. No founder action required.'}
         </div>
       ) : (
         <>
-          {props.editorialSummary?.trim() ? (
+          {editorialSummary?.trim() ? (
             <p
               className={
                 props.isFirst
@@ -55,7 +62,7 @@ export function DepartmentSection(props: DepartmentSectionProps): React.ReactEle
                   : 'clarity-bulletin-editorial'
               }
             >
-              {props.editorialSummary}
+              {editorialSummary}
             </p>
           ) : null}
           {items.map((item, i) => (

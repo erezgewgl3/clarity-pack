@@ -32,6 +32,11 @@ import { buildPulseSentence } from '../../../../src/ui/surfaces/situation-room/p
 // Phase 11/13/14 NO_UUID_LEAK render-scan guards).
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
+// Plan 18-02 (LEG-02c) — the ANCHORED partial-hash guard, imported from the
+// runtime so guard + runtime never drift. Anchored to `agent#` — never a blanket
+// /[0-9a-f]{8,}/ (false-positives on git SHAs / hex colors — landmine #5).
+const { PARTIAL_HEX_RE } = await import('../../../../src/shared/scrub-human-action.ts');
+
 // A handful of illustrative company prefixes — none may appear as a literal in
 // the source or in the rendered output (instance-agnostic, D-10).
 const PREFIX_LITERALS = ['BEAAA', 'COU'];
@@ -155,4 +160,35 @@ test('NO_UUID_LEAK structural — pulse-sentence.ts emits counts + static Englis
   for (const lit of PREFIX_LITERALS) {
     assert.doesNotMatch(SENTENCE_CODE, new RegExp(`\\b${lit}\\b`), `no ${lit} literal in the sentence helper`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Plan 18-02 (LEG-02c) — ANCHORED partial-hash guard. Neither the PulseHeader
+// source nor the sentence helper nor the rendered text may carry an
+// `agent#<hex{6,}>` partial hash. Anchored only (imported PARTIAL_HEX_RE).
+// ---------------------------------------------------------------------------
+
+test('NO_UUID_LEAK anchored — PulseHeader + sentence source carry no agent#<hex> partial hash', () => {
+  assert.doesNotMatch(HEADER_CODE, PARTIAL_HEX_RE, 'PulseHeader source leaks an agent#<hex> partial hash');
+  assert.doesNotMatch(SENTENCE_CODE, PARTIAL_HEX_RE, 'pulse-sentence source leaks an agent#<hex> partial hash');
+});
+
+test('NO_UUID_LEAK anchored behavioral — rendered Pulse text has ZERO partial-hash matches across regimes', () => {
+  const regimes = [
+    undefined,
+    { needYou: 0, inMotion: 0, stuck: 0, selfClearing: 0 },
+    { needYou: 9, inMotion: 12, stuck: 4, selfClearing: 2 },
+    { needYou: 1, inMotion: 1, stuck: 1, selfClearing: 1 },
+  ];
+  for (const r of regimes) {
+    const text = renderPulseText(r);
+    assert.doesNotMatch(text, PARTIAL_HEX_RE, `rendered Pulse text leaked a partial hash: ${text}`);
+    assert.doesNotMatch(text, UUID_RE, `rendered Pulse text leaked a UUID: ${text}`);
+  }
+});
+
+test('NO_UUID_LEAK anchored — the imported anchor is meaningful (matches the leak, not a git SHA)', () => {
+  assert.match('agent#04fcac7c', PARTIAL_HEX_RE);
+  assert.doesNotMatch('deadbeef', PARTIAL_HEX_RE);
+  assert.doesNotMatch('#0E0D0A', PARTIAL_HEX_RE);
 });

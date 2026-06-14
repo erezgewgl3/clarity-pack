@@ -31,6 +31,7 @@ import {
 
 import type { BlockerChainResult } from '../../../shared/types.ts';
 import { isReplyReachable } from '../../../shared/reply-reachable.ts';
+import { rescrubPersisted } from '../../../shared/scrub-human-action.ts';
 import { ReplyInPlace } from '../_shared/reply-in-place.tsx';
 import { StatePill } from '../../primitives/state-pill.tsx';
 import { useResolvedCompanyId } from '../../primitives/use-resolved-company-id.ts';
@@ -81,7 +82,17 @@ function primaryActionLabel(
  *  engine) nor a raw targetAgentUuid/targetIssueUuid (NO_UUID_LEAK / D-15 / CR-01).
  *  For UNCLASSIFIED (D-12) the honest "can't determine — open to investigate" line. */
 function blockerLine(data: BlockerChainResult): string {
+  // Plan 18-02 (LEG-02e) — read-time re-scrub over the ALREADY-fetched display
+  // strings (data.awaitedPartyLabel / data.degradeReason). The worker scrubs on
+  // write; this additionally cleans any HISTORICAL persisted leak (a pre-18-02
+  // partial hash or bare UUID) on the NEXT render. Pure regex over in-memory
+  // strings — ZERO new DB fetches; idempotent over already-clean text. Applied
+  // to the switch result below so all 8 kinds are covered in one place.
   const t = data.terminal;
+  // Compose the raw display line off the worker-scrubbed display fields
+  // (data.awaitedPartyLabel / data.degradeReason — never the raw engine label),
+  // then pass through rescrubPersisted at the single return below.
+  const line = ((): string => {
   switch (t.kind) {
     case 'AWAITING_HUMAN':
       return data.awaitedPartyLabel;
@@ -110,6 +121,8 @@ function blockerLine(data: BlockerChainResult): string {
       return _exhaustive;
     }
   }
+  })();
+  return rescrubPersisted(line);
 }
 
 export function LiveBlockerPanel({ issueId }: { issueId: string }): React.ReactElement | null {

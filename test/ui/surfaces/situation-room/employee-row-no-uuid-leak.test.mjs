@@ -28,6 +28,12 @@ import test from 'node:test';
 // Phase 11 NO_UUID_LEAK guard pattern in employee-row-actions.test.mjs).
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
+// Plan 18-02 (LEG-02c) — import the ANCHORED partial-hash guard from the runtime
+// scrub module so the guard and the runtime can NEVER drift. Do NOT redefine a
+// local anchor, and do NOT add a blanket /[0-9a-f]{8,}/ (false-positives on git
+// SHAs / hex colors — landmine #5).
+const { PARTIAL_HEX_RE } = await import('../../../../src/shared/scrub-human-action.ts');
+
 function stripComments(src) {
   return src
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -41,6 +47,11 @@ const ROW = readFileSync(
   'utf8',
 );
 const ROW_CODE = stripComments(ROW);
+// This guard file's own source (comments stripped) — used to assert it carries
+// no blanket short-hex RULE (Plan 18-02 landmine #5: anchored only). Comments
+// are stripped first so a mention of the forbidden shape in THIS comment does
+// not self-trip the check; only an actual regex literal in code would.
+const SELF_CODE = stripComments(readFileSync(fileURLToPath(import.meta.url), 'utf8'));
 
 // ---------------------------------------------------------------------------
 // (1) STRUCTURAL — sourceIssueUuid is not a field on the actionCard mirror, and
@@ -126,6 +137,39 @@ test('NO_UUID_LEAK behavioral — a card whose (worker) sourceIssueUuid is a rea
   assert.match(rendered, /Approve the Q3 budget/);
   assert.match(rendered, /waiting on you — Founder/);
   assert.match(rendered, /quick decision/);
+});
+
+// ---------------------------------------------------------------------------
+// Plan 18-02 (LEG-02c) — ANCHORED partial-hash guard. The source must carry no
+// `agent#<hex{6,}>` partial hash, and the behavioral render must produce none.
+// Anchored to `agent#` (imported PARTIAL_HEX_RE) — no blanket short-hex rule.
+// ---------------------------------------------------------------------------
+
+test('NO_UUID_LEAK anchored — employee-row source carries no agent#<hex> partial hash', () => {
+  assert.doesNotMatch(ROW_CODE, PARTIAL_HEX_RE, 'employee-row source leaks an agent#<hex> partial hash');
+});
+
+test('NO_UUID_LEAK anchored — the imported guard is the runtime anchor (no blanket short-hex)', () => {
+  // The runtime anchor matches the leak shape...
+  assert.match('agent#04fcac7c', PARTIAL_HEX_RE);
+  // ...and does NOT false-positive on a bare git SHA / hex color (landmine #5).
+  assert.doesNotMatch('deadbeef', PARTIAL_HEX_RE);
+  assert.doesNotMatch('#0E0D0A', PARTIAL_HEX_RE);
+  // This guard file must NOT define a blanket short-hex regex literal in code.
+  assert.doesNotMatch(SELF_CODE, /\/\[0-9a-f\]\{8,\}\//, 'no blanket short-hex rule in the guard');
+});
+
+test('NO_UUID_LEAK anchored behavioral — a clean card renders zero partial-hash matches', () => {
+  const card = {
+    namedAction: 'Approve the Q3 budget so Finance can close the books.',
+    awaitedParty: 'an agent',
+    estBucket: 'quick',
+    actionKind: 'decide',
+    decisionOptions: ['Approve', 'Reject'],
+  };
+  const rendered = renderCardText(card, 'ISSUE-123');
+  assert.doesNotMatch(rendered, PARTIAL_HEX_RE, `rendered card leaked a partial hash: ${rendered}`);
+  assert.doesNotMatch(rendered, UUID_RE, `rendered card leaked a UUID: ${rendered}`);
 });
 
 test('NO_UUID_LEAK behavioral — even a SCRUB-MISS UUID inside namedAction/awaitedParty is the value passed; the worker (13-02 D-10) is the scrub point, and sourceIssueUuid can never leak by construction', () => {
