@@ -29,11 +29,17 @@ import type {
   PluginHttpClient,
   PluginProjectsClient,
   PluginGoalsClient,
+  PluginAgentsClient,
   Issue,
   IssueComment,
 } from '@paperclipai/plugin-sdk';
 
 import type { RefCardData, TLDR } from '../../shared/types.ts';
+// Plan 18 (LEG-02 gap) — the SINGLE LEG-02 vocabulary. The Reader activity
+// timeline's comment-author actor must never leak a raw UUID / `agent#<hex>`
+// partial-hash into human-facing text (a non-builder reads it). We REUSE these
+// constants + the read-time rescrub here — NO parallel scrubber.
+import { AGENT_FALLBACK, UUID_RE, PARTIAL_HEX_RE, rescrubPersisted } from '../../shared/scrub-human-action.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { resolveRefsViaSdk } from './sdk-ref-fetch.ts';
 // 07-04 (D-I31-04) — the worker-side TL;DR refs-to-title rewrite module is
@@ -158,6 +164,11 @@ export type IssueReaderCtx = OptInGuardDataCtx & {
   // PluginContext always provides them.
   projects?: PluginProjectsClient;
   goals?: PluginGoalsClient;
+  // Plan 18 (LEG-02 gap) — `agents` resolves a comment-author UUID to a real
+  // name/role for the activity timeline. Optional so existing test fixtures
+  // type-check; the handler narrows via `typeof ctx.agents?.get === 'function'`
+  // and degrades to AGENT_FALLBACK when absent.
+  agents?: Pick<PluginAgentsClient, 'get'>;
 };
 
 function emptyResult(): IssueReaderResult {
@@ -323,9 +334,19 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
     // closest read API. State-change + work-product events are not exposed;
     // ROADMAP gap captured in 02-03b-SUMMARY.
     // Reuse the comments fetched above for the TL;DR inputs (no second round-trip).
-    const activity: ActivityEvent[] = commentsRaw
-      .slice(-ACTIVITY_LIMIT)
-      .map((c) => commentToActivity(c))
+    //
+    // Plan 18 (LEG-02 gap) — the comment author is the raw camelCase
+    // authorUserId/authorAgentId, which on BEAAA is frequently a raw agent/user
+    // UUID the host does NOT pre-resolve (confirmed live). Rendering it verbatim
+    // leaks a machine token into human-facing text (LEG-02 violation). Resolve
+    // every UUID author to a real name via ctx.agents.get — batched/deduped over
+    // the UNIQUE author ids visible in this window (O(unique authors), no N+1) —
+    // and pass the final string through a read-time floor (rescrubPersisted) so
+    // even an unresolved author can never reach the UI as a UUID/partial-hash.
+    const windowComments = commentsRaw.slice(-ACTIVITY_LIMIT);
+    const authorNameByUuid = await resolveActivityAuthorNames(ctx, windowComments, companyId);
+    const activity: ActivityEvent[] = windowComments
+      .map((c) => commentToActivity(c, authorNameByUuid))
       .reverse(); // newest first
 
     // ---- Deliverable (most-recent IssueDocumentSummary) ---------------------
@@ -474,17 +495,124 @@ async function deriveAncestry(
   return ancestry;
 }
 
-function commentToActivity(c: IssueComment): ActivityEvent {
-  const anyC = c as unknown as {
-    authorAgentId?: string | null;
-    authorUserId?: string | null;
-    body?: string | null;
-    createdAt?: string;
-    created_at?: string;
-  };
-  const actor = anyC.authorUserId ?? anyC.authorAgentId ?? null;
+// Plan 18 (LEG-02 gap) — the comment-author shape. We read a possible
+// pre-resolved display name FIRST (the cheapest correct path: if the host
+// already carries a readable name on the comment, no ctx.agents.get is needed),
+// then fall back to the raw author id. Field names are duck-typed because the
+// SDK IssueComment type does not expose these at 2026.512.0.
+type CommentAuthorFields = {
+  authorAgentId?: string | null;
+  authorUserId?: string | null;
+  authorName?: string | null;
+  authorDisplayName?: string | null;
+  body?: string | null;
+  createdAt?: string;
+  created_at?: string;
+};
+
+// A bare author id is "UUID-shaped" (or a legacy `agent#<hex>` partial-hash)
+// when it would leak a machine token into prose. A readable label like
+// "local-board" or "carrier-ops" matches neither and is preserved verbatim.
+function isLeakyAuthorId(actor: string): boolean {
+  return UUID_RE.test(actor) || PARTIAL_HEX_RE.test(actor);
+}
+
+// Read the raw author id off a comment (user id preferred over agent id, to
+// match the prior precedence). Null when neither is present.
+function rawCommentAuthorId(c: IssueComment): string | null {
+  const anyC = c as unknown as CommentAuthorFields;
+  return anyC.authorUserId ?? anyC.authorAgentId ?? null;
+}
+
+// A pre-resolved readable name carried directly on the comment, if any. This is
+// the cheapest correct path — when present we never spend a ctx.agents.get.
+function commentCarriedName(c: IssueComment): string | null {
+  const anyC = c as unknown as CommentAuthorFields;
+  const name = anyC.authorName ?? anyC.authorDisplayName ?? null;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
+/**
+ * Plan 18 (LEG-02 gap) — resolve the UNIQUE UUID-shaped comment authors in this
+ * window to real names via ctx.agents.get, batched + deduped (O(unique authors),
+ * never N+1 per comment). Degrade-safe: a missing ctx.agents client OR any throw
+ * yields an empty/partial map (the caller then applies AGENT_FALLBACK). NEVER
+ * throws — the activity timeline is non-essential and must not blank the Reader.
+ */
+async function resolveActivityAuthorNames(
+  ctx: IssueReaderCtx,
+  comments: IssueComment[],
+  companyId: string,
+): Promise<Map<string, string | null>> {
+  const nameByUuid = new Map<string, string | null>();
+  if (typeof ctx.agents?.get !== 'function') return nameByUuid;
+
+  // Only resolve authors that (a) are not already carried as a readable name on
+  // the comment, and (b) are UUID/partial-hash-shaped (a plain readable id like
+  // "local-board" needs no lookup and is preserved as-is downstream).
+  const distinctLeakyIds = Array.from(
+    new Set(
+      comments
+        .filter((c) => commentCarriedName(c) === null)
+        .map((c) => rawCommentAuthorId(c))
+        .filter((a): a is string => a !== null && isLeakyAuthorId(a)),
+    ),
+  );
+
+  for (const uuid of distinctLeakyIds) {
+    try {
+      const agent = await ctx.agents.get(uuid, companyId);
+      const name =
+        agent && typeof (agent as { name?: unknown }).name === 'string'
+          ? (agent as { name: string }).name.trim()
+          : '';
+      nameByUuid.set(uuid, name || null);
+    } catch (e) {
+      // Degrade silently to null — NEVER fall back to the UUID. The caller's
+      // AGENT_FALLBACK floor takes over. (Mirrors the resolve-refs D-09 pattern.)
+      ctx.logger?.warn?.('issue.reader: activity author agents.get failed', {
+        companyId,
+        uuid,
+        err: (e as Error).message,
+      });
+      nameByUuid.set(uuid, null);
+    }
+  }
+  return nameByUuid;
+}
+
+function commentToActivity(
+  c: IssueComment,
+  authorNameByUuid: Map<string, string | null>,
+): ActivityEvent {
+  const anyC = c as unknown as CommentAuthorFields;
   const at = anyC.createdAt ?? anyC.created_at ?? new Date(0).toISOString();
   const detail = truncate(anyC.body, COMMENT_DETAIL_MAX);
+
+  // Plan 18 (LEG-02 gap) — actor resolution, cheapest-correct-first:
+  //   1. a readable name carried on the comment → use it (no lookup spent).
+  //   2. a UUID/partial-hash-shaped id → its resolved name, else AGENT_FALLBACK.
+  //   3. a plain readable id (e.g. "local-board") → preserved verbatim.
+  //   4. no author at all → null (the UI renders nothing).
+  let actor: string | null;
+  const carried = commentCarriedName(c);
+  const rawId = rawCommentAuthorId(c);
+  if (carried !== null) {
+    actor = carried;
+  } else if (rawId === null) {
+    actor = null;
+  } else if (isLeakyAuthorId(rawId)) {
+    actor = authorNameByUuid.get(rawId) ?? AGENT_FALLBACK;
+  } else {
+    actor = rawId; // already readable — preserve as-is.
+  }
+
+  // Read-time floor (the LEG-02 NO_UUID_LEAK guarantee): even if resolution
+  // missed or a name itself embeds an id, no raw UUID / `agent#<hex>` can reach
+  // the UI — rescrubPersisted rewrites any residual to AGENT_FALLBACK. Idempotent
+  // over already-clean strings (a no-op for "local-board" / a resolved name).
+  if (actor !== null) actor = rescrubPersisted(actor);
+
   return { kind: 'comment', actor, at, detail };
 }
 
