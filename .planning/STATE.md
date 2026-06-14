@@ -4,13 +4,13 @@ milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
 stopped_at: Phase 18 context gathered
-last_updated: "2026-06-13T20:49:11.596Z"
-last_activity: 2026-06-13 -- Phase 18 planning complete
+last_updated: "2026-06-14T15:51:49.710Z"
+last_activity: 2026-06-14
 progress:
   total_phases: 12
   completed_phases: 7
   total_plans: 44
-  completed_plans: 38
+  completed_plans: 39
   percent: 58
 ---
 
@@ -710,14 +710,14 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 17 — structured-human-wait-truthful-verdicts-centerpiece
+**Current Focus:** Phase 18 — no-rabbit-holes-plain-english
 
 ## Current Position
 
-Phase: 17 (structured-human-wait-truthful-verdicts-centerpiece) — EXECUTING
-Plan: 6 of 6
+Phase: 18 (no-rabbit-holes-plain-english) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-13 -- Phase 18 planning complete
+Last activity: 2026-06-14
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1432,7 +1432,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
 **Status:** Ready to execute
-**Progress:** [█████████░] 93%
+**Progress:** [█████████░] 89%
 
 ## Performance Metrics
 
@@ -1474,6 +1474,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 17 P01 | ~25m | 3 tasks | 5 files (4 created) — WAIT-01/02/03 foundation: additive clarity_human_waits table (migration 0018) + repo, priority-0 AWAITING_HUMAN engine branch (D-07 wins over agent; D-08 reuses kind), generic founder resolver; 28/28 engine+verdict tests pass (determinism + AI-token purity green); commits 1de5f0b/14c221c/d4cad98/3ac0f35 |
 | Phase 17 P04 | 30m | 3 tasks | 3 files |
 | Phase 17 P03 | ~35m | 2 tasks | 3 files (1 created) — WAIT-01/02 producer: detectAndPersistHumanWait (high-precision detect D-03 + upsert/self-clear D-04 + polishTldr voice D-05) wired as a governed heartbeat sibling (no new wake path); human-wait-detect OperationKind + isResultComment readback branch (GOTCHA 1); 57/57 delivery+heartbeat+engine+parity tests pass; commits d8ab989/faae261 |
+| Phase 18 P02 | 55m | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -1567,7 +1568,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-13T20:06:57.851Z
+**Last session:** 2026-06-14T15:51:03.592Z
 
 **Stopped at:** Phase 18 context gathered
 

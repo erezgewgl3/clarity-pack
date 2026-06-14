@@ -39,7 +39,7 @@
 ### No rabbit-holes & plain-English (Phase 18)
 
 - [ ] **LEG-01**: "Open ↗" routes to the Clarity Reader view (inline-resolved, plain-English), never the raw classic Paperclip issue page (the wall of unresolved inline references).
-- [ ] **LEG-02**: ZERO raw or partial agent/UUID identifiers in any human-facing text on any surface; every agent reference shows a human name/role (extends NO_UUID_LEAK; the v1.4.3 prefix-gate is the partial start).
+- [x] **LEG-02**: ZERO raw or partial agent/UUID identifiers in any human-facing text on any surface; every agent reference shows a human name/role (extends NO_UUID_LEAK; the v1.4.3 prefix-gate is the partial start).
 - [ ] **LEG-03**: A "Looks done — close it?" affordance appears when the AI TL;DR reads done but the deterministic engine still classifies the item as blocked (honest divergence surfaced as an action, not hidden).
 
 ### Action-cards async re-architecture — LAST, flag-gated (Phase 19)
@@ -83,7 +83,7 @@
 | WAIT-03 | Phase 17 | Complete |
 | WAIT-04 | Phase 17 | Complete |
 | LEG-01 | Phase 18 | Pending |
-| LEG-02 | Phase 18 | Pending |
+| LEG-02 | Phase 18 | Complete |
 | LEG-03 | Phase 18 | Pending |
 | CARD-01 | Phase 19 | Pending |
 | CARD-02 | Phase 19 | Pending |
