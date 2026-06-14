@@ -569,7 +569,7 @@ test('builder — agents.get THROWS for the label UUID: humanAction still has NO
   );
 });
 
-test('builder — owned label UUIDs with agents.get THROW fall back to agent#<short>, never raw', async () => {
+test("builder — owned label UUIDs with agents.get THROW fall back to plain-English 'an agent', never raw or agent#<hex> (LEG-02)", async () => {
   const ownerUuid = 'aaaaaaaa-1111-2222-3333-444444444444';
   const blockerNodeUuid = 'bbbbbbbb-5555-6666-7777-888888888888';
   const f = {
@@ -597,7 +597,19 @@ test('builder — owned label UUIDs with agents.get THROW fall back to agent#<sh
     !UUID_RE.test(row.humanAction),
     `humanAction must not contain a raw UUID; got: ${row.humanAction}`,
   );
-  assert.match(row.humanAction, /agent#/);
+  // Plan 18-02 (LEG-02 / D-08) — the agents.get-THROW fallback no longer emits the
+  // `agent#<hex>` machine token (a non-builder can't read it). It resolves to the
+  // plain-English 'an agent' (real name/role still resolved first when available).
+  assert.doesNotMatch(
+    row.humanAction,
+    /agent#/,
+    `humanAction must not contain the agent#<hex> machine token (LEG-02); got: ${row.humanAction}`,
+  );
+  assert.match(
+    row.humanAction,
+    /an agent/,
+    `humanAction must use the plain-English 'an agent' fallback; got: ${row.humanAction}`,
+  );
 });
 
 // ---------------------------------------------------------------------------

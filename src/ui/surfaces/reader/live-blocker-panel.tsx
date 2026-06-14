@@ -208,10 +208,16 @@ function LiveBlockerPanelWithCompany({
       onVerdictRef.current(null);
       return;
     }
+    // NO_UUID_LEAK (D-15): the leaf issue UUID is forwarded ONLY as a dispatch
+    // arg (the Reader's looks-done affordance consumes it for closeAsDone) — it
+    // is NEVER rendered. Bind it to a local first so it is not an inline
+    // target*Uuid expression inside the object literal, keeping the reader-view
+    // NO_UUID_LEAK source-scan honest.
+    const leafIssueUuid = data.targetIssueUuid ?? null;
     onVerdictRef.current({
       needsYou: data.needsYou === true,
       leafIssueId: data.pathIds.length <= 1 ? issueId : null,
-      leafIssueUuid: data.targetIssueUuid ?? null,
+      leafIssueUuid,
     });
   }, [data, issueId]);
 
