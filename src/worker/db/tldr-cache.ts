@@ -109,3 +109,58 @@ export async function getTldrByScope(
   );
   return rows[0] ?? null;
 }
+
+/**
+ * Plan 18-03 Task 1 (LEG-03) — BATCHED read of the most-recent TL;DR body for a
+ * SET of scope_ids, in ONE query. The perf-critical primitive behind the SR-row
+ * "Looks done — close it?" divergence flag: the snapshot rollup needs the TL;DR
+ * body for the needs-you set, and that read MUST be O(1) queries (one `= ANY`),
+ * never O(rows) (a per-row getTldrByScope inside the per-agent loop would
+ * re-introduce the Phase-16 snapshot cliff — landmine #1).
+ *
+ * Returns a Map<scope_id, body> carrying ONLY the most-recent body per scope_id
+ * (DISTINCT ON (scope_id) ... ORDER BY scope_id, generated_at DESC — the batched
+ * analogue of getTldrByScope's `ORDER BY generated_at DESC LIMIT 1`). A scope_id
+ * with no cached TL;DR is simply absent from the Map.
+ *
+ * EMPTY-SET SHORT-CIRCUIT: an empty `scopeIds` returns an empty Map WITHOUT
+ * issuing a query (the SPEC O(1) acceptance — zero queries on the empty
+ * needs-you set; also sidesteps a degenerate `= ANY('{}')`).
+ *
+ * TEXT[] BRIDGE (file header v0.6.5 Bug 2): the host `ctx.db` parameter bridge
+ * does not pass a JS string array through as a native Postgres array. We bind the
+ * scope_id set as an explicit array-LITERAL string through a `$1::text[]` cast
+ * (the SAME `toPgTextArrayLiteral` upsertTldr uses for its text[] columns), so
+ * `= ANY($1::text[])` coerces unambiguously regardless of bridge serialization.
+ *
+ * Pure read; the CALLER (build-employees-rollup) degrade-wraps this in try/catch
+ * so a throw/slow read drops the affordance and leaves focusLine intact.
+ */
+export async function getTldrBodiesByScopeIds(
+  ctx: TldrCacheCtx,
+  surface: TldrRow['surface'],
+  scopeIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  // Empty set → no query (O(1) acceptance; avoids `= ANY('{}')`).
+  if (!Array.isArray(scopeIds) || scopeIds.length === 0) return out;
+
+  // De-dupe defensively so the literal stays minimal; ANY is set-membership so
+  // duplicates are harmless, but a smaller literal is cheaper to bind.
+  const unique = [...new Set(scopeIds.filter((s) => typeof s === 'string' && s.length > 0))];
+  if (unique.length === 0) return out;
+
+  const rows = await ctx.db.query<{ scope_id: string; body: string }>(
+    `SELECT DISTINCT ON (scope_id) scope_id, body
+     FROM plugin_clarity_pack_cdd6bda4bd.tldr_cache
+     WHERE surface = $1 AND scope_id = ANY($2::text[])
+     ORDER BY scope_id, generated_at DESC`,
+    [surface, toPgTextArrayLiteral(unique)],
+  );
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (r && typeof r.scope_id === 'string' && typeof r.body === 'string') {
+      out.set(r.scope_id, r.body);
+    }
+  }
+  return out;
+}
