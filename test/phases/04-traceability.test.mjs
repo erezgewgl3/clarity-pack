@@ -19,9 +19,16 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// HYG-02 (Phase 20 hygiene, 2026-06-15): the CHAT-01..11 traceability rows were
+// archived to the v1.0.0 milestone requirements doc when the active
+// .planning/REQUIREMENTS.md rolled over to the v1.5.0 milestone (which carries
+// SNAP/LOOP/WAIT/LEG/CARD/HYG, not the closed Phase-4 CHAT rows). Re-point this
+// gate at the archive where the rows actually live + are marked Implemented, so
+// the Phase-4 traceability stays pinned without polluting the active milestone
+// doc with closed-phase rows.
 const REQUIREMENTS_PATH = path.resolve(
   __dirname,
-  '../../.planning/REQUIREMENTS.md',
+  '../../.planning/milestones/v1.0.0-REQUIREMENTS.md',
 );
 
 const CHAT_IDS = Array.from(

@@ -23,9 +23,14 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// HYG-02 (Phase 20 hygiene, 2026-06-15): the CTT-01..08 traceability rows were
+// archived to the v1.0.0 milestone requirements doc when the active
+// .planning/REQUIREMENTS.md rolled over to the v1.5.0 milestone. Re-point this
+// gate at the archive where the rows actually live + are marked Implemented
+// (mirrors the 04-traceability re-point).
 const REQUIREMENTS_PATH = path.resolve(
   __dirname,
-  '../../.planning/REQUIREMENTS.md',
+  '../../.planning/milestones/v1.0.0-REQUIREMENTS.md',
 );
 
 const CTT_IDS = Array.from(
