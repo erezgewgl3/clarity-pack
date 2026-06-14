@@ -104,7 +104,7 @@ test('viewer substitution survives the scrub — userId === viewer → "You"', a
   assert.ok(scrubbed.awaitedPartyLabel.includes('You'));
 });
 
-test('agents.get throws → label still UUID-free (agent#<8> fallback, never the raw UUID)', async () => {
+test('agents.get throws → label still UUID-free ("an agent" fallback, never the raw UUID or a partial hash)', async () => {
   const terminal = {
     kind: 'AWAITING_AGENT_STUCK',
     agentId: AGENT_UUID,
@@ -118,7 +118,17 @@ test('agents.get throws → label still UUID-free (agent#<8> fallback, never the
     result,
   );
   assert.equal(scrubbed.awaitedPartyLabel.match(UUID_RE_G), null);
-  assert.ok(scrubbed.awaitedPartyLabel.includes('agent#'));
+  // Plan 18-02 (LEG-02) — INVERTED. The degrade fallback reads the plain-English
+  // "an agent", NEVER an `agent#<hex>` partial hash.
+  assert.doesNotMatch(
+    scrubbed.awaitedPartyLabel,
+    /agent#[0-9a-f]{6,}/i,
+    `degrade fallback leaked a partial hash: ${scrubbed.awaitedPartyLabel}`,
+  );
+  assert.ok(
+    scrubbed.awaitedPartyLabel.includes('an agent'),
+    `expected plain-English fallback; got: ${scrubbed.awaitedPartyLabel}`,
+  );
 });
 
 test('absent ctx.agents → label still UUID-free (empty map, agent#<8> fallback)', async () => {

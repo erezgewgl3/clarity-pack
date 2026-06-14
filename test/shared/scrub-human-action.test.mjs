@@ -91,7 +91,12 @@ test('scrubHumanAction — AWAITING_AGENT_WORKING/STUCK + UNCLASSIFIED scrub emb
     '',
     new Map(),
   );
-  assert.match(stuck, /agent#eeeeeeee/);
+  // Plan 18-02 (LEG-02) — INVERTED. An unresolved agent NO LONGER renders the
+  // `agent#<hex>` partial-hash; it reads the plain-English "an agent". The
+  // inversion IS the proof (landmine #4): a runtime-only change would leave the
+  // OLD `assert.match(stuck, /agent#eeeeeeee/)` failing.
+  assert.doesNotMatch(stuck, /agent#[0-9a-f]{6,}/i, `AWAITING_AGENT_STUCK leaked a partial hash: ${stuck}`);
+  assert.match(stuck, /an agent/, `expected plain-English fallback; got: ${stuck}`);
   assert.ok(!UUID_RE.test(stuck), `AWAITING_AGENT_STUCK leaked: ${stuck}`);
 
   const unclassified = scrubHumanAction(
@@ -120,7 +125,10 @@ test('scrubHumanAction — SELF_RESOLVING / EXTERNAL / CYCLE labels scrub every 
     '',
     new Map(),
   );
-  assert.match(ext, /agent#dddddddd/);
+  // Plan 18-02 (LEG-02) — INVERTED. The unresolved UUID reads "an agent", not
+  // `agent#dddddddd`.
+  assert.doesNotMatch(ext, /agent#[0-9a-f]{6,}/i, `EXTERNAL leaked a partial hash: ${ext}`);
+  assert.match(ext, /an agent/, `expected plain-English fallback; got: ${ext}`);
   assert.ok(!UUID_RE.test(ext), `EXTERNAL leaked: ${ext}`);
 
   const cyc = scrubHumanAction(
@@ -132,15 +140,18 @@ test('scrubHumanAction — SELF_RESOLVING / EXTERNAL / CYCLE labels scrub every 
 });
 
 // Test 6 — belt-and-suspenders: a UUID that escapes step-2/step-3 is rewritten
-// to agent#<8hex>. We simulate by passing an unresolved UUID in an EXTERNAL
-// label — the final pass must short-form it.
-test('scrubHumanAction — belt-and-suspenders: any surviving UUID → agent#<8hex>', () => {
+// to the plain-English "an agent" (Plan 18-02 LEG-02 — was `agent#<8hex>`). We
+// simulate by passing an unresolved UUID in an EXTERNAL label — the final pass
+// must replace it with the plain-English fallback, NEVER a partial hash.
+test('scrubHumanAction — belt-and-suspenders: any surviving UUID → "an agent" (never a partial hash)', () => {
   const u = '12345678-9abc-def0-1234-56789abcdef0';
   const result = scrubHumanAction(
     { kind: 'EXTERNAL', label: `blocked on ${u} forever` },
     '',
     new Map(),
   );
-  assert.match(result, /agent#12345678/);
+  // Plan 18-02 (LEG-02) — INVERTED.
+  assert.doesNotMatch(result, /agent#[0-9a-f]{6,}/i, `surviving UUID became a partial hash: ${result}`);
+  assert.match(result, /an agent/, `expected plain-English fallback; got: ${result}`);
   assert.ok(!UUID_RE.test(result), `no raw UUID survives; got: ${result}`);
 });
