@@ -44,27 +44,45 @@
 //   src/manifest.ts:786), which is instance-independent.
 //
 // ============================================================================
-// TIER1_HONORED=PENDING_LIVE_PROBE   (winning carrier: PENDING)
+// TIER1_HONORED=DEFERRED  (winning carrier: NONE — Tier-2 fallback ships now)
 // ============================================================================
-// This top line is the machine-readable verdict. After Eric runs the probe on
-// live BEAAA, a continuation agent rewrites it to one of:
+// VERDICT (2026-06-14, continuation executor, checkpoint resume-signal = "tier2"):
+//   The live deep-link probe COULD NOT BE RUN — the entire Clarity Pack UI was
+//   rendering BLANK on live BEAAA v1.6.0 at execution time. Every surface (Reader,
+//   Situation Room) showed only the host's empty slot frame. Live diagnosis: the
+//   plugin's UI bundle 404s (`index.js?v=2026-06-11T07:…` → 404) and NO clarity-pack
+//   plugin files exist on the real data volume (`/mnt/paperclipdata/dot-paperclip`),
+//   while the host still serves CACHED `ui-contributions` metadata (304). This is a
+//   broken/partial install (consistent with the fail2ban-interrupted v1.6.0 deploy:
+//   the registration persisted, the files did not). It is NOT a probe-false result —
+//   there was no working Reader tab to probe at all.
+//
+//   DECISION: ship the locked SPEC Tier-2 fallback NOW (D-02) — it is ALWAYS correct
+//   regardless of host tab-deep-link feasibility — and DEFER the Tier-1 deep-link
+//   probe to AFTER the UI is restored by the Phase 18 clean reinstall deploy (18-04).
+//   Because buildReaderHref's tier choice is a one-line change in one file, the
+//   Tier-1 upgrade is a trivial post-restore follow-up: re-run this probe against a
+//   working Reader, then (only if a carrier wins) append it to the single return line.
+//
+// This top line is the machine-readable verdict. After the UI is restored (18-04),
+// re-run the probe and rewrite it to one of:
 //   TIER1_HONORED=true   (winning carrier: QUERY  → ?tab=clarity-reader)
 //   TIER1_HONORED=true   (winning carrier: HASH   → #tab=clarity-reader)
-//   TIER1_HONORED=false  (winning carrier: NONE   → Tier-2 fallback ships)
+//   TIER1_HONORED=false  (winning carrier: NONE   → Tier-2 fallback stays)
 // Task 3's src/ui/primitives/reader-href.ts buildReaderHref() branches on it:
 //   - TIER1_HONORED=true + QUERY → return `/${p}/issues/${id}?tab=clarity-reader`
 //   - TIER1_HONORED=true + HASH  → return `/${p}/issues/${id}#tab=clarity-reader`
-//   - TIER1_HONORED=false        → return `/${p}/issues/${id}` (locked SPEC fallback, D-02)
+//   - DEFERRED / false           → return `/${p}/issues/${id}` (locked SPEC fallback, D-02)
 //
-// ACCEPTANCE-RISK NOTE (escalated per 18-RESEARCH §1 / SPEC line 28):
-//   If TIER1_HONORED=false, the classic issue page MAY be the terminal landing,
-//   because Clarity cannot force-select a host-owned tab from inside ReaderView
-//   (the detailTab mount model, finding C). In that case LEG-01's "lands on the
-//   Reader, not the classic wall" acceptance criterion is only physically
-//   satisfiable with a host feature (host honors `?tab=`/`#tab=`, OR a
-//   host detailTab `defaultTab` hint — neither is set today). Task 3 ships the
-//   honest Tier-2 fallback AND this risk is acknowledged with Eric before
-//   proceeding, never silently absorbed.
+// ACCEPTANCE-RISK NOTE (escalated per 18-RESEARCH §1 / SPEC line 28 — ACKNOWLEDGED):
+//   With the Tier-2 fallback shipping, the classic issue page MAY be the terminal
+//   landing, because Clarity cannot force-select a host-owned tab from inside
+//   ReaderView (the detailTab mount model, finding C). LEG-01's "lands on the Reader,
+//   not the classic wall" acceptance criterion is only physically satisfiable with a
+//   host feature (host honors `?tab=`/`#tab=`, OR a host detailTab `defaultTab`
+//   hint — neither is confirmed today, and could not be probed while the UI was down).
+//   This risk is ACKNOWLEDGED, not silently absorbed; the honest Tier-2 fallback ships
+//   and the Tier-1 upgrade is a one-line change once a working Reader exists to probe.
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -248,16 +266,26 @@ export { READER_TAB_PROBE, READER_TAB_PROBE_1B, printOperatorWalkthrough };
 // OPERATOR-OUTPUT (verbatim console output from the live BEAAA probe run)
 // ============================================================================
 //
-// Probe run: <YYYY-MM-DD>, live BEAAA Paperclip instance, browser DevTools.
+// Probe run: 2026-06-14 — ATTEMPTED, NOT COMPLETED (live UI down).
 //
 // ## QUERY form  (/<prefix>/issues/<id>?tab=clarity-reader)
-// - <paste Snippet 1B output here>
+// - NOT RUN — no working Reader tab to land on (see below).
 //
 // ## HASH form  (/<prefix>/issues/<id>#tab=clarity-reader)
-// - <paste Snippet 1B output here>
+// - NOT RUN — no working Reader tab to land on (see below).
 //
-// ## Final verdict: TIER1_HONORED=<true|false>  (winning carrier: <QUERY|HASH|NONE>)
-// - Justification: <one-line — which carrier mounted the Reader surface, if any>
-// - If false: acceptance-risk acknowledged (classic issue page may be the
-//   terminal landing absent a host feature) — Tier-2 fallback ships per D-02.
+// ## Final verdict: TIER1_HONORED=DEFERRED  (winning carrier: NONE → Tier-2 ships)
+// - Justification: at execution time the ENTIRE Clarity Pack UI was rendering
+//   BLANK on live BEAAA v1.6.0 — every surface showed only the host's empty slot
+//   frame. Live diagnosis: the plugin UI bundle 404s (index.js?v=… → 404) and NO
+//   clarity-pack plugin files exist on /mnt/paperclipdata/dot-paperclip, while the
+//   host serves CACHED ui-contributions metadata (304). Broken/partial install
+//   (fail2ban-interrupted v1.6.0 deploy: registration persisted, files did not).
+//   There was no working Reader tab to probe — this is NOT a probe-false result.
+// - DECISION: ship the locked Tier-2 fallback now (D-02 — always correct); DEFER
+//   the Tier-1 deep-link probe to AFTER the Phase 18 clean reinstall deploy (18-04)
+//   restores the UI. Re-run THIS probe then; the Tier-1 upgrade is a one-line change.
+// - ACCEPTANCE-RISK ACKNOWLEDGED: classic issue page may be the terminal landing
+//   absent a host feature (18-RESEARCH §1 / SPEC line 28) — Tier-2 fallback ships
+//   honestly per D-02; not silently absorbed.
 // ---
