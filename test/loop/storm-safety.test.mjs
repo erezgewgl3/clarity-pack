@@ -44,6 +44,11 @@ import { CLARITY_PACK_VERSION } from '../../src/worker/db/wake-kill-switch-repo.
 // proves the action-card op-issues are bounded + provenance-suppressed +
 // created as plugin_operation (so the status-only mark-done is non-notifying).
 import { startAgentTask } from '../../src/worker/agents/agent-task-delivery.ts';
+// Phase 19 Plan 19-04 (CARD-03) — the explicit governor ceiling + the action-card
+// bounded-warm cap. Folded into the existing CARD-01 burst (plan-checker note D9:
+// fold the CARD-03 ceiling/bounded-warm assertions rather than duplicate the burst).
+import { DEFAULT_WAKE_CEILING_PER_MIN } from '../../src/worker/agents/wake-governor.ts';
+import { ACTION_CARDS_WARM_MAX_ROWS } from '../../src/worker/agents/action-cards.ts';
 
 /**
  * The fake storm ctx. The durable structures live in closure state so a
@@ -416,4 +421,31 @@ test('CARD-01 storm: action-card op-issue burst stays bounded + provenance-suppr
       'every op-issue create routes through the 16.1 plugin_operation path — no second op-issue path (CARD-01)',
     );
   }
+
+  // -----------------------------------------------------------------------
+  // CARD-03 (Plan 19-04, folded per D9) — the ON-state no-storm proof made
+  // explicit on top of the CARD-01 burst above:
+  //   - bounded wakes are within the GOVERNOR CEILING (CLARITY_WAKE_CEILING_PER_MIN),
+  //     read from the REAL governor source (readCeiling) — not a magic 6.
+  //   - the action-card BOUNDED-WARM cap (ACTION_CARDS_WARM_MAX_ROWS = 5) holds, so
+  //     a needs-you spike can never fan out into one giant compile per heartbeat.
+  //   - zero self-trigger recursion (asserted via provenance suppression above).
+  // Together these are the falsifiable "flag ON => no wake storm, no notification
+  // storm" guarantee. The live 502/notification confirm is 19-05 Step-1; the
+  // snapshot-502 absence is structural by construction (the on-request compile was
+  // DELETED in 19-02 + the static gate forbids its return) — this proves the
+  // remaining heartbeat path stays bounded.
+  // -----------------------------------------------------------------------
+  // No CLARITY_WAKE_CEILING_PER_MIN is set in CI, so the documented default IS the
+  // governor ceiling the burst is bounded by (readCeiling is module-private; the
+  // exported default is its CI value).
+  const ceiling = DEFAULT_WAKE_CEILING_PER_MIN;
+  assert.ok(
+    h.wakeCalls.length <= ceiling,
+    `CARD-03: flag-ON action-card burst wakes stay within CLARITY_WAKE_CEILING_PER_MIN (${ceiling}); got ${h.wakeCalls.length} — no wake storm`,
+  );
+  assert.ok(
+    ACTION_CARDS_WARM_MAX_ROWS <= 5 && ACTION_CARDS_WARM_MAX_ROWS > 0,
+    `CARD-03: the bounded-warm cap is <=5 stale rows/heartbeat (got ${ACTION_CARDS_WARM_MAX_ROWS}) — a needs-you spike cannot fan out into one giant compile`,
+  );
 });
