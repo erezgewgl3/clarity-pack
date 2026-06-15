@@ -51,6 +51,13 @@ function makeCtx({
   topicIssueNull = false,
   getThrows = false,
   getDelayMs = 0,
+  // HYG-03 / D-04 — an OBSERVABLE barrier (a deferred promise) that ONLY the
+  // FIRST ctx.issues.get (the fire-and-forget watchdog get, handler line 216)
+  // awaits. The awaited stuck-read get (handler line 249, the SECOND get) does
+  // NOT await it. This replaces the old wall-clock getDelayMs + `elapsed < 85`
+  // threshold: U7 now proves fire-and-forget by the handler RESOLVING while the
+  // watchdog get is still pending on this barrier — a condition, not a clock.
+  getBarrier = null,
 } = {}) {
   const handlers = new Map();
   const getCalls = [];
@@ -72,6 +79,15 @@ function makeCtx({
       },
       async get(issueId, companyId) {
         getCalls.push({ issueId, companyId });
+        // HYG-03 / D-04 — block ONLY the first get (the fire-and-forget
+        // watchdog get) on the test-controlled barrier. The awaited stuck-read
+        // (second get) proceeds immediately. If the handler awaited the watchdog
+        // get, it could not resolve until the test releases the barrier — so a
+        // handler that resolves with the barrier still pending PROVES the
+        // watchdog get is not awaited (condition-based, no wall-clock).
+        if (getBarrier && getCalls.length === 1) {
+          await getBarrier;
+        }
         if (getDelayMs > 0) {
           await new Promise((r) => setTimeout(r, getDelayMs));
         }
@@ -449,41 +465,53 @@ test('U6b WATCHDOG-LOGS-OFF-DONE: when the topic is parked at done, the watchdog
 });
 
 test('U7 WATCHDOG-FIRE-AND-FORGET: a slow watchdog does NOT delay the chat.messages response', async () => {
-  // 50ms ctx.issues.get delay simulates a slow host. The fire-and-forget
-  // watchdog must NOT be awaited; the response must return as fast as the
-  // listComments + side-table-query path.
-  //
-  // The handler DOES await the topicIssue read for the topicStuck/recoveryOwner
-  // shape — that's a SECOND ctx.issues.get. The fire-and-forget call is the
-  // FIRST one (the watchdog). With both reads served by the same fake, we
-  // can't measure them separately by wall-clock; instead we assert the
-  // response returns AT MOST one round-trip slow (≤ ~80ms), not two (≥ ~100ms).
-  // Specifically: the fire-and-forget watchdog's get IS not awaited, so the
-  // total elapsed is bounded by the single stuck-read get.
+  // HYG-03 / D-04 — CONDITION-BASED, not wall-clock. The fire-and-forget
+  // watchdog (handler line 216, `void ensureTopicWakeable(...)`) issues the
+  // FIRST ctx.issues.get; the awaited stuck-read for topicStuck/recoveryOwner
+  // (handler line 249) is the SECOND get. We gate ONLY the first get on a
+  // test-controlled barrier (a deferred promise) and prove fire-and-forget by
+  // OBSERVING that the handler RESOLVES while that barrier is still unresolved.
+  // If the handler awaited the watchdog get, it could not return until we
+  // released the barrier — so a resolved response with the barrier still
+  // pending is a positive proof of non-await. NO Date.now() elapsed math and NO
+  // wall-clock threshold anywhere: a slow CI runner cannot make this false-fail.
+  let releaseBarrier;
+  const barrier = new Promise((resolve) => {
+    releaseBarrier = resolve;
+  });
+  // Observe whether the barrier has settled, WITHOUT timing anything.
+  let barrierReleased = false;
+  barrier.then(() => {
+    barrierReleased = true;
+  });
+
   const ctx = makeCtx({
     comments: mixedThread(),
     topicIssue: { status: 'in_progress' },
-    getDelayMs: 50,
+    getBarrier: barrier,
   });
   registerChatMessages(ctx);
 
-  const before = Date.now();
+  // The handler must resolve even though the watchdog get is still blocked on
+  // the (un-released) barrier. We never await/release the barrier before this.
   const result = await ctx._handlers.get('chat.messages')(msgParams());
-  const elapsed = Date.now() - before;
 
   assert.equal(result.kind, 'messages');
-  // If both gets were awaited sequentially we'd see >=100ms. The watchdog
-  // get must not be awaited — total elapsed is bounded by ONE 50ms get
-  // (the stuck-read) plus listComments overhead. Threshold 85ms allows CI
-  // slack; 100ms would be a regression.
-  assert.ok(
-    elapsed < 85,
-    `chat.messages must not await the watchdog get (elapsed=${elapsed}ms; threshold=85ms)`,
+  // POSITIVE PROOF: the response resolved while the watchdog get is still
+  // pending on the barrier (we have NOT released it yet) → the handler did not
+  // await the watchdog get. A microtask drain confirms `.then` hasn't fired.
+  await new Promise((r) => setImmediate(r));
+  assert.equal(
+    barrierReleased,
+    false,
+    'chat.messages resolved while the watchdog get is still blocked on the barrier (fire-and-forget)',
   );
 
-  // Let the fire-and-forget watchdog complete so node --test doesn't see
-  // a dangling promise.
-  await new Promise((r) => setTimeout(r, 70));
+  // Now release the barrier and drain so the fire-and-forget watchdog settles
+  // and node --test sees no dangling promise (the U6/U6b tick-drain analog).
+  releaseBarrier();
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
 });
 
 test('U8 TOPIC-STUCK-FIELD-FALSE: a clean topic returns topicStuck=false, recoveryOwner=null', async () => {
