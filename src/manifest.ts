@@ -679,7 +679,15 @@ const manifest: PaperclipPluginManifestV1 = {
   // PARTY only for the agent kinds (repointed at all 3 worker sites), and
   // scrubHumanAction now emits a clean "{name} is stuck/working" (no leaf).
   // Reader now reads "CEO is stuck".
-  version: '1.7.4',
+  //
+  // 1.7.5 (Reader deliverable fixes, 2026-06-15 — found while investigating
+  // BEAAA-4882's "Couldn't load this deliverable"): (1) the deliverable previewer
+  // was sent the document TITLE as the documentKey, but the host needs the real
+  // KEY (title 404s → READ_FAILED for every deliverable whose title != key) —
+  // DeliverableSummary now carries the real key; (2) the newest-document
+  // heuristic surfaced a misrouted clarity-pack `compile-result` op artifact over
+  // the real deliverable — issue.reader now filters internal docs.
+  version: '1.7.5',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
