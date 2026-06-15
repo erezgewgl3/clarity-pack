@@ -1825,3 +1825,54 @@
   border: 1px dashed var(--clarity-line, var(--clarity-border));
   border-radius: 4px;
 }
+
+/* ---------------------------------------------------------------------
+ * Phase 21 (21-05 gap-closure) — reply-in-place compose-row layout.
+ *
+ * The shared <ReplyInPlace> compose row (input + Send/Nudge button) shipped
+ * with NO layout CSS, relying on default inline-block flow. That held together
+ * in the wide Situation Room employee row but COLLIDED in the narrow Reader
+ * live-blocker column: the longer "Nudge to unstick" button overlapped the
+ * input's placeholder text (operator-reported on the live BEAAA Reader tab,
+ * v1.8.1). A proper flex row with a shrinkable input — `min-width: 0` is the
+ * fix that lets the input compress instead of overflowing under the button —
+ * resolves it for BOTH the 'answer' and 'nudge' variants and on every surface.
+ * Scoped under [data-clarity-surface] (SCAF-06 + COEXIST-01).
+ * ------------------------------------------------------------------- */
+[data-clarity-surface] .clarity-reply-in-place {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+[data-clarity-surface] .clarity-reply-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+[data-clarity-surface] .clarity-reply-compose {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+[data-clarity-surface] .clarity-reply-compose .clarity-reply-input {
+  flex: 1 1 auto;
+  /* min-width:0 lets the input shrink below its placeholder width so the
+   * fixed-width Send/Nudge button never overlaps it in a narrow column. */
+  min-width: 0;
+  padding: 0.35rem 0.55rem;
+  color: var(--clarity-fg);
+  background: var(--clarity-bg-2, transparent);
+  border: 1px solid var(--clarity-line, var(--clarity-border));
+  border-radius: 4px;
+  font: inherit;
+}
+
+[data-clarity-surface] .clarity-reply-compose .clarity-reply-send {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
