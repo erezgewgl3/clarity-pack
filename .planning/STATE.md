@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6.0
 milestone_name: Stuck-Agent Reply-In-Place
-status: roadmapped
-last_updated: "2026-06-15T19:55:32.283Z"
+status: executing
+stopped_at: Phases 19+20 code-complete & verified (passed-with-rider); one batched operator window remains to close v1.5.0
+last_updated: "2026-06-15T20:42:28.536Z"
 last_activity: 2026-06-15
 progress:
-  total_phases: 1
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 13
+  completed_phases: 10
+  total_plans: 57
+  completed_plans: 51
+  percent: 77
 ---
 
 # State: Clarity Pack
@@ -26,6 +27,7 @@ New milestone roadmapped. **Phase numbering CONTINUES from v1.5.0** (which ended
 | 21. Stuck-Agent Reply-In-Place | Surface the reply-in-place affordance on `AWAITING_AGENT_STUCK` rows (SR employee row + Reader live-blocker panel); a plain operator reply resumes the stuck agent via `situation.replyAndResume`; no auto-resume on passive view; stuck-context copy; degrade-safe + NO_UUID_LEAK | STUCK-01, STUCK-02, STUCK-03, STUCK-04, STUCK-05, STUCK-06 |
 
 **Why it's wiring, not invention:**
+
 - Handler exists: `src/worker/handlers/situation-reply-and-resume.ts` (`situation.replyAndResume`, Plan 14-01) — today works on the AWAITING_HUMAN+`status=blocked` path; Phase 21 confirms/loosens the terminal-kind gate so a STUCK leaf is accepted.
 - Resume recipe proven: the Phase-10 spike showed a plain comment resumes an agent in BOTH the awaiting-answer AND `status='blocked'` cases — no special transition; a STUCK agent resumes the same way.
 - Engine unchanged: `src/shared/blocker-chain.ts` already classifies `AWAITING_AGENT_STUCK`; Phase 21 only consumes the existing verdict (no new terminal kind, AI-free, untouched).
@@ -43,7 +45,6 @@ New milestone roadmapped. **Phase numbering CONTINUES from v1.5.0** (which ended
 Files: `.planning/ROADMAP.md` (v1.6.0 section + Phase 21 detail appended; v1.0.0/v1.4.0/v1.5.0 sections preserved), `.planning/REQUIREMENTS.md` (traceability 6/6 to Phase 21).
 
 ---
-
 
 ## ▶ Phase 17 — PLANNED 2026-06-10 (6 plans, plan-checker PASS)
 
@@ -739,14 +740,14 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 **Core Value:** Zero rabbit-holes - every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place.
 
-**Current Focus:** Phase 20 — Hygiene & honestly-green CI
+**Current Focus:** Phase 21 — stuck-agent-reply-in-place
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-15 — Milestone v1.6.0 started
+Phase: 21 (stuck-agent-reply-in-place) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-06-15
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1460,8 +1461,8 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** v1.5.0 milestone complete
-**Progress:** [█████████░] 92%
+**Status:** Ready to execute
+**Progress:** [█████████░] 89%
 
 ## Performance Metrics
 
@@ -1512,6 +1513,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 | Phase 19 P04 | ~12 min | 2 tasks | 6 files |
 | Phase 20 P01 | 25min | 3 tasks | 4 files |
 | Phase 20 P02 | 20m | 2 tasks | 1 files |
+| Phase 21 P01 | ~20 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -1605,7 +1607,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-15T16:01:12.849Z
+**Last session:** 2026-06-15T20:41:34.947Z
 
 **Stopped at:** Phases 19+20 code-complete & verified (passed-with-rider); one batched operator window remains to close v1.5.0
 

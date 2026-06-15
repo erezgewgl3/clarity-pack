@@ -11,7 +11,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 - [ ] **STUCK-01**: Operator sees a reply-in-place affordance on `AWAITING_AGENT_STUCK` rows in the Situation Room employee row (Phase-15 Watch tier)
 - [ ] **STUCK-02**: Operator sees the same reply-in-place affordance on `AWAITING_AGENT_STUCK` rows in the Reader live-blocker panel
-- [ ] **STUCK-03**: Submitting a reply on a stuck row posts a comment that resumes the stuck agent via `situation.replyAndResume` (worker accepts a STUCK leaf and resumes it)
+- [x] **STUCK-03**: Submitting a reply on a stuck row posts a comment that resumes the stuck agent via `situation.replyAndResume` (worker accepts a STUCK leaf and resumes it)
 - [ ] **STUCK-04**: A stuck agent is never resumed by merely viewing or loading a row — resume happens only on an explicit operator reply (Phase-13/14 no-auto-resume rule preserved)
 - [ ] **STUCK-05**: Reply copy is appropriate to the stuck context ("nudge / reply to unstick"), distinct from the human-decision wording used on `AWAITING_HUMAN` rows
 - [ ] **STUCK-06**: Every new render and resume path is degrade-safe and NO_UUID_LEAK clean — no raw agent ids/UUIDs surface in the affordance, its prose, or the resumed comment
@@ -42,7 +42,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | STUCK-01 | Phase 21 | Pending |
 | STUCK-02 | Phase 21 | Pending |
-| STUCK-03 | Phase 21 | Pending |
+| STUCK-03 | Phase 21 | Complete |
 | STUCK-04 | Phase 21 | Pending |
 | STUCK-05 | Phase 21 | Pending |
 | STUCK-06 | Phase 21 | Pending |
