@@ -34,6 +34,17 @@ export type ChatActiveTask = {
   title: string;
   status: string;
   createdAt: string | null;
+  // Phase 19 Plan 19-03 (CARD-02 / D-09) — the Editor named-action card for this
+  // task's leaf, attached read-only by chat.taskOwned ONLY when the flag is ON and
+  // a FRESH cached card exists; null/absent otherwise → the rail floors to its
+  // deterministic line. DISPLAY fields ONLY (sourceIssueUuid omitted, NO_UUID_LEAK).
+  actionCard?: {
+    namedAction: string;
+    awaitedParty: string;
+    estBucket: 'quick' | 'focused' | 'deep' | (string & {});
+    actionKind: 'answer' | 'decide' | 'assign' | 'none' | (string & {});
+    decisionOptions: string[] | null;
+  } | null;
 };
 
 type Result =

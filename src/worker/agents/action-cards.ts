@@ -508,6 +508,32 @@ export function rowToCard(row: ActionCardRow): ActionCard {
   };
 }
 
+/** The DISPLAY-ONLY subset of an action card — exactly the fields a render
+ *  surface may show. The mutation-only sourceIssueUuid (and the generatedAt
+ *  liveness field) are dropped. Phase 19 Plan 19-03 (CARD-02 / D-09): the four
+ *  surface attaches carry this shape to the UI so the dispatch UUID can NEVER be
+ *  threaded into a render (NO_UUID_LEAK by construction, D-10). */
+export type ActionCardDisplay = {
+  namedAction: string;
+  awaitedParty: string;
+  estBucket: ActionCard['estBucket'];
+  actionKind: ActionCard['actionKind'];
+  decisionOptions: string[] | null;
+};
+
+/** Project a cached row → the DISPLAY-only card shape (drops sourceIssueUuid /
+ *  generatedAt). The single mapping the Reader / Bulletin / Chat attaches reuse
+ *  so the NO_UUID_LEAK omission lives in ONE place. */
+export function rowToCardDisplay(row: ActionCardRow): ActionCardDisplay {
+  return {
+    namedAction: row.named_action,
+    awaitedParty: row.awaited_party,
+    estBucket: row.est_bucket,
+    actionKind: row.action_kind,
+    decisionOptions: row.decision_options,
+  };
+}
+
 /**
  * Read back an existing TERMINAL op's result for THIS company's action-cards op
  * (consume-before-spawn — the bulletin-gloss BUG-2 fix). The agent marks its op

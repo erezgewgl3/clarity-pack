@@ -45,6 +45,14 @@ import {
 import { filterLineageThreads } from '../bulletin/lineage-filter.ts';
 import { driveBulletinGlossStep, type BulletinGlossCtx } from '../bulletin/bulletin-gloss.ts';
 import type { LineageThread } from '../../shared/types.ts';
+// Phase 19 Plan 19-03 (CARD-02 / D-09) — read-cached-only action-card attach for
+// the Bulletin Action Inbox. Flag-gated (degrade-to-OFF), batch read, liveness-
+// armed, projected to DISPLAY-only fields (rowToCardDisplay drops sourceIssueUuid
+// — NO_UUID_LEAK). NEVER compiles (no driveActionCardsStep — the 19-02 static
+// gate covers this handler).
+import { isActionCardsEnabled } from '../db/action-cards-flag-repo.ts';
+import { getActionCardsBySources } from '../db/action-cards-repo.ts';
+import { rowToCardDisplay, isActionCardLive } from '../agents/action-cards.ts';
 
 export type BulletinByCycleCtx = OptInGuardDataCtx &
   BulletinsRepoCtx &
@@ -129,10 +137,35 @@ export function registerBulletinByCycle(ctx: BulletinByCycleCtx): void {
     }
 
     // Action Inbox is viewer-scoped — computed live, not from draft_json.
-    const actionInbox = await queryActionInbox(ctx, {
+    let actionInbox = await queryActionInbox(ctx, {
       companyId,
       viewerUserId: userId,
     });
+
+    // Phase 19 Plan 19-03 (CARD-02 / D-09) — flag-gated, READ-ONLY cached-card
+    // attach per inbox item (the item's `issueId` IS the action_cards
+    // source_issue_id leaf). Degrade-safe: OFF / stale / absent / any read throw
+    // → actionCard stays undefined/null → the UI floors to the existing summary
+    // line. NEVER compiles (no driveActionCardsStep — CARD-01 static gate).
+    try {
+      if (actionInbox.length > 0 && (await isActionCardsEnabled(ctx, companyId))) {
+        const leafUuids = actionInbox.map((c) => c.issueId).filter((x): x is string => !!x);
+        if (leafUuids.length > 0) {
+          const nowMs = Date.now();
+          const rowsBySource = await getActionCardsBySources(ctx, companyId, leafUuids);
+          actionInbox = actionInbox.map((c) => {
+            const row = rowsBySource[c.issueId];
+            const actionCard = row && isActionCardLive(row, nowMs) ? rowToCardDisplay(row) : null;
+            return { ...c, actionCard };
+          });
+        }
+      }
+    } catch (e) {
+      ctx.logger?.warn?.('bulletin.byCycle: action-card cached read failed (floor)', {
+        companyId,
+        err: (e as Error).message,
+      });
+    }
 
     // Errata for this cycle (Plan 03-04 surfaces the UI; the read path is
     // already final here).

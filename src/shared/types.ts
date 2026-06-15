@@ -191,6 +191,18 @@ export type ActionInboxCard = {
   ageMs: number;
   ageText: string;
   summary: string;
+  // Phase 19 Plan 19-03 (CARD-02 / D-09) — the Editor-Agent named-action card for
+  // this inbox item's leaf, attached read-only by bulletin.byCycle ONLY when the
+  // runtime flag is ON and a FRESH cached card exists; null/absent otherwise → the
+  // UI floors to the existing `summary` line. DISPLAY fields ONLY — the worker
+  // ActionCard's mutation-only sourceIssueUuid is OMITTED (NO_UUID_LEAK, D-10).
+  actionCard?: {
+    namedAction: string;
+    awaitedParty: string;
+    estBucket: 'quick' | 'focused' | 'deep' | (string & {});
+    actionKind: 'answer' | 'decide' | 'assign' | 'none' | (string & {});
+    decisionOptions: string[] | null;
+  } | null;
 };
 
 /** A lineage thread — the agent-handoff DAG approximated for one cycle (D-21). */

@@ -54,6 +54,23 @@ import * as React from 'react';
 import { usePluginAction, usePluginData } from '@paperclipai/plugin-sdk/ui/hooks';
 
 import { useToast } from '../../primitives/toast.tsx';
+import { rescrubPersisted } from '../../../shared/scrub-human-action.ts';
+
+/** Phase 19 Plan 19-03 (CARD-02 / D-09) — coarse estimate bucket → display words.
+ *  Mirrors situation-room/employee-row.tsx:estBucketLabel EXACTLY. Anything else
+ *  → null so the await line OMITS the estimate (never a fabricated number). */
+function estBucketLabel(bucket: string | null | undefined): string | null {
+  switch (bucket) {
+    case 'quick':
+      return 'quick decision';
+    case 'focused':
+      return '~30-min review';
+    case 'deep':
+      return 'deep work';
+    default:
+      return null;
+  }
+}
 
 import type { RosterEmployee } from './roster-rail.tsx';
 import type { ChatTopic } from './topic-strip.tsx';
@@ -317,12 +334,37 @@ export function ContextRail({
         <p className="ctx-empty">Select a topic to see its spun-off tasks.</p>
       )}
 
+      {/* Phase 19 Plan 19-03 (CARD-02 / D-09) — the needs-you "You owe" slot. When
+          the runtime flag is ON and an active task carries a FRESH cached Editor
+          action card (owedCard.actionCard, attached read-only by chat.taskOwned),
+          render the named-action prose + "waiting on <party> · <estimate>" line in
+          place of the deterministic floor. When no fresh card exists (stale /
+          absent / flag OFF) fall through to the existing "No outstanding
+          decisions" line exactly as today (D-09 degrade-safe). Every display
+          string is rescrubbed at render and is a plain React text node;
+          sourceIssueUuid is not on the mirror, so it can never render
+          (NO_UUID_LEAK, D-10). Mirrors employee-row.tsx:374-404. */}
       <h3>You owe</h3>
-      <p className="ctx-empty">
-        {topic
-          ? 'No outstanding decisions on this topic.'
-          : 'Select a topic to see what you owe.'}
-      </p>
+      {(() => {
+        const owedCard = topic
+          ? (activeTasks.find((t) => t.actionCard)?.actionCard ?? null)
+          : null;
+        const estWords = owedCard ? estBucketLabel(owedCard.estBucket) : null;
+        return owedCard ? (
+          <div className="ctx-you-owe-card" data-clarity-region="you-owe-card">
+            <p className="ctx-you-owe-named-action">{rescrubPersisted(owedCard.namedAction)}</p>
+            <p className="ctx-you-owe-await">
+              {`waiting on ${rescrubPersisted(owedCard.awaitedParty)}${estWords ? ` · ${estWords}` : ''}`}
+            </p>
+          </div>
+        ) : (
+          <p className="ctx-empty">
+            {topic
+              ? 'No outstanding decisions on this topic.'
+              : 'Select a topic to see what you owe.'}
+          </p>
+        );
+      })()}
 
       {/* Plan 05-11 (CHAT-07 gap closure) -- Recent Attachments is LIVE.
           chat.attachment.list returns the newest 5 attachments for the

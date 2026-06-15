@@ -36,6 +36,18 @@ import {
   listChatTopicTasksForTopic,
   type ChatTopicsRepoCtx,
 } from '../db/chat-topics-repo.ts';
+// Phase 19 Plan 19-03 (CARD-02 / D-09) — read-cached-only action-card attach for
+// the Chat needs-you rail. Flag-gated (degrade-to-OFF), batch read, liveness-
+// armed, projected to DISPLAY-only fields (rowToCardDisplay drops sourceIssueUuid
+// — NO_UUID_LEAK). NEVER compiles (no driveActionCardsStep — the 19-02 static
+// gate covers this handler).
+import { isActionCardsEnabled } from '../db/action-cards-flag-repo.ts';
+import { getActionCardsBySources } from '../db/action-cards-repo.ts';
+import {
+  rowToCardDisplay,
+  isActionCardLive,
+  type ActionCardDisplay,
+} from '../agents/action-cards.ts';
 
 export type ChatActiveTasksCtx = OptInGuardDataCtx &
   ChatTopicsRepoCtx & {
@@ -49,6 +61,11 @@ type ActiveTaskEntry = {
   title: string;
   status: string;
   createdAt: string | null;
+  // Phase 19 Plan 19-03 (CARD-02 / D-09) — the Editor named-action card for this
+  // task's leaf, attached read-only ONLY when the flag is ON and a FRESH cached
+  // card exists; null otherwise → the rail floors to its deterministic line.
+  // DISPLAY-only (sourceIssueUuid omitted, NO_UUID_LEAK, D-10).
+  actionCard?: ActionCardDisplay | null;
 };
 
 /**
@@ -136,6 +153,31 @@ export function registerChatActiveTasks(ctx: ChatActiveTasksCtx): void {
         title: row.title ?? '(untitled task)',
         status: row.status ?? 'todo',
         createdAt: coerceCreatedAt(row.createdAt),
+      });
+    }
+
+    // Phase 19 Plan 19-03 (CARD-02 / D-09) — flag-gated, READ-ONLY cached-card
+    // attach per active task (the task's `issueId` IS the action_cards
+    // source_issue_id leaf). Degrade-safe: OFF / stale / absent / any read throw
+    // → actionCard stays null → the rail floors to its deterministic line. NEVER
+    // compiles (no driveActionCardsStep — CARD-01 static gate).
+    try {
+      if (tasks.length > 0 && (await isActionCardsEnabled(ctx, companyId))) {
+        const leafUuids = tasks.map((t) => t.issueId).filter((x): x is string => !!x);
+        if (leafUuids.length > 0) {
+          const nowMs = Date.now();
+          const rowsBySource = await getActionCardsBySources(ctx, companyId, leafUuids);
+          for (const t of tasks) {
+            const cardRow = rowsBySource[t.issueId];
+            t.actionCard = cardRow && isActionCardLive(cardRow, nowMs) ? rowToCardDisplay(cardRow) : null;
+          }
+        }
+      }
+    } catch (e) {
+      ctx.logger?.warn?.('chat.taskOwned: action-card cached read failed (floor)', {
+        companyId,
+        topicIssueId,
+        err: (e as Error).message,
       });
     }
 

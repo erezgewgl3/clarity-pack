@@ -14,6 +14,23 @@
 import * as React from 'react';
 import { usePluginAction, useHostNavigation } from '@paperclipai/plugin-sdk/ui/hooks';
 import type { ActionInboxCard } from '../../../shared/types.ts';
+import { rescrubPersisted } from '../../../shared/scrub-human-action.ts';
+
+/** Phase 19 Plan 19-03 (CARD-02 / D-09) — coarse estimate bucket → display words.
+ *  Mirrors situation-room/employee-row.tsx:estBucketLabel EXACTLY. Anything else
+ *  → null so the await line OMITS the estimate (never a fabricated number). */
+function estBucketLabel(bucket: string | null | undefined): string | null {
+  switch (bucket) {
+    case 'quick':
+      return 'quick decision';
+    case 'focused':
+      return '~30-min review';
+    case 'deep':
+      return 'deep work';
+    default:
+      return null;
+  }
+}
 
 export type ActionInboxProps = {
   cards: ActionInboxCard[];
@@ -96,7 +113,28 @@ function ActionInboxCardView({
         <span className="clarity-bulletin-action-time">{card.ageText}</span>
       </div>
       <h3 className="clarity-bulletin-action-card-h3">{card.title}</h3>
-      <p className="clarity-bulletin-summary">{card.summary}</p>
+      {/* Phase 19 Plan 19-03 (CARD-02 / D-09) — when a FRESH cached Editor action
+          card is attached (card.actionCard, read-only by bulletin.byCycle), render
+          the named-action prose + "waiting on <party> · <estimate>" line IN PLACE
+          OF the deterministic summary floor. When null (stale / absent / flag OFF)
+          fall through to the existing card.summary line exactly as today (D-09
+          degrade-safe). Every display string is rescrubbed at render and is a
+          plain React text node; sourceIssueUuid is not on the mirror, so it can
+          never render (NO_UUID_LEAK, D-10). Mirrors employee-row.tsx:374-404. */}
+      {(() => {
+        const ac = card.actionCard;
+        const estWords = ac ? estBucketLabel(ac.estBucket) : null;
+        return ac ? (
+          <div className="clarity-bulletin-summary clarity-bulletin-action-named">
+            <p className="clarity-bulletin-named-action">{rescrubPersisted(ac.namedAction)}</p>
+            <p className="clarity-bulletin-await">
+              {`waiting on ${rescrubPersisted(ac.awaitedParty)}${estWords ? ` · ${estWords}` : ''}`}
+            </p>
+          </div>
+        ) : (
+          <p className="clarity-bulletin-summary">{card.summary}</p>
+        );
+      })()}
       <div className="clarity-bulletin-actions">
         <button
           type="button"
