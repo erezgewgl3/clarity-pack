@@ -4,6 +4,32 @@
 
 ---
 
+## ADDENDUM 2 — v1.7.5 (Reader deliverable, investigated on BEAAA-4882)
+
+Eric asked me to test another issue and report. I deep-probed BEAAA-4882's Reader data handlers and found **two real deliverable bugs** behind the "Couldn't load this deliverable just now" line — plus one host/agent-side item that is NOT a Clarity render bug.
+
+**The issue's documents (live):**
+| key | title | updated |
+|---|---|---|
+| `compile-result` | "compile-result (misrouted — see correct operation issue)" | 2026-06-15 (newest) |
+| `gap-closure-plan` | "Gap-Closure Plan" | 2026-06-12 ← the real deliverable |
+| `prompt-ceo-scanning-gap-closure` | "Prompt CEO Scanning Gap Closure" | 2026-06-12 |
+
+**Bug 1 — title-vs-key (the actual "Couldn't load" cause).** The Reader sent the document's display **title** ("Gap-Closure Plan") to `deliverable.preview` as the `documentKey`, but the host's `documents.get` needs the real **key** (`gap-closure-plan`). Proven live: preview by title → `READ_FAILED`; preview by real key → loads (honest "no inline preview for this type"). This silently broke **every** deliverable whose title ≠ key — a broad bug, not specific to this issue.
+
+**Bug 2 — misrouted internal artifact wins.** `issue.reader` picked the **newest** document as the deliverable with no filtering, so a (mis)routed clarity-pack `compile-result` op artifact masqueraded as "The deliverable" over the real `gap-closure-plan`.
+
+**Fix (commit `a066bab`, shipped as v1.7.5):** `DeliverableSummary` now carries the real host `key` (the previewer already prefers `documentKey ?? filename`), and `issue.reader` filters internal `compile-result` documents out of the deliverable selection (genuine deliverable wins, or honest empty-state). +3 tests; full suite green.
+
+**Live-verified on BEAAA-4882 (v1.7.5):** the deliverable now reads **"Gap-Closure Plan · last write 2d ago / Inline preview isn't available for this file type — open in classic Paperclip"** — the real deliverable + an honest reason, and the "compile-result (misrouted…)" string is gone from the Reader. Verdict line still "CEO is stuck". Screenshot: `v1.7.5-BEAAA-4882-real-deliverable-honest-preview.png`.
+
+**Still OPEN (not a Clarity render bug — needs a separate look):**
+- **TL;DR stuck `"compiling"`** on BEAAA-4882 (`tldrStatus: "compiling"`, empty body). The Editor-Agent's compile for this task never finalized — and the misrouted `compile-result` document (title literally "misrouted — see correct operation issue") is the trail of a TL;DR-compile that filed its result on the **task** instead of its operation issue. This is an Editor-Agent / compile-routing matter (worker pipeline + agent behavior), distinct from the deliverable-render bugs fixed above. Worth a dedicated debug session; I did not change the compile pipeline tonight.
+
+BEAAA is now on **v1.7.5**.
+
+---
+
 ## ADDENDUM — v1.7.4 (Reader verdict-line fix, after Eric flagged the screenshot)
 
 Eric spotted a real bug in the Reader: **"AWAITING AGENT STUCK / CEO stuck on an agent is stuck"** — garbled prose. Root cause: `awaitedPartyLabel` was being filled with the whole scrubbed action sentence (`"{agent} stuck on {leaf}"`, where the leaf id even mis-scrubbed to "an agent"), but the Reader composes `"{party} is stuck"` and the Situation Room composes `"waiting on {party}"` — so the field must be the **party** ("CEO"), not a sentence. Phase-18's LEG-02 had only stripped the `agent#<hex>` leak from this exact line; the broken grammar survived.
