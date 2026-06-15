@@ -145,7 +145,7 @@ Plans:
 **Plans**: 5 plans
 Plans:
 - [x] 19-01-PLAN.md — Wave 1: safety primitive — migration 0019 (additive action_cards_flag) + degrade-to-OFF flag repo (inverted polarity, NOT version-scoped) + runtime-read swap at editor.ts:387 / situation-room.ts (inert at default OFF)
-- [ ] 19-02-PLAN.md — Wave 2: CARD-01 — delete the on-request compile block + batch getActionCardsBySources read-cached attach + SWR serve-path flag strip + bounded-warm <=5 cap + no-on-request-compile static gate + non-notifying op-issue verification
+- [x] 19-02-PLAN.md — Wave 2: CARD-01 — delete the on-request compile block + batch getActionCardsBySources read-cached attach + SWR serve-path flag strip + bounded-warm <=5 cap + no-on-request-compile static gate + non-notifying op-issue verification
 - [ ] 19-03-PLAN.md — Wave 3: CARD-02 four-surface attach — Reader/Bulletin/Chat read-only card attach + named-action render with deterministic floor + NO_UUID_LEAK render-scan across all 3 new surfaces
 - [ ] 19-04-PLAN.md — Wave 4: CARD-03 — set-action-cards-flag RPC (Step-2 enable + panic-OFF, no psql) + OFF-floor-at-every-gate test + ON-no-storm storm-safety burst
 - [ ] 19-05-PLAN.md — Wave 5 (autonomous:false): two-source bump to v1.8.0 + clean rebuild + bookended BEAAA reinstall (flag OFF) + Step-1 quiet verify + monitored Step-2 ON-flip drill (kill-switch armed) + panic-OFF rehearsal
@@ -273,7 +273,7 @@ Plans:
 | 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 7/7 | Complete   | 2026-06-10 |
 | 17. Structured human-wait + truthful verdicts | 6/6 | Complete   | 2026-06-11 |
 | 18. No rabbit-holes & plain-English | 4/4 | Complete    | 2026-06-14 |
-| 19. Action-cards async re-architecture | 1/5 | In Progress|  |
+| 19. Action-cards async re-architecture | 2/5 | In Progress|  |
 | 20. Hygiene & honestly-green CI | 0/TBD | Not started | - |
 
 ### v1.4.0 phase tracking
