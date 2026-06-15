@@ -130,8 +130,63 @@ test('honest error path — error toast on non-ok / throw; onActed NOT called; n
 });
 
 test('pending posture — Sending… label + disabled controls during the in-flight window', () => {
-  assert.match(CODE, /sending\s*\?\s*'Sending…'\s*:\s*'Send'/, 'Send→Sending… while in flight');
+  // Phase 21 / D-4 — the Send label is now the variant-selected `copy.sendLabel`
+  // (default 'answer' → 'Send'); the in-flight label stays 'Sending…'.
+  assert.match(CODE, /sending\s*\?\s*'Sending…'\s*:\s*copy\.sendLabel/, 'Send→Sending… while in flight');
   assert.match(CODE, /disabled=\{sending/, 'controls disabled while sending');
+});
+
+// ---------------------------------------------------------------------------
+// Phase 21 / D-4 (STUCK-05) — the OPTIONAL `variant` copy prop. COPY ONLY: it
+// must change only the affordance wording, never dispatch/behavior. Default
+// 'answer' is byte-identical to today (zero regression for AWAITING_HUMAN).
+// ---------------------------------------------------------------------------
+
+test('ReplyInPlaceProps declares an OPTIONAL variant?: answer | nudge prop', () => {
+  assert.match(CODE, /variant\?:\s*'answer'\s*\|\s*'nudge'/, 'optional variant union on the props');
+});
+
+test('component destructures variant with a default of answer (backward compatible)', () => {
+  assert.match(CODE, /variant\s*=\s*'answer'/, "variant defaults to 'answer' in the signature");
+});
+
+test('a pure copy-selector keyed on variant produces aria-label/placeholder/sendLabel', () => {
+  assert.match(CODE, /const copy\s*=/, 'a copy selector const');
+  assert.match(CODE, /variant === 'nudge'/, 'keyed on variant (no behavior branch)');
+  assert.match(CODE, /inputAriaLabel:/, 'selects the aria-label');
+  assert.match(CODE, /inputPlaceholder:/, 'selects the placeholder');
+  assert.match(CODE, /sendLabel:/, 'selects the Send label');
+});
+
+test("default 'answer' copy is byte-identical to the pre-Phase-21 literals (no regression)", () => {
+  // The exact AWAITING_HUMAN wording shipped before Phase 21.
+  assert.match(CODE, /inputAriaLabel:\s*`Reply to \$\{awaitedPartyLabel\}`/, "answer aria-label unchanged");
+  assert.match(CODE, /inputPlaceholder:\s*`Reply to \$\{awaitedPartyLabel\}…`/, 'answer placeholder unchanged');
+  assert.match(CODE, /sendLabel:\s*'Send'/, "answer Send label unchanged");
+});
+
+test("variant='nudge' swaps in the stuck-context 'Nudge to unstick' wording (STUCK-05)", () => {
+  assert.match(CODE, /Nudge to unstick/, 'nudge Send label');
+  assert.match(CODE, /Reply to unstick \$\{awaitedPartyLabel\}/, 'nudge aria-label');
+  assert.match(CODE, /Reply to unstick — your note resumes \$\{awaitedPartyLabel\}…/, 'nudge placeholder');
+});
+
+test('the render sites consume the selected copy (not inline literals)', () => {
+  assert.match(CODE, /aria-label=\{copy\.inputAriaLabel\}/, 'aria-label from selector');
+  assert.match(CODE, /placeholder=\{copy\.inputPlaceholder\}/, 'placeholder from selector');
+});
+
+test('variant is render-copy ONLY — absent from dispatchReply body and its dep array (T-21-03)', () => {
+  // Isolate the dispatchReply useCallback (from its declaration to the closing
+  // dependency array) and assert `variant` never appears inside it.
+  const start = CODE.indexOf('const dispatchReply = React.useCallback');
+  assert.ok(start >= 0, 'dispatchReply callback found');
+  // The callback ends at the `);` that closes useCallback(fn, [deps]). Find the
+  // deps array close after the start.
+  const depsClose = CODE.indexOf('],', start);
+  assert.ok(depsClose > start, 'dispatchReply deps array close found');
+  const callbackRange = CODE.slice(start, depsClose + 2);
+  assert.doesNotMatch(callbackRange, /\bvariant\b/, 'variant must not appear in dispatchReply or its deps');
 });
 
 // ---------------------------------------------------------------------------

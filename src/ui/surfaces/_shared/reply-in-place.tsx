@@ -54,6 +54,14 @@ export type ReplyInPlaceProps = {
   awaitedPartyLabel: string;
   /** The Editorial named-action sentence shown as the row label. */
   namedAction: string;
+  /** Phase 21 / D-4 (STUCK-05) — COPY ONLY, default 'answer'. Selects the
+   *  affordance wording (input aria-label/placeholder + Send-button label) so a
+   *  stuck-context (`AWAITING_AGENT_STUCK`) caller can read "nudge to unstick"
+   *  phrasing distinct from the human-decision wording. It MUST NOT change any
+   *  dispatch/behavior — `variant` is render-copy only and is deliberately absent
+   *  from dispatchReply + its dependency array. AWAITING_HUMAN callers omit the
+   *  prop and get byte-identical copy to today (zero regression). See 21-CONTEXT D-4. */
+  variant?: 'answer' | 'nudge';
   /** Computed by the surface via isReplyReachable(terminalKind) — AWAITING_HUMAN
    *  only. true → Send/chips; false → named action + Open↗ only (no dead Send). */
   reachable: boolean;
@@ -122,9 +130,28 @@ export function ReplyInPlace({
   companyPrefix,
   navigate,
   onActed,
+  variant = 'answer',
 }: ReplyInPlaceProps): React.ReactElement {
   const reply = usePluginAction('situation.replyAndResume');
   const { showToast } = useToast();
+
+  // Phase 21 / D-4 — a PURE copy-selector keyed on `variant`. No behavior branch:
+  // these four strings only feed the input aria-label/placeholder + the Send
+  // button label. The 'answer' values are byte-identical to the pre-Phase-21
+  // literals (zero regression for AWAITING_HUMAN callers). 'nudge' swaps in the
+  // stuck-context "reply to unstick" / "Nudge to unstick" wording (STUCK-05).
+  const copy =
+    variant === 'nudge'
+      ? {
+          inputAriaLabel: `Reply to unstick ${awaitedPartyLabel}`,
+          inputPlaceholder: `Reply to unstick — your note resumes ${awaitedPartyLabel}…`,
+          sendLabel: 'Nudge to unstick',
+        }
+      : {
+          inputAriaLabel: `Reply to ${awaitedPartyLabel}`,
+          inputPlaceholder: `Reply to ${awaitedPartyLabel}…`,
+          sendLabel: 'Send',
+        };
 
   const [body, setBody] = React.useState('');
   const [sending, setSending] = React.useState(false);
@@ -271,8 +298,8 @@ export function ReplyInPlace({
           // Plan 14-03 (Rule 2 a11y fix) — an accessible name for the reply input
           // (the static a11y R2 rule requires id/name/aria-label, not just a
           // placeholder). Scrubbed awaitedPartyLabel only (NO_UUID_LEAK).
-          aria-label={`Reply to ${awaitedPartyLabel}`}
-          placeholder={`Reply to ${awaitedPartyLabel}…`}
+          aria-label={copy.inputAriaLabel}
+          placeholder={copy.inputPlaceholder}
           value={body}
           disabled={sending}
           onChange={(e) => setBody(e.target.value)}
@@ -286,7 +313,7 @@ export function ReplyInPlace({
           disabled={sending || body.trim().length === 0}
           onClick={() => void dispatchReply(body)}
         >
-          {sending ? 'Sending…' : 'Send'}
+          {sending ? 'Sending…' : copy.sendLabel}
         </button>
       </div>
     </div>
