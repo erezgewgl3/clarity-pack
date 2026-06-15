@@ -17,20 +17,19 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 
 **Zero rabbit-holes.** Every cross-reference resolved inline, every blocker chain transitively flattened to a single named human action, every deliverable previewed in place. If anything else fails, this must hold: Eric should never have to click through three levels of unresolved task references to find out what one of his agents is stuck on.
 
-## Current Milestone: v1.5.0 Truthful & Legible Situation Room
+## Current Milestone: v1.6.0 Stuck-Agent Reply-In-Place
 
-**Goal:** Make every Clarity surface legible to a non-builder — plain English everywhere, zero raw agent/UUID identifiers — and make the Editor-Agent's *truthful* named-action prose actually live in production, via a safe off-request (flag-gated) compile path that keeps the snapshot fast.
+**Goal:** Extend the Do-It-Here reply loop so the operator can reply-in-place to **resume a STUCK agent** — not just a human-wait. The reply affordance + `situation.replyAndResume` that Phase 14 shipped for `AWAITING_HUMAN` rows now also fire on `AWAITING_AGENT_STUCK` rows (the Phase-15 Watch tier).
 
-**Target features (locked scope `v150-scope-locked`, Phases 16-20):**
-- **16 — Snapshot performance & honest loading** — cockpit loads instantly; rollup fast + degrade-safe; no 30s/502 (the live 25.7s cold recompute). FIRST.
-- **17 — Structured human-wait + truthful verdicts (CENTERPIECE)** — agents declare "blocked on a human decision X" *structurally* so the engine honestly classifies AWAITING_HUMAN instead of parking in Watch; the deep fix behind BEAAA-972; SC5 extended to a full surface×terminal matrix.
-- **18 — No rabbit-holes & plain-English** — "Open ↗" → Clarity Reader (not the raw page); zero raw agent/UUID ids in human-facing text; "Looks done — close it?" when the AI TL;DR says done but the engine says blocked.
-- **19 — Action-cards async re-architecture (LAST, flag-gated)** — off-request compile + non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; named-action prose live; slip-safe to v1.6.
-- **20 — Hygiene & honestly-green CI** — SC5 full-matrix; fix the 7 CHAT/CTT traceability failures; stabilize the chat-watchdog timing flake; refresh the version label; confirm automated DO backups (the continuous-deploy bookend).
+**Target feature (locked scope `v16-stuck-agent-reply-seed` — this is the ONLY thing in v1.6.0):**
+- **UI gate** — surface `src/ui/surfaces/_shared/reply-in-place.tsx` on STUCK rows; gating lives in `src/ui/surfaces/situation-room/employee-row.tsx` (currently AWAITING_HUMAN-only) + Reader `src/ui/surfaces/reader/live-blocker-panel.tsx`. Decide the copy ("Nudge / reply to unstick").
+- **Worker eligibility** — confirm/loosen the terminal-kind gate in `src/worker/handlers/situation-reply-and-resume.ts` so a STUCK row's leaf is accepted and resumed; keep the Phase-13/14 no-auto-resume rule (never resume on a passive view).
+- **Tests** — extend the Phase-14 reply-and-resume tests to the STUCK kind; degrade-safe; NO_UUID_LEAK on any new render path.
+- **Live drill** — bookended BEAAA deploy + a real stuck-agent reply→resume.
 
-**Live driver (2026-06-03):** room no longer 502s with action-cards gated (6/6 snapshot calls 200), but cold recompute is **25.7s** (~4s under the 30s cliff) → Phase 16. The BEAAA-972 confusion (agents expressing human-waits as prose the engine can't read) → Phase 17 centerpiece.
-**Note:** the v1.4.3 incident hotfix already partially delivered Phase-16 (less DB load), Phase-18 (prefix-gate kills fake-ref id leakage), and Phase-20 (version label, known watchdog flake) pieces.
-**Explicitly OUT:** multi-operator / onboarding / opt-in toggle UI — "usable for everyone" = legible-for-non-builders, NOT multi-user; the Phase-2 opt-in already ships.
+**Why it's wiring, not invention:** handler exists (`situation.replyAndResume`, Plan 14-01); the Phase-10 spike proved a plain comment resumes an agent in BOTH the awaiting-answer AND `status='blocked'` cases (no special transition); the engine (`src/shared/blocker-chain.ts`) already classifies `AWAITING_AGENT_STUCK` and stays AI-free and untouched. Likely **no new migration** — UI/handler gate only.
+**Deploy reality:** current live = **v1.8.0**; next bump likely v1.8.1 / v1.9.0 (two sources: package.json + src/manifest.ts). Bookend = confirmed automated DO backups; fail2ban → one deliberate SSH connection per step; AriClaw root `/` runs HOT → temp/artifacts to `/mnt/paperclipdata`; `plugin upgrade` is registry-only → uninstall-then-install from extract-dir.
+**Explicitly DROPPED by Eric ("not even needed"):** per-user opt-in toggle UI / multi-user; Phase-4.2 deferred power features (archive full-view, paused-agent banner, ref-chip peek cards, storage-pin, cold-task-from-global); `R3-self-assign-one-assignee`.
 
 ## Requirements
 
@@ -48,22 +47,20 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 - ✓ **Plugin distribution** — v1.0. Installable via `paperclipai plugin install`. *Adjusted:* distribution is internal-only (local-tarball install); npm publish was dropped by decision — v1 audience is Eric on BEAAA.
 - ✓ **Pre-install backup, snapshot, and rollback discipline** — v1.0 (Phase 1). Snapshot/restore/smoke-test CLI + rehearsed restore drill (Countermoves 2026-05-13 PASS). For BEAAA, the bookend is the DigitalOcean droplet backup + plugin-reinstall rollback (safety-CLI not installed on that box).
 - ✓ **Honest blocker taxonomy (engine)** — Validated in Phase 11 (2026-06-02). Deterministic, agent-aware terminal taxonomy (8 kinds: awaiting-human / agent-working / agent-stuck / self-resolving / external / cycle / genuinely-unowned / unclassified) flattened transitively to the human at the end; degrade-safe per row; the single `verdict` source every surface reads. NO_UUID_LEAK enforced at every chain producer (scrub-before-return) with a render-scan regression guard. Verification 5/5 must-haves; gap-closure (CR-01 + WR/IN warnings) closed in 11-05..07.
-- ✓ **Truthful Situation Room (v1.4.0 → shipped v1.4.2, Phases 12–15)** — "Needs you" lists only human-actionable items (Phase 12); Editor-Agent named single action with stale→degrade (Phase 13); reply-in-place + decision chips that unblock+resume across surfaces (Phase 14); Pulse + Needs-you / In-motion / Watch tier IA (Phase 15). SC5 one-verdict-everywhere fix (BEAAA-972 divergence) landed v1.4.2 and live-verified 2026-06-03. **Caveat carried into v1.5.0:** action-card compile is gated OFF (v1.4.1 hotfix) because synchronous compile blocked the snapshot >30s + caused a notification storm — the Editor-Agent named-action layer is therefore dark in production until the off-request re-arch ships.
+- ✓ **Truthful Situation Room (v1.4.0 → shipped v1.4.2, Phases 12–15)** — "Needs you" lists only human-actionable items (Phase 12); Editor-Agent named single action with stale→degrade (Phase 13); reply-in-place + decision chips that unblock+resume across surfaces (Phase 14); Pulse + Needs-you / In-motion / Watch tier IA (Phase 15). SC5 one-verdict-everywhere fix (BEAAA-972 divergence) landed v1.4.2 and live-verified 2026-06-03.
+- ✓ **Truthful & Legible Situation Room (v1.5.0, Phases 16–20; shipped to BEAAA through v1.8.0)** — snapshot performance & honest loading (Phase 16: cold ~2.0s vs 25.7s, never 502); Editor-Agent loop-elimination + wake-governor (Phase 16.1, storm-safe); **structured human-wait + truthful verdicts centerpiece** (Phase 17: agents declare human-decision waits structurally → engine honestly classifies AWAITING_HUMAN; the deep BEAAA-972 fix; one verdict across all four surfaces by construction; migration 0018); no-rabbit-holes & plain-English (Phase 18: "Open ↗" → Clarity Reader, zero raw agent/UUID ids, looks-done-vs-blocked affordance); action-cards async re-architecture flag-gated (Phase 19: off-request compile, `ACTION_CARDS_ENABLED` re-enabled with no storm, migration 0019; **live ON on BEAAA v1.8.0**); hygiene & honestly-green CI (Phase 20). Open riders carried as human-verification (live-positive structured-wait demo; CARD-02 visible prose), not code gaps.
 
 ### Active
 
-<!-- v1.5.0 Truthful & Legible Situation Room. Detailed REQ-IDs + traceability in .planning/REQUIREMENTS.md. -->
+<!-- v1.6.0 Stuck-Agent Reply-In-Place. Detailed REQ-IDs + traceability in .planning/REQUIREMENTS.md. -->
 
-- [ ] **No raw identifiers anywhere** — partial agent-id hashes, bare UUIDs, and machine tokens never render; every agent reference shows a human name/role across all four surfaces. NO_UUID_LEAK guard extended to partial-hash labels.
-- [ ] **Plain-English legibility** — verdict/terminal lines, focus lines, blocker chains read as sentences for a non-builder; focus line enriched from `tldr_cache`.
-- [ ] **Editor-Agent prose live** — Pulse-header prose + grounded named-action row prose in production; stale→degrade floor intact.
-- [ ] **Off-request snapshot + action-card re-arch (flag-gated, last)** — heavy recompute off the request path (cold snapshot well under the 30s cliff); `ACTION_CARDS_ENABLED` re-enabled safely with no notification storm.
+- [ ] **Reply-in-place resumes a STUCK agent** — the Do-It-Here reply affordance + `situation.replyAndResume` surface on `AWAITING_AGENT_STUCK` (Watch-tier) rows in both the Situation Room employee row and the Reader live-blocker panel; a plain operator comment resumes the stuck agent; no auto-resume on passive view; degrade-safe; NO_UUID_LEAK on every new render path.
 
 ### Out of Scope
 
-- **Per-user opt-in toggle UI / multi-user (this milestone)** — v1.5.0 is legible-for-non-builders, not multi-user; server-side opt-in already ships (Phase 2). The settings-page toggle UI stays deferred to a future "usable for everyone" milestone. *Why:* Eric's locked v1.5.0 scope.
-- **Reply-in-place for stuck-agent rows** — Phase 14 shipped reply-in-place for AWAITING_HUMAN only; the AWAITING_AGENT_STUCK reply path is deferred. *Why:* legibility + truthful prose is the v1.5.0 focus; the do-it-here action surface is feature-complete enough for now.
-- **`R3-self-assign-one-assignee`** (minor) — "Take it myself" trips the host "one assignee" rule on already-agent-owned rows; deferred candidate fix (clear-then-assign or "already owned by <agent>" messaging). Tracked in `phases/09-.../09-VERIFICATION.md`. *Why:* not legibility/prose; fold in only if cheap during the action-layer rework.
+- **Per-user opt-in toggle UI / multi-user (this milestone)** — v1.6.0 is a single targeted action-loop extension, not multi-user; server-side opt-in already ships (Phase 2). The settings-page toggle UI stays deferred to a future "usable for everyone" milestone. *Why:* Eric explicitly dropped it ("not even needed").
+- **Phase-4.2 deferred power features** — archive full-view, paused-agent banner, ref-chip peek cards, storage-pin wiring, cold-task-from-global. *Why:* Eric explicitly dropped them from v1.6.0 scope.
+- **`R3-self-assign-one-assignee`** (minor) — "Take it myself" trips the host "one assignee" rule on already-agent-owned rows; deferred candidate fix (clear-then-assign or "already owned by <agent>" messaging). Tracked in `phases/09-.../09-VERIFICATION.md`. *Why:* Eric explicitly dropped it from v1.6.0 scope.
 - **Replacing the original Paperclip UI** — Reader view is an additional tab, never a replacement. *Why:* coexistence guarantee; Eric's daily flow on BEAAA must not break.
 - **Forking Paperclip core** — all functionality must live inside the plugin manifest's contribution surface. *Why:* enables clean uninstall and Clipmart shipping without merge debt.
 - **Multi-tenant isolation work for v1** — Paperclip today is single-tenant, self-hosted, single-node. Clarity Pack v1 inherits that. *Why:* matches PLUGIN_SPEC.md's stated deployment model; broadening it is a separate project.
@@ -169,4 +166,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-03 — started milestone v1.5.0 Truthful & Legible Situation Room; folded shipped v1.4.0 (v1.4.2) work into Validated; live-verified BEAAA loads fast + BEAAA-972 SC5 consistency.*
+*Last updated: 2026-06-15 — started milestone v1.6.0 Stuck-Agent Reply-In-Place; folded shipped v1.5.0 (Phases 16–20, live to BEAAA v1.8.0) into Validated; flipped the stuck-agent reply-in-place deferral from Out of Scope into the active milestone.*

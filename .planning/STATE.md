@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5.0
-milestone_name: Truthful & Legible Situation Room
-status: completed
-stopped_at: Phases 19+20 code-complete & verified (passed-with-rider); one batched operator window remains to close v1.5.0
-last_updated: "2026-06-15T17:27:31.826Z"
-last_activity: 2026-06-15 — Milestone v1.5.0 completed and archived
+milestone: v1.6.0
+milestone_name: Stuck-Agent Reply-In-Place
+status: planning
+last_updated: "2026-06-15T19:55:32.283Z"
+last_activity: 2026-06-15
 progress:
-  total_phases: 12
-  completed_phases: 10
-  total_plans: 52
-  completed_plans: 50
-  percent: 83
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # State: Clarity Pack
@@ -714,10 +713,10 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 ## Current Position
 
-Phase: Milestone v1.5.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-15 — Milestone v1.5.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-15 — Milestone v1.6.0 started
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
