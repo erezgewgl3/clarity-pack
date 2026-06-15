@@ -127,6 +127,14 @@ export type ActionCardsStepResult = {
  * snapshot returns immediately, and every row degrades to the deterministic
  * engine line (Phase 13 D-12). Re-enable in the async re-architecture (compile
  * off the request path; op issue must not raise user notifications).
+ *
+ * Phase 19 Plan 19-01 (D-01) SUPERSEDED AT THE CALL SITES: editor.ts:387 and
+ * situation-room.ts now read the RUNTIME flag isActionCardsEnabled
+ * (src/worker/db/action-cards-flag-repo.ts) — a degrade-to-OFF, NOT
+ * version-scoped DB row the operator flips live with no redeploy. This const is
+ * retained only as a legacy/no-op export (its value is no longer consulted at
+ * either call site) pending the Plan 19-02 (CARD-01) request-path cleanup, which
+ * owns its removal. Do NOT re-wire new call sites to this const.
  */
 export const ACTION_CARDS_ENABLED: boolean = false;
 

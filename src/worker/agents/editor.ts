@@ -63,11 +63,16 @@ import { detectAndPersistHumanWait } from './human-wait-detect.ts';
 // heartbeat must remain best-effort; no auto-resume). The view-driven SR data
 // handler (situation-room.ts) is the must-have primary trigger.
 import {
-  ACTION_CARDS_ENABLED,
   driveActionCardsStep,
   type ActionCardsCtx,
   type ActionCardSourceRow,
 } from './action-cards.ts';
+// Phase 19 Plan 19-01 (D-01) — the compile decision now reads the runtime
+// action-cards flag (default OFF, degrade-safe) instead of the compile-time
+// ACTION_CARDS_ENABLED const, so the operator can flip enablement live with no
+// redeploy. At default OFF this is INERT — the heartbeat trigger is skipped
+// exactly as it is today.
+import { isActionCardsEnabled } from '../db/action-cards-flag-repo.ts';
 import {
   buildEmployeesRollup,
   type EmployeesRollupCtx,
@@ -382,9 +387,11 @@ export async function handleEditorHeartbeat(
   // call driveActionCardsStep. Wrapped so ANY failure is logged and never
   // propagates — the heartbeat must remain best-effort; driveActionCardsStep
   // itself already never throws. No auto-resume (the step's paused-check owns it).
-  // v1.4.1 HOTFIX (BEAAA-2092) — action-card compile gated OFF; skip the
-  // heartbeat trigger entirely so no op issue is started/touched.
-  if (!ACTION_CARDS_ENABLED) return;
+  // Phase 19 Plan 19-01 (D-01) — read the runtime action-cards flag (default
+  // OFF, degrade-safe to OFF on an unreadable row). When OFF, skip the heartbeat
+  // trigger entirely so no op issue is started/touched (the v1.4.1 BEAAA-2092
+  // safety the const flag provided, now flippable live with no redeploy).
+  if (!(await isActionCardsEnabled(ctx, payload.companyId))) return;
   try {
     const rollup = await buildEmployeesRollup(
       ctx as unknown as EmployeesRollupCtx,

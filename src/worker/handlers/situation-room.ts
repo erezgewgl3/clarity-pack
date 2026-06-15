@@ -82,11 +82,17 @@ import {
 // lives for the Reader. Degrade-safe (a throw → no cards → the row renders the
 // deterministic engine line); never blocks the snapshot.
 import {
-  ACTION_CARDS_ENABLED,
   driveActionCardsStep,
   type ActionCardsCtx,
   type ActionCardSourceRow,
 } from '../agents/action-cards.ts';
+// Phase 19 Plan 19-01 (D-01) — the snapshot compile decision now reads the
+// runtime action-cards flag (default OFF, degrade-safe) instead of the
+// compile-time ACTION_CARDS_ENABLED const. At default OFF the guard is false so
+// the compile block is inert exactly as today (deterministic floor). The
+// on-request compile block deletion itself is Plan 19-02 (CARD-01) — this plan
+// is a pure flag-read swap with zero behavior change.
+import { isActionCardsEnabled } from '../db/action-cards-flag-repo.ts';
 import type { ActionCard } from '../../shared/types.ts';
 // Plan 17-02 Task 1 (WAIT-02 / SC5) — the per-company structured-wait prefetch.
 // ONE company-scoped SELECT in buildSnapshotPrefetch builds the waitMap
@@ -603,7 +609,7 @@ async function computeViewerInvariantSlice(
       }))
       .filter((r) => r.sourceIssueId.length > 0);
 
-    if (ACTION_CARDS_ENABLED && needsYouRows.length > 0) {
+    if ((await isActionCardsEnabled(ctx, companyId)) && needsYouRows.length > 0) {
       const step = await driveActionCardsStep(ctx as unknown as ActionCardsCtx, {
         companyId,
         needsYouRows,
