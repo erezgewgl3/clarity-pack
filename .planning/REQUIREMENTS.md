@@ -14,7 +14,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 - [x] **STUCK-03**: Submitting a reply on a stuck row posts a comment that resumes the stuck agent via `situation.replyAndResume` (worker accepts a STUCK leaf and resumes it)
 - [x] **STUCK-04**: A stuck agent is never resumed by merely viewing or loading a row — resume happens only on an explicit operator reply (Phase-13/14 no-auto-resume rule preserved)
 - [x] **STUCK-05**: Reply copy is appropriate to the stuck context ("nudge / reply to unstick"), distinct from the human-decision wording used on `AWAITING_HUMAN` rows
-- [ ] **STUCK-06**: Every new render and resume path is degrade-safe and NO_UUID_LEAK clean — no raw agent ids/UUIDs surface in the affordance, its prose, or the resumed comment
+- [x] **STUCK-06**: Every new render and resume path is degrade-safe and NO_UUID_LEAK clean — no raw agent ids/UUIDs surface in the affordance, its prose, or the resumed comment
 
 ## v2 Requirements
 
@@ -45,7 +45,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STUCK-03 | Phase 21 | Complete |
 | STUCK-04 | Phase 21 | Complete |
 | STUCK-05 | Phase 21 | Complete |
-| STUCK-06 | Phase 21 | Pending |
+| STUCK-06 | Phase 21 | Complete |
 
 **Coverage:**
 - v1 requirements: 6 total

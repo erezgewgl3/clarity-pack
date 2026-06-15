@@ -300,7 +300,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 21. Stuck-Agent Reply-In-Place | 3/5 | In Progress|  |
+| 21. Stuck-Agent Reply-In-Place | 4/5 | In Progress|  |
 
 ### v1.5.0 phase tracking
 
