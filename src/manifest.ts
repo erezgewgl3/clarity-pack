@@ -670,7 +670,16 @@ const manifest: PaperclipPluginManifestV1 = {
   // `POST /api/plugins/<id>/data/clarity.health` (mirrors issue.reader, which
   // 200s on that route). 1.7.2 is superseded by 1.7.3 (no separate 1.7.2 deploy
   // is relied upon downstream; this keeps one build per version literal).
-  version: '1.7.3',
+  //
+  // 1.7.4 (Reader verdict-line legibility fix, 2026-06-15): the live BEAAA-972
+  // Reader rendered the garbled "AWAITING AGENT STUCK / CEO stuck on an agent is
+  // stuck". Root cause: awaitedPartyLabel held the FULL action sentence
+  // ("{agent} stuck on {leaf}") while the Reader composes "{party} is stuck" and
+  // the leaf id mis-scrubbed to "an agent". New scrubAwaitedParty() returns the
+  // PARTY only for the agent kinds (repointed at all 3 worker sites), and
+  // scrubHumanAction now emits a clean "{name} is stuck/working" (no leaf).
+  // Reader now reads "CEO is stuck".
+  version: '1.7.4',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',
