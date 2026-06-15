@@ -104,3 +104,50 @@ export async function getActionCardBySource(
   );
   return rows[0] ?? null;
 }
+
+/**
+ * Phase 19 Plan 19-02 Task 1 (CARD-01) — BATCH newest-per-source cached read.
+ *
+ * Reads the most-recent action card for EACH (company_id, source_issue_id) in
+ * one query, returning a `Record<source_issue_id, ActionCardRow>`. This is the
+ * read-cached-only replacement for the deleted on-request compile block in
+ * situation-room.ts — the snapshot handler attaches cards from this map and does
+ * ZERO AI work on the request path (CARD-01 core).
+ *
+ * Newest-per-source is `DISTINCT ON (source_issue_id) ... ORDER BY
+ * source_issue_id, generated_at DESC` — one row per source, the freshest. Source
+ * ids absent from the table are simply missing from the returned map (the caller
+ * degrades to the deterministic engine line — never blank, never fabricated, D-12).
+ *
+ * A2 BINDING (verified by test/worker/db/action-cards-repo-batch.test.mjs): the
+ * id array is bound as a Postgres array-LITERAL scalar through a `$2::text[]`
+ * cast via `toPgTextArrayLiteral` (the EXACT discipline upsertActionCard uses for
+ * its `$N::text[]` writes — see this file's header / tldr-cache.ts v0.6.5 Bug 2).
+ * The host `ctx.db.query` bridge does NOT pass a native JS string array through
+ * to the postgres driver as `text[]`; the cast scalar is unambiguous. The
+ * predicate is `source_issue_id = ANY($2::text[])` — parameterized, no identifier
+ * interpolation, no inlined IN-list. (The probe confirmed this binds cleanly, so
+ * no per-id fallback loop is needed; the downstream contract is the Record either
+ * way.) An empty input short-circuits to `{}` with no query.
+ */
+export async function getActionCardsBySources(
+  ctx: ActionCardsCacheCtx,
+  companyId: string,
+  sourceIssueIds: string[],
+): Promise<Record<string, ActionCardRow>> {
+  if (sourceIssueIds.length === 0) return {};
+  const rows = await ctx.db.query<ActionCardRow>(
+    `SELECT DISTINCT ON (source_issue_id) company_id, source_issue_id, named_action, awaited_party, est_bucket, action_kind, decision_options, content_hash, generated_at, compiled_by_agent_id, source_revisions, tags
+     FROM plugin_clarity_pack_cdd6bda4bd.action_cards
+     WHERE company_id = $1 AND source_issue_id = ANY($2::text[])
+     ORDER BY source_issue_id, generated_at DESC`,
+    [companyId, toPgTextArrayLiteral(sourceIssueIds)],
+  );
+  const out: Record<string, ActionCardRow> = {};
+  for (const r of rows) {
+    // DISTINCT ON yields one row per source; guard against a duplicate from the
+    // bridge by keeping the FIRST (newest, DESC-ordered) row per source.
+    if (out[r.source_issue_id] === undefined) out[r.source_issue_id] = r;
+  }
+  return out;
+}
