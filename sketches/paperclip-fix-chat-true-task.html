@@ -1,0 +1,1190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sketch — Chat → True Task (Plan 04.1-08 redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  /* ───────── Tokens (warm-dark editorial, with WCAG-fixed contrast) ───────── */
+  :root{
+    /* Surfaces */
+    --bg:#0E0D0A;
+    --bg-2:#15140F;
+    --bg-3:#1B1A14;
+    --bg-4:#222019;
+
+    /* Lines */
+    --line:#2A2820;
+    --line-bright:#3D3A2E;
+
+    /* Ink — BUMPED from default.css for WCAG AA/AAA */
+    /*   --ink-3 was #7E7869 (~4.3:1) → #A09786 (~6.0:1) AA body / AAA UI */
+    /*   --ink-4 was #52503F (~2.4:1) → #6D6857 (~3.5:1) — usable for non-text/decorative only */
+    --ink:#E8E1CF;       /* 13.5:1  AAA */
+    --ink-2:#B8B0A0;     /*  8.5:1  AAA */
+    --ink-3:#A09786;     /*  6.0:1  AA body / AAA UI  (bumped) */
+    --ink-4:#6D6857;     /*  3.5:1  decorative only   (bumped) */
+
+    /* Status accents */
+    --live:#7DB47E;   --live-soft:#1F3320;
+    --warn:#D9A23E;   --warn-soft:#3A2D14;
+    --alert:#E0744A;  --alert-soft:#3A1C12;
+    --you:#E5C56F;    --you-soft:#3D3318;
+    --idle:#5C6878;   --idle-soft:#1B2129;
+
+    /* Bubbles */
+    --eric-bubble:#22201A;
+    --agent-bubble:#16140F;
+
+    /* Type */
+    --font-sans:"Geist","Helvetica Neue",sans-serif;
+    --font-mono:"Geist Mono",monospace;
+    --font-serif:"Instrument Serif",serif;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg);color:var(--ink);
+    font-family:var(--font-sans);font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    font-feature-settings:"ss01","cv11";
+    height:100%;
+  }
+  body{
+    overflow:hidden;padding-top:46px;
+    background:
+      radial-gradient(900px 500px at 100% 0%, rgba(217,162,62,.05), transparent 60%),
+      linear-gradient(180deg,#0E0D0A 0%, #0B0A07 100%);
+  }
+
+  /* scrollbars */
+  .messages,.roster-list,.ctx{scrollbar-width:thin;scrollbar-color:var(--line-bright) transparent}
+  .messages::-webkit-scrollbar,.roster-list::-webkit-scrollbar,.ctx::-webkit-scrollbar{width:7px;height:7px}
+  .messages::-webkit-scrollbar-track,.roster-list::-webkit-scrollbar-track,.ctx::-webkit-scrollbar-track{background:transparent}
+  .messages::-webkit-scrollbar-thumb,.roster-list::-webkit-scrollbar-thumb,.ctx::-webkit-scrollbar-thumb{
+    background:var(--line-bright);border-radius:4px;
+  }
+  .topics{scrollbar-width:none;-ms-overflow-style:none}
+  .topics::-webkit-scrollbar{display:none}
+
+  /* ───────── variant tab bar ───────── */
+  #variant-nav{
+    position:fixed;top:0;left:0;right:0;z-index:9998;height:46px;
+    background:var(--bg-2);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;padding:0 16px;
+    font-family:var(--font-mono);
+  }
+  #variant-nav .lbl{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-right:4px}
+  .variant-tab{
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:6px 12px;border:1px solid var(--line-bright);background:transparent;color:var(--ink-2);
+    cursor:pointer;transition:all .15s ease;
+  }
+  .variant-tab:hover{color:var(--ink);border-color:var(--ink-3)}
+  .variant-tab.active{background:var(--you);color:#1B150A;border-color:var(--you);font-weight:600}
+  #variant-nav .desc{margin-left:auto;font-size:10px;letter-spacing:.04em;color:var(--ink-2)}
+  #variant-nav .desc b{color:var(--ink)}
+
+  /* ───────── shell ───────── */
+  .shell{
+    display:grid;grid-template-columns:264px 1fr 360px;height:calc(100vh - 46px);
+    position:relative;z-index:1;
+  }
+
+  /* ── LEFT: roster ── */
+  .roster{border-right:1px solid var(--line);background:var(--bg-2);display:flex;flex-direction:column;height:100%;min-height:0}
+  .roster-head{
+    padding:14px 16px 12px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .roster-head .ttl{font-family:var(--font-serif);font-style:italic;font-size:20px;color:var(--ink)}
+  .roster-head .ct{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:var(--ink-2);text-transform:uppercase}
+  .roster-search{padding:10px 12px;border-bottom:1px solid var(--line)}
+  .roster-search input{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    font-family:var(--font-mono);font-size:11.5px;padding:7px 10px;letter-spacing:.04em;
+  }
+  .roster-search input::placeholder{color:var(--ink-3)}
+  .roster-search input:focus{outline:none;border-color:var(--ink-2)}
+  .roster-list{flex:1;min-height:0;overflow-y:auto;padding:6px 0}
+  .roster-section{
+    padding:14px 16px 8px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.22em;
+    color:var(--ink-3);text-transform:uppercase;border-top:1px solid var(--line);margin-top:8px;
+  }
+  .roster-section:first-child{border-top:none;margin-top:0}
+  .emp{
+    display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:10px;
+    padding:10px 14px;cursor:pointer;border-left:2px solid transparent;transition:background .12s ease;
+  }
+  .emp:hover{background:var(--bg-3)}
+  .emp.active{background:var(--bg-3);border-left-color:var(--you)}
+  .emp .av{
+    width:24px;height:24px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:12px;color:var(--ink-2);position:relative;
+  }
+  .emp .av::after{
+    content:"";position:absolute;width:7px;height:7px;border-radius:50%;
+    bottom:-2px;right:-2px;border:1.5px solid var(--bg-2);
+  }
+  .emp.s-live .av::after{background:var(--live)}
+  .emp.s-warn .av::after{background:var(--warn)}
+  .emp.s-idle .av::after{background:var(--idle)}
+  .emp .name{font-size:13.5px;color:var(--ink);font-weight:400}
+  .emp .name small{display:block;font-family:var(--font-mono);font-size:10px;color:var(--ink-2);letter-spacing:.06em;margin-top:2px}
+
+  /* ── MIDDLE: thread ── */
+  .thread{display:flex;flex-direction:column;height:100%;background:var(--bg);min-width:0;min-height:0}
+
+  .thread-head{
+    display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;
+    padding:14px 22px;border-bottom:1px solid var(--line);background:var(--bg-2);
+  }
+  .who-big{display:flex;align-items:center;gap:14px}
+  .who-big .av{
+    width:38px;height:38px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:18px;color:var(--ink);position:relative;
+  }
+  .who-big .av::after{
+    content:"";position:absolute;width:9px;height:9px;border-radius:50%;
+    bottom:-2px;right:-2px;border:2px solid var(--bg-2);background:var(--live);
+  }
+  .who-big .role{font-family:var(--font-serif);font-style:italic;font-size:22px;color:var(--ink);line-height:1}
+  .who-big .role small{
+    display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-2);margin-top:4px;font-style:normal;
+  }
+  .global-search{position:relative;max-width:380px;margin:0 auto;width:100%}
+  .global-search input{
+    width:100%;background:var(--bg);border:1px solid var(--line-bright);color:var(--ink);
+    font-family:var(--font-mono);font-size:11.5px;padding:9px 14px 9px 34px;letter-spacing:.04em;
+  }
+  .global-search input::placeholder{color:var(--ink-3)}
+  .global-search .icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:12px}
+
+  /* topic strip */
+  .topics{
+    display:flex;gap:6px;padding:10px 22px;border-bottom:1px solid var(--line);
+    background:var(--bg-2);overflow-x:auto;align-items:center;
+  }
+  .topic-lbl{
+    font-family:var(--font-mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-2);margin-right:6px;flex-shrink:0;
+  }
+  .topic{
+    display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border:1px solid var(--line);
+    font-family:var(--font-mono);font-size:11px;color:var(--ink-2);cursor:pointer;letter-spacing:.02em;
+    flex-shrink:0;transition:all .12s ease;
+  }
+  .topic:hover{border-color:var(--line-bright);color:var(--ink)}
+  .topic.active{background:var(--bg-3);border-color:var(--ink-3);color:var(--ink)}
+  .topic .id{color:var(--ink-3);font-size:10px}
+  .topic .dot{width:5px;height:5px;border-radius:50%;background:var(--live)}
+  .topic .new-topic{margin-left:auto;padding:5px 11px;border:1px solid var(--line-bright);color:var(--ink-2);cursor:pointer}
+  .archived-pill{
+    display:inline-flex;align-items:center;gap:6px;padding:5px 9px;
+    font-family:var(--font-mono);font-size:10px;color:var(--ink-2);
+    border:1px dashed var(--line-bright);font-style:italic;cursor:pointer;margin-left:auto;
+  }
+  .archived-pill:hover{color:var(--ink);border-color:var(--ink-3)}
+
+  /* ───────── ACTIONS ROW — NEW (Plan 04.1-08) ───────── */
+  .actions-row{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 22px;border-bottom:1px solid var(--line);background:var(--bg-2);
+  }
+  .btn{
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    padding:8px 14px;border:1px solid var(--ink-2);background:var(--ink);color:var(--bg);cursor:pointer;
+    font-weight:600;white-space:nowrap;transition:transform .12s ease;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn.primary{background:var(--you);color:#1B150A;border-color:var(--you);font-weight:700}
+  .btn.primary:hover{background:#F0CE76;border-color:#F0CE76}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-bright);font-weight:500}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--ink-2);background:var(--bg-3)}
+  .btn.armed{background:var(--you-soft);color:var(--you);border-color:var(--you);font-weight:600}
+  .actions-row .spacer{flex:1}
+  .actions-row .kbd-hint{
+    font-family:var(--font-mono);font-size:10px;color:var(--ink-2);letter-spacing:.04em;
+  }
+  .actions-row .kbd-hint kbd{
+    display:inline-block;padding:1px 5px;border:1px solid var(--line-bright);border-radius:2px;
+    background:var(--bg-3);font-size:9.5px;letter-spacing:.04em;margin:0 2px;color:var(--ink);
+  }
+
+  /* ── messages ── */
+  .messages{
+    flex:1;min-height:0;overflow-y:auto;padding:24px 22px 16px;
+    display:flex;flex-direction:column;gap:18px;position:relative;
+  }
+  .live-tick{
+    align-self:center;display:inline-flex;align-items:center;gap:6px;
+    font-family:var(--font-mono);font-size:10px;color:var(--live);letter-spacing:.12em;
+    text-transform:uppercase;
+  }
+  .live-tick::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--live)}
+  .day-divider{
+    align-self:center;font-family:var(--font-mono);font-size:10px;color:var(--ink-2);letter-spacing:.18em;
+    text-transform:uppercase;padding:8px 0;
+  }
+
+  .msg{display:grid;grid-template-columns:34px 1fr;gap:12px;max-width:780px;position:relative}
+  .msg.you{justify-self:flex-end;grid-template-columns:1fr 34px}
+  .msg .av{
+    width:34px;height:34px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:14px;color:var(--ink-2);
+  }
+  .msg.you .av{border-color:var(--you);color:var(--you);background:var(--you-soft);grid-column:2}
+  .msg .bubble-wrap{display:flex;flex-direction:column;gap:5px}
+  .msg.you .bubble-wrap{grid-column:1;align-items:flex-end}
+  .msg .meta{
+    font-family:var(--font-mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.06em;
+    display:flex;gap:8px;align-items:baseline;
+  }
+  .msg .meta .name{color:var(--ink);font-weight:500;text-transform:uppercase;letter-spacing:.14em;font-size:10px}
+  .msg .meta time{color:var(--ink-3)}
+  .msg .bubble{
+    background:var(--agent-bubble);border:1px solid var(--line);padding:13px 16px;
+    color:var(--ink);font-size:14.5px;line-height:1.55;font-weight:300;
+  }
+  .msg.you .bubble{background:var(--eric-bubble);border-color:var(--line-bright)}
+
+  /* ───────── hover: → Promote on agent reply ───────── */
+  .msg .actions{
+    position:absolute;top:-2px;right:-2px;opacity:0;transition:opacity .15s ease;
+    display:flex;gap:4px;
+  }
+  .msg:hover .actions{opacity:1}
+  .msg.you .actions{display:none}
+  .msg .actions .pmote{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    padding:4px 9px;border:1px solid var(--you);color:var(--you);background:var(--bg-3);cursor:pointer;
+  }
+  .msg .actions .pmote:hover{background:var(--you);color:#1B150A}
+
+  /* ───────── INLINE TASK CARD (provenance marker, not a message) ───────── */
+  /* Toned down per Plan 04.1-08 critique: this is "X happened" provenance,
+     not a message — should read as a quieter event in the thread.
+     Left-rule accent instead of full border + gradient. */
+  .inline-task-card{
+    align-self:stretch;max-width:560px;width:100%;
+    border-left:2px solid var(--you);background:transparent;
+    padding:6px 0 6px 14px;display:flex;flex-direction:column;gap:3px;
+    margin:2px 0;
+  }
+  .inline-task-card .eyebrow{
+    font-family:var(--font-mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--you);font-weight:600;opacity:.85;
+  }
+  .inline-task-card .ttl{
+    font-size:13px;color:var(--ink-2);font-weight:400;line-height:1.4;
+  }
+  .inline-task-card .meta-row{
+    display:flex;gap:10px;align-items:center;font-family:var(--font-mono);font-size:10px;
+    color:var(--ink-3);letter-spacing:.04em;margin-top:2px;
+  }
+  .inline-task-card .ref-chip{
+    padding:0;color:var(--you);font-weight:500;letter-spacing:.06em;
+    background:none;border:none;text-decoration:underline;text-underline-offset:2px;cursor:pointer;
+  }
+  .inline-task-card .ref-chip:hover{color:#F0CE76}
+  .inline-task-card .status-pill{
+    padding:1px 6px;border:1px solid var(--idle);color:var(--idle);background:transparent;
+    text-transform:uppercase;letter-spacing:.12em;font-size:9px;font-weight:500;
+  }
+  .inline-task-card .status-pill.live{border-color:var(--live);color:var(--live)}
+
+  /* ───────── HOST-STUCK BANNER ───────── */
+  .host-stuck-banner{
+    position:sticky;top:0;z-index:5;
+    background:var(--alert-soft);border:1px solid var(--alert);border-radius:2px;
+    padding:12px 18px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+    margin:0 auto 8px;max-width:780px;
+  }
+  .host-stuck-banner .ico{font-size:18px;color:var(--alert)}
+  .host-stuck-banner .text{display:flex;flex-direction:column;gap:3px}
+  .host-stuck-banner .ttl{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--alert);font-weight:600;
+  }
+  .host-stuck-banner .body{font-size:13px;color:var(--ink-2);line-height:1.4}
+  .host-stuck-banner .body strong{color:var(--ink)}
+  .host-stuck-banner .nav-link{
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    padding:6px 12px;border:1px solid var(--alert);color:var(--alert);background:transparent;
+    cursor:pointer;text-decoration:none;
+  }
+  .host-stuck-banner .nav-link:hover{background:var(--alert);color:var(--bg)}
+
+  /* ───────── RUNTIME NOISE COMMENT (Diagnostics ON) ───────── */
+  .runtime-noise-comment{
+    align-self:flex-start;max-width:780px;width:100%;
+    border:1px dashed var(--line-bright);background:rgba(217,162,62,.04);
+    padding:10px 14px;font-family:var(--font-mono);
+  }
+  .runtime-noise-comment .head{
+    display:flex;gap:8px;align-items:center;font-size:9.5px;color:var(--ink-3);
+    letter-spacing:.18em;text-transform:uppercase;margin-bottom:6px;
+  }
+  .runtime-noise-comment .head .ico{color:var(--warn)}
+  .runtime-noise-comment .head .pres-kind{color:var(--warn)}
+  .runtime-noise-comment .body{
+    font-size:12px;color:var(--ink-2);line-height:1.45;font-family:var(--font-mono);
+  }
+  .runtime-noise-comment details{margin-top:6px}
+  .runtime-noise-comment summary{
+    font-size:10px;color:var(--ink-3);cursor:pointer;letter-spacing:.1em;text-transform:uppercase;
+    padding:3px 0;
+  }
+  .runtime-noise-comment summary:hover{color:var(--ink)}
+  .runtime-noise-comment .sections{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+  .runtime-noise-comment .section-title{
+    font-size:9.5px;color:var(--ink-2);letter-spacing:.18em;text-transform:uppercase;
+    margin-top:8px;margin-bottom:4px;
+  }
+  .runtime-noise-comment .section-title:first-child{margin-top:0}
+  .runtime-noise-comment .row{display:grid;grid-template-columns:130px 1fr;gap:10px;padding:3px 0;font-size:11px}
+  .runtime-noise-comment .row .label{color:var(--ink-3)}
+  .runtime-noise-comment .row .value{color:var(--ink)}
+  .runtime-noise-comment .row .value a{color:var(--you);text-decoration:underline}
+
+  /* ── composer (single-purpose: CHAT only) ── */
+  .composer{
+    border-top:1px solid var(--line);background:var(--bg-2);padding:14px 22px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .composer .ctx-line{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-2);display:flex;justify-content:space-between;align-items:center;
+  }
+  .composer .ctx-line .ctx-topic{color:var(--ink)}
+  .composer .editor{
+    background:var(--bg);border:1px solid var(--line-bright);padding:13px 16px;color:var(--ink);
+    font-family:var(--font-sans);font-size:14.5px;line-height:1.5;font-weight:300;
+    min-height:80px;outline:none;cursor:text;
+  }
+  .composer .editor:focus-within{border-color:var(--ink-2)}
+  .composer .editor .placeholder{color:var(--ink-3)}
+  .composer .bottom-row{
+    display:flex;align-items:center;gap:10px;
+    font-family:var(--font-mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.04em;
+  }
+  .composer .bottom-row .attach{
+    color:var(--ink-2);cursor:pointer;padding:6px 10px;border:1px solid var(--line);
+    text-transform:uppercase;letter-spacing:.14em;font-size:10px;
+  }
+  .composer .bottom-row .attach.disabled{color:var(--ink-3);cursor:not-allowed;border-style:dashed}
+  .composer .bottom-row .kbd-hint{flex:1;text-align:right;color:var(--ink-2)}
+  .composer .bottom-row .kbd-hint kbd{
+    display:inline-block;padding:1px 5px;border:1px solid var(--line-bright);border-radius:2px;
+    background:var(--bg-3);font-size:9.5px;color:var(--ink);
+  }
+
+  /* ── RIGHT: context rail (WIDER + readable) ── */
+  .ctx{
+    border-left:1px solid var(--line);background:var(--bg-2);padding:18px 18px 24px;
+    overflow-y:auto;min-height:0;height:100%;
+    display:flex;flex-direction:column;gap:20px;
+  }
+  .ctx h4{
+    font-family:var(--font-mono);font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-2);margin-bottom:10px;font-weight:600;
+  }
+  .ctx .card{
+    border:1px solid var(--line);padding:14px;background:var(--bg-3);
+  }
+  .ctx .card .av-big{
+    width:48px;height:48px;border:1px solid var(--ink-3);display:grid;place-items:center;
+    font-family:var(--font-serif);font-style:italic;font-size:22px;color:var(--ink);
+    margin-bottom:10px;
+  }
+  .ctx .card .role-line{font-family:var(--font-serif);font-style:italic;font-size:18px;color:var(--ink)}
+  .ctx .card .role-line small{
+    display:block;font-family:var(--font-mono);font-size:10px;color:var(--ink-2);
+    letter-spacing:.14em;text-transform:uppercase;margin-top:3px;font-style:normal;
+  }
+  .ctx .card .status-line{
+    margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+    font-family:var(--font-mono);font-size:11px;color:var(--ink-2);
+  }
+  .ctx .card .status-line .v{color:var(--ink)}
+
+  .task-row{
+    display:grid;grid-template-columns:1fr auto;gap:8px;padding:9px 0;
+    border-top:1px solid var(--line);align-items:center;
+  }
+  .task-row:first-of-type{border-top:none}
+  .task-row .t-ttl{font-size:13px;color:var(--ink);font-weight:400}
+  .task-row .t-meta{
+    display:flex;gap:8px;align-items:center;margin-top:3px;
+    font-family:var(--font-mono);font-size:10px;color:var(--ink-2);letter-spacing:.04em;
+  }
+  .task-row .ref-chip{
+    background:var(--bg-4);border:1px solid var(--line-bright);padding:1px 6px;
+    color:var(--ink);font-weight:500;letter-spacing:.06em;font-size:9.5px;
+  }
+  .task-row .st{
+    padding:2px 7px;border:1px solid;text-transform:uppercase;letter-spacing:.12em;font-size:9px;font-weight:600;
+  }
+  .st.todo{border-color:var(--idle);color:var(--idle);background:var(--idle-soft)}
+  .st.in-progress{border-color:var(--live);color:var(--live);background:var(--live-soft)}
+  .st.done{border-color:var(--ink-3);color:var(--ink-3);background:transparent;text-decoration:line-through}
+
+  .empty-rail{
+    font-family:var(--font-mono);font-size:11px;color:var(--ink-2);letter-spacing:.02em;font-style:italic;
+    padding:8px 0;line-height:1.5;
+  }
+
+  .qa{
+    display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);
+    font-family:var(--font-mono);font-size:11px;color:var(--ink);letter-spacing:.04em;cursor:pointer;
+  }
+  .qa:first-of-type{border-top:none}
+  .qa:hover{color:var(--you)}
+  .qa .ico{color:var(--ink-2);font-size:13px;width:16px}
+  .qa .lbl{flex:1}
+  .qa.armed{color:var(--alert)}
+  .qa.armed .ico{color:var(--alert)}
+
+  .qa .confirm-row{display:none;gap:6px;align-items:center}
+  .qa.armed .lbl{display:none}
+  .qa.armed .confirm-row{display:flex;flex:1}
+  .qa .yes{
+    padding:3px 9px;background:var(--alert);color:var(--bg);border:none;cursor:pointer;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;font-weight:600;
+  }
+  .qa .keep{
+    padding:3px 9px;background:transparent;color:var(--ink-2);border:1px solid var(--line-bright);
+    cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;
+  }
+
+  /* ───────── DIALOG (the redesigned task-create modal) ───────── */
+  .dialog-backdrop{
+    display:none;position:fixed;inset:46px 0 0 0;z-index:200;
+    background:rgba(8,7,5,.75);backdrop-filter:blur(2px);
+    align-items:center;justify-content:center;padding:40px;
+  }
+  .shell[data-variant="cold-task-dialog"] .dialog-backdrop,
+  .shell[data-variant="promote-dialog"] .dialog-backdrop{
+    display:flex;
+  }
+  .dialog{
+    width:100%;max-width:560px;background:var(--bg-2);border:1px solid var(--line-bright);
+    box-shadow:0 24px 64px rgba(0,0,0,.5);
+    display:flex;flex-direction:column;
+  }
+  .dialog .d-head{
+    padding:18px 22px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .dialog .d-head h2{font-family:var(--font-serif);font-style:italic;font-size:22px;color:var(--ink);font-weight:400}
+  .dialog .d-head .close{
+    background:none;border:none;color:var(--ink-2);font-size:18px;cursor:pointer;padding:4px 8px;
+  }
+  .dialog .d-head .close:hover{color:var(--ink)}
+  .dialog .d-body{padding:20px 22px;display:flex;flex-direction:column;gap:16px}
+  .dialog .field label{
+    display:block;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--ink-2);margin-bottom:6px;font-weight:600;
+  }
+  .dialog .field label .req{color:var(--you);margin-left:3px}
+  .dialog .field input[type="text"],
+  .dialog .field select,
+  .dialog .field textarea{
+    width:100%;background:var(--bg);border:1px solid var(--line-bright);color:var(--ink);
+    font-family:var(--font-sans);font-size:14.5px;padding:11px 13px;line-height:1.5;
+    outline:none;font-weight:300;
+  }
+  .dialog .field input[type="text"]:focus,
+  .dialog .field select:focus,
+  .dialog .field textarea:focus{border-color:var(--you)}
+  .dialog .field textarea{resize:vertical;min-height:80px}
+  .dialog .field .hint{
+    font-family:var(--font-mono);font-size:10px;color:var(--ink-2);margin-top:4px;letter-spacing:.04em;
+  }
+  .dialog .from-msg{
+    border-left:3px solid var(--you);background:var(--bg-3);padding:10px 14px;
+    font-size:13px;color:var(--ink-2);font-style:italic;line-height:1.55;
+  }
+  .dialog .from-msg .src-label{
+    font-family:var(--font-mono);font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--you);margin-bottom:6px;font-style:normal;font-weight:600;display:block;
+  }
+  .dialog .d-foot{
+    padding:16px 22px;border-top:1px solid var(--line);background:var(--bg-3);
+    display:flex;justify-content:flex-end;gap:10px;align-items:center;
+  }
+  .dialog .d-foot .kbd-hint{
+    margin-right:auto;font-family:var(--font-mono);font-size:10px;color:var(--ink-2);letter-spacing:.04em;
+  }
+  .dialog .d-foot .kbd-hint kbd{
+    display:inline-block;padding:1px 5px;border:1px solid var(--line-bright);border-radius:2px;
+    background:var(--bg);font-size:9.5px;color:var(--ink);margin:0 1px;
+  }
+
+  /* hide promote-only / cold-only fields per variant */
+  .shell[data-variant="cold-task-dialog"] .from-msg{display:none}
+
+  /* annotation strip — only on default variant */
+  .annotation{
+    display:none;position:fixed;left:18px;bottom:18px;max-width:380px;z-index:50;
+    background:rgba(20,18,12,.95);border:1px solid var(--line-bright);
+    padding:14px 16px;font-family:var(--font-mono);font-size:11px;line-height:1.55;
+    color:var(--ink-2);letter-spacing:.02em;
+  }
+  .shell[data-variant="default"] .annotation{display:block}
+  .annotation h5{
+    font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--you);
+    margin-bottom:8px;font-weight:700;
+  }
+  .annotation ol{padding-left:18px;margin-top:6px;color:var(--ink)}
+  .annotation ol li{margin-bottom:3px}
+
+  /* variant-specific visibility */
+  .only-diagnostics{display:none}
+  .shell[data-variant="diagnostics-on"] .only-diagnostics{display:flex}
+  .shell[data-variant="diagnostics-on"] .runtime-noise-comment{display:flex;flex-direction:column}
+  .runtime-noise-comment{display:none}
+  .shell[data-variant="diagnostics-on"] .diag-toggle,
+  .shell[data-variant="diagnostics-on"] .diag-toggle{
+    background:var(--ink);color:var(--bg);border-color:var(--ink);
+  }
+  .only-host-stuck{display:none}
+  .shell[data-variant="host-stuck-banner"] .only-host-stuck{display:grid}
+
+  /* on dialog variants, dim the underlying chat */
+  .shell[data-variant="cold-task-dialog"] .thread,
+  .shell[data-variant="cold-task-dialog"] .roster,
+  .shell[data-variant="cold-task-dialog"] .ctx,
+  .shell[data-variant="promote-dialog"] .thread,
+  .shell[data-variant="promote-dialog"] .roster,
+  .shell[data-variant="promote-dialog"] .ctx{pointer-events:none}
+
+  /* ───────── ARCHIVE PANEL (drops below topic strip) ───────── */
+  .archive-panel{
+    display:none;position:absolute;top:0;right:22px;width:440px;z-index:30;
+    background:var(--bg-2);border:1px solid var(--line-bright);
+    box-shadow:0 18px 48px rgba(0,0,0,.55);
+    flex-direction:column;
+  }
+  .shell[data-variant="archive-panel"] .archive-panel{display:flex}
+  .shell[data-variant="archive-panel"] .topics{position:relative}
+
+  .archive-panel .ap-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:12px 16px;border-bottom:1px solid var(--line);background:var(--bg-3);
+  }
+  .archive-panel .ap-head h4{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink);font-weight:600;
+  }
+  .archive-panel .ap-head .close{
+    background:none;border:none;color:var(--ink-2);font-size:16px;cursor:pointer;padding:2px 6px;
+  }
+  .archive-panel .ap-head .close:hover{color:var(--ink)}
+
+  .archive-panel .ap-search{padding:10px 14px;border-bottom:1px solid var(--line)}
+  .archive-panel .ap-search input{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    font-family:var(--font-mono);font-size:11.5px;padding:7px 10px;letter-spacing:.04em;
+  }
+  .archive-panel .ap-search input::placeholder{color:var(--ink-3)}
+  .archive-panel .ap-search input:focus{outline:none;border-color:var(--ink-2)}
+
+  .archive-panel .ap-list{max-height:340px;overflow-y:auto;padding:6px 0}
+  .archive-panel .ap-row{
+    padding:11px 16px;border-top:1px solid var(--line);cursor:pointer;
+    display:grid;grid-template-columns:1fr auto;column-gap:12px;row-gap:5px;
+    align-items:center;transition:background .12s ease;position:relative;
+  }
+  .archive-panel .ap-row:first-child{border-top:none}
+  .archive-panel .ap-row:hover{background:var(--bg-3)}
+  .archive-panel .ap-row .ap-content{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .archive-panel .ap-row .ap-ttl{
+    font-size:13.5px;color:var(--ink);font-weight:400;line-height:1.35;
+  }
+  .archive-panel .ap-row .ap-sub{
+    font-family:var(--font-mono);font-size:10px;color:var(--ink-2);letter-spacing:.04em;
+    display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  }
+  .archive-panel .ap-row .ap-sub .sep{color:var(--ink-3)}
+  .archive-panel .ap-row .ap-sub .archived-on{color:var(--ink-3);font-style:italic}
+  .archive-panel .ap-row .ap-hint{
+    font-family:var(--font-mono);font-size:9.5px;color:var(--ink-3);
+    letter-spacing:.16em;text-transform:uppercase;opacity:0;transition:opacity .15s ease;
+    align-self:start;margin-top:2px;
+  }
+  .archive-panel .ap-row:hover .ap-hint{opacity:.8}
+  .archive-panel .ap-row .ap-unarchive{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    padding:5px 11px;border:1px solid var(--you);color:var(--you);background:transparent;cursor:pointer;
+    opacity:0;transition:opacity .15s ease, background .12s ease, color .12s ease;
+    white-space:nowrap;
+  }
+  .archive-panel .ap-row:hover .ap-unarchive{opacity:1}
+  .archive-panel .ap-row .ap-unarchive:hover{background:var(--you);color:#1B150A}
+
+  .archive-panel .ap-foot{
+    padding:10px 16px;border-top:1px solid var(--line);background:var(--bg-3);
+    font-family:var(--font-mono);font-size:10px;color:var(--ink-2);letter-spacing:.04em;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .archive-panel .ap-foot a{color:var(--you);text-decoration:none;cursor:pointer;letter-spacing:.14em;text-transform:uppercase;font-weight:600;font-size:9.5px}
+  .archive-panel .ap-foot a:hover{text-decoration:underline}
+
+  /* visual pill state when panel is open */
+  .shell[data-variant="archive-panel"] .archived-pill{
+    background:var(--bg-3);border-style:solid;border-color:var(--ink-3);color:var(--ink);font-style:normal;
+  }
+
+  /* ───────── ARCHIVED TOPIC OPEN (read-only banner) ───────── */
+  .archived-banner{
+    position:sticky;top:0;z-index:5;
+    background:var(--warn-soft);border:1px solid var(--warn);
+    padding:12px 18px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+    margin:0 auto 8px;max-width:780px;
+  }
+  .archived-banner .ico{font-size:18px;color:var(--warn)}
+  .archived-banner .text{display:flex;flex-direction:column;gap:3px}
+  .archived-banner .ttl{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--warn);font-weight:600;
+  }
+  .archived-banner .body{font-size:13px;color:var(--ink-2);line-height:1.4}
+  .archived-banner .unarchive-btn{
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    padding:7px 14px;border:1px solid var(--warn);color:#1B150A;background:var(--warn);font-weight:700;cursor:pointer;
+  }
+  .archived-banner .unarchive-btn:hover{background:#E6B259;border-color:#E6B259}
+
+  /* archived-topic-open variant: banner shows + composer is disabled */
+  .only-archived-open{display:none}
+  .shell[data-variant="archived-topic-open"] .only-archived-open{display:grid}
+  .shell[data-variant="archived-topic-open"] .composer .editor{
+    background:var(--bg-2);border-style:dashed;cursor:not-allowed;color:var(--ink-3);
+  }
+  .shell[data-variant="archived-topic-open"] .composer .editor .placeholder{color:var(--ink-3)}
+  .shell[data-variant="archived-topic-open"] .composer .editor::after{
+    content:"Unarchive to send messages.";display:block;color:var(--ink-3);font-style:italic;
+  }
+  .shell[data-variant="archived-topic-open"] .composer .ctx-line .ctx-topic{
+    color:var(--warn);font-style:italic;
+  }
+  /* indicate the topic is archived in the strip itself */
+  .shell[data-variant="archived-topic-open"] .topic.active{
+    opacity:.62;border-style:dashed;
+  }
+  .shell[data-variant="archived-topic-open"] .topic.active::after{
+    content:"📁";margin-left:6px;font-size:10px;
+  }
+</style>
+</head>
+<body>
+
+<nav id="variant-nav">
+  <span class="lbl">Variant:</span>
+  <button class="variant-tab active" data-variant="default">Default</button>
+  <button class="variant-tab" data-variant="cold-task-dialog">+ Create task (cold)</button>
+  <button class="variant-tab" data-variant="promote-dialog">→ Promote from message</button>
+  <button class="variant-tab" data-variant="diagnostics-on">Diagnostics ON</button>
+  <button class="variant-tab" data-variant="host-stuck-banner">Host-stuck banner</button>
+  <button class="variant-tab" data-variant="archive-panel">Archive panel</button>
+  <button class="variant-tab" data-variant="archived-topic-open">Archived topic open</button>
+  <span class="desc">Plan <b>04.1-08</b> redesign — chat → true task · folds 6 gap-closure findings into one UI surface</span>
+</nav>
+
+<div class="shell" id="shell" data-variant="default">
+
+  <!-- ───────── LEFT: ROSTER ───────── -->
+  <aside class="roster">
+    <div class="roster-head">
+      <div class="ttl">Employees</div>
+      <div class="ct">3 · BEAAA</div>
+    </div>
+    <div class="roster-search">
+      <input type="text" placeholder="Search agents…" />
+    </div>
+    <div class="roster-list">
+      <div class="roster-section">Employees</div>
+      <div class="emp s-live active">
+        <div class="av">C</div>
+        <div class="name">CEO<small>ceo</small></div>
+      </div>
+      <div class="emp s-live">
+        <div class="av">C</div>
+        <div class="name">CMO<small>cmo</small></div>
+      </div>
+      <div class="emp s-idle">
+        <div class="av">E</div>
+        <div class="name">Editor-Agent<small>editor</small></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ───────── MIDDLE: THREAD ───────── -->
+  <main class="thread">
+
+    <div class="thread-head">
+      <div class="who-big">
+        <div class="av">C</div>
+        <div class="role">CEO<small>ceo · live</small></div>
+      </div>
+      <div class="global-search">
+        <span class="icon">⌕</span>
+        <input type="text" placeholder="Search all chats and tasks across BEAAA…" />
+      </div>
+      <div class="head-actions"></div>
+    </div>
+
+    <!-- TOPIC STRIP -->
+    <div class="topics">
+      <span class="topic-lbl">Topics ·</span>
+      <span class="topic active">
+        <span class="dot"></span>Define what company's goals are<span class="id">CHT-1117</span>
+      </span>
+      <span class="topic">
+        <span class="dot"></span>Hire a CMO<span class="id">CHT-1115</span>
+      </span>
+      <span class="topic">
+        <span class="dot"></span>CMO<span class="id">CHT-1114</span>
+      </span>
+      <span class="archived-pill" id="archived-pill">+2 archived</span>
+
+      <!-- ARCHIVE PANEL (dropdown anchored to the pill) -->
+      <div class="archive-panel">
+        <div class="ap-head">
+          <h4>Archived topics</h4>
+          <button class="close" id="ap-close">✕</button>
+        </div>
+        <div class="ap-search">
+          <input type="text" placeholder="Search archived topics by title…" />
+        </div>
+        <div class="ap-list">
+
+          <div class="ap-row ap-row-clickable">
+            <div class="ap-content">
+              <div class="ap-ttl">Broker commission percentage — Bedrock-Re</div>
+              <div class="ap-sub">
+                <span>CEO</span>
+                <span class="sep">·</span>
+                <span>12 messages</span>
+                <span class="sep">·</span>
+                <span>last active 2d ago</span>
+                <span class="sep">·</span>
+                <span class="archived-on">archived 2026-05-18</span>
+              </div>
+              <div class="ap-hint">↵ Click to open · read-only</div>
+            </div>
+            <button class="ap-unarchive">Unarchive</button>
+          </div>
+
+          <div class="ap-row ap-row-clickable">
+            <div class="ap-content">
+              <div class="ap-ttl">Reinsurance carrier vetting</div>
+              <div class="ap-sub">
+                <span>CMO</span>
+                <span class="sep">·</span>
+                <span>27 messages</span>
+                <span class="sep">·</span>
+                <span>last active 1w ago</span>
+                <span class="sep">·</span>
+                <span class="archived-on">archived 2026-05-10</span>
+              </div>
+              <div class="ap-hint">↵ Click to open · read-only</div>
+            </div>
+            <button class="ap-unarchive">Unarchive</button>
+          </div>
+
+        </div>
+        <div class="ap-foot">
+          <span>Showing 2 of 2</span>
+          <a>View all archived →</a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ACTIONS ROW — Plan 04.1-08 redesign -->
+    <div class="actions-row">
+      <button class="btn primary" id="btn-create-task">+ Create task</button>
+      <button class="btn ghost">+ New topic</button>
+      <button class="btn ghost diag-toggle">⏿ Diagnostics</button>
+      <span class="spacer"></span>
+      <span class="kbd-hint"><kbd>⌘</kbd><kbd>T</kbd> new task &nbsp;·&nbsp; <kbd>⌘</kbd><kbd>K</kbd> search</span>
+    </div>
+
+    <!-- MESSAGES -->
+    <div class="messages">
+
+      <!-- ARCHIVED BANNER (only on archived-topic-open variant) -->
+      <div class="archived-banner only-archived-open">
+        <div class="ico">📁</div>
+        <div class="text">
+          <div class="ttl">Archived — read-only</div>
+          <div class="body">Last active <strong>2 days ago</strong> · 12 messages · 1 task spawned. You can browse the conversation but can't send new messages until you unarchive.</div>
+        </div>
+        <button class="unarchive-btn">Unarchive</button>
+      </div>
+
+      <!-- HOST-STUCK BANNER (only on host-stuck-banner variant) -->
+      <div class="host-stuck-banner only-host-stuck">
+        <div class="ico">⚠</div>
+        <div class="text">
+          <div class="ttl">Topic stuck host-side</div>
+          <div class="body">The host's disposition-recovery service has parked this topic for review. The chat surface can't unstick it; opens in classic Paperclip to mark the disposition. Owner: <strong>CEO</strong>.</div>
+        </div>
+        <a class="nav-link">Open in classic Paperclip</a>
+      </div>
+
+      <div class="live-tick">Live</div>
+
+      <div class="day-divider">Today · 23:01</div>
+
+      <!-- you -->
+      <div class="msg you">
+        <div class="bubble-wrap">
+          <div class="meta"><span class="name">You</span><time>23:01</time></div>
+          <div class="bubble">Let's define what the company's goals should be for this year.</div>
+        </div>
+        <div class="av">E</div>
+      </div>
+
+      <!-- agent reply with hover promote -->
+      <div class="msg">
+        <div class="av">C</div>
+        <div class="bubble-wrap">
+          <div class="meta"><span class="name">CEO</span><time>23:03</time></div>
+          <div class="bubble">
+            Great question to tackle. To define meaningful company goals, I need to understand a bit more about where we are and where you want to go.<br><br>
+            A few questions to ground this:<br>
+            1. <b>What does this company do?</b> What product or service are we building/delivering?<br>
+            2. <b>Who are we building for?</b> What's the target customer or user?<br>
+            3. <b>What's the time horizon?</b> Are we setting goals for this quarter, this year, or longer-term?<br>
+            4. <b>What stage are we at?</b> Pre-revenue, early traction, scaling?<br><br>
+            If you can share even a rough answer to those, I can draft a concrete set of company goals — covering growth, product, and operational dimensions — that we can refine together.
+          </div>
+        </div>
+        <div class="actions">
+          <button class="pmote" id="btn-promote">→ Promote to task</button>
+        </div>
+      </div>
+
+      <!-- RUNTIME NOISE (only on diagnostics-on variant) -->
+      <div class="runtime-noise-comment">
+        <div class="head">
+          <span class="ico">⏿</span>
+          <span>System</span>
+          <span>·</span>
+          <span class="pres-kind">system_notice</span>
+          <span>·</span>
+          <time>23:04</time>
+        </div>
+        <div class="body">Paperclip needs a disposition before this issue can continue.</div>
+        <details open>
+          <summary>Details ⌄</summary>
+          <div class="sections">
+            <div class="section-title">Required action</div>
+            <div class="row"><span class="label">Source issue</span><span class="value"><a>COU-1117</a> Define what company's goals are</span></div>
+            <div class="row"><span class="label">Assignee</span><span class="value"><a>CEO</a></span></div>
+            <div class="row"><span class="label">Missing disposition</span><span class="value">clear_next_step</span></div>
+            <div class="row"><span class="label">Valid dispositions</span><span class="value">done, cancelled, in_review with an owner, blocked with blockers, delegated follow-up, or explicit continuation</span></div>
+            <div class="section-title">Run evidence</div>
+            <div class="row"><span class="label">Run status</span><span class="value">succeeded</span></div>
+            <div class="row"><span class="label">Normalized cause</span><span class="value">successful_run_missing_state</span></div>
+            <div class="row"><span class="label">Automatic retry</span><span class="value">one corrective handoff wake queued</span></div>
+          </div>
+        </details>
+      </div>
+
+      <!-- you -->
+      <div class="msg you">
+        <div class="bubble-wrap">
+          <div class="meta"><span class="name">You</span><time>23:07</time></div>
+          <div class="bubble">We need to hire a Chief Strategy Officer first. That's blocking everything.</div>
+        </div>
+        <div class="av">E</div>
+      </div>
+
+      <!-- INLINE TASK CARD -->
+      <div class="inline-task-card">
+        <div class="eyebrow">↗ Task created</div>
+        <div class="ttl">Hire a Chief Strategy Officer and define the profile and what his role would be</div>
+        <div class="meta-row">
+          <span>Assigned to <strong style="color:var(--ink)">CEO · ceo</strong></span>
+          <span class="ref-chip">BEAAA-1118</span>
+          <span class="status-pill live">in progress</span>
+        </div>
+      </div>
+
+      <!-- agent reply -->
+      <div class="msg">
+        <div class="av">C</div>
+        <div class="bubble-wrap">
+          <div class="meta"><span class="name">CEO</span><time>23:08</time></div>
+          <div class="bubble">
+            Got the task. I'll draft a CSO profile — responsibilities, must-haves, nice-to-haves, and the comp band — and post a hiring plan back in this topic within the hour.
+          </div>
+        </div>
+        <div class="actions">
+          <button class="pmote">→ Promote to task</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- COMPOSER (single-purpose: CHAT only) -->
+    <div class="composer">
+      <div class="ctx-line">
+        <span>Topic · <span class="ctx-topic">Define what company's goals are</span></span>
+        <span>Messages persist as comments on the topic issue</span>
+      </div>
+      <div class="editor" contenteditable="true">
+        <span class="placeholder">Message CEO…</span>
+      </div>
+      <div class="bottom-row">
+        <span class="attach disabled">📎 Attach · temporarily unavailable</span>
+        <span class="kbd-hint"><kbd>⏎</kbd> to send · <kbd>⇧</kbd><kbd>⏎</kbd> for newline</span>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ───────── RIGHT: CONTEXT RAIL (wider, no truncation) ───────── -->
+  <aside class="ctx">
+
+    <div class="card">
+      <div class="av-big">C</div>
+      <div class="role-line">CEO<small>ceo · live</small></div>
+      <div class="status-line"><b>Status:</b> <span class="v">live · idle</span></div>
+      <div class="status-line"><b>Adapter:</b> <span class="v">claude_local · opus-4.7</span></div>
+    </div>
+
+    <div>
+      <h4>Active tasks owned</h4>
+      <div class="task-row">
+        <div>
+          <div class="t-ttl">Hire a Chief Strategy Officer and define the profile</div>
+          <div class="t-meta">
+            <span class="ref-chip">BEAAA-1118</span>
+            <span>just now</span>
+          </div>
+        </div>
+        <span class="st in-progress">in progress</span>
+      </div>
+      <div class="task-row">
+        <div>
+          <div class="t-ttl">Draft Q1 goals across growth, product, ops</div>
+          <div class="t-meta">
+            <span class="ref-chip">BEAAA-1112</span>
+            <span>2 hours ago</span>
+          </div>
+        </div>
+        <span class="st todo">todo</span>
+      </div>
+    </div>
+
+    <div>
+      <h4>You owe</h4>
+      <div class="empty-rail">No outstanding decisions on this topic.</div>
+    </div>
+
+    <div>
+      <h4>Recent attachments</h4>
+      <div class="empty-rail">Attachments are temporarily unavailable.</div>
+    </div>
+
+    <div>
+      <h4>Quick actions</h4>
+      <div class="qa" id="qa-archive">
+        <span class="ico">⌗</span>
+        <span class="lbl">Archive this topic</span>
+        <span class="confirm-row">
+          <span>Archive “Define what company's goals are”?</span>
+          <button class="yes">YES</button>
+          <button class="keep">KEEP TOPIC</button>
+        </span>
+      </div>
+      <div class="qa">
+        <span class="ico">⌕</span>
+        <span class="lbl">Search this employee's chats</span>
+      </div>
+      <div class="qa">
+        <span class="ico">⏸</span>
+        <span class="lbl">Pause heartbeat</span>
+      </div>
+    </div>
+
+    <div>
+      <h4>Storage pin</h4>
+      <div class="empty-rail">Pin “Define what company's goals are” so all messages persist even when the topic is archived.</div>
+    </div>
+
+  </aside>
+
+  <!-- ───────── DIALOG (cold task + promote variants share the same shell) ───────── -->
+  <div class="dialog-backdrop">
+    <div class="dialog">
+      <div class="d-head">
+        <h2 class="cold-only">Create a task</h2>
+        <h2 class="promote-only" style="display:none">Promote message to task</h2>
+        <button class="close">✕</button>
+      </div>
+      <div class="d-body">
+
+        <div class="field">
+          <label>Title <span class="req">required</span></label>
+          <input type="text"
+                 class="cold-input"
+                 placeholder="What needs to get done?"
+                 autofocus>
+          <input type="text"
+                 class="promote-input"
+                 value="Outline a CSO profile based on the current org and runway"
+                 style="display:none">
+        </div>
+
+        <div class="field">
+          <label>Assign to</label>
+          <select>
+            <option>CEO · ceo  (chatted with)</option>
+            <option>CMO · cmo</option>
+            <option>Editor-Agent · editor</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Topic (optional)</label>
+          <select class="cold-only-select">
+            <option>Standalone  (not linked to any topic)</option>
+            <option>Define what company's goals are · CHT-1117</option>
+            <option>Hire a CMO · CHT-1115</option>
+            <option>CMO · CHT-1114</option>
+          </select>
+          <select class="promote-only-select" style="display:none">
+            <option>Define what company's goals are · CHT-1117  (from message)</option>
+            <option>Standalone</option>
+            <option>Hire a CMO · CHT-1115</option>
+          </select>
+          <div class="hint cold-only">Standalone tasks won't appear in any topic's <i>Active tasks owned</i> rail.</div>
+          <div class="hint promote-only" style="display:none">This task will appear in the source topic's <i>Active tasks owned</i> rail.</div>
+        </div>
+
+        <div class="field">
+          <label>Details (optional)</label>
+          <textarea placeholder="Add context, acceptance criteria, links…"></textarea>
+        </div>
+
+        <div class="from-msg">
+          <span class="src-label">From this message · CEO · 23:03</span>
+          Great question to tackle. To define meaningful company goals, I need to understand a bit more about where we are and where you want to go…
+        </div>
+
+      </div>
+      <div class="d-foot">
+        <span class="kbd-hint"><kbd>⌘</kbd><kbd>⏎</kbd> create &nbsp;·&nbsp; <kbd>Esc</kbd> cancel</span>
+        <button class="btn ghost">Cancel</button>
+        <button class="btn primary">Create task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- annotation strip (default variant only) -->
+  <div class="annotation">
+    <h5>Plan 04.1-08 — what changed</h5>
+    <ol>
+      <li><b>Composer = chat only.</b> No more "Send as task" toggle.</li>
+      <li><b>+ Create task</b> is a primary action in its own row — always visible.</li>
+      <li><b>→ Promote to task</b> appears on hover on each agent reply (and your own message).</li>
+      <li><b>Cold tasks default to <i>Standalone</i></b> — no ambient topic anchoring.</li>
+      <li><b>Right rail widened</b> to 360px; labels no longer truncate.</li>
+      <li><b>Contrast bumped</b> — muted text now passes WCAG AA at 6.0:1 (was 4.3:1).</li>
+      <li><b>Diagnostics moved to actions row</b> next to + Create task.</li>
+    </ol>
+  </div>
+
+</div>
+
+<script>
+  // variant tab switching
+  const shell = document.getElementById('shell');
+  document.querySelectorAll('.variant-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.variant-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const v = btn.dataset.variant;
+      shell.dataset.variant = v;
+      // swap dialog heading + fields for cold vs promote
+      const isPromote = v === 'promote-dialog';
+      document.querySelectorAll('.cold-only').forEach(el => el.style.display = isPromote ? 'none' : '');
+      document.querySelectorAll('.promote-only').forEach(el => el.style.display = isPromote ? '' : 'none');
+      document.querySelectorAll('.cold-only-select').forEach(el => el.style.display = isPromote ? 'none' : '');
+      document.querySelectorAll('.promote-only-select').forEach(el => el.style.display = isPromote ? '' : 'none');
+      document.querySelectorAll('.cold-input').forEach(el => el.style.display = isPromote ? 'none' : '');
+      document.querySelectorAll('.promote-input').forEach(el => el.style.display = isPromote ? '' : 'none');
+    });
+  });
+
+  // demo: clicking + Create task opens cold-task variant
+  document.getElementById('btn-create-task').addEventListener('click', () => {
+    document.querySelector('.variant-tab[data-variant="cold-task-dialog"]').click();
+  });
+  // demo: clicking → Promote opens promote variant
+  document.getElementById('btn-promote').addEventListener('click', () => {
+    document.querySelector('.variant-tab[data-variant="promote-dialog"]').click();
+  });
+  // demo: clicking ✕ closes back to default
+  document.querySelectorAll('.dialog .close, .dialog .d-foot .btn.ghost').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelector('.variant-tab[data-variant="default"]').click();
+    });
+  });
+  // demo: archive 2-step confirmation
+  document.getElementById('qa-archive').addEventListener('click', (e) => {
+    if (e.target.classList.contains('yes')) {
+      document.getElementById('qa-archive').classList.remove('armed');
+      alert('Topic archived (plugin-side only; host issue status untouched per D-10)');
+      return;
+    }
+    if (e.target.classList.contains('keep')) {
+      document.getElementById('qa-archive').classList.remove('armed');
+      return;
+    }
+    document.getElementById('qa-archive').classList.toggle('armed');
+  });
+  // demo: clear placeholder on focus in composer editor
+  const ed = document.querySelector('.composer .editor');
+  ed.addEventListener('focus', () => {
+    const ph = ed.querySelector('.placeholder');
+    if (ph) ph.remove();
+  });
+
+  // demo: clicking +N archived pill opens archive panel
+  document.getElementById('archived-pill').addEventListener('click', () => {
+    document.querySelector('.variant-tab[data-variant="archive-panel"]').click();
+  });
+  // demo: closing the archive panel returns to default
+  document.getElementById('ap-close').addEventListener('click', () => {
+    document.querySelector('.variant-tab[data-variant="default"]').click();
+  });
+  // demo: clicking an archive row opens that topic in archived-open variant
+  document.querySelectorAll('.ap-row-clickable').forEach(row => {
+    row.addEventListener('click', (e) => {
+      // Unarchive button has its own handler — don't double-fire
+      if (e.target.closest('.ap-unarchive')) return;
+      document.querySelector('.variant-tab[data-variant="archived-topic-open"]').click();
+    });
+  });
+  // demo: clicking "Unarchive" returns to default and confirms
+  document.querySelectorAll('.ap-unarchive, .unarchive-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelector('.variant-tab[data-variant="default"]').click();
+      alert('Topic unarchived — plugin-side flag flipped; host issue status unchanged (D-10)');
+    });
+  });
+</script>
+
+</body>
+</html>

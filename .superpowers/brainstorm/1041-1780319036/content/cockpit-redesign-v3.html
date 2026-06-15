@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Situation Room — redesign v3</title>
+<style>
+  :root{
+    --bg:#100f0d; --panel:#161412; --panel2:#1b1916; --line:#2a2622; --line2:#36312a;
+    --ink:#efe9dd; --ink2:#cdc5b6; --ink3:#8a8275;
+    --read:#dcd5c7;            /* content-secondary: important to actually read */
+    --gold:#e9c97e; --goldline:#6a5828;
+    --green:#8fc98f; --greenline:#3f5a3a; --amber:#e0b46a; --red:#e08a8a; --redline:#6e3636;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       -webkit-font-smoothing:antialiased;line-height:1.45;}
+  .wrap{max-width:980px;margin:0 auto;padding:26px 26px 60px;}
+
+  /* ---------- PULSE ---------- */
+  .pulse{border:1px solid var(--line2);background:linear-gradient(180deg,#1a1815,#141210);
+         border-radius:14px;padding:18px 20px;margin-bottom:8px;}
+  .pulse .when{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);}
+  .pulse .head{font-family:Georgia,serif;font-size:21px;color:var(--ink);margin:7px 0 14px;line-height:1.3;}
+  .pulse .head b{color:var(--gold);font-weight:600;}
+  .vitals{display:flex;gap:10px;flex-wrap:wrap;}
+  .vital{display:flex;align-items:center;gap:8px;background:#13110f;border:1px solid var(--line);
+         border-radius:10px;padding:8px 12px;font-size:12.5px;color:var(--ink2);}
+  .vital .n{font-size:16px;font-weight:700;font-family:Georgia,serif;}
+  .vital.you .n{color:var(--gold)} .vital.mov .n{color:var(--green)}
+  .vital.stk .n{color:var(--red)} .vital.slf .n{color:var(--ink2)}
+  .dot{width:7px;height:7px;border-radius:50%;}
+  .dot.you{background:var(--gold)} .dot.mov{background:var(--green)}
+  .dot.stk{background:var(--red)} .dot.slf{background:var(--ink3)}
+
+  /* ---------- TIER HEADERS ---------- */
+  .tier{margin-top:30px;}
+  .tier-h{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--line);
+          padding-bottom:7px;margin-bottom:14px;}
+  .tier-h .t{font-family:Georgia,serif;font-style:italic;font-size:19px;color:var(--ink);}
+  .tier-h .t .c{font-style:normal;font-family:inherit;color:var(--ink3);font-size:13px;margin-left:8px;
+                border:1px solid var(--line2);border-radius:20px;padding:1px 9px;}
+  .tier-h .meta{font-size:12px;color:var(--ink3);}
+
+  /* ---------- NEEDS YOU — uniform rows, ranked by impact ---------- */
+  .qrow{border:1px solid var(--line);border-radius:11px;background:var(--panel);
+        padding:13px 15px;margin-bottom:9px;}
+  .qrow.lead{border-color:var(--goldline);}
+  .qline{display:flex;align-items:flex-start;gap:12px;}
+  .qrow .rank{font-family:Georgia,serif;font-size:13px;color:var(--ink3);width:14px;flex:none;text-align:center;margin-top:1px;}
+  .qrow .star{color:var(--gold);font-size:12px;flex:none;margin-top:2px;}
+  .qrow .body{flex:1;min-width:0;}
+  .qrow .action{font-size:14.5px;color:var(--ink);line-height:1.35;}
+  .qrow .action .key{color:var(--gold);}
+  .qrow .sub{font-size:12px;color:var(--read);margin-top:4px;}
+  .qrow .sub .imp{color:var(--green);}
+  .qrow .sub .muted{color:var(--ink3);}
+  .qrow .est{font-size:12px;color:var(--ink2);white-space:nowrap;margin-top:1px;}
+  .qrow .go{font-size:12px;color:var(--gold);border:1px solid var(--goldline);border-radius:8px;
+            padding:6px 11px;white-space:nowrap;align-self:center;}
+  .replybar{display:flex;gap:8px;align-items:center;margin:11px 0 0;padding-left:26px;}
+  .replybar input{flex:1;background:#0e0d0b;border:1px solid var(--line2);border-radius:9px;
+                  color:var(--ink);font-size:13px;padding:9px 12px;}
+  .replybar input::placeholder{color:#8a8275}
+  .btn{font-size:12.5px;padding:8px 14px;border-radius:9px;border:1px solid var(--line2);
+       background:#221f1b;color:var(--ink2);white-space:nowrap;}
+  .btn.gold{border-color:var(--goldline);color:var(--gold);background:#241f15;}
+  .btn.ghost{background:transparent;color:var(--ink2);}
+  .chips{display:flex;gap:7px;margin-top:9px;padding-left:26px;align-items:center;}
+  .chip{font-size:12.5px;padding:6px 13px;border-radius:18px;border:1px solid var(--greenline);
+        background:#16201a;color:var(--green);}
+  .chip.no{border-color:var(--redline);background:#201818;color:var(--red);}
+  .chip.alt{border-color:var(--line2);background:transparent;color:var(--ink2);}
+
+  /* ---------- IN MOTION ---------- */
+  .calm{border:1px solid var(--line);border-radius:12px;background:#131210;padding:6px 4px;}
+  .mrow{display:flex;align-items:center;gap:11px;padding:9px 13px;border-bottom:1px solid #211e1b;}
+  .mrow:last-child{border-bottom:none}
+  .mrow .dotm{width:6px;height:6px;border-radius:50%;background:var(--green);flex:none;
+              box-shadow:0 0 7px 0 rgba(143,201,143,.6);}
+  .mrow .nm{font-size:13px;color:var(--ink);font-weight:600;width:140px;flex:none;}
+  .mrow .gist{font-size:13px;color:var(--read);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mrow .age{font-size:11px;color:var(--ink3);}
+
+  /* ---------- WATCH ---------- */
+  .watch{display:flex;flex-direction:column;gap:9px;}
+  .wrow{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-left:2px solid var(--amber);
+        border-radius:10px;background:#15120f;padding:11px 14px;}
+  .wrow.red{border-left-color:var(--red)}
+  .wrow .ic{font-size:14px;width:18px;flex:none;text-align:center;color:var(--amber);}
+  .wrow.red .ic{color:var(--red)}
+  .wrow .txt{flex:1;font-size:13px;color:var(--read);}
+  .wrow .txt b{color:var(--ink);font-weight:600;}
+  .wrow .txt small{display:block;color:var(--ink2);font-size:11.5px;margin-top:2px;}
+  .wrow .act{font-size:12px;color:var(--ink2);border:1px solid var(--line2);border-radius:8px;padding:6px 11px;white-space:nowrap;}
+
+  .foot{margin-top:26px;font-size:11.5px;color:var(--ink3);text-align:center;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== PULSE ===== -->
+  <div class="pulse">
+    <div class="when">Situation Room · Tue Jun 1 · 9:14 AM</div>
+    <div class="head">The company is <b>mostly moving</b>. Three things need you — about <b>12 minutes</b> to clear your plate.</div>
+    <div class="vitals">
+      <div class="vital you"><span class="dot you"></span><span class="n">3</span> need you</div>
+      <div class="vital mov"><span class="dot mov"></span><span class="n">6</span> in motion</div>
+      <div class="vital stk"><span class="dot stk"></span><span class="n">1</span> agent stuck</div>
+      <div class="vital slf"><span class="dot slf"></span><span class="n">2</span> clearing themselves</div>
+    </div>
+  </div>
+
+  <!-- ===== NEEDS YOU — three equal rows, ranked by what they unblock ===== -->
+  <div class="tier">
+    <div class="tier-h">
+      <div class="t">Needs you <span class="c">3</span></div>
+      <div class="meta">ranked by what it unblocks · ~12 min total</div>
+    </div>
+
+    <!-- 1 -->
+    <div class="qrow lead">
+      <div class="qline">
+        <span class="rank">1</span><span class="star">⚑</span>
+        <div class="body">
+          <div class="action">Approve the <span class="key">Tier-A LOI cap</span> so CBDO can ship the first warm-intro batch.</div>
+          <div class="sub">CBDO · <span class="imp">unblocks the Tier-A outreach (3 downstream)</span> <span class="muted">· blocked 4d</span></div>
+        </div>
+        <span class="est">~3 min</span>
+      </div>
+      <div class="replybar">
+        <input placeholder="Your ruling…  e.g. “Cap at $25k — ship it.”" disabled>
+        <span class="btn gold">Send ↵</span>
+        <span class="btn ghost">Open BEAAA-649 ↗</span>
+      </div>
+      <div class="chips">
+        <span style="font-size:11.5px;color:var(--ink2)">or:</span>
+        <span class="chip">Approve as proposed</span>
+        <span class="chip no">Reject</span>
+        <span class="chip alt">Reply instead…</span>
+      </div>
+    </div>
+
+    <!-- 2 -->
+    <div class="qrow">
+      <div class="qline">
+        <span class="rank">2</span><span class="star">⚑</span>
+        <div class="body">
+          <div class="action">Confirm the <span class="key">rate-book refuse thresholds</span> from production so the Actuary can finish the v1.1 re-cal.</div>
+          <div class="sub">Actuary · <span class="imp">unblocks Actuary + Underwriter (2 agents)</span> <span class="muted">· blocked 9d — oldest</span></div>
+        </div>
+        <span class="est">~5 min</span>
+        <span class="go">Answer ↵</span>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="qrow">
+      <div class="qline">
+        <span class="rank">3</span><span class="star">⚑</span>
+        <div class="body">
+          <div class="action">Your <span class="key">17:00 ET status entry</span> for the Phase A scorecard.</div>
+          <div class="sub">CEO · Week 1 scorecard <span class="muted">· due Fri 6/5 (2 days)</span></div>
+        </div>
+        <span class="est">~4 min</span>
+        <span class="go">Answer ↵</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== IN MOTION ===== -->
+  <div class="tier">
+    <div class="tier-h">
+      <div class="t">In motion <span class="c">6</span></div>
+      <div class="meta">nothing for you — here for awareness</div>
+    </div>
+    <div class="calm">
+      <div class="mrow"><span class="dotm"></span><span class="nm">CFO</span><span class="gist">absorbing confirmed inputs into the v1 financial model</span><span class="age">5h</span></div>
+      <div class="mrow"><span class="dotm"></span><span class="nm">Scanner Engineer</span><span class="gist">activating the LLM-Guard MaliciousURLs scanner (output-side)</span><span class="age">5d</span></div>
+      <div class="mrow"><span class="dotm"></span><span class="nm">Scanner Engineer #3</span><span class="gist">Langfuse OSS adoption spike — trace/evidence + golden-set</span><span class="age">5d</span></div>
+      <div class="mrow"><span class="dotm"></span><span class="nm">Legal Coordinator</span><span class="gist">counsel-cycle §12 cross-regime packet drafting</span><span class="age">2d</span></div>
+      <div class="mrow" style="opacity:.8"><span class="dotm" style="background:var(--ink3);box-shadow:none"></span><span class="nm" style="color:var(--ink2)">+ 2 more</span><span class="gist" style="color:var(--ink3)">Underwriter, Auditor — working</span><span class="age"></span></div>
+    </div>
+  </div>
+
+  <!-- ===== WATCH ===== -->
+  <div class="tier">
+    <div class="tier-h">
+      <div class="t">Watch <span class="c">3</span></div>
+      <div class="meta">quietly stalled — know about it, act when you want</div>
+    </div>
+    <div class="watch">
+      <div class="wrow red">
+        <span class="ic">●</span>
+        <div class="txt">Scanner Engineer #2 is <b>stuck</b> — idle 4d with nothing queued on the Garak probe corpus.
+          <small>not blocked on anyone — it just has no next move. The one place "assign / redirect" is the right call.</small></div>
+        <span class="act">Redirect ▾</span>
+      </div>
+      <div class="wrow">
+        <span class="ic">↗</span>
+        <div class="txt">Legal cycle is waiting on <b>outside counsel</b> — external, not yours to unblock.
+          <small>BEAAA-1101 · chase externally if it's urgent</small></div>
+        <span class="act">Open ↗</span>
+      </div>
+      <div class="wrow">
+        <span class="ic">▦</span>
+        <div class="txt"><b>29 more</b> blocked issues across the org with no active agent.
+          <small>mostly self-clearing or low-priority — review the full backlog when you have a minute</small></div>
+        <span class="act">Review ↗</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Built from your real board · named actions shown are illustrative of the Editor-Agent's output
+  </div>
+
+</div>
+</body>
+</html>

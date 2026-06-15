@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BEAAA · Situation Room — One-Cockpit Redesign (mockup v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0E0D0A; --bg-2:#15140F; --bg-3:#1B1A14; --bg-4:#222019;
+  --line:#2A2820; --line-bright:#3D3A2E;
+  --ink:#E8E1CF; --ink-2:#B8B0A0; --ink-3:#7E7869; --ink-4:#52503F;
+  --st-running:#16a34a; --st-reviewing:#15803d; --st-blocked:#dc2626;
+  --st-idle:#d97706; --st-stale:#b45309; --st-unknown:#6b7280;
+  --you:#E5C56F; --you-soft:#3D3318;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg); color:var(--ink); font-family:'Geist',system-ui,sans-serif; font-size:15px; line-height:1.5; min-height:100vh; position:relative}
+body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(900px 500px at 100% -5%, rgba(217,162,62,0.06), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(125,180,126,0.05), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 48px);}
+.wrap{position:relative; z-index:1; max-width:1040px; margin:0 auto; padding:22px 28px 80px}
+
+.topbar{display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:14px}
+.brand{display:flex; align-items:center; gap:12px}
+.logo{width:34px; height:34px; border:1px solid var(--line-bright); border-radius:3px; display:grid; place-items:center; font-family:'Instrument Serif',serif; font-style:italic; font-size:20px; color:var(--you)}
+.brand-text{display:flex; flex-direction:column; line-height:1.15}
+.brand-name{font-family:'Instrument Serif',serif; font-style:italic; font-size:20px}
+.brand-sub{font-family:'Geist Mono',monospace; font-size:10.5px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-3)}
+.create-btn{font-family:'Geist Mono',monospace; font-size:12px; letter-spacing:0.04em; padding:8px 14px; border:1px solid var(--line-bright); border-radius:2px; background:transparent; color:var(--ink); cursor:pointer}
+.create-btn:hover{border-color:var(--ink-3)}
+
+.banner{display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:13px 16px; border-radius:4px; margin:6px 0 10px; font-size:15px}
+.banner.urgent{border:1px solid var(--st-blocked); background:color-mix(in oklch, var(--bg), var(--st-blocked) 9%)}
+.banner.clear{border:1px solid var(--line); background:color-mix(in oklch, var(--bg), var(--st-running) 6%); color:var(--ink-3)}
+.banner-text{flex:1 1 auto; font-weight:500}
+.banner-text .num{color:var(--st-blocked); font-weight:600}
+.banner.clear .banner-text{font-weight:400; color:var(--ink-3)}
+.banner.clear .num{color:var(--st-running)}
+
+/* section / group headers */
+.sec{display:flex; align-items:center; gap:13px; margin:24px 0 11px}
+.sec .gicon{font-size:15px}
+.sec h2{font-family:'Instrument Serif',serif; font-style:italic; font-weight:400; font-size:25px; margin:0; color:var(--ink)}
+.sec .tag{font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-3); border:1px solid var(--line); border-radius:2px; padding:2px 7px}
+.sec .rule{flex:1 1 auto; height:1px}
+.sec.needs .rule{background:linear-gradient(90deg,color-mix(in oklch,var(--st-blocked),transparent 55%),transparent)}
+.sec.working .rule{background:linear-gradient(90deg,color-mix(in oklch,var(--st-running),transparent 60%),transparent)}
+.sec.idle .rule{background:linear-gradient(90deg,color-mix(in oklch,var(--st-idle),transparent 60%),transparent)}
+.sec .meta{font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:0.06em; color:var(--ink-3)}
+.sec.needs h2{color:#f0c9c0}
+.empty-note{color:var(--ink-4); font-style:italic; font-size:0.9rem; margin:2px 0 0 2px}
+
+.rows{display:flex; flex-direction:column; gap:8px}
+.row{position:relative; border:1px solid var(--line); border-radius:4px; background:color-mix(in oklch, var(--bg), white 2%); padding:13px 16px 13px 20px; transition:opacity .35s ease, border-color .25s ease, background .35s ease}
+.row::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:4px 0 0 4px; background:var(--state)}
+.row[data-state="running"]{--state:var(--st-running)}
+.row[data-state="reviewing"]{--state:var(--st-reviewing)}
+.row[data-state="blocked"]{--state:var(--st-blocked)}
+.row[data-state="idle"]{--state:var(--st-idle)}
+.row[data-state="stale"]{--state:var(--st-stale)}
+.row.working-row{background:transparent; border-color:var(--line)}
+
+.row-head{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.dot{width:9px; height:9px; border-radius:50%; background:var(--state); align-self:center; flex:0 0 auto}
+.name{font-weight:600; color:var(--ink)}
+.role{color:var(--ink-3); font-size:0.9rem}
+.pill{font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--state); border:1px solid currentColor; border-radius:2px; padding:1px 7px}
+.age{margin-left:auto; font-family:'Geist Mono',monospace; font-size:12px; color:var(--ink-3); white-space:nowrap}
+
+.focus{margin:7px 0 0; color:var(--ink-2); font-size:0.95rem}
+.focus .ref{color:var(--ink-3); font-size:0.82rem; font-family:'Geist Mono',monospace}
+.chain{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:9px 0 0 4px; padding-left:10px; border-left:2px solid var(--st-blocked); font-size:0.9rem}
+.chain .pfx{font-family:'Geist Mono',monospace; color:var(--ink-3)}
+.chain .act{font-weight:500; color:var(--ink)}
+.chain.owned{border-left-color:var(--st-idle)}
+.actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:11px}
+.idle-line,.moving-line{margin:7px 0 0; color:var(--ink-3); font-size:0.92rem; font-style:italic}
+
+.btn{font-family:'Geist Mono',monospace; font-size:12px; letter-spacing:0.03em; padding:6px 12px; border-radius:2px; border:1px solid var(--line-bright); background:transparent; color:var(--ink); cursor:pointer; white-space:nowrap}
+.btn:hover{border-color:var(--ink-3); background:rgba(255,255,255,0.02)}
+.btn.gold{border-color:var(--you); color:var(--you)}
+.btn.gold:hover{background:var(--you-soft)}
+.btn.danger:hover{border-color:var(--st-blocked); color:#f3b4b4}
+
+.pop-wrap{position:relative; display:inline-block}
+.pop{position:absolute; top:calc(100% + 6px); left:0; z-index:30; min-width:240px; background:var(--bg-2); border:1px solid var(--line-bright); border-radius:6px; padding:5px; box-shadow:0 12px 30px rgba(0,0,0,.5); display:none}
+.pop.open{display:block}
+.pop-hd{font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-3); padding:6px 9px 4px}
+.pop-item{display:flex; align-items:center; gap:9px; width:100%; text-align:left; background:transparent; border:none; border-radius:4px; padding:8px 9px; color:var(--ink); font:inherit; font-size:13.5px; cursor:pointer}
+.pop-item:hover{background:var(--bg-3)}
+.pop-item .pdot{width:7px; height:7px; border-radius:50%; background:var(--st-idle); flex:0 0 auto}
+.pop-item.self{border-top:1px solid var(--line); margin-top:3px; color:var(--you)}
+.pop-item.self .pdot{background:var(--you)}
+
+/* orphan blocked issues (the old org-backlog, folded in) */
+.orphans{margin-top:9px}
+.orphan-toggle{width:100%; text-align:left; font-family:'Geist Mono',monospace; font-size:12px; letter-spacing:0.04em; color:var(--ink-3); background:transparent; border:1px dashed var(--line-bright); border-radius:4px; padding:9px 13px; cursor:pointer}
+.orphan-toggle:hover{color:var(--ink-2); border-color:var(--ink-4)}
+.orphan-list{display:none; flex-direction:column; gap:1px; margin-top:6px}
+.orphans.open .orphan-list{display:flex}
+.orphans.open .chev{transform:rotate(90deg)}
+.chev{display:inline-block; transition:transform .2s ease}
+.orow{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:9px 12px; border:1px solid var(--line); border-radius:4px; background:color-mix(in oklch,var(--bg),white 1.5%)}
+.orow .oid{font-family:'Geist Mono',monospace; font-size:12px; color:var(--ink-3); font-weight:600}
+.orow .ottl{flex:1 1 200px; color:var(--ink-2); font-size:0.92rem}
+.orow .ometa{font-family:'Geist Mono',monospace; font-size:11px; color:var(--ink-4)}
+
+.foot{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-top:34px; padding-top:14px; border-top:1px solid var(--line); font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:0.06em; color:var(--ink-3); text-transform:uppercase}
+.foot .tagline{font-family:'Instrument Serif',serif; font-style:italic; font-size:14px; letter-spacing:0; text-transform:none; color:var(--ink-2)}
+
+.note{margin:22px 0 0; padding:11px 14px; border:1px dashed var(--line-bright); border-radius:6px; background:rgba(229,197,111,0.04); color:var(--ink-2); font-size:13px; line-height:1.55}
+.note b{color:var(--you); font-weight:600}
+.reset{font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:0.06em; color:var(--ink-3); background:transparent; border:1px solid var(--line); border-radius:2px; padding:5px 10px; cursor:pointer}
+.reset:hover{border-color:var(--ink-3); color:var(--ink)}
+.flash{animation:flash 1.1s ease}
+@keyframes flash{0%{background:color-mix(in oklch,var(--bg),var(--st-running) 22%)}100%{background:color-mix(in oklch,var(--bg),white 2%)}}
+.toast{position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--bg-2); border:1px solid var(--st-running); color:var(--ink); border-radius:6px; padding:10px 16px; font-size:13px; box-shadow:0 10px 30px rgba(0,0,0,.5); opacity:0; transition:all .3s ease; z-index:60}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+.toast .k{font-family:'Geist Mono',monospace; color:var(--st-running)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">B</div>
+      <div class="brand-text">
+        <div class="brand-name">BEAAA · Situation Room</div>
+        <div class="brand-sub">Live ops · auto-refresh 30s</div>
+      </div>
+    </div>
+    <button class="create-btn">+ Create task</button>
+  </div>
+
+  <div class="banner urgent" id="banner">
+    <span class="banner-text" id="banner-text"></span>
+    <div class="pop-wrap"><button class="btn gold" id="assign-first">Assign first ▾</button></div>
+  </div>
+
+  <!-- the three groups render here -->
+  <div id="board"></div>
+
+  <div class="note">
+    <b>Interactive mockup — three groups, stuck work on top.</b> Click <b>Assign owner ▾</b> on a Needs-You row → pick an agent → the row clears and <b>jumps down into Working</b> (live re-grouping, the real <span style="font-family:'Geist Mono',monospace">ctx.issues.update</span> round-trip). Expand <b>“+ more blocked issues”</b> to see the old 29-item org-backlog folded in. <b>Stand down</b> a stale agent, or <b>Assign work</b> to an idle one.
+    <div style="margin-top:9px"><button class="reset" onclick="DATA=seed();render()">↻ Reset mockup</button></div>
+  </div>
+
+  <div class="foot">
+    <span>BEAAA · Situation Room · Editorial Desk</span>
+    <span class="tagline">Every reference resolved inline · zero rabbit-holes</span>
+    <span>Next compile · 13:43 ET</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ROSTER=['Head of UW & AI Risk','Auditor','CBDO','CSO','Legal Coordinator','Head of Compliance'];
+function seed(){return [
+  {id:'cfo',name:'CFO',role:'Chief Financial Officer',state:'blocked',age:'29d',focus:'v1 financial model refinement — absorb confirmed inputs as they land',ref:'BEAAA-43',chain:{leaf:'BEAAA-43',owned:false}},
+  {id:'se3',name:'Scanner Engineer #3',role:'Scanner Engineer',state:'blocked',age:'3d',focus:'Langfuse OSS adoption spike — trace/evidence + golden-set dataset',ref:'BEAAA-802',chain:{leaf:'BEAAA-802',owned:false}},
+  {id:'ceo',name:'CEO',role:'Chief Executive Officer',state:'blocked',age:'3d',focus:'Sentinel: advisor-channel hold lifted — tripwire Tue 6/2 12:00Z',ref:'BEAAA-814',chain:{leaf:'BEAAA-814',owned:false}},
+  {id:'act',name:'Actuary',role:'Chief Actuary',state:'blocked',age:'8d',focus:'v1.1 rate-book re-cal — loading breakpoints + refresh thresholds',ref:'BEAAA-617',chain:{leaf:'BEAAA-617',owned:true,owner:'Head of UW'}},
+  {id:'cto',name:'CTO',role:'Chief Technology Officer',state:'running',age:'12m',focus:'Scope-β rev2 — wiring the eval harness into CI'},
+  {id:'hoc',name:'Head of Compliance',role:'Compliance',state:'reviewing',age:'40m',focus:'Reviewing the C2 adversarial-robustness fixture before sign-off'},
+  {id:'cla',name:'Claims Architect',role:'Claims',state:'stale',age:'3d',lastSeen:'BEAAA-1103'},
+  {id:'des',name:'Designer',role:'Design',state:'idle',age:'2d'},
+];}
+let DATA=seed();
+const ORPHANS=[
+  {id:'BEAAA-655',ttl:'Vendor Garak probe corpus — adversarial-robustness fixture',age:'5d'},
+  {id:'BEAAA-663',ttl:'Tier A LOI template — Founder ruling pending',age:'3d'},
+  {id:'BEAAA-708',ttl:'Pricing guardrail thresholds — awaiting actuarial sign-off',age:'6d'},
+  {id:'BEAAA-741',ttl:'SOC2 evidence collector — scope unconfirmed',age:'2d'},
+];
+const $=(s,el=document)=>el.querySelector(s);
+
+function unownedBlocked(){return DATA.filter(a=>a.state==='blocked'&&a.chain&&!a.chain.owned);}
+function ownedBlocked(){return DATA.filter(a=>a.state==='blocked'&&a.chain&&a.chain.owned);}
+
+function banner(){
+  const stuck=DATA.filter(a=>a.state==='blocked').length, unowned=unownedBlocked().length;
+  const b=$('#banner'), t=$('#banner-text');
+  if(unowned>0){ b.className='banner urgent';
+    t.innerHTML=`⚠ <span class="num">${stuck} stuck</span> · <span class="num">${unowned} unowned</span> → assign owners to clear the board`;
+    $('#assign-first').style.display='';
+  } else if(stuck>0){ b.className='banner urgent'; const o=ownedBlocked()[0];
+    t.innerHTML=`⚠ <span class="num">${stuck} stuck</span>, all owned → chase <span class="num">${o?o.chain.owner:''}</span> on ${o?o.chain.leaf:''}`;
+    $('#assign-first').style.display='none';
+  } else { const mv=DATA.filter(a=>a.state==='running'||a.state==='reviewing').length, id=DATA.filter(a=>a.state==='idle'||a.state==='stale').length;
+    b.className='banner clear'; t.innerHTML=`✓ <span class="num">0 need you</span> — ${mv} working · ${id} idle · 0 stuck`;
+    $('#assign-first').style.display='none';
+  }
+}
+function rosterPop(){return `<div class="pop-hd">Assign owner →</div>`+ROSTER.map(r=>`<button class="pop-item" data-name="${r}"><span class="pdot"></span>${r}</button>`).join('')+`<button class="pop-item self" data-name="__self__"><span class="pdot"></span>Take it myself (Eric)</button>`;}
+
+function needsRow(a){
+  const owned=a.chain&&a.chain.owned;
+  const chain = owned
+    ? `<div class="chain owned"><span class="pfx">└ blocked:</span><span class="act">waiting on ${a.chain.owner} to co-sign</span><span class="leaf">${a.chain.leaf}</span></div>`
+    : `<div class="chain"><span class="pfx">└ blocked:</span><span class="act">${a.chain.leaf} has no owner</span></div>`;
+  const actions = owned
+    ? `<div class="actions"><button class="btn gold" onclick="toast('Would open chat with ${a.chain.owner}')">Open chat: ${a.chain.owner}</button><button class="btn" onclick="toast('Sent wake to ${a.chain.owner}')">Wake</button><button class="btn" onclick="toast('Would open ${a.chain.leaf} ↗')">Open ↗</button></div>`
+    : `<div class="actions"><div class="pop-wrap"><button class="btn gold" onclick="togglePop(this)">Assign owner ▾</button><div class="pop" data-agent="${a.id}">${rosterPop()}</div></div><button class="btn" onclick="toast('Would open ${a.chain.leaf} ↗')">Open ${a.chain.leaf} ↗</button></div>`;
+  return `<div class="row" data-state="blocked" id="row-${a.id}"><div class="row-head"><span class="dot"></span><span class="name">${a.name}</span><span class="role">${a.role}</span><span class="pill">blocked</span><span class="age">${a.age}</span></div><p class="focus">${a.focus} <span class="ref">(${a.ref})</span></p>${chain}${actions}</div>`;
+}
+function workingRow(a){
+  return `<div class="row working-row" data-state="${a.state}" id="row-${a.id}"><div class="row-head"><span class="dot"></span><span class="name">${a.name}</span><span class="role">${a.role}</span><span class="pill">${a.state}</span><span class="age">${a.age}</span></div><p class="focus">${a.focus}</p><p class="moving-line">moving · no action needed</p></div>`;
+}
+function idleRow(a){
+  const line = a.state==='stale' ? `Idle ${a.age} — last seen ${a.lastSeen}` : 'Nothing assigned';
+  const standdown = a.state==='stale' ? `<button class="btn danger" onclick="standDown('${a.id}')">Stand down</button>` : '';
+  return `<div class="row" data-state="${a.state}" id="row-${a.id}"><div class="row-head"><span class="dot"></span><span class="name">${a.name}</span><span class="role">${a.role}</span><span class="pill">${a.state}</span><span class="age">${a.age}</span></div><p class="idle-line">${line}</p><div class="actions"><button class="btn gold" onclick="toast('Would open chat with ${a.name} to brief them')">Assign work ▾</button>${standdown}</div></div>`;
+}
+
+function section(cls,icon,title,count,metaText,rowsHtml,emptyText){
+  return `<div class="sec ${cls}"><span class="gicon">${icon}</span><h2>${title}</h2><span class="tag">${count}</span><div class="rule"></div><span class="meta">${metaText||''}</span></div>`
+    + (rowsHtml ? `<div class="rows">${rowsHtml}</div>` : `<p class="empty-note">${emptyText}</p>`);
+}
+
+function render(){
+  const blocked=DATA.filter(a=>a.state==='blocked').sort((a,b)=>(a.chain.owned-b.chain.owned)||(parseInt(b.age)-parseInt(a.age)));
+  const working=DATA.filter(a=>a.state==='running'||a.state==='reviewing');
+  const idle=DATA.filter(a=>a.state==='idle'||a.state==='stale').sort((a,b)=>(a.state==='stale'?0:1)-(b.state==='stale'?0:1));
+
+  const orphanBlock = `<div class="orphans" id="orphans"><button class="orphan-toggle" onclick="this.parentElement.classList.toggle('open')"><span class="chev">▸</span> + ${ORPHANS.length} more blocked issues across the org (no active agent)</button><div class="orphan-list">`
+    + ORPHANS.map(o=>`<div class="orow"><span class="oid">${o.id}</span><span class="ottl">${o.ttl}</span><span class="ometa">${o.age}</span><div class="pop-wrap"><button class="btn gold" onclick="togglePop(this)">Assign ▾</button><div class="pop" data-agent="orphan">${rosterPop()}</div></div><button class="btn" onclick="toast('Would open ${o.id} ↗')">Open ↗</button></div>`).join('')
+    + `</div></div>`;
+
+  let html = section('needs','⚠','Needs you',`${blocked.length} stuck`,'blocked & ownerless work — act here',
+        blocked.length?blocked.map(needsRow).join(''):'', 'Nothing stuck — the board is clear.');
+  html += `<div class="rows" style="margin-top:8px">${orphanBlock}</div>`;
+  html += section('working','●','Working',`${working.length} moving`,'in motion — for your awareness',
+        working.length?working.map(workingRow).join(''):'', 'No agents currently working.');
+  html += section('idle','○','Idle',`${idle.length} free`,'unused capacity — assign or stand down',
+        idle.length?idle.map(idleRow).join(''):'', 'No idle agents.');
+
+  $('#board').innerHTML=html;
+  banner();
+}
+
+function togglePop(btn){
+  const pop=btn.parentElement.querySelector('.pop'); const open=pop.classList.contains('open');
+  document.querySelectorAll('.pop.open').forEach(p=>p.classList.remove('open'));
+  if(!open){ pop.classList.add('open'); pop.querySelectorAll('.pop-item').forEach(it=>it.onclick=()=>assign(pop.dataset.agent,it.dataset.name)); }
+}
+document.addEventListener('click',e=>{ if(!e.target.closest('.pop-wrap')) document.querySelectorAll('.pop.open').forEach(p=>p.classList.remove('open')); });
+$('#assign-first').onclick=function(e){ e.stopPropagation();
+  const first=unownedBlocked().sort((a,b)=>parseInt(b.age)-parseInt(a.age))[0]; if(!first) return;
+  const row=document.getElementById('row-'+first.id); row.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(()=>{const b=row.querySelector('.actions .btn.gold'); if(b) togglePop(b);},350);
+};
+function assign(agentId,owner){
+  if(agentId==='orphan'){ document.querySelectorAll('.pop.open').forEach(p=>p.classList.remove('open')); toast(`Assigned orphan issue → <span class="k">${owner==='__self__'?'Eric':owner}</span>`); return; }
+  const a=DATA.find(x=>x.id===agentId); if(!a) return;
+  const who=owner==='__self__'?'Eric (you)':owner;
+  a.state='running'; a.age='just now'; a.chain=null;
+  a.focus=`Owner assigned to ${a.ref} — now ${who==='Eric (you)'?'with you':'with '+who}; work resuming`;
+  document.querySelectorAll('.pop.open').forEach(p=>p.classList.remove('open')); render();
+  const row=document.getElementById('row-'+a.id); if(row) row.classList.add('flash');
+  toast(`Assigned ${a.ref} → <span class="k">${who}</span> · moved to Working`);
+}
+function standDown(agentId){ const a=DATA.find(x=>x.id===agentId); if(!a) return;
+  const row=document.getElementById('row-'+agentId); if(row) row.style.opacity='0.35';
+  setTimeout(()=>{ DATA=DATA.filter(x=>x.id!==agentId); render(); toast(`Stood down ${a.name} · agent paused`); },380);
+}
+function toast(msg){ const t=$('#toast'); t.innerHTML=msg; t.classList.add('show'); clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('show'),2200); }
+render();
+</script>
+</body>
+</html>

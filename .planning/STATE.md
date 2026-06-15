@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: Truthful & Legible Situation Room
 status: executing
-stopped_at: Completed 19-04-PLAN.md
-last_updated: "2026-06-15T15:47:57.200Z"
+stopped_at: Phases 19+20 code-complete & verified (passed-with-rider); one batched operator window remains to close v1.5.0
+last_updated: "2026-06-15T16:01:12.872Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 12
@@ -1576,9 +1576,9 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
 
 ## Session Continuity
 
-**Last session:** 2026-06-15T15:46:50.819Z
+**Last session:** 2026-06-15T16:01:12.849Z
 
-**Stopped at:** Completed 19-04-PLAN.md
+**Stopped at:** Phases 19+20 code-complete & verified (passed-with-rider); one batched operator window remains to close v1.5.0
 
 **Plan 11-02 decisions:**
 

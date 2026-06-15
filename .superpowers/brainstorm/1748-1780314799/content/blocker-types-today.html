@@ -1,0 +1,98 @@
+<h2>Your nine blocked items — what are they <em>actually</em> waiting on?</h2>
+<p class="subtitle">
+  Today every blocked row wears the same <strong>Assign owner ▾</strong> button — but the chain
+  flattener already knows there are <strong>five different kinds</strong> of "blocked," and only one
+  of them is really an ownership problem. The plain-English unblock step (shown in gold) is
+  <em>computed and then hidden</em>. <br><br>
+  <strong>Which of these are actually showing up in your nine?</strong> Select all you recognize —
+  this tells me where to aim.
+</p>
+
+<style>
+  .brow { background:#1c1a17; border:1px solid #3a352e; border-radius:8px; padding:10px 12px;
+          margin-top:10px; font-size:13px; color:#e7e2d8; }
+  .brow .leaf { color:#b9b0a0; font-family:ui-monospace,monospace; font-size:12px; }
+  .brow .today { display:block; margin-top:4px; color:#cfc8bb; }
+  .brow .wrongbtn { display:inline-block; margin-top:8px; padding:3px 10px; border-radius:6px;
+                    background:#2a2723; border:1px solid #5a4b2e; color:#9c8a5e;
+                    font-size:12px; text-decoration:line-through; opacity:.8; }
+  .brow .real { display:block; margin-top:9px; padding-top:8px; border-top:1px dashed #3a352e;
+                color:#e8c879; font-size:12.5px; }
+  .brow .real b { color:#f3d98a; }
+  .tag { font-family:ui-monospace,monospace; font-size:10.5px; color:#8a8275;
+         text-transform:none; letter-spacing:0; }
+</style>
+
+<div class="options" data-multiselect>
+
+  <div class="option" data-choice="awaiting-party" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Awaiting a named party <span class="tag">HUMAN_ACTION_ON</span></h3>
+      <p>A specific person or agent has to do one thing before this can move — you, the CEO, a board member, or another employee.</p>
+      <div class="brow">
+        <span class="leaf">BEAAA-43 · CFO</span>
+        <span class="today">today: "BEAAA-43 has no owner" <span class="wrongbtn">Assign owner ▾</span></span>
+        <span class="real">the truth it hides: <b>confirm broker-comm % to the CFO (~5 min)</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="unowned" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Genuinely unowned <span class="tag">__unowned__</span></h3>
+      <p>The chain dead-ends with nobody identified to act. <strong>This is the one case where "assign an owner" is actually the right move.</strong></p>
+      <div class="brow">
+        <span class="leaf">BEAAA-512 · Ops</span>
+        <span class="today">today: "BEAAA-512 has no owner" <span class="wrongbtn" style="text-decoration:none;border-color:#3d6b3d;color:#8fc98f;">Assign owner ▾</span></span>
+        <span class="real">here the button is correct — just buried among the wrong ones</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="self-resolving" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Self-resolving <span class="tag">SELF_RESOLVING</span></h3>
+      <p>Has an ETA and will clear on its own. <strong>No action needed</strong> — it shouldn't be demanding anything from you.</p>
+      <div class="brow">
+        <span class="leaf">BEAAA-88 · Research</span>
+        <span class="today">today: "BEAAA-88 has no owner" <span class="wrongbtn">Assign owner ▾</span></span>
+        <span class="real">the truth it hides: <b>clears itself by Tue 3pm — just waiting</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="external" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>External blocker <span class="tag">EXTERNAL</span></h3>
+      <p>Waiting on something outside the org entirely (a vendor, a signature, a third party). Assigning an internal agent does nothing.</p>
+      <div class="brow">
+        <span class="leaf">BEAAA-204 · Legal</span>
+        <span class="today">today: "BEAAA-204 has no owner" <span class="wrongbtn">Assign owner ▾</span></span>
+        <span class="real">the truth it hides: <b>blocked on outside counsel — chase externally</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="cycle" onclick="toggleSelect(this)">
+    <div class="letter">E</div>
+    <div class="content">
+      <h3>Dependency cycle <span class="tag">CYCLE</span></h3>
+      <p>A waits on B waits on A. A structural knot — needs you to break the loop, not assign a person.</p>
+      <div class="brow">
+        <span class="leaf">BEAAA-301 → BEAAA-305 → BEAAA-301</span>
+        <span class="today">today: "BEAAA-301 has no owner" <span class="wrongbtn">Assign owner ▾</span></span>
+        <span class="real">the truth it hides: <b>circular dependency — break the loop</b></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:18px;">
+  Don't worry about being precise — even "mostly A, a couple of B" in the terminal is perfect.
+  If you're not sure which type something is, that's useful too.
+</p>

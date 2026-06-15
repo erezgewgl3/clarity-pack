@@ -1,0 +1,470 @@
+- generic [ref=e4]:
+  - link "Skip to Main Content" [ref=e5] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e6]:
+    - generic [ref=e8]:
+      - complementary [ref=e10]:
+        - generic [ref=e11]:
+          - button "Open IFA workspace switcher" [ref=e12]:
+            - generic [ref=e13]:
+              - generic [ref=e14]:
+                - img [ref=e15]
+                - generic [ref=e16]: I
+              - generic [ref=e17]: IFA
+            - img
+          - link "Open search" [ref=e18] [cursor=pointer]:
+            - /url: /BEAAA/search
+            - img
+          - button "Collapse sidebar" [expanded] [ref=e19]:
+            - img
+        - navigation [ref=e20]:
+          - generic [ref=e21]:
+            - button "New Task" [ref=e22]:
+              - img [ref=e23]
+              - generic [ref=e26]: New Task
+            - link "Dashboard 3 live" [ref=e803] [cursor=pointer]:
+              - /url: /BEAAA/dashboard
+              - img [ref=e29]
+              - generic [ref=e34]: Dashboard
+              - generic [ref=e39]: 3 live
+            - link "Inbox 75" [ref=e40] [cursor=pointer]:
+              - /url: /BEAAA/inbox
+              - img [ref=e42]
+              - generic [ref=e45]: Inbox
+              - generic [ref=e46]: "75"
+          - generic [ref=e47]:
+            - generic [ref=e51]: Work
+            - generic [ref=e52]:
+              - link "Tasks" [ref=e53] [cursor=pointer]:
+                - /url: /BEAAA/issues
+                - img [ref=e55]
+                - generic [ref=e58]: Tasks
+              - link "Routines" [ref=e59] [cursor=pointer]:
+                - /url: /BEAAA/routines
+                - img [ref=e61]
+                - generic [ref=e66]: Routines
+              - link "Goals" [ref=e67] [cursor=pointer]:
+                - /url: /BEAAA/goals
+                - img [ref=e69]
+                - generic [ref=e73]: Goals
+              - link "Artifacts" [ref=e74] [cursor=pointer]:
+                - /url: /BEAAA/artifacts
+                - img [ref=e76]
+                - generic [ref=e80]: Artifacts
+              - generic [ref=e81]:
+                - button "Situation Room" [ref=e83]
+                - button "Daily Bulletin" [ref=e85]
+                - button "Employee Chat" [ref=e87]
+          - generic [ref=e88]:
+            - generic [ref=e90]:
+              - button "Collapse Projects" [expanded] [ref=e91]:
+                - img [ref=e92]
+              - button "Projects section actions" [ref=e94]:
+                - generic [ref=e95]: Projects
+              - button "New project" [ref=e96]:
+                - img
+            - generic [ref=e98]:
+              - generic [ref=e99]:
+                - button "Onboarding Open actions for Onboarding" [ref=e100]:
+                  - generic [ref=e102]:
+                    - link "Onboarding" [ref=e103] [cursor=pointer]:
+                      - /url: /BEAAA/projects/onboarding/issues
+                      - img [ref=e105]
+                      - generic [ref=e107]: Onboarding
+                    - button "Open actions for Onboarding":
+                      - img
+                - button "ARE Scanner v0.1 Open actions for ARE Scanner v0.1" [ref=e108]:
+                  - generic [ref=e110]:
+                    - link "ARE Scanner v0.1" [ref=e111] [cursor=pointer]:
+                      - /url: /BEAAA/projects/are-scanner-v0-1/issues
+                      - img [ref=e113]
+                      - generic [ref=e115]: ARE Scanner v0.1
+                    - button "Open actions for ARE Scanner v0.1":
+                      - img
+              - status [ref=e116]
+          - generic [ref=e117]:
+            - generic [ref=e119]:
+              - button "Collapse Agents" [expanded] [ref=e120]:
+                - img [ref=e121]
+              - button "Agents section actions" [ref=e123]:
+                - generic [ref=e124]: Agents
+              - button "New agent" [ref=e125]:
+                - img
+            - generic [ref=e127]:
+              - generic [ref=e128]:
+                - link "CEO 1 live" [ref=e804] [cursor=pointer]:
+                  - /url: /BEAAA/agents/ceo
+                  - img [ref=e130]
+                  - generic [ref=e133]: CEO
+                  - generic [ref=e809]: 1 live
+                - button "Open actions for CEO":
+                  - img
+              - generic [ref=e134]:
+                - link "Editor-Agent" [ref=e135] [cursor=pointer]:
+                  - /url: /BEAAA/agents/editor-agent
+                  - img [ref=e136]
+                  - generic [ref=e139]: Editor-Agent
+                - button "Open actions for Editor-Agent":
+                  - img
+              - generic [ref=e140]:
+                - link "Head of Underwriting & AI Risk" [ref=e141] [cursor=pointer]:
+                  - /url: /BEAAA/agents/head-of-underwriting-ai-risk
+                  - img [ref=e142]
+                  - generic [ref=e145]: Head of Underwriting & AI Risk
+                - button "Open actions for Head of Underwriting & AI Risk":
+                  - img
+              - generic [ref=e146]:
+                - link "Actuary" [ref=e147] [cursor=pointer]:
+                  - /url: /BEAAA/agents/actuary
+                  - img [ref=e148]
+                  - generic [ref=e152]: Actuary
+                - button "Open actions for Actuary":
+                  - img
+              - generic [ref=e153]:
+                - link "Auditor" [ref=e154] [cursor=pointer]:
+                  - /url: /BEAAA/agents/auditor
+                  - img [ref=e155]
+                  - generic [ref=e158]: Auditor
+                - button "Open actions for Auditor":
+                  - img
+              - generic [ref=e159]:
+                - link "CBDO" [ref=e160] [cursor=pointer]:
+                  - /url: /BEAAA/agents/cbdo
+                  - img [ref=e161]
+                  - generic [ref=e165]: CBDO
+                - button "Open actions for CBDO":
+                  - img
+              - generic [ref=e166]:
+                - link "CFO" [ref=e167] [cursor=pointer]:
+                  - /url: /BEAAA/agents/cfo
+                  - img [ref=e168]
+                  - generic [ref=e171]: CFO
+                - button "Open actions for CFO":
+                  - img
+              - generic [ref=e172]:
+                - link "CMO" [ref=e173] [cursor=pointer]:
+                  - /url: /BEAAA/agents/cmo
+                  - img [ref=e174]
+                  - generic [ref=e179]: CMO
+                - button "Open actions for CMO":
+                  - img
+              - generic [ref=e180]:
+                - link "CSO 1 live" [ref=e181] [cursor=pointer]:
+                  - /url: /BEAAA/agents/cso
+                  - img [ref=e182]
+                  - generic [ref=e190]: CSO
+                  - generic [ref=e195]: 1 live
+                - button "Open actions for CSO":
+                  - img
+              - generic [ref=e196]:
+                - link "CTO 1 live" [ref=e197] [cursor=pointer]:
+                  - /url: /BEAAA/agents/cto
+                  - img [ref=e198]
+                  - generic [ref=e201]: CTO
+                  - generic [ref=e206]: 1 live
+                - button "Open actions for CTO":
+                  - img
+              - generic [ref=e207]:
+                - link "Head of Compliance" [ref=e208] [cursor=pointer]:
+                  - /url: /BEAAA/agents/head-of-compliance
+                  - img [ref=e209]
+                  - generic [ref=e211]: Head of Compliance
+                - button "Open actions for Head of Compliance":
+                  - img
+              - generic [ref=e212]:
+                - link "Legal Coordinator" [ref=e213] [cursor=pointer]:
+                  - /url: /BEAAA/agents/legal-coordinator
+                  - img [ref=e214]
+                  - generic [ref=e217]: Legal Coordinator
+                - button "Open actions for Legal Coordinator":
+                  - img
+              - generic [ref=e218]:
+                - link "Underwriter" [ref=e219] [cursor=pointer]:
+                  - /url: /BEAAA/agents/underwriter
+                  - img [ref=e220]
+                  - generic [ref=e222]: Underwriter
+                - button "Open actions for Underwriter":
+                  - img
+              - generic [ref=e223]:
+                - link "Claims Architect" [ref=e224] [cursor=pointer]:
+                  - /url: /BEAAA/agents/claims-architect
+                  - img [ref=e225]
+                  - generic [ref=e229]: Claims Architect
+                - button "Open actions for Claims Architect":
+                  - img
+              - generic [ref=e230]:
+                - link "Designer" [ref=e231] [cursor=pointer]:
+                  - /url: /BEAAA/agents/designer
+                  - img [ref=e232]
+                  - generic [ref=e235]: Designer
+                - button "Open actions for Designer":
+                  - img
+              - generic [ref=e236]:
+                - link "Scanner Engineer" [ref=e237] [cursor=pointer]:
+                  - /url: /BEAAA/agents/scanner-engineer
+                  - img [ref=e238]
+                  - generic [ref=e241]: Scanner Engineer
+                - button "Open actions for Scanner Engineer":
+                  - img
+              - generic [ref=e242]:
+                - 'link "Scanner Engineer #2" [ref=e243] [cursor=pointer]':
+                  - /url: /BEAAA/agents/scanner-engineer-2
+                  - img [ref=e244]
+                  - generic [ref=e248]: "Scanner Engineer #2"
+                - 'button "Open actions for Scanner Engineer #2"':
+                  - img
+              - generic [ref=e249]:
+                - 'link "Scanner Engineer #3" [ref=e250] [cursor=pointer]':
+                  - /url: /BEAAA/agents/scanner-engineer-3
+                  - img [ref=e251]
+                  - generic [ref=e258]: "Scanner Engineer #3"
+                - 'button "Open actions for Scanner Engineer #3"':
+                  - img
+          - generic [ref=e259]:
+            - generic [ref=e263]: Company
+            - generic [ref=e264]:
+              - link "Org" [ref=e265] [cursor=pointer]:
+                - /url: /BEAAA/org
+                - img [ref=e267]
+                - generic [ref=e272]: Org
+              - link "Skills" [ref=e273] [cursor=pointer]:
+                - /url: /BEAAA/skills
+                - img [ref=e275]
+                - generic [ref=e285]: Skills
+              - link "Costs" [ref=e286] [cursor=pointer]:
+                - /url: /BEAAA/costs
+                - img [ref=e288]
+                - generic [ref=e290]: Costs
+              - link "Activity" [ref=e291] [cursor=pointer]:
+                - /url: /BEAAA/activity
+                - img [ref=e293]
+                - generic [ref=e297]: Activity
+              - link "Settings" [ref=e298] [cursor=pointer]:
+                - /url: /BEAAA/company/settings
+                - img [ref=e300]
+                - generic [ref=e303]: Settings
+      - button "Open account menu" [ref=e305]:
+        - generic [ref=e307]: BO
+        - generic [ref=e308]: Board
+      - separator "Resize sidebar" [ref=e309]
+    - generic [ref=e310]:
+      - navigation "breadcrumb" [ref=e314]:
+        - list [ref=e315]:
+          - listitem [ref=e316]:
+            - link "Tasks" [ref=e317] [cursor=pointer]:
+              - /url: /BEAAA/issues
+          - listitem [ref=e318]:
+            - img [ref=e319]
+          - listitem [ref=e321]:
+            - 'link "CBDO: Phase A scorecard — Week 3 capacity + LOI row by Fri 2026-06-19 13:00 ET" [disabled] [ref=e322]'
+      - generic [ref=e323]:
+        - main [ref=e324]:
+          - generic [ref=e325]:
+            - navigation [ref=e326]:
+              - link "Monday 09:00 — CEO cascade to direct reports" [ref=e328] [cursor=pointer]:
+                - /url: /BEAAA/issues/BEAAA-1560
+              - generic [ref=e329]:
+                - img [ref=e330]
+                - 'link "CSO: 30-day Phase A scorecard — weekly into CEO Friday status (window 6/01–6/29)" [ref=e332] [cursor=pointer]':
+                  - /url: /BEAAA/issues/BEAAA-1592
+              - generic [ref=e333]:
+                - img [ref=e334]
+                - 'link "CSO: Phase A scorecard — Week 3 entry (Fri 2026-06-19) into CEO 17:00 ET status" [ref=e336] [cursor=pointer]':
+                  - /url: /BEAAA/issues/BEAAA-4840
+              - img [ref=e337]
+              - generic [ref=e339]: "CBDO: Phase A scorecard — Week 3 capacity + LOI row by Fri 2026-06-19 13:00 ET"
+            - generic [ref=e340]:
+              - generic [ref=e341]:
+                - generic "In Review" [ref=e342] [cursor=pointer]
+                - img [ref=e344] [cursor=pointer]
+                - generic [ref=e346]: BEAAA-4842
+                - generic [ref=e347]:
+                  - img [ref=e348]
+                  - text: No project
+                - generic [ref=e350]:
+                  - button "Copy task as markdown" [ref=e351]:
+                    - img
+                  - button "Show properties":
+                    - img
+                  - button "More task actions" [ref=e352]:
+                    - img
+              - 'heading "CBDO: Phase A scorecard — Week 3 capacity + LOI row by Fri 2026-06-19 13:00 ET" [level=2] [ref=e353] [cursor=pointer]'
+              - textbox "Add a description..." [ref=e354]:
+                - generic [ref=e355]:
+                  - generic [ref=e357]:
+                    - heading "Purpose" [level=2] [ref=e358]
+                    - paragraph [ref=e810]:
+                      - text: Provide the CBDO-owned Week 3 input for
+                      - 'link "Issue BEAAA-4840: CSO: Phase A scorecard — Week 3 entry (Fri 2026-06-19) into CEO 17:00 ET status" [ref=e811] [cursor=pointer]':
+                        - /url: /BEAAA/issues/BEAAA-4840
+                        - generic "Blocked" [ref=e812]
+                        - text: BEAAA-4840
+                      - text: and
+                      - 'link "Issue BEAAA-1592: CSO: 30-day Phase A scorecard — weekly into CEO Friday status (window 6/01–6/29)" [ref=e813] [cursor=pointer]':
+                        - /url: /BEAAA/issues/BEAAA-1592
+                        - generic "Blocked" [ref=e814]
+                        - text: phase-a-scorecard-v1
+                      - text: by
+                      - strong [ref=e815]: Fri 2026-06-19 13:00 ET
+                      - text: .
+                    - heading "Required input" [level=2] [ref=e365]
+                    - list [ref=e366]:
+                      - listitem [ref=e816]: "Capacity-conversation count by stage: live / advanced / closed-won / closed-lost-or-paused."
+                      - listitem [ref=e817]: Written next-step for each counted capacity conversation. Verbal-only movement counts as zero.
+                      - listitem [ref=e818]: LOIs signed cumulative-to-window-date; procurement intake count; named insurance-line entry count.
+                      - listitem [ref=e819]: Named near-term LOI candidates only if a real warm-intro path and needed-by exist.
+                    - heading "Output format" [level=2] [ref=e371]
+                    - paragraph [ref=e820]:
+                      - text: Post a comment on
+                      - 'link "Issue BEAAA-4840: CSO: Phase A scorecard — Week 3 entry (Fri 2026-06-19) into CEO 17:00 ET status" [ref=e821] [cursor=pointer]':
+                        - /url: /BEAAA/issues/BEAAA-4840
+                        - generic "Blocked" [ref=e822]
+                        - text: BEAAA-4840
+                      - text: or this child with the values above. If the value is zero, say zero explicitly; silence becomes a CSO GAP cell after 13:00 ET.
+                    - heading "Deadline" [level=2] [ref=e375]
+                    - paragraph [ref=e823]: Fri 2026-06-19 13:00 ET. CSO ships the consolidated cell by 16:30 ET.
+                  - button "Show more" [ref=e378]:
+                    - text: Show more
+                    - img
+            - button "New Sub-task" [ref=e380]:
+              - img
+              - text: New Sub-task
+            - generic [ref=e382]:
+              - button "Upload attachment" [ref=e383]:
+                - img
+                - generic [ref=e384]: Upload attachment
+              - button "New document" [ref=e385]:
+                - img
+                - generic [ref=e386]: New document
+            - generic [ref=e387]:
+              - tablist [ref=e388]:
+                - tab "Chat" [ref=e389]:
+                  - img
+                  - text: Chat
+                - tab "Activity" [ref=e390]:
+                  - img
+                  - text: Activity
+                - tab "Related work" [ref=e391]:
+                  - img
+                  - text: Related work
+                - tab "Reader" [active] [selected] [ref=e392]
+              - tabpanel [ref=e824]:
+                - generic [ref=e825]:
+                  - paragraph [ref=e826]: Loading Reader view…
+                  - region "Notifications"
+        - complementary [ref=e663]:
+          - generic [ref=e664]:
+            - generic [ref=e665]:
+              - generic [ref=e666]: Properties
+              - button [ref=e667]:
+                - img
+            - generic [ref=e672]:
+              - generic [ref=e673]:
+                - generic [ref=e674]:
+                  - generic [ref=e675]: Status
+                  - button "In Review In Review" [ref=e677] [cursor=pointer]:
+                    - generic "In Review" [ref=e678]
+                    - generic [ref=e679]: In Review
+                - generic [ref=e680]:
+                  - generic [ref=e681]: Priority
+                  - button "High" [ref=e683] [cursor=pointer]:
+                    - img [ref=e685]
+                    - generic [ref=e687]: High
+                - generic [ref=e688]:
+                  - generic [ref=e689]: Labels
+                  - button "No labels" [ref=e691] [cursor=pointer]:
+                    - img [ref=e692]
+                    - generic [ref=e695]: No labels
+                - generic [ref=e696]:
+                  - generic [ref=e697]: Assignee
+                  - generic [ref=e698]:
+                    - button "CB CBDO" [ref=e699] [cursor=pointer]:
+                      - generic [ref=e700]:
+                        - generic [ref=e702]: CB
+                        - generic [ref=e703]: CBDO
+                    - link [ref=e704] [cursor=pointer]:
+                      - /url: /BEAAA/agents/571bcfb6-d83d-4159-a361-06163ff6c40c
+                      - img [ref=e705]
+                - generic [ref=e708]:
+                  - generic [ref=e709]: Project
+                  - button "No project" [ref=e711] [cursor=pointer]:
+                    - img [ref=e712]
+                    - generic [ref=e714]: No project
+                - generic [ref=e715]:
+                  - generic [ref=e716]: Parent
+                  - generic [ref=e717]:
+                    - 'button "BEAAA-4840 CSO: Phase A scorecard — Week 3 entry (Fri 2026-06-19) into CEO 17:00 ET status" [ref=e718] [cursor=pointer]':
+                      - generic [ref=e719]: "BEAAA-4840 CSO: Phase A scorecard — Week 3 entry (Fri 2026-06-19) into CEO 17:00 ET status"
+                    - link [ref=e720] [cursor=pointer]:
+                      - /url: /BEAAA/issues/BEAAA-4840
+                      - img [ref=e721]
+                - generic [ref=e724]:
+                  - generic [ref=e725]: Blocked by
+                  - button "Add blocker" [ref=e727]:
+                    - img [ref=e728]
+                    - text: Add blocker
+                - generic [ref=e729]:
+                  - generic [ref=e730]: Blocking
+                  - 'link "Task BEAAA-4840: CSO: Phase A scorecard — Week 3 entry (Fri 2026-06-19) into CEO 17:00 ET status" [ref=e733] [cursor=pointer]':
+                    - /url: /BEAAA/issues/BEAAA-4840
+                    - generic "Blocked" [ref=e734]
+                    - generic [ref=e735]: BEAAA-4840
+                - generic [ref=e736]:
+                  - generic [ref=e737]: Sub-tasks
+                  - button "Add sub-task" [ref=e740]:
+                    - img [ref=e741]
+                    - text: Add sub-task
+                - generic [ref=e742]:
+                  - generic [ref=e743]: Related Tasks
+                  - generic [ref=e745]:
+                    - 'link "Task BEAAA-101: CBDO: C− ceded-layer pre-circulation to reinsurers (pre-2026-05-09)" [ref=e746] [cursor=pointer]':
+                      - /url: /BEAAA/issues/BEAAA-101
+                      - generic "In Review" [ref=e747]
+                      - generic [ref=e748]: BEAAA-101
+                    - 'link "Task BEAAA-1592: CSO: 30-day Phase A scorecard — weekly into CEO Friday status (window 6/01–6/29)" [ref=e749] [cursor=pointer]':
+                      - /url: /BEAAA/issues/BEAAA-1592
+                      - generic "Blocked" [ref=e750]
+                      - generic [ref=e751]: BEAAA-1592
+                    - 'link "Task BEAAA-2841: Don''t send any external email before sending me for approval" [ref=e752] [cursor=pointer]':
+                      - /url: /BEAAA/issues/BEAAA-2841
+                      - generic "Done" [ref=e753]
+                      - generic [ref=e755]: BEAAA-2841
+                    - 'link "Task BEAAA-663: Ship Tier A LOI template to first warm-intro batch — Founder ruling BEAAA-649 Q3 A" [ref=e756] [cursor=pointer]':
+                      - /url: /BEAAA/issues/BEAAA-663
+                      - generic "In Review" [ref=e757]
+                      - generic [ref=e758]: BEAAA-663
+                - generic [ref=e759]:
+                  - generic [ref=e760]: Reviewers
+                  - button "None" [ref=e762] [cursor=pointer]:
+                    - generic [ref=e763]: None
+                - generic [ref=e764]:
+                  - generic [ref=e765]: Approvers
+                  - button "None" [ref=e767] [cursor=pointer]:
+                    - generic [ref=e768]: None
+                - generic [ref=e769]:
+                  - generic [ref=e770]: Monitor
+                  - button "Next check in 4d Jun 19, 2026" [ref=e772] [cursor=pointer]:
+                    - generic [ref=e773]:
+                      - img [ref=e774]
+                      - generic "Next check Jun 19, 2026" [ref=e777]: Next check in 4d
+                      - generic "Next check Jun 19, 2026" [ref=e778]: Jun 19, 2026
+              - generic [ref=e779]:
+                - generic [ref=e780]:
+                  - generic [ref=e781]: Created by
+                  - link "CS CSO" [ref=e783] [cursor=pointer]:
+                    - /url: /BEAAA/agents/0460b110-6b57-4d63-951e-0794dc11bb34
+                    - generic [ref=e784]:
+                      - generic [ref=e786]: CS
+                      - generic [ref=e787]: CSO
+                - generic [ref=e788]:
+                  - generic [ref=e789]: Started
+                  - generic [ref=e791]: Jun 12, 2026, 8:09 PM
+                - generic [ref=e792]:
+                  - generic [ref=e793]: Created
+                  - generic [ref=e795]: Jun 12, 2026, 8:08 PM
+                - generic [ref=e796]:
+                  - generic [ref=e797]: Updated
+                  - generic [ref=e799]: 2d ago
+  - generic [ref=e800]:
+    - heading "Command Palette" [level=2] [ref=e801]
+    - paragraph [ref=e802]: Search for a command to run...
