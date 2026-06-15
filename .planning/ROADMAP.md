@@ -162,7 +162,7 @@ Plans:
   4. The stale plugin-list version label is refreshed (continuing the v1.4.3 partial refresh) and automated DO backups are confirmed ON — the bookend that makes continuous flag-gated BEAAA deploy safe (version-bump BOTH package.json AND src/manifest.ts per DEPLOY-RUNBOOK).
 **Plans**: 3 plans
 - [x] 20-01-PLAN.md — Wave 1: fix the test-debt (snapshot-prefetch count drift D-05, U7 chat-watchdog wall-clock flake HYG-03, the 7 env-dependent safety-CLI harness failures D-06) so the full sweep is honestly green
-- [ ] 20-02-PLAN.md — Wave 2: wire the SC5 full surface×terminal-kind matrix into CI + widen the CI test glob to recurse (HYG-01 / D-03) so ~126 previously-silent nested tests + the safety-CLI suite actually run; full honest-green sweep verification
+- [x] 20-02-PLAN.md — Wave 2: wire the SC5 full surface×terminal-kind matrix into CI + widen the CI test glob to recurse (HYG-01 / D-03) so ~126 previously-silent nested tests + the safety-CLI suite actually run; full honest-green sweep verification
 - [ ] 20-03-PLAN.md — Wave 1 (autonomous:false): verify the two-source version label is 1.8.0 (no re-bump, D-02) + operator-confirm automated DO backups ON for AriClaw (HYG-04 deploy bookend, batched with the end-of-milestone operator window)
 
 ## Phase Details (v1.4.0)
@@ -277,7 +277,7 @@ Plans:
 | 17. Structured human-wait + truthful verdicts | 6/6 | Complete   | 2026-06-11 |
 | 18. No rabbit-holes & plain-English | 4/4 | Complete    | 2026-06-14 |
 | 19. Action-cards async re-architecture | 4/5 | In Progress|  |
-| 20. Hygiene & honestly-green CI | 1/3 | In Progress|  |
+| 20. Hygiene & honestly-green CI | 2/3 | In Progress|  |
 
 ### v1.4.0 phase tracking
 

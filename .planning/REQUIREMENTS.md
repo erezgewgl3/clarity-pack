@@ -50,7 +50,7 @@
 
 ### Hygiene & honestly-green CI (Phase 20)
 
-- [ ] **HYG-01**: The SC5 full-matrix coverage runs in CI (every surface × every terminal kind).
+- [x] **HYG-01**: The SC5 full-matrix coverage runs in CI (every surface × every terminal kind).
 - [x] **HYG-02**: The 7 CHAT/CTT REQUIREMENTS traceability test failures are resolved (2026-06-15: re-pointed `test/phases/04-traceability.test.mjs` + `04.1-traceability.test.mjs` at `.planning/milestones/v1.0.0-REQUIREMENTS.md`, where the CHAT-01..11 / CTT-01..08 rows live + are marked Implemented; 9/9 green). The active v1.5.0 milestone doc stays free of closed-phase rows.
 - [x] **HYG-03**: The load-dependent chat-watchdog timing flake (`U7 WATCHDOG-FIRE-AND-FORGET`) is stabilized (condition-based, not a wall-clock threshold).
 - [ ] **HYG-04**: The stale plugin-list version label is refreshed and automated DO backups are confirmed ON (the continuous-deploy bookend prerequisite).
@@ -88,7 +88,7 @@
 | CARD-01 | Phase 19 | Complete |
 | CARD-02 | Phase 19 | Complete |
 | CARD-03 | Phase 19 | Complete |
-| HYG-01 | Phase 20 | Pending |
+| HYG-01 | Phase 20 | Complete |
 | HYG-02 | Phase 20 | Pending |
 | HYG-03 | Phase 20 | Complete |
 | HYG-04 | Phase 20 | Pending |
