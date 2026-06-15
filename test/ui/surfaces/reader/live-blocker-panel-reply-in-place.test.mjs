@@ -62,6 +62,35 @@ test('the dead replyInChat navigate-to-chat path for reply is removed', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Plan 21-04 Task 1 (STUCK-02 / D-3) — the 'nudge' (stuck) affordance is
+// RE-WIRED from a issues.requestWakeup button to the SAME shared
+// <ReplyInPlace variant="nudge">. The exhaustive switch's `case 'nudge'` sets
+// onAction = null (no wake button); the render mounts the primitive instead.
+// Extends the Phase-14 suite — the reply-branch assertions above hold unchanged.
+// ---------------------------------------------------------------------------
+
+test('isNudgeBranch is gated on the engine verdict actionAffordance === nudge', () => {
+  assert.match(CODE, /isNudgeBranch\s*=\s*data\.actionAffordance\s*===\s*'nudge'/);
+});
+
+test('the nudge branch mounts <ReplyInPlace> with variant chosen by isNudgeBranch', () => {
+  assert.match(CODE, /<ReplyInPlace\b/);
+  // The render mounts on EITHER branch and selects variant='nudge' for stuck.
+  assert.match(CODE, /isReplyBranch\s*\|\|\s*isNudgeBranch/);
+  assert.match(CODE, /variant=\{isNudgeBranch\s*\?\s*'nudge'\s*:\s*'answer'\}/);
+});
+
+test('the case nudge onAction is null — NO requestWakeup button for stuck (dead wake path removed)', () => {
+  // The exhaustive switch's nudge case sets onAction = null (handled by the
+  // primitive). The old `onAction = () => { void nudge( ... )}` wake wiring must
+  // be gone, and no requestWakeup dispatch survives anywhere in the panel.
+  assert.match(CODE, /case 'nudge':[\s\S]*?onAction\s*=\s*null;/);
+  assert.doesNotMatch(CODE, /onAction\s*=\s*\(\)\s*=>\s*\{?\s*void\s+nudge\(/);
+  assert.doesNotMatch(CODE, /requestWakeup/);
+  assert.doesNotMatch(CODE, /usePluginAction/);
+});
+
+// ---------------------------------------------------------------------------
 // reachable computed off data.terminal.kind (native here) — no inline Terminal.
 // ---------------------------------------------------------------------------
 

@@ -115,7 +115,52 @@ test('OwnerPickerPopover still renders for the assign branch (Phase 12 untouched
 });
 
 // ---------------------------------------------------------------------------
+// Plan 21-04 Task 1 (STUCK-01 / D-3) — the Watch-tier STUCK (nudge) branch
+// mounts the SAME shared <ReplyInPlace variant="nudge"> (reply-to-unstick),
+// gated on the engine verdict actionAffordance === 'nudge' (NOT a terminal.kind
+// list). The row stays in the QUIET Watch tier (no Needs-you promotion). The
+// reachable + needsDurabilityFlip pins hold for the nudge path exactly as the
+// reply path. Extends the Phase-14 suite — every reply-branch assertion above
+// still holds unchanged.
+// ---------------------------------------------------------------------------
+
+test('showNudge is gated STRICTLY on the engine verdict actionAffordance === nudge', () => {
+  assert.match(CODE, /showNudge\s*=\s*chain\?\.actionAffordance\s*===\s*'nudge'/);
+});
+
+test('the Watch-tier body mounts <ReplyInPlace variant="nudge"> on the nudge branch', () => {
+  // The nudge ReplyInPlace must carry variant="nudge" (the stuck-context copy).
+  assert.match(CODE, /<ReplyInPlace\s+variant="nudge"/);
+  // It is gated on showNudge inside the Watch-tier body.
+  assert.match(CODE, /showNudge\s*\?/);
+});
+
+test('the nudge mount passes the REAL reachable + needsDurabilityFlip (no terminal.kind proxy)', () => {
+  // Both reply AND nudge branches read the SAME real chain fields. The whole-file
+  // grep guarantees the nudge mount uses chain.terminalKind for reachable and
+  // chain.needsDurabilityFlip for the durable flip — never a terminal.kind proxy.
+  assert.match(CODE, /reachable=\{isReplyReachable\(chain\.terminalKind\)\}/);
+  assert.match(CODE, /needsDurabilityFlip=\{chain\.needsDurabilityFlip\}/);
+});
+
+test('the stuck row stays in the QUIET Watch tier (visualTierOf NOT forked for nudge)', () => {
+  // The nudge branch lives inside the Watch-tier body block; the row is NOT
+  // promoted to needs-you. visualTierOf is the single source (tier-utils.ts) — no
+  // re-derivation of the tier from the nudge affordance.
+  assert.match(CODE, /visualTier\s*===\s*'watch'\s*&&\s*chain\s*&&\s*!isChainlessIdle/);
+  assert.doesNotMatch(CODE, /showNudge[\s\S]{0,40}needs-you/);
+});
+
+test('NO stale "assign an owner" copy remains on the stuck Watch path', () => {
+  // After the Phase-21 flip a stuck row is 'nudge', never 'assign' — the old
+  // "agent stuck · assign an owner" dead-end copy must be gone from this file.
+  assert.doesNotMatch(CODE, /agent stuck\s*·\s*assign an owner/);
+});
+
+// ---------------------------------------------------------------------------
 // NO_UUID_LEAK — the *Uuid fields are dispatch props only, never a render node.
+// (STUCK-06 — the existing whole-file JSX-text-node scan below covers the new
+//  nudge render path; no new exemption.)
 // ---------------------------------------------------------------------------
 
 test('NO_UUID_LEAK — no chain.leafIssueUuid / targetAgentUuid interpolated as a JSX text node', () => {
