@@ -31,3 +31,11 @@ entities.json
 
 # Claude Code tool state (harness-managed; not project artifact)
 .claude/
+
+# session/tooling artifacts (untracked 2026-06-15 milestone close)
+.playwright-mcp/
+.superpowers/
+.vscode/
+/*.png
+/snap.json
+/*chat-messages*.json

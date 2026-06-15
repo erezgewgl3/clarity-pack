@@ -1,8 +1,0 @@
-[    4664ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/issues/%3Cweekly-issue-id%3E#document-%3Cweekly-doc-key%3E:0
-[    6007ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/issues/%3Cweekly-issue-id%3E#document-%3Cweekly-doc-key%3E:0
-[    8086ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/issues/%3Cweekly-issue-id%3E#document-%3Cweekly-doc-key%3E:0
-[   12163ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/issues/%3Cweekly-issue-id%3E#document-%3Cweekly-doc-key%3E:0
-[   28167ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/issues/%3Cweekly-issue-id%3E#document-%3Cweekly-doc-key%3E:0
-[   29254ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/issues/%3Cweekly-issue-id%3E#document-%3Cweekly-doc-key%3E:0
-[   31335ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/issues/%3Cweekly-issue-id%3E#document-%3Cweekly-doc-key%3E:0
-[   35406ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/issues/%3Cweekly-issue-id%3E#document-%3Cweekly-doc-key%3E:0
