@@ -25,7 +25,6 @@
 import * as React from 'react';
 import {
   usePluginData,
-  usePluginAction,
   useHostLocation,
 } from '@paperclipai/plugin-sdk/ui/hooks';
 
@@ -198,8 +197,6 @@ function LiveBlockerPanelWithCompany({
   const nav = useHostNavigation();
   const { pathname } = useHostLocation();
   const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
-  const wakeAction = usePluginAction('issues.requestWakeup');
-  const [busy, setBusy] = React.useState(false);
 
   // WR-03 (14-REVIEW) — destructure `refresh` (PluginDataResult exposes a manual
   // refresh per the SDK) so a confirmed reply can force an immediate re-poll of
@@ -253,24 +250,14 @@ function LiveBlockerPanelWithCompany({
   // Plan 14-03 — the 'reply' affordance no longer navigates to chat; it mounts the
   // shared <ReplyInPlace> primitive (act-in-place, DO-01). The old replyInChat
   // navigate-to-chat callback is removed.
-
-  // 'nudge' → wake the stuck agent on the leaf issue (issues.requestWakeup),
-  // mirroring employee-row's wake. The leaf-issue UUID is the mutation target.
-  const nudge = React.useCallback(
-    async (issueUuid: string | null | undefined) => {
-      const wakeIssueId = issueUuid ?? issueId;
-      if (busy) return;
-      setBusy(true);
-      try {
-        await wakeAction({ companyId, issueId: wakeIssueId, userId: viewerUserId });
-      } catch {
-        // Honest no-throw: the host call is best-effort; the panel stays mounted.
-      } finally {
-        setBusy(false);
-      }
-    },
-    [busy, wakeAction, companyId, viewerUserId, issueId],
-  );
+  //
+  // Plan 21-03 Task 2 (STUCK-02 / D-3) — the 'nudge' affordance is RE-WIRED from
+  // a issues.requestWakeup button to the SAME shared <ReplyInPlace variant='nudge'>
+  // render branch (mirrors the reply branch below). The operator's reply posts a
+  // comment that resumes the stuck agent (Shape-B answer-comment recipe, Phase-10
+  // spike) — strictly higher-signal than a bare wake. The old requestWakeup nudge
+  // callback (and its busy/wakeAction state) are removed; nudge no longer renders
+  // a button (onAction = null below).
 
   if (!data) return null;
   const { terminal } = data;
@@ -298,6 +285,10 @@ function LiveBlockerPanelWithCompany({
   // ABSENT from this onAction switch and contributes no <button>; the dead
   // navigate-to-chat path is removed.
   const isReplyBranch = data.actionAffordance === 'reply';
+  // Plan 21-03 Task 2 (STUCK-02 / D-3) — the nudge (stuck) branch now mounts the
+  // SAME shared <ReplyInPlace> as reply (variant='nudge' below); both are render
+  // branches, NOT onAction handlers, so neither contributes a <button>.
+  const isNudgeBranch = data.actionAffordance === 'nudge';
   let onAction: (() => void) | null = null;
   switch (data.actionAffordance) {
     case 'open':
@@ -308,9 +299,9 @@ function LiveBlockerPanelWithCompany({
       onAction = null;
       break;
     case 'nudge':
-      onAction = () => {
-        void nudge(issueDispatchTarget);
-      };
+      // Plan 21-03 Task 2 — handled by <ReplyInPlace variant='nudge'> below; no
+      // requestWakeup button on this path (the dead wake wiring is removed).
+      onAction = null;
       break;
     case 'assign':
       // Plan 12-03 Task 2 (NY-03 / D-09 / T-12-11) + CR-01 (12-REVIEW) — the
@@ -381,7 +372,7 @@ function LiveBlockerPanelWithCompany({
        *  React text node; card.sourceIssueUuid is NOT on the mirror, so it can
        *  never be rendered (NO_UUID_LEAK by construction, D-10). Mirrors
        *  employee-row.tsx:374-404. */}
-      {data.actionAffordance !== 'reply' ? (
+      {!isReplyBranch && !isNudgeBranch ? (
         (() => {
           const card = data.actionCard;
           const estWords = card ? estBucketLabel(card.estBucket) : null;
@@ -408,8 +399,18 @@ function LiveBlockerPanelWithCompany({
        *  needs-you state right after a confirmed reply, instead of looking stale
        *  until the next background poll. Mirrors the Situation Room's
        *  onAssignSuccess force-refetch. */}
-      {isReplyBranch ? (
+      {/* Plan 21-03 Task 2 (STUCK-02 / D-3) — mount the ONE shared <ReplyInPlace>
+       *  for BOTH the reply AND nudge branches. variant='nudge' on the stuck branch
+       *  swaps in reply-to-unstick copy (21-02) WITHOUT changing dispatch — same
+       *  primitive, no copy. For nudge, needsDurabilityFlip stays false: the
+       *  Reader's BlockerChainResult carries NO leaf status field (comment-only,
+       *  spike-safe — NEVER proxied from terminal.kind). reachable computes off
+       *  data.terminal.kind (true for stuck after 21-01). leafIssueId = the open
+       *  issue ONLY for a single-hop chain (CR-01 honest degrade); leafIssueUuid =
+       *  the leaf mutation id (dispatch-only, NO_UUID_LEAK). */}
+      {isReplyBranch || isNudgeBranch ? (
         <ReplyInPlace
+          variant={isNudgeBranch ? 'nudge' : 'answer'}
           leafIssueId={data.pathIds.length <= 1 ? issueId : null}
           leafIssueUuid={issueDispatchTarget ?? null}
           awaitedPartyLabel={data.awaitedPartyLabel}
@@ -430,7 +431,6 @@ function LiveBlockerPanelWithCompany({
         <button
           type="button"
           className="clarity-blocker-action"
-          disabled={busy}
           onClick={onAction ?? undefined}
         >
           {actionLabel}
