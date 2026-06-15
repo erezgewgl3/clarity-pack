@@ -102,8 +102,19 @@ export function BlockedBacklogExpander({
                  *  reachable computed off the REAL row.terminalKind (14-04, no
                  *  inline Terminal); needsDurabilityFlip from the REAL
                  *  row.needsDurabilityFlip (no terminalKind proxy). */}
-                {row.actionAffordance === 'reply' ? (
+                {row.actionAffordance === 'reply' || row.actionAffordance === 'nudge' ? (
+                  /* Plan 21-03 Task 4 (STUCK-02 / D-3 / D-7) — a stuck row can
+                   *  reach the org-blocked backlog (it lists every org-wide blocked
+                   *  issue with no active agent). After the Phase-21 engine flip
+                   *  (21-01) a stuck row carries 'nudge', not 'assign', so it would
+                   *  otherwise fall to a bare "Open ↗" dead-end here. Mount the SAME
+                   *  shared <ReplyInPlace> as the reply branch with
+                   *  variant={'nudge'} (reply-to-unstick copy, no copy of the
+                   *  primitive). reachable off the REAL row.terminalKind (true for
+                   *  stuck after 21-01); leafIssueUuid is the leaf mutation id
+                   *  (dispatch-only, NO_UUID_LEAK). */
                   <ReplyInPlace
+                    variant={row.actionAffordance === 'nudge' ? 'nudge' : 'answer'}
                     leafIssueId={row.identifier}
                     leafIssueUuid={row.leafIssueUuid}
                     awaitedPartyLabel={row.awaitedPartyLabel}
@@ -119,14 +130,14 @@ export function BlockedBacklogExpander({
                   />
                 ) : (
                   <>
-                    {/* Plan 12-03 Task 2 (NY-03 / D-09 / T-12-08) — the Assign
-                     *  control (which dispatches situation.assignOwner, a REAL
-                     *  mutation) renders ONLY when the engine verdict says
+                    {/* Plan 12-03 Task 2 (NY-03 / D-09 / T-12-08) + Plan 21-03 (D-7)
+                     *  — the Assign control (which dispatches situation.assignOwner,
+                     *  a REAL mutation) renders ONLY when the engine verdict says
                      *  assignment is the answer: actionAffordance === 'assign' ⇔
-                     *  UNOWNED + AWAITING_AGENT_STUCK (after 12-01). We gate on the
-                     *  SAME single verdict the SR row + Reader panel read — NO
-                     *  terminal.kind list, NO ownerName string-match. Untouched by
-                     *  Phase 14. */}
+                     *  UNOWNED ONLY (after the Phase-21 engine flip; a stuck agent
+                     *  now carries 'nudge' → reply-to-unstick, handled above). We
+                     *  gate on the SAME single verdict the SR row + Reader panel
+                     *  read — NO terminal.kind list, NO ownerName string-match. */}
                     {row.actionAffordance === 'assign' ? (
                       <OwnerPickerPopover
                         // WR-02 (14-REVIEW / NO_UUID_LEAK) — leafIssueId is the

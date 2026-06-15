@@ -21,11 +21,12 @@ export type OrgBlockedRow = {
   // shared Terminal type so a 9th kind is a compile error here too. Was a bare
   // `string` (which silently accepted the legacy 4-kind set).
   terminalKind: Terminal['kind'];
-  // Plan 12-03 Task 1 (NY-03 / D-09) — the engine verdict affordance mirrored
-  // from the worker's OrgBlockedRow so the expander gates the OwnerPickerPopover
-  // on `actionAffordance === 'assign'` (the SAME verdict every surface reads).
-  // Typed off the shared union so a 6th affordance is a compile error in BOTH
-  // the worker emit and this mirror.
+  // Plan 12-03 Task 1 (NY-03 / D-09) + Plan 21-03 (D-7) — the engine verdict
+  // affordance mirrored from the worker's OrgBlockedRow so the expander gates the
+  // OwnerPickerPopover on `actionAffordance === 'assign'` (after Phase-21,
+  // assign ⇔ UNOWNED ONLY; stuck ⇔ 'nudge' → shared <ReplyInPlace>) — the SAME
+  // verdict every surface reads. Typed off the shared union so a 6th affordance
+  // is a compile error in BOTH the worker emit and this mirror.
   actionAffordance: BlockerChainResult['actionAffordance'];
   ownerName: string | null;
   ownerAgentId: string | null;

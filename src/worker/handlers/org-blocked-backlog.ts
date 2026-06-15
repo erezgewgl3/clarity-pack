@@ -125,13 +125,15 @@ export type OrgBlockedRow = {
    *  the UI never renders ownerAgentId as text). */
   humanAction: string;
   terminalKind: Terminal['kind'];
-  /** Plan 12-03 Task 1 (NY-03 / D-09) — the engine verdict's action affordance,
-   *  carried verbatim from chain.actionAffordance (classifyVerdict). The org-
-   *  blocked backlog expander gates the OwnerPickerPopover on
-   *  `actionAffordance === 'assign'` (UNOWNED + AWAITING_AGENT_STUCK after 12-01)
-   *  — the SAME single verdict every other surface reads, never a terminal.kind
-   *  list or an ownerName string-match. Typed off the shared union so a 6th
-   *  affordance is a compile error here AND in the UI mirror type. */
+  /** Plan 12-03 Task 1 (NY-03 / D-09) + Plan 21-03 (D-7) — the engine verdict's
+   *  action affordance, carried verbatim from chain.actionAffordance
+   *  (classifyVerdict). The org-blocked backlog expander gates the
+   *  OwnerPickerPopover on `actionAffordance === 'assign'` (after the Phase-21
+   *  engine flip, assign ⇔ UNOWNED ONLY; a stuck agent now carries 'nudge' ⇔
+   *  reply-to-unstick, mounted via the shared <ReplyInPlace> instead) — the SAME
+   *  single verdict every other surface reads, never a terminal.kind list or an
+   *  ownerName string-match. Typed off the shared union so a 6th affordance is a
+   *  compile error here AND in the UI mirror type. */
   actionAffordance: BlockerChainResult['actionAffordance'];
   /** Owner DISPLAY NAME or null. NO_UUID_LEAK: null renders "Unassigned" in
    *  the UI — NEVER the raw UUID. */

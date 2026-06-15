@@ -94,11 +94,14 @@ test('leafIssueUuid = the leaf mutation id via the dispatch-only const (NO_UUID_
 // WARNING 2 — the standalone blockerLine <p> is SUPPRESSED for the reply branch.
 // ---------------------------------------------------------------------------
 
-test('blockerLine <p> is guarded by affordance !== reply (no duplicate headline)', () => {
-  // The standalone blockerLine render must be conditional on a non-reply affordance.
+test('blockerLine <p> is guarded against BOTH reply and nudge (no duplicate headline)', () => {
+  // Plan 21-03 Task 2 (STUCK-02 / D-3) — the standalone blockerLine render must be
+  // SUPPRESSED for BOTH the reply AND nudge branches (each mounts <ReplyInPlace>,
+  // which renders its own namedAction line). The guard is `!isReplyBranch &&
+  // !isNudgeBranch`.
   assert.match(
     CODE,
-    /actionAffordance\s*!==\s*'reply'[\s\S]*?clarity-blocker-label[\s\S]*?blockerLine\(data\)/,
+    /!isReplyBranch\s*&&\s*!isNudgeBranch[\s\S]*?clarity-blocker-label[\s\S]*?blockerLine\(data\)/,
   );
 });
 

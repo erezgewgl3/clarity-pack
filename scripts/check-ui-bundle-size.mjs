@@ -236,7 +236,16 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // deliverable-preview.tsx; a lazy-load/replacement audit would reclaim far more
 // than these cumulative bumps add. Until that audit, one honest bump beats
 // crippling a legitimate feature; the SheetJS sentinel check is the real guard.
-const UI_BUNDLE_BYTES_CEILING = 761 * 1024; // 761 kB = 779,264 bytes
+//
+// Plan 21-03 (STUCK-01/02 / D-3) — mounting the shared <ReplyInPlace
+// variant='nudge'> on the stuck Watch-tier SR row + the backlog-expander nudge
+// branch (re-using the SAME primitive, no copy) added a small amount of
+// legitimate feature code; the Reader re-wire removed the dead wake path. Net
+// built bundle 779,264 → 779,715 bytes. Verified zero SheetJS sentinels (the
+// real bloat guard stays clean), so the delta is legitimate feature code.
+// Recalibrated per the same empirical precedent:
+//   ceil((779,715 + 3,072) / 1024) = 765 kB (783,360 bytes), ~3.6 kB headroom.
+const UI_BUNDLE_BYTES_CEILING = 765 * 1024; // 765 kB = 783,360 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

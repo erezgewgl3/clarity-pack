@@ -315,8 +315,8 @@ function LiveBlockerPanelWithCompany({
       // start). For a multi-hop chain it would send the operator to the page they
       // are already on (a no-op — the original CR-01 defect).
       //
-      // BlockerChainResult carries NO human leaf identifier — only
-      // targetIssueUuid (the leaf NODE id), which is mutation-only and must NEVER
+      // BlockerChainResult carries NO human leaf identifier — only the leaf NODE
+      // UUID (the dispatch id), which is mutation-only and must NEVER
       // enter a URL (NO_UUID_LEAK), and the Paperclip issue URL needs a HUMAN key
       // (paperclip-issue-url-pattern memory: /<prefix>/issues/<identifier>, a UUID
       // 404s). So for a multi-hop chain we cannot build a correct, leak-free leaf

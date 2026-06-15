@@ -212,26 +212,34 @@ test('CR-01 behavioral guard — a terminal whose label embeds a raw UUID scrubs
 });
 
 // ---------------------------------------------------------------------------
-// T1-C (no-rabbit-holes, 2026-06-15) — a Watch-tier stuck row must terminate
-// in a NAMED HUMAN ACTION, not a bare "— agent stuck" dead-end.
+// Plan 21-03 Task 1 (STUCK-01 / D-3) — SUPERSEDES T1-C. A Watch-tier stuck row
+// now mounts the shared <ReplyInPlace variant='nudge'> (reply-to-unstick) in
+// place of the former "assign an owner" copy. After the Phase-21 engine flip
+// (21-01) a stuck agent carries actionAffordance 'nudge', not 'assign', so the
+// OwnerPickerPopover no longer fires for stuck rows; the operator resumes the
+// agent by replying in place (Shape-B answer-comment recipe). The row stays in
+// the QUIET Watch tier (no Needs-you promotion). Owner reassignment stays
+// reachable via Open↗ / the leaf page (21-CONTEXT Deferred Ideas).
 // ---------------------------------------------------------------------------
 
-test('T1-C — the Watch-tier stuck label names the human action (assign an owner), not a dead-end', () => {
-  // The previous render produced `${leaf} — agent stuck` with no next step.
-  // The fix keeps the honest stall but names the resolving action so the row
-  // never forces a drill-in. The OwnerPickerPopover (the assign affordance) is
-  // mounted in the same showAssign branch — asserted elsewhere in this file.
+test('21-03 — the Watch-tier stuck row mounts ReplyInPlace(variant=nudge), not the assign-owner dead-end', () => {
+  // The stuck Watch branch is gated on showNudge (=== 'nudge').
   assert.match(
     ROW,
-    /agent stuck · assign an owner to unblock/,
-    'Watch-tier stuck row must name the assign-an-owner action',
+    /const showNudge = chain\?\.actionAffordance === 'nudge'/,
+    'employee-row must gate the stuck branch on showNudge (actionAffordance === nudge)',
   );
-  // The bare dead-end string (terminating in "agent stuck" with nothing after)
-  // must NOT survive as the rendered label.
+  // The Watch-tier body mounts the shared primitive with variant="nudge".
+  assert.match(
+    ROW,
+    /showNudge\s*\?[\s\S]*?<ReplyInPlace[\s\S]*?variant="nudge"/,
+    'Watch-tier stuck row must mount <ReplyInPlace variant="nudge">',
+  );
+  // The old "assign an owner to unblock" stuck copy must be gone (superseded).
   assert.doesNotMatch(
     ROW,
-    /\$\{chain\.leafIssueId \?\? 'this issue'\} — agent stuck`/,
-    'the bare "— agent stuck" dead-end template literal must be gone',
+    /agent stuck · assign an owner to unblock/,
+    'the former "— agent stuck · assign an owner" Watch-tier copy must be removed',
   );
 });
 
