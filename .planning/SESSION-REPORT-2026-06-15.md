@@ -4,6 +4,18 @@
 
 ---
 
+## ADDENDUM — v1.7.4 (Reader verdict-line fix, after Eric flagged the screenshot)
+
+Eric spotted a real bug in the Reader: **"AWAITING AGENT STUCK / CEO stuck on an agent is stuck"** — garbled prose. Root cause: `awaitedPartyLabel` was being filled with the whole scrubbed action sentence (`"{agent} stuck on {leaf}"`, where the leaf id even mis-scrubbed to "an agent"), but the Reader composes `"{party} is stuck"` and the Situation Room composes `"waiting on {party}"` — so the field must be the **party** ("CEO"), not a sentence. Phase-18's LEG-02 had only stripped the `agent#<hex>` leak from this exact line; the broken grammar survived.
+
+**Fix (commit `2c9f9e8`, shipped as v1.7.4):** new `scrubAwaitedParty()` returns just the agent name for the two agent kinds (byte-identical delegation for all others), repointed at all 3 worker sites; `scrubHumanAction()` now emits a clean `"{name} is stuck/working"` (no leaf) so the org-backlog's full line is clean too. +6 tests, full suite green.
+
+**Live-verified on the exact issue from the screenshot (BEAAA-4882):** the Reader verdict now reads **"CEO is stuck"** (`garbledPresent: false`, `doubleStuck: false`). Screenshot: `v1.7.4-BEAAA-4882-reader-CEO-is-stuck.png`. BEAAA is now on **v1.7.4**.
+
+Two *other* things visible in that same screenshot are pre-existing and separate (not the garbled-text bug): the **"Compiling TL;DR…"** placeholder means the Editor-Agent hasn't compiled this task's summary yet (agent/compile path), and **"Couldn't load this deliverable just now"** is the T1-B *honest* error for a deliverable whose host `documents.get` is failing — T1-B made the reason legible; the underlying load failure is host-side. Worth a follow-up if they persist, but neither is the bug Eric flagged.
+
+---
+
 ## TL;DR (read this if nothing else)
 
 1. **clarity-pack v1.7.3 is LIVE on BEAAA and fully verified.** Four "no rabbit holes" fixes + one hygiene item. 3 of the 4 fixes were verified live-positive on real BEAAA data through the browser; the 4th's live symptom was proven to be a host bug (not ours). Nothing destructive; all data preserved.
