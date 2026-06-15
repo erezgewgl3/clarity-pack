@@ -8,6 +8,7 @@
 - ✅ **v1.0.0 — v1 Final Internal** — Phases 1–9 (shipped 2026-06-01, final version v1.3.0 live on BEAAA)
 - ✅ **v1.4.0 — Truthful Situation Room** — Phases 10–15 (shipped v1.4.2, live-verified BEAAA 2026-06-03)
 - ✅ **v1.5.0 — Truthful & Legible Situation Room** — Phases 16–20 (shipped v1.8.0 — action-cards live on BEAAA 2026-06-15)
+- ▶ **v1.6.0 — Stuck-Agent Reply-In-Place** — Phase 21 (active; current live = v1.8.0; next bump v1.8.1 / v1.9.0)
 
 ## Phases
 
@@ -67,6 +68,27 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 - [x] **Phase 20: Hygiene & honestly-green CI** — SC5 full-matrix in CI; fix the 7 CHAT/CTT traceability failures; stabilize the chat-watchdog timing flake; refresh the version label; confirm automated DO backups (the continuous-deploy bookend). (completed 2026-06-15)
 
 </details>
+
+### ▶ v1.6.0 — Stuck-Agent Reply-In-Place (Phase 21) — ACTIVE
+
+Extend the Do-It-Here reply loop so the operator can reply-in-place to **resume a STUCK agent** (`AWAITING_AGENT_STUCK` / Phase-15 Watch-tier rows), not just human-wait (`AWAITING_HUMAN`) rows. WIRING, not invention: the `situation.replyAndResume` handler already exists (Plan 14-01), the Phase-10 spike proved a plain comment resumes an agent in both awaiting-answer and `status='blocked'` cases, and `blocker-chain.ts` already classifies `AWAITING_AGENT_STUCK` and stays AI-free/untouched. Likely NO new migration.
+
+- [ ] **Phase 21: Stuck-Agent Reply-In-Place** — surface the reply-in-place affordance on `AWAITING_AGENT_STUCK` rows (Situation Room employee row + Reader live-blocker panel); a plain operator reply resumes the stuck agent via `situation.replyAndResume`; no auto-resume on passive view; stuck-context copy; degrade-safe + NO_UUID_LEAK on every new path.
+
+## Phase Details (v1.6.0)
+
+### Phase 21: Stuck-Agent Reply-In-Place
+**Goal**: The operator can unstick a STUCK agent from inside the cockpit — the same reply-in-place affordance that ships for `AWAITING_HUMAN` (human-wait) rows now also appears on `AWAITING_AGENT_STUCK` (Watch-tier) rows, and a plain operator reply resumes the stuck agent without leaving the Situation Room or the Reader.
+**Depends on**: Nothing new (continues numbering from Phase 20; the v1.5.0 milestone is shipped/live). Builds directly on the existing Phase-14 `situation.replyAndResume` handler + the ONE shared `<ReplyInPlace>` primitive, the Phase-10 proven unblock-resume recipe, and the Phase-11 engine that already classifies `AWAITING_AGENT_STUCK`. Engine (`blocker-chain.ts`) stays AI-free and untouched.
+**Requirements**: STUCK-01, STUCK-02, STUCK-03, STUCK-04, STUCK-05, STUCK-06
+**Success Criteria** (what must be TRUE):
+  1. The operator sees a reply-in-place affordance on `AWAITING_AGENT_STUCK` rows in BOTH the Situation Room employee row and the Reader live-blocker panel — the same shared `<ReplyInPlace>` primitive, gated to also accept the STUCK terminal kind (no third copy). (STUCK-01, STUCK-02)
+  2. Submitting a reply on a stuck row posts a canonical `public.issue_comments` comment and resumes the stuck agent via `situation.replyAndResume` — the worker accepts a STUCK leaf and resumes it using the proven Phase-10 recipe. (STUCK-03)
+  3. A stuck agent is NEVER resumed by merely viewing or loading a row — resume happens only on an explicit operator reply (the Phase-13/14 no-auto-resume rule is preserved and proven on the new STUCK path). (STUCK-04)
+  4. The reply copy reads appropriately for the stuck context ("nudge / reply to unstick"), distinct from the human-decision wording shown on `AWAITING_HUMAN` rows. (STUCK-05)
+  5. Every new render and resume path is degrade-safe and NO_UUID_LEAK clean — no raw agent ids/UUIDs surface in the affordance, its prose, or the resumed comment — and a bookended live BEAAA deploy completes a real stuck-agent reply→resume drill (snapshot/backup before, rehearsed rollback path), with the two-source version bump (package.json + src/manifest.ts) applied. (STUCK-06 + live acceptance)
+**Plans**: TBD
+**UI hint**: yes
 
 ## Phase Details (v1.5.0)
 
@@ -271,7 +293,14 @@ Plans:
 |-----------|--------|--------|---------|
 | v1.0.0 — v1 Final Internal | 1–9 (11 incl. decimals) | ✅ Complete | 2026-06-01 (v1.3.0) |
 | v1.4.0 — Truthful Situation Room | 10–15 | ✅ Complete | 2026-06-03 (v1.4.2) |
-| v1.5.0 — Truthful & Legible Situation Room | 16–20 | ▶ Active | — |
+| v1.5.0 — Truthful & Legible Situation Room | 16–20 | ✅ Complete | 2026-06-15 (v1.8.0) |
+| v1.6.0 — Stuck-Agent Reply-In-Place | 21 | ▶ Active | — |
+
+### v1.6.0 phase tracking
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 21. Stuck-Agent Reply-In-Place | 0/TBD | Not started | - |
 
 ### v1.5.0 phase tracking
 
@@ -296,4 +325,4 @@ Plans:
 | 15. Cockpit IA Redesign | 3/3 | Complete | 2026-06-03 |
 
 ---
-*Roadmap defined: 2026-05-07 · v1.0.0 milestone archived: 2026-06-01 · v1.4.0 milestone added 2026-06-01, shipped v1.4.2 2026-06-03 · v1.5.0 milestone added 2026-06-03; re-roadmapped 2026-06-03 from a 3-phase (16-18 LEG/PROSE/PERF) mis-scope to the locked 5-phase 16-20 structure (SNAP/WAIT/LEG/CARD/HYG) with the structured-human-wait centerpiece*
+*Roadmap defined: 2026-05-07 · v1.0.0 milestone archived: 2026-06-01 · v1.4.0 milestone added 2026-06-01, shipped v1.4.2 2026-06-03 · v1.5.0 milestone added 2026-06-03; re-roadmapped 2026-06-03 from a 3-phase (16-18 LEG/PROSE/PERF) mis-scope to the locked 5-phase 16-20 structure (SNAP/WAIT/LEG/CARD/HYG) with the structured-human-wait centerpiece* · v1.6.0 milestone added 2026-06-15 (Phase 21, single-phase Stuck-Agent Reply-In-Place; STUCK-01..06 mapped; coverage 6/6, no orphans; granularity coarse)*

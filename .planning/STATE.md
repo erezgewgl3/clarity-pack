@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.6.0
 milestone_name: Stuck-Agent Reply-In-Place
-status: planning
+status: roadmapped
 last_updated: "2026-06-15T19:55:32.283Z"
 last_activity: 2026-06-15
 progress:
-  total_phases: 0
+  total_phases: 1
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -14,6 +14,36 @@ progress:
 ---
 
 # State: Clarity Pack
+
+## ▶ v1.6.0 Stuck-Agent Reply-In-Place — ROADMAP CREATED 2026-06-15 (Phase 21)
+
+New milestone roadmapped. **Phase numbering CONTINUES from v1.5.0** (which ended at Phase 20, with a 16.1 decimal insert) — this milestone's single phase is **Phase 21**, NOT a reset to Phase 1.
+
+**Single-phase milestone (granularity: coarse).** v1.6.0 is ONE locked feature: extend the Do-It-Here reply loop so a reply-in-place can **resume a STUCK agent** (`AWAITING_AGENT_STUCK` / Phase-15 Watch-tier rows), not just a human-wait (`AWAITING_HUMAN`) row. This is WIRING, not invention — six cohesive requirements with no internal dependency boundary, so one well-scoped phase is the correct shape.
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 21. Stuck-Agent Reply-In-Place | Surface the reply-in-place affordance on `AWAITING_AGENT_STUCK` rows (SR employee row + Reader live-blocker panel); a plain operator reply resumes the stuck agent via `situation.replyAndResume`; no auto-resume on passive view; stuck-context copy; degrade-safe + NO_UUID_LEAK | STUCK-01, STUCK-02, STUCK-03, STUCK-04, STUCK-05, STUCK-06 |
+
+**Why it's wiring, not invention:**
+- Handler exists: `src/worker/handlers/situation-reply-and-resume.ts` (`situation.replyAndResume`, Plan 14-01) — today works on the AWAITING_HUMAN+`status=blocked` path; Phase 21 confirms/loosens the terminal-kind gate so a STUCK leaf is accepted.
+- Resume recipe proven: the Phase-10 spike showed a plain comment resumes an agent in BOTH the awaiting-answer AND `status='blocked'` cases — no special transition; a STUCK agent resumes the same way.
+- Engine unchanged: `src/shared/blocker-chain.ts` already classifies `AWAITING_AGENT_STUCK`; Phase 21 only consumes the existing verdict (no new terminal kind, AI-free, untouched).
+- UI gating: extend the ONE shared `src/ui/surfaces/_shared/reply-in-place.tsx` primitive; gates live in `src/ui/surfaces/situation-room/employee-row.tsx` (currently AWAITING_HUMAN-only) + `src/ui/surfaces/reader/live-blocker-panel.tsx`. Decide stuck copy ("nudge / reply to unstick").
+- **Likely NO new migration** — UI/handler gate over the existing handler; `blocker-chain.ts` stays untouched.
+
+**Coverage: 6/6 STUCK requirements mapped to Phase 21. No orphans, no duplicates.** The bookended live BEAAA stuck-agent reply→resume drill is captured as a Phase-21 success criterion (live verification, not a REQ-ID).
+
+**Carried invariants (in the success criteria):** additive-only plugin-namespace schema (disable/uninstall preserves data); no-auto-resume on passive view (Phase-13/14 rule); degrade-safe deterministic floor; instance-agnostic (no company-prefix literals); NO_UUID_LEAK on every new render/resume path; two-source version bump (package.json + src/manifest.ts); bookended by confirmed automated DO backups.
+
+**Deploy gotchas to honor at ship (from V1.6-SEED + memory):** current live = v1.8.0 → next bump v1.8.1 / v1.9.0; fail2ban bans rapid SSH → ONE deliberate connection per step; AriClaw root `/` runs HOT → temp/artifacts to `/mnt/paperclipdata`; `plugin upgrade` is registry-only → uninstall-then-install from extract-dir; BEAAA plugin UUID `a763176a-2f4d-4986-b190-b5151e42cc00`, CID `59f8876e-e729-4dda-98f9-1317c2b50492`.
+
+**Next action:** `/gsd:plan-phase 21` (single-phase milestone; the discuss/plan step refines the UI-gate / worker-eligibility / tests / live-drill task shape). Then `/gsd:execute-phase 21`.
+
+Files: `.planning/ROADMAP.md` (v1.6.0 section + Phase 21 detail appended; v1.0.0/v1.4.0/v1.5.0 sections preserved), `.planning/REQUIREMENTS.md` (traceability 6/6 to Phase 21).
+
+---
+
 
 ## ▶ Phase 17 — PLANNED 2026-06-10 (6 plans, plan-checker PASS)
 
