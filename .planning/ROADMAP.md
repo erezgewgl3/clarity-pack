@@ -87,7 +87,7 @@ Extend the Do-It-Here reply loop so the operator can reply-in-place to **resume 
   3. A stuck agent is NEVER resumed by merely viewing or loading a row — resume happens only on an explicit operator reply (the Phase-13/14 no-auto-resume rule is preserved and proven on the new STUCK path). (STUCK-04)
   4. The reply copy reads appropriately for the stuck context ("nudge / reply to unstick"), distinct from the human-decision wording shown on `AWAITING_HUMAN` rows. (STUCK-05)
   5. Every new render and resume path is degrade-safe and NO_UUID_LEAK clean — no raw agent ids/UUIDs surface in the affordance, its prose, or the resumed comment — and a bookended live BEAAA deploy completes a real stuck-agent reply→resume drill (snapshot/backup before, rehearsed rollback path), with the two-source version bump (package.json + src/manifest.ts) applied. (STUCK-06 + live acceptance)
-**Plans**: TBD
+**Plans**: 5 plans (21-01 engine verdict+reachable flip; 21-02 variant copy prop; 21-03 mount nudge affordance on SR+Reader + action-cards nudge->answer + assign audit; 21-04 tests; 21-05 two-source bump 1.8.1 + bookended live stuck-reply drill)
 **UI hint**: yes
 
 ## Phase Details (v1.5.0)
@@ -300,7 +300,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 21. Stuck-Agent Reply-In-Place | 0/TBD | Not started | - |
+| 21. Stuck-Agent Reply-In-Place | 0/5 | Planned | - |
 
 ### v1.5.0 phase tracking
 
