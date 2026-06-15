@@ -6,16 +6,18 @@
 // this chain by posting an answer-comment in place (→ render Send / chips), or must
 // the row degrade to a named action + "Open ↗" escape (no dead Send)?
 //
-// SCOPE — AWAITING_HUMAN ONLY (the spike-proven dominant BEAAA shape). The operator
-// answering his own awaited-decision issue is the only kind the Phase-10 spike ran
-// and PASSED on: posting the answer-comment triggers the assigned agent's native
-// resume (Shape A awaiting-answer / Shape B status='blocked'). Every other kind
-// returns false:
-//   - AWAITING_AGENT_STUCK → false. DEFERRED. It stays actionAffordance:'assign'
-//     (Phase 12 D-05 LOCK — NOT reversed); the existing OwnerPicker assign branch
-//     owns that row, never a Send. A stuck-agent reply would need a future engine
-//     affordance change. The dead "AWAITING_AGENT_STUCK = true" arm from the prior
-//     draft is REMOVED.
+// SCOPE — AWAITING_HUMAN and AWAITING_AGENT_STUCK (the two reply-reachable kinds).
+// Both resume via the SAME answer-comment recipe the Phase-10 spike proved: posting
+// the answer-comment triggers the assigned party's native resume (Shape A
+// awaiting-answer / Shape B status='blocked'). Every other kind returns false:
+//   - AWAITING_HUMAN → true. The operator answers his own awaited-decision issue;
+//     the answer-comment wakes the assigned agent.
+//   - AWAITING_AGENT_STUCK → true. Phase 21 (21-CONTEXT D-2) ACTIVATED. A stuck
+//     agent's blocked issue is Shape B (status='blocked'); a plain reply comment
+//     resumes it exactly as the spike proved. The verdict moved to
+//     actionAffordance:'nudge' (blocker-chain.ts D-1) and mounts the same
+//     <ReplyInPlace> Send. (The prior Phase-12 D-05 LOCK that routed it to
+//     'assign'/false is reversed.)
 //   - AWAITING_AGENT_WORKING / SELF_RESOLVING → false (in motion / settling, no
 //     action needed).
 //   - EXTERNAL / CYCLE / UNCLASSIFIED → false (no in-system thread can consume a
@@ -37,10 +39,10 @@
 import type { Terminal } from './types.ts';
 
 /**
- * SC4 reply-reachable predicate — AWAITING_HUMAN ONLY.
+ * SC4 reply-reachable predicate — AWAITING_HUMAN + AWAITING_AGENT_STUCK.
  *
  * Returns true iff the operator can unblock the chain by replying in place (the
- * answer-comment triggers the assigned agent's resume per the Phase-10 spike).
+ * answer-comment triggers the assigned party's resume per the Phase-10 spike).
  * Pure / deterministic per kind — exhaustive switch with a `never` guard so a new
  * Terminal kind fails the build here (the established total-function idiom from
  * classifyVerdict).
@@ -54,9 +56,13 @@ export function isReplyReachable(terminalKind: Terminal['kind']): boolean {
     case 'AWAITING_AGENT_WORKING':
       return false; // in motion — no action needed
     case 'AWAITING_AGENT_STUCK':
-      // DEFERRED — stays actionAffordance:'assign' (Phase 12 D-05 LOCK). The
-      // OwnerPicker handles this row; reply would need a future engine change.
-      return false;
+      // Phase 21 (21-CONTEXT D-2) — ACTIVATED. A stuck agent's blocked issue
+      // resumes via the SAME answer-comment recipe as AWAITING_HUMAN (Phase-10
+      // Shape B proven: a plain comment wakes a status='blocked' agent). So the
+      // operator can reply in place to unstick — reply is reachable. The verdict
+      // moved to actionAffordance:'nudge' (blocker-chain.ts D-1); the quiet
+      // nudge affordance mounts the same <ReplyInPlace> Send.
+      return true;
     case 'SELF_RESOLVING':
       return false; // settling on its own ETA
     case 'EXTERNAL':

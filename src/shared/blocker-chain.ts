@@ -78,12 +78,14 @@ export function classifyVerdict(terminal: Terminal): {
     case 'AWAITING_AGENT_WORKING':
       return { tier: 'in-motion', actionAffordance: 'none', needsYou: false };
     case 'AWAITING_AGENT_STUCK':
-      // Plan 12-01 (D-05) — a stuck agent's honest answer is re-owning the issue,
-      // so the row offers 'assign' (was 'nudge'). tier stays 'watch' and needsYou
-      // stays false (D-04: stuck never enters the loud Needs-you list). The 'nudge'
-      // affordance is reserved for the Phase 14 reply/nudge loop (D-06 — dormant,
-      // not deleted from the union).
-      return { tier: 'watch', actionAffordance: 'assign', needsYou: false };
+      // Phase 21 (21-CONTEXT D-1) — the reserved 'nudge' slot is now ACTIVE for the
+      // reply-to-unstick loop. The Phase-12 D-05 lock (which routed stuck → 'assign')
+      // is reversed: a stuck agent's blocked issue resumes via the same answer-comment
+      // recipe (Phase-10 Shape B proven), so the honest first response is a quiet
+      // reply/nudge, not an owner reassignment. tier stays 'watch' and needsYou stays
+      // false DELIBERATELY (Phase-12 D-04 / Phase-15 lock preserved) — stuck remains a
+      // QUIET Watch affordance, NOT a promotion to the loud Needs-you tier.
+      return { tier: 'watch', actionAffordance: 'nudge', needsYou: false };
     case 'SELF_RESOLVING':
       return { tier: 'watch', actionAffordance: 'none', needsYou: false };
     case 'EXTERNAL':
