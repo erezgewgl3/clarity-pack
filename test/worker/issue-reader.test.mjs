@@ -247,6 +247,50 @@ test('issue.reader handler assembles tldr + refCards + ancestry + acItems + acti
   assert.equal(result.issueBody, FIXTURE.body);
   assert.ok(result.deliverable, 'deliverable returned');
   assert.equal(result.deliverable.filename, 'Q3-underwriting-plan.xlsx');
+  // Fix (2026-06-15) — the deliverable carries the REAL host key, not the title.
+  // The previewer dispatches documents.get on this; sending the title 404s.
+  assert.equal(result.deliverable.documentKey, 'q3-underwriting-plan');
+});
+
+test('issue.reader deliverable SKIPS a (mis)routed compile-result + carries the real key (BEAAA-4882 fix)', async () => {
+  const { ctx, registered } = makeFakeCtx();
+  // Override documents.list: a NEWER internal compile-result must NOT win over
+  // the real deliverable. Mirrors the live BEAAA-4882 document set.
+  ctx.issues.documents.list = async () => [
+    {
+      id: 'd-real',
+      key: 'gap-closure-plan',
+      title: 'Gap-Closure Plan',
+      updatedAt: '2026-06-12T19:59:12.618Z',
+    },
+    {
+      id: 'd-op',
+      key: 'compile-result',
+      title: 'compile-result (misrouted — see correct operation issue)',
+      updatedAt: '2026-06-15T06:38:19.010Z', // NEWER — would win without the filter
+    },
+  ];
+  registerIssueReader(ctx);
+  const handler = registered.get('issue.reader');
+  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
+  assert.ok(result.deliverable, 'a deliverable is still returned');
+  // The internal compile-result is filtered out; the REAL deliverable wins.
+  assert.equal(result.deliverable.filename, 'Gap-Closure Plan');
+  assert.equal(result.deliverable.documentKey, 'gap-closure-plan');
+  assert.notEqual(result.deliverable.documentKey, 'compile-result');
+});
+
+test('issue.reader deliverable is null when the ONLY document is an internal compile-result', async () => {
+  const { ctx, registered } = makeFakeCtx();
+  ctx.issues.documents.list = async () => [
+    { id: 'd-op', key: 'compile-result', title: 'compile-result', updatedAt: '2026-06-15T06:38:19Z' },
+  ];
+  registerIssueReader(ctx);
+  const handler = registered.get('issue.reader');
+  const result = await handler({ userId: 'test-user', issueId: FIXTURE.issueId, companyId: 'co-1' });
+  // No real deliverable → null (the UI shows the honest empty-state, not the
+  // internal artifact).
+  assert.equal(result.deliverable, null);
 });
 
 // --- Plan 07-04 Task 4 (D-I31-04) — the worker TL;DR text-rewrite is REMOVED ---

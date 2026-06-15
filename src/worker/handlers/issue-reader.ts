@@ -42,6 +42,10 @@ import type { RefCardData, TLDR } from '../../shared/types.ts';
 import { AGENT_FALLBACK, UUID_RE, PARTIAL_HEX_RE, rescrubPersisted } from '../../shared/scrub-human-action.ts';
 import { resolveRefs } from '../../shared/reference-resolver.ts';
 import { resolveRefsViaSdk } from './sdk-ref-fetch.ts';
+// The Editor-Agent's TL;DR delivery document key — filtered out of the Reader's
+// deliverable selection so a (mis)routed compile-result never masquerades as the
+// user's deliverable (live BEAAA-4882, 2026-06-15).
+import { RESULT_DOCUMENT_KEY } from '../agents/agent-task-delivery.ts';
 // 07-04 (D-I31-04) — the worker-side TL;DR refs-to-title rewrite module is
 // REMOVED. Client-side titled chips (the ref-aware SafeMarkdown + RefChip,
 // 07-04 D-I31-01..03) supply the title, so the worker rewrite was redundant and
@@ -114,7 +118,17 @@ export type ActivityEvent = {
   detail: string;
 };
 
-export type DeliverableSummary = { filename: string; last_write_at: string | null } | null;
+// `documentKey` is the REAL host document key (e.g. "gap-closure-plan"), carried
+// separately from `filename` (the human title, e.g. "Gap-Closure Plan"). The
+// deliverable previewer must dispatch documents.get on the KEY — sending the
+// title 404s the host → READ_FAILED (the live BEAAA-4882 "Couldn't load this
+// deliverable" bug). Optional so older cached rows / callers that omit it fall
+// back to filename (deliverable-preview.tsx: `documentKey ?? filename`).
+export type DeliverableSummary = {
+  filename: string;
+  last_write_at: string | null;
+  documentKey?: string;
+} | null;
 
 export type IssueReaderResult = {
   tldr: TLDR | null;
@@ -353,12 +367,23 @@ export function registerIssueReader(ctx: IssueReaderCtx): void {
     let deliverable: DeliverableSummary = null;
     try {
       const docs = await ctx.issues.documents.list(issueId, companyId);
-      const sorted = [...docs].sort((a, b) => docTimestamp(b) - docTimestamp(a));
+      // Skip clarity-pack INTERNAL documents. The Editor-Agent files its TL;DR
+      // delivery as a document keyed `compile-result` (RESULT_DOCUMENT_KEY) — a
+      // bookkeeping artifact, NOT the user's deliverable. When one lands on a task
+      // (incl. a misrouted compile-result, as seen live on BEAAA-4882) the newest-
+      // doc heuristic below would otherwise surface it as "The deliverable" over
+      // the real one. Filter it out so the genuine deliverable wins (or the honest
+      // empty-state shows).
+      const userDocs = docs.filter((d) => !isInternalClarityDocument(d));
+      const sorted = [...userDocs].sort((a, b) => docTimestamp(b) - docTimestamp(a));
       const top = sorted[0];
       if (top) {
         deliverable = {
           filename: deliverableFilename(top),
           last_write_at: deliverableTimestamp(top),
+          // The REAL host key (not the display title) — the previewer dispatches
+          // documents.get on this; sending the title 404s → READ_FAILED.
+          documentKey: deliverableDocumentKey(top),
         };
       }
     } catch (e) {
@@ -625,6 +650,22 @@ function docTimestamp(d: unknown): number {
 function deliverableFilename(d: unknown): string {
   const anyD = d as { title?: string; key?: string; filename?: string };
   return anyD.filename ?? anyD.title ?? anyD.key ?? 'document';
+}
+
+/** The REAL host document key (what documents.get needs), distinct from the
+ *  display title. Falls back to the title only if no key is present. */
+function deliverableDocumentKey(d: unknown): string | undefined {
+  const key = (d as { key?: unknown }).key;
+  return typeof key === 'string' && key.length > 0 ? key : undefined;
+}
+
+/** True for clarity-pack INTERNAL documents that must never surface as a user
+ *  deliverable. Today that is the Editor-Agent's TL;DR delivery channel (the
+ *  `compile-result` document, RESULT_DOCUMENT_KEY) and any suffixed variant. */
+function isInternalClarityDocument(d: unknown): boolean {
+  const key = (d as { key?: unknown }).key;
+  if (typeof key !== 'string') return false;
+  return key === RESULT_DOCUMENT_KEY || key.startsWith(`${RESULT_DOCUMENT_KEY}-`);
 }
 
 function deliverableTimestamp(d: unknown): string | null {

@@ -109,7 +109,9 @@ export type ReaderViewData = {
   ancestry: Ancestry | null;
   acItems: AcItem[];
   activity: ActivityEvent[];
-  deliverable: { filename: string; last_write_at: string | null } | null;
+  // documentKey = the REAL host key (deliverable-preview dispatches documents.get
+  // on it; the title 404s). Optional for back-compat with older cached payloads.
+  deliverable: { filename: string; last_write_at: string | null; documentKey?: string } | null;
   issueBody: string | null;
   /** Plan 04.2-01 (RCB-06) — chat topics started FROM this issue. Optional so
    *  a pre-04.2-01 cached issue.reader payload still satisfies the type;
