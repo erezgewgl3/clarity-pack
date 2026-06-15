@@ -60,8 +60,28 @@ jobs:
       - name: Install Playwright Chromium (chat-live-sticky convergence test needs a real browser)
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: unit tests (shared + worker + UI primitives)
-        run: node --test "test/shared/*.test.mjs" "test/worker/*.test.mjs" "test/ui/*.test.mjs"
+      # HYG-01 / D-03 — RECURSIVE glob is REQUIRED here. The old single-level
+      # glob (test/{shared,worker,ui}/*.test.mjs) silently SKIPPED ~126 nested
+      # tests (101 under test/worker/**, 25 under test/ui/**) so CI was green
+      # only because those suites never ran. The recursive form mirrors the
+      # package.json `test` script (node --test expands `**` itself) and makes
+      # the green checkmark honest: it now runs the SC5 full surface × terminal-
+      # kind matrix (test/worker/blocked-no-edge-verdict-consistency.test.mjs)
+      # and the now-fixed watchdog + snapshot-prefetch tests in the nested dirs.
+      # test/visual/sketch-regression.test.mjs is matched by test/** and runs
+      # for real here (Chromium was installed above; CI must NOT set SKIP_VISUAL).
+      - name: full recursive suite (shared + worker/** + ui/** incl. SC5 matrix + visual)
+        run: node --test "test/**/*.test.mjs"
+
+      # The safety-CLI harness suite lives OUTSIDE test/ (scripts/safety/test/**)
+      # so it needs its own glob segment. It MUST run SERIALLY
+      # (--test-concurrency=1): the PGlite/WASM-backed snapshot/restore/verify
+      # files contend for shared temp + WASM resources under node --test's
+      # default parallel scheduling, producing a flaky red (per Plan 20-01's
+      # finding). Per-file and serial execution are deterministically green;
+      # parallel is the only failing mode, so we pin concurrency to 1 here.
+      - name: safety-CLI suite (serial — PGlite/WASM contention; Plan 20-01 finding)
+        run: node --test --test-concurrency=1 "scripts/safety/test/**/*.test.mjs"
 
       - name: build (worker + ui + manifest)
         run: pnpm build
