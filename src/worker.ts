@@ -46,6 +46,12 @@ import {
 import { registerClarityHealth, type ClarityHealthCtx } from './worker/handlers/clarity-health.ts';
 import { registerGetOptIn, type GetOptInCtx } from './worker/handlers/get-opt-in.ts';
 import { registerSetOptIn, type SetOptInCtx } from './worker/handlers/set-opt-in.ts';
+// Phase 19 Plan 19-04 (CARD-03 / D-08) — the operator RPC that flips the
+// action-cards runtime flag ON/OFF (Step-2 enable + panic-OFF; BEAAA has no psql).
+import {
+  registerSetActionCardsFlag,
+  type SetActionCardsFlagCtx,
+} from './worker/handlers/set-action-cards-flag.ts';
 import {
   registerGetInstanceConfig,
   type GetInstanceConfigCtx,
@@ -276,6 +282,9 @@ const plugin = definePlugin({
     // dispatch time).
     registerGetOptIn(ctx as unknown as GetOptInCtx);
     registerSetOptIn(ctx as unknown as SetOptInCtx);
+    // Phase 19 Plan 19-04 (CARD-03 / D-08) — operator flag flip (ON/panic-OFF),
+    // registered alongside set-opt-in (same operator-action posture; no psql path).
+    registerSetActionCardsFlag(ctx as unknown as SetActionCardsFlagCtx);
     registerGetInstanceConfig(ctx as unknown as GetInstanceConfigCtx);
     // T1-D — opt-in-exempt worker liveness probe (clarity-pack/health).
     registerClarityHealth(ctx as unknown as ClarityHealthCtx);

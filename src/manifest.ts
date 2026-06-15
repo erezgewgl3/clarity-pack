@@ -687,6 +687,18 @@ const manifest: PaperclipPluginManifestV1 = {
   // DeliverableSummary now carries the real key; (2) the newest-document
   // heuristic surfaced a misrouted clarity-pack `compile-result` op artifact over
   // the real deliverable — issue.reader now filters internal docs.
+  //
+  // Phase 19 Plan 19-04 (CARD-03 / D-08) — NEW operator action
+  // `set-action-cards-flag`: flips the action-cards runtime flag ON (Step-2
+  // monitored enable) / OFF (panic, room back to the deterministic floor) via the
+  // parameterized namespaced UPSERT in action-cards-flag-repo.ts. BEAAA has no
+  // psql, so the flip MUST be an RPC. NO new capability/manifest-shape change:
+  // SDK 2026.512.0 exposes no `actions[]` field on PaperclipPluginManifestV1 (the
+  // rc.6 note above documents this) — actions are registered programmatically via
+  // ctx.actions.register and gated by the host's action-invocation auth, exactly
+  // like set-opt-in. The handler's only write rides the already-declared
+  // `database.namespace.*` capabilities. The version bump (1.7.5 -> v1.8.0) is
+  // Plan 19-05, NOT here — at default OFF this phase is behaviorally inert.
   version: '1.7.5',
   displayName: 'Clarity Pack',
   description:
