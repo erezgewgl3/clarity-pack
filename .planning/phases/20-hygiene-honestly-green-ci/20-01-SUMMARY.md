@@ -143,6 +143,29 @@ Non-empty reason, surfaced in the run summary, not introduced by this plan.
 - **Files modified:** package.json, pnpm-lock.yaml
 - **Commit:** abbd37f
 
+## Finding for Plan 20-02 (CI glob wiring) — safety suite needs serial execution
+
+The 7 safety-CLI tests are `fail 0` when each file runs in its own `node --test`
+invocation, and `fail 0` deterministically when all 7 run together with
+`--test-concurrency=1` (verified across repeated runs). But when all 7 run in **one
+default (parallel) `node --test` invocation**, a flaky `fail 1` appears
+(observed on `verify.test.mjs` V3) — the PGlite/WASM-backed snapshot / restore /
+snapshot-pglite files contend for shared temp + WASM resources when node --test
+schedules files concurrently, starving the stub-HTTP-server verify test.
+
+Two facts make this a 20-02 concern, not a 20-01 blocker:
+1. The current default `test` script glob is `test/**/*.test.mjs` — it does **not**
+   match `scripts/safety/test/*` at all, so the safety suite is presently excluded
+   from the default sweep (precisely the gap 20-02 closes: "widen the CI test glob
+   to recurse so the safety-CLI suite actually runs").
+2. The fix is a CI-runner concern (run the safety suite with `--test-concurrency=1`,
+   or as its own serial step), not a test-file or lib change — which D-07 forbids
+   here anyway.
+
+**Action for 20-02:** when wiring the safety-CLI suite into CI, run it with
+`--test-concurrency=1` (or as a dedicated serial step) so the WASM contention
+cannot produce a flaky red. Per-file and serial execution are honestly green today.
+
 ## Carried invariants (D-07)
 
 - **blocker-chain.ts untouched** — verified via `git diff --name-only` (no match).
