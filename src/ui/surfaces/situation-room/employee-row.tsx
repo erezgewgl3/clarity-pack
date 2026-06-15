@@ -9,7 +9,8 @@
 //
 // PER-STATE ACTION CLUSTERS (R4), keyed on the worker `group` field:
 //   - needs_you, UNOWNED (blockerChain.actionAffordance === 'assign' — Plan 11-04
-//     reads the engine verdict, NOT an ownerName string-match):
+//     reads the engine verdict, NOT an ownerName string-match; after Phase-21,
+//     assign ⇔ UNOWNED ONLY — a stuck agent now carries 'nudge', not 'assign'):
 //       [Assign owner ▾] (owner-picker-popover → situation.assignOwner) + [Open <leaf> ↗]
 //   - needs_you, OWNED (any other affordance — chat/wake the owner):
 //       [Open chat: <owner>] (buildChatDeepLink employee-only) + [Wake] (issues.requestWakeup) + [Open ↗]
@@ -205,16 +206,17 @@ export function EmployeeRow({
 
   const ageMs = ageMsFromISO(row.lastActivityAt);
   const chain = row.blockerChain;
-  // Plan 11-04 (SC3/D-13) + Plan 12-03 Task 2 (NY-03 / D-05 / D-09) — the assign
-  // cluster is gated STRICTLY on the engine verdict's affordance, never on an
-  // ownerName string-match or a terminal.kind list. After 12-01,
-  // actionAffordance === 'assign' fires for BOTH genuinely-unowned (UNOWNED) AND
-  // stuck-agent (AWAITING_AGENT_STUCK) rows — re-owning the issue is the honest
-  // answer for both. An AWAITING_HUMAN / AWAITING_AGENT_WORKING / UNCLASSIFIED
-  // row never carries 'assign', so the picker never renders a false "assign
-  // owner" for an in-motion or already-owned blocker. This is the SAME single
-  // verdict the org-blocked backlog expander and Reader blocker panel read
-  // (D-09: the three surfaces agree by construction).
+  // Plan 11-04 (SC3/D-13) + Plan 12-03 Task 2 (NY-03 / D-05 / D-09) + Plan 21-03
+  // (D-7) — the assign cluster is gated STRICTLY on the engine verdict's
+  // affordance, never on an ownerName string-match or a terminal.kind list. After
+  // the Phase-21 engine flip (21-01), actionAffordance === 'assign' ⇔ UNOWNED
+  // ONLY — re-owning the issue is the honest answer for a genuinely-unowned
+  // blocker. A stuck agent (AWAITING_AGENT_STUCK) now carries 'nudge' (handled by
+  // showNudge below — reply-to-unstick), NOT 'assign'. An AWAITING_HUMAN /
+  // AWAITING_AGENT_WORKING / UNCLASSIFIED row never carries 'assign', so the
+  // picker never renders a false "assign owner" for an in-motion or already-owned
+  // blocker. This is the SAME single verdict the org-blocked backlog expander and
+  // Reader blocker panel read (D-09: the surfaces agree by construction).
   const showAssign = chain?.actionAffordance === 'assign';
   // Plan 14-03 Task 1 (SC3/SC4/DO-01) — the reply-in-place branch. Mutually
   // exclusive with showAssign: 'reply' (⇔ AWAITING_HUMAN per classifyVerdict) is
@@ -223,6 +225,18 @@ export function EmployeeRow({
   // reachable gate inside the primitive computes off chain.terminalKind (14-04),
   // so a defensive non-reachable reply row still degrades to named action + Open↗.
   const showReply = chain?.actionAffordance === 'reply';
+
+  // Plan 21-03 Task 1 (STUCK-01 / D-3 / D-5) — the reply-to-unstick branch for a
+  // STUCK agent. After the Phase-21 engine flip (21-01), AWAITING_AGENT_STUCK
+  // carries actionAffordance 'nudge' (was 'assign'), so a stuck row now mounts
+  // the SAME shared <ReplyInPlace> (variant='nudge') as the AWAITING_HUMAN reply
+  // branch — NO copy of the primitive. The row stays in the QUIET Watch tier
+  // (visualTierOf unchanged; needsYou false): reply-to-unstick is a calm Watch
+  // affordance, never a Needs-you promotion (12-CONTEXT D-04 / 21-CONTEXT D-1
+  // lock preserved). reachable computes off chain.terminalKind (true for stuck
+  // after 21-01's reply-reachable flip); needsDurabilityFlip is status-derived in
+  // the rollup (D-5 — flows for nudge rows the same as reply, no new plumbing).
+  const showNudge = chain?.actionAffordance === 'nudge';
 
   // Plan 15-03 Task 2 (COCK-02 / D-04 / D-05 / D-06) — the row BODY is gated on
   // the ENGINE visual tier, NOT row.group. This is the SAME locked partition the
@@ -507,40 +521,64 @@ export function EmployeeRow({
        *  row keeps the Phase-9 assign-work / stand-down / resume cluster
        *  (preserved affordances). A chain-backed Watch row (stuck / external /
        *  cycle / self-resolving) shows the honest verdict line + its affordance:
-       *  stuck -> assign (OwnerPickerPopover), external/cycle/unclassified ->
-       *  Open ↗, self-resolving -> none. Quieter than Needs-you, but NOT dead. */}
+       *  stuck -> nudge (reply-to-unstick via the shared <ReplyInPlace>, Plan
+       *  21-03), external/cycle/unclassified -> Open ↗, self-resolving -> none.
+       *  Quieter than Needs-you, but NOT dead. */}
       {visualTier === 'watch' && chain && !isChainlessIdle && (
         <>
-          <div className="clarity-employee-chain clarity-employee-chain-watch">
-            <span className="clarity-employee-chain-prefix">{`└ `}</span>
-            <span className="clarity-employee-chain-action">
-              {showAssign
-                ? /* T1-C (no-rabbit-holes, 2026-06-15) — a Watch-tier stuck row
-                   *  must terminate in a NAMED HUMAN ACTION, not a "— agent stuck"
-                   *  dead-end that forces the operator to drill in. showAssign ⇔
-                   *  actionAffordance==='assign', so the resolving action is
-                   *  literally "assign an owner" (the OwnerPickerPopover mounted
-                   *  below). State the stall honestly AND name the action. */
-                  `${chain.leafIssueId ?? 'this issue'} — agent stuck · assign an owner to unblock`
-                : `waiting on ${rescrubPersisted(chain.awaitedPartyLabel)}`}
-            </span>
-            {chain.leafIssueId && !showAssign && (
-              <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
-            )}
-          </div>
-          {/* Honest affordance only — assign for stuck, Open for external/cycle/
-           *  unclassified, nothing for self-resolving (actionAffordance 'none'). */}
-          {(showAssign || chain.actionAffordance === 'open') && (
-            <div className="clarity-employee-actions">
-              {showAssign && chain.leafIssueId && (
-                <OwnerPickerPopover
-                  leafIssueId={chain.leafIssueId}
-                  leafIssueUuid={chain.leafIssueUuid ?? undefined}
-                  companyId={companyId}
-                  userId={userId}
-                  onAssigned={() => onAssignSuccess()}
-                />
+          {/* Plan 21-03 Task 1 (STUCK-01 / D-3) — a stuck (nudge) Watch row now
+           *  mounts the shared <ReplyInPlace variant='nudge'> in place of the
+           *  former "— agent stuck · assign an owner" dead-end copy. The primitive
+           *  renders its own namedAction line, so suppress the standalone chain
+           *  line for the nudge branch (it would duplicate the headline). Non-nudge
+           *  Watch rows (external/cycle/self-resolving) keep the honest verdict
+           *  line exactly as before. */}
+          {!showNudge && (
+            <div className="clarity-employee-chain clarity-employee-chain-watch">
+              <span className="clarity-employee-chain-prefix">{`└ `}</span>
+              <span className="clarity-employee-chain-action">
+                {`waiting on ${rescrubPersisted(chain.awaitedPartyLabel)}`}
+              </span>
+              {chain.leafIssueId && (
+                <span className="clarity-employee-chain-leaf">{` (${chain.leafIssueId})`}</span>
               )}
+            </div>
+          )}
+          {showNudge ? (
+            /* Plan 21-03 Task 1 (STUCK-01 / D-3 / D-5 / STUCK-04) — the ONE shared
+             * <ReplyInPlace variant='nudge'> on the stuck (nudge) Watch row. The
+             * operator's note posts as a comment and resumes the stuck agent on
+             * Send ONLY (no auto-resume on view). reachable computed off the REAL
+             * chain.terminalKind (true for stuck after 21-01); needsDurabilityFlip
+             * from the REAL chain.needsDurabilityFlip (status-derived in the rollup,
+             * D-5 — flows for nudge rows unchanged). The *Uuid fields are dispatch
+             * props only (NO_UUID_LEAK). The row stays in Watch (visualTierOf
+             * untouched). Owner reassignment stays reachable via Open↗ inside the
+             * primitive's reachable===false degrade or the leaf page (21-CONTEXT
+             * Deferred Ideas). */
+            <ReplyInPlace
+              variant="nudge"
+              leafIssueId={chain.leafIssueId}
+              leafIssueUuid={chain.leafIssueUuid}
+              /* Plan 18-02 (LEG-02e) — read-time re-scrub over the already-in-hand
+               * display strings before they reach the shared primitive. */
+              awaitedPartyLabel={rescrubPersisted(chain.awaitedPartyLabel)}
+              namedAction={rescrubPersisted(
+                row.actionCard?.namedAction ?? `Reply to unstick ${chain.awaitedPartyLabel}`,
+              )}
+              decisionOptions={row.actionCard?.decisionOptions ?? null}
+              needsDurabilityFlip={chain.needsDurabilityFlip}
+              reachable={isReplyReachable(chain.terminalKind)}
+              companyId={companyId}
+              userId={userId}
+              companyPrefix={companyPrefix}
+              navigate={navigate}
+              onActed={onAssignSuccess}
+            />
+          ) : chain.actionAffordance === 'open' ? (
+            /* Honest affordance — Open for external/cycle/unclassified; nothing for
+             *  self-resolving (actionAffordance 'none'). */
+            <div className="clarity-employee-actions">
               {chain.leafIssueId && (
                 <button
                   type="button"
@@ -551,7 +589,7 @@ export function EmployeeRow({
                 </button>
               )}
             </div>
-          )}
+          ) : null}
         </>
       )}
 
