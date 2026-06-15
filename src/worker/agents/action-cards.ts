@@ -146,6 +146,19 @@ const ACTION_CARDS_SCOPE_PREFIX = 'action-cards:';
  *  on a content-hash match. 10 minutes ≈ 5 SR recompute cycles of slack. */
 export const ACTION_CARD_STALE_MS = 10 * 60 * 1000;
 
+/**
+ * Phase 19 Plan 19-02 (D-06 / Pitfall 5) — the BOUNDED-WARM cap. The governed
+ * heartbeat compile (the ONLY compile path now that the on-request block is
+ * deleted) compiles at most this many STALE/absent needs-you rows per heartbeat
+ * invocation; the remainder compile on subsequent heartbeats. This caps the
+ * compile fan-out so a needs-you spike can never become one giant compile (the
+ * 502 surface). Mirrors the Phase-16.1 bounded-warm cadence — kept consistent
+ * with editor.ts:DEFAULT_WARM_MAX_ROWS (re-declared locally rather than imported
+ * to avoid a value read across the editor.ts↔action-cards.ts circular import's
+ * temporal dead zone; both are 5 by design).
+ */
+export const ACTION_CARDS_WARM_MAX_ROWS = 5;
+
 /** The per-company operation dedupe key (shared by start + read-back). Per
  *  company per recompute (D-05 / Claude's-discretion scoping). */
 function actionCardsOperationId(companyId: string): string {
@@ -196,6 +209,30 @@ export function isActionCardFresh(
 ): boolean {
   if (!card) return false;
   if (card.content_hash !== recomputedHash) return false;
+  const genMs = card.generated_at ? Date.parse(card.generated_at) : NaN;
+  if (!Number.isFinite(genMs)) return false;
+  return nowMs - genMs <= ACTION_CARD_STALE_MS;
+}
+
+/**
+ * Phase 19 Plan 19-02 (RESEARCH Pattern 2) — the LIVENESS-ONLY arm of staleness,
+ * for the READ-CACHED-ONLY snapshot path where the per-row content hash is NOT
+ * recomputed (the handler no longer compiles, so it has no recomputed hash to
+ * check the correctness arm against). A cached card is shown iff its generated_at
+ * is within {@link ACTION_CARD_STALE_MS} of `nowMs`; a long-idle Editor-Agent's
+ * stale card floors out to the deterministic line. Returns false on a
+ * null/absent card or an unparseable timestamp. Pure — the clock is INJECTED.
+ *
+ * This is intentionally SEPARATE from isActionCardFresh: that predicate ALSO
+ * gates on hash equality (the compile path's correctness arm), which would floor
+ * every card on the read path that has no recomputed hash. Same staleness
+ * constant, single-sourced.
+ */
+export function isActionCardLive(
+  card: { generated_at?: string } | null | undefined,
+  nowMs: number,
+): boolean {
+  if (!card) return false;
   const genMs = card.generated_at ? Date.parse(card.generated_at) : NaN;
   if (!Number.isFinite(genMs)) return false;
   return nowMs - genMs <= ACTION_CARD_STALE_MS;
@@ -455,8 +492,11 @@ async function persistCard(
   }
 }
 
-/** Map a cached ActionCardRow → the public ActionCard shape. */
-function rowToCard(row: ActionCardRow): ActionCard {
+/** Map a cached ActionCardRow → the public ActionCard shape. Exported (Plan
+ *  19-02) so the read-cached-only snapshot handler reuses the SAME mapping
+ *  instead of re-implementing it (NO_UUID_LEAK discipline lives here too:
+ *  sourceIssueUuid is dispatch-only, never a render field). */
+export function rowToCard(row: ActionCardRow): ActionCard {
   return {
     namedAction: row.named_action,
     awaitedParty: row.awaited_party,
@@ -610,6 +650,18 @@ export async function driveActionCardsStep(
     return { cards, status: 'ready' };
   }
 
+  // Phase 19 Plan 19-02 (D-06 / Pitfall 5) — BOUNDED-WARM cap. Compile at most
+  // ACTION_CARDS_WARM_MAX_ROWS (5) stale/absent rows on THIS heartbeat; the rest
+  // stay in `cards`-absent state and compile on subsequent heartbeats
+  // (degrade-safe: their rows show the deterministic floor until then). This caps
+  // the compile fan-out so a needs-you spike can't fan out into one giant compile
+  // (the 502 surface CARD-01 eliminates). The slice keeps the input order — the
+  // earliest needs-you rows warm first.
+  const compileSlice =
+    compileRows.length > ACTION_CARDS_WARM_MAX_ROWS
+      ? compileRows.slice(0, ACTION_CARDS_WARM_MAX_ROWS)
+      : compileRows;
+
   // CACHE MISS — resolve the Editor-Agent (op-issue discovery, NO dead reconcile).
   const editorAgentId = await resolveEditorAgentId(ctx, companyId);
   if (!editorAgentId) {
@@ -623,7 +675,7 @@ export async function driveActionCardsStep(
   if (priorBody != null) {
     const fresh = await finalizeBody(ctx, {
       companyId,
-      rows: compileRows,
+      rows: compileSlice,
       body: priorBody,
       editorAgentId,
     });
@@ -651,7 +703,7 @@ export async function driveActionCardsStep(
       operationKind: 'action-cards',
       operationId: actionCardsOperationId(companyId),
       title: 'Compile Situation Room action cards',
-      prompt: buildActionCardPrompt(compileRows),
+      prompt: buildActionCardPrompt(compileSlice),
     });
     operationIssueId = started.operationIssueId;
   } catch (e) {
@@ -680,7 +732,7 @@ export async function driveActionCardsStep(
   // starts fresh.
   const fresh = await finalizeBody(ctx, {
     companyId,
-    rows: compileRows,
+    rows: compileSlice,
     body: poll.body,
     editorAgentId,
   });

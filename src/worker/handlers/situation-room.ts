@@ -76,22 +76,25 @@ import {
   buildPulseSummary,
   type PulseSummary,
 } from '../situation/build-pulse-summary.ts';
-// Plan 13-02 (D-06/D-13) — the Editor-Agent action-card step. Generation runs
-// HERE, in the situation.snapshot valid-scope handler (the 60s on-view
-// recompute), after buildEmployeesRollup — exactly where driveTldrCompileStep
-// lives for the Reader. Degrade-safe (a throw → no cards → the row renders the
-// deterministic engine line); never blocks the snapshot.
+// Phase 19 Plan 19-02 (CARD-01 core / D-04) — the situation.snapshot DATA
+// handler is now READ-CACHED-ONLY for action cards. It NEVER calls
+// driveActionCardsStep (the on-request compile that was the 502 + BEAAA-2092
+// storm cause is DELETED). Cards are read in BATCH from the action_cards cache
+// via getActionCardsBySources (newest-per-source) and mapped to the public
+// ActionCard shape with rowToCard, behind a liveness arm (isActionCardLive) so a
+// long-idle stale card floors out. All compilation now rides the governed Editor
+// heartbeat (editor.ts) — bounded-warm, non-notifying. Degrade-safe: a throw →
+// {} → every row renders the deterministic engine line.
+import { getActionCardsBySources } from '../db/action-cards-repo.ts';
 import {
-  driveActionCardsStep,
-  type ActionCardsCtx,
-  type ActionCardSourceRow,
+  rowToCard,
+  isActionCardLive,
 } from '../agents/action-cards.ts';
-// Phase 19 Plan 19-01 (D-01) — the snapshot compile decision now reads the
-// runtime action-cards flag (default OFF, degrade-safe) instead of the
-// compile-time ACTION_CARDS_ENABLED const. At default OFF the guard is false so
-// the compile block is inert exactly as today (deterministic floor). The
-// on-request compile block deletion itself is Plan 19-02 (CARD-01) — this plan
-// is a pure flag-read swap with zero behavior change.
+// Phase 19 Plan 19-01 (D-01) / 19-02 (D-03/D-04, Pitfall 4) — the runtime
+// action-cards flag (default OFF, degrade-to-OFF). Read at BOTH the attach
+// decision (don't read cards when OFF) AND the SWR serve path (strip baked-in
+// cards from a fresh cached slice when OFF) so a panic-OFF flip floors the room
+// instantly with no redeploy.
 import { isActionCardsEnabled } from '../db/action-cards-flag-repo.ts';
 import type { ActionCard } from '../../shared/types.ts';
 // Plan 17-02 Task 1 (WAIT-02 / SC5) — the per-company structured-wait prefetch.
@@ -587,37 +590,35 @@ async function computeViewerInvariantSlice(
     ctx.logger?.info?.('snap.stage', { stage: 'employees-rollup', ms: Date.now() - t0, companyId });
   }
 
-  // Plan 13-02 (D-06/D-07/D-12) — the Editor-Agent action cards. GATED OFF
-  // (ACTION_CARDS_ENABLED=false, v1.4.1 BEAAA-2092 hotfix) so cardsBySource stays
-  // {} → every row degrades to the deterministic engine line. The block is kept
-  // for the gate; degrade-safe.
+  // Phase 19 Plan 19-02 (CARD-01 core / D-04) — READ-CACHED-ONLY action cards.
+  // The on-request compile block (driveActionCardsStep) is DELETED — this handler
+  // does ZERO AI work on the request path (the 502 + BEAAA-2092 storm cause).
+  // When the runtime flag is ON we BATCH-read the newest cached card per needs-you
+  // leaf (getActionCardsBySources) and keep only the LIVE ones (isActionCardLive —
+  // a long-idle stale card floors out, RESEARCH Pattern 2). When OFF (or on any
+  // read failure → degrade-to-OFF) cardsBySource stays {} → every row renders the
+  // deterministic engine line. All compilation rides the governed Editor heartbeat.
   let cardsBySource: Record<string, ActionCard> = {};
   try {
-    const needsYouRows: ActionCardSourceRow[] = employees
-      .filter((e) => e.blockerChain && e.blockerChain.needsYou === true)
-      .map((e) => ({
-        sourceIssueId: e.blockerChain!.targetIssueUuid ?? e.blockerChain!.leafIssueUuid ?? '',
-        leafIssueId: e.blockerChain!.leafIssueId,
-        awaitedPartyLabel: e.blockerChain!.awaitedPartyLabel,
-        humanAction: e.blockerChain!.humanAction,
-        actionAffordance: e.blockerChain!.actionAffordance,
-        inputs: {
-          body: e.focusLine ?? '',
-          comments: [],
-          refs: e.blockerChain!.leafIssueId ? [e.blockerChain!.leafIssueId] : [],
-        },
-      }))
-      .filter((r) => r.sourceIssueId.length > 0);
-
-    if ((await isActionCardsEnabled(ctx, companyId)) && needsYouRows.length > 0) {
-      const step = await driveActionCardsStep(ctx as unknown as ActionCardsCtx, {
-        companyId,
-        needsYouRows,
-      });
-      cardsBySource = step.cards;
+    if (await isActionCardsEnabled(ctx, companyId)) {
+      const leafUuids = employees
+        .filter((e) => e.blockerChain?.needsYou === true)
+        .map((e) => e.blockerChain!.targetIssueUuid ?? e.blockerChain!.leafIssueUuid)
+        .filter((x): x is string => !!x);
+      if (leafUuids.length > 0) {
+        const nowMs = Date.now();
+        const rowsBySource = await getActionCardsBySources(ctx, companyId, leafUuids);
+        for (const [sourceId, row] of Object.entries(rowsBySource)) {
+          // Liveness arm only — the read path recomputes no per-row hash, so a
+          // long-idle stale card floors out by age (isActionCardLive).
+          if (isActionCardLive(row, nowMs)) {
+            cardsBySource[sourceId] = rowToCard(row);
+          }
+        }
+      }
     }
   } catch (e) {
-    ctx.logger?.warn?.('situation.snapshot: action-card generation failed', {
+    ctx.logger?.warn?.('situation.snapshot: action-card cached read failed (floor)', {
       companyId,
       err: (e as Error).message,
     });
@@ -694,8 +695,27 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       // from the cached rows (pure, no fetch). Kick off a fresh recompute +
       // write-back fire-and-forget — do NOT await it before responding.
       const slice = cached.payload;
-      const needsYou = buildNeedsYou(slice.situation_employees, viewerUserId);
-      const pulse: PulseSummary = buildPulseSummary(slice.situation_employees, needsYou);
+
+      // Phase 19 Plan 19-02 (Pitfall 4 / Open Q#3) — SWR serve-path flag strip.
+      // A FRESH cached slice may have action cards BAKED IN from when the flag was
+      // ON. A panic-OFF flip must floor the room with no deploy latency, so read
+      // the flag HERE and strip actionCard (set null) from the served rows when
+      // OFF — the literal "flip ONE row, room back to floor" guarantee. The flag
+      // read degrades to OFF (a read failure also floors — safe). needsYou + pulse
+      // already ignore actionCard, so they compute identically over the cached rows.
+      let servedEmployees = slice.situation_employees;
+      let cardsOn = false;
+      try {
+        cardsOn = await isActionCardsEnabled(ctx, companyId);
+      } catch {
+        cardsOn = false; // unreadable ⇒ OFF ⇒ floor (degrade-safe)
+      }
+      if (!cardsOn) {
+        servedEmployees = slice.situation_employees.map((e) => ({ ...e, actionCard: null }));
+      }
+
+      const needsYou = buildNeedsYou(servedEmployees, viewerUserId);
+      const pulse: PulseSummary = buildPulseSummary(servedEmployees, needsYou);
 
       // Fire-and-forget revalidation INSIDE the valid handler scope (Pitfall 4 —
       // no cron, no setInterval). Errors are swallowed so a failed recompute never
@@ -719,7 +739,7 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
 
       return {
         org_blocked_backlog: slice.org_blocked_backlog,
-        situation_employees: slice.situation_employees,
+        situation_employees: servedEmployees,
         needsYou,
         pulse,
         taken_at: cached.takenAt,
