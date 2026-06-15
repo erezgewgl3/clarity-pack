@@ -106,6 +106,35 @@ export function humanizeChatChip(
  *   5. AWAITING_HUMAN whose userId is the viewer → substitute that id with "You".
  *   6. Belt-and-suspenders: any UUID that somehow survived → 'an agent'.
  */
+/**
+ * The AWAITED-PARTY label — JUST the party (a name/role), for consumers that
+ * compose their own sentence around it: the Reader's "{party} is stuck" /
+ * "{party} is working", the Situation Room's "waiting on {party}" and
+ * "Open chat: {party}". This is distinct from scrubHumanAction (the full action
+ * line).
+ *
+ * THE BUG THIS FIXES (live BEAAA-972 Reader, 2026-06-15): the two agent kinds'
+ * raw engine label is "{agentId} stuck on {leaf}" / "{agentId} working on {leaf}".
+ * Feeding that whole scrubbed sentence in as the "party" made the Reader render
+ * "{party} is stuck" → "CEO stuck on an agent is stuck" — doubled "stuck", and
+ * the leaf id (an ISSUE uuid) even mis-scrubbed to "an agent" (the agent
+ * fallback). For these two kinds the party is simply the agent's name, so return
+ * that (or AGENT_FALLBACK when unresolved). Every other kind has no distinct
+ * "party" to extract and its consumers render the full line as-is, so they
+ * delegate to scrubHumanAction with byte-identical behavior.
+ */
+export function scrubAwaitedParty(
+  terminal: Terminal,
+  viewerUserId: string,
+  nameByUuid: Map<string, string | null>,
+): string {
+  if (terminal.kind === 'AWAITING_AGENT_STUCK' || terminal.kind === 'AWAITING_AGENT_WORKING') {
+    const name = nameByUuid.get(terminal.agentId) ?? null;
+    return name && name.trim() ? name.trim() : AGENT_FALLBACK;
+  }
+  return scrubHumanAction(terminal, viewerUserId, nameByUuid);
+}
+
 export function scrubHumanAction(
   terminal: Terminal,
   viewerUserId: string,
@@ -128,8 +157,22 @@ export function scrubHumanAction(
     return terminal.label.replace(UUID_RE_G, (uuid) => nameOf(uuid) ?? AGENT_FALLBACK);
   }
 
+  // Step 2.5 (2026-06-15 legibility fix) — the two agent kinds. The raw engine
+  // label is "{agentId} stuck on {leaf}" / "{agentId} working on {leaf}"; the
+  // generic UUID-replace in step 3 turned the LEAF id (an ISSUE uuid) into the
+  // agent fallback, producing "CEO stuck on an agent" → the Reader then wrapped
+  // it as "CEO stuck on an agent is stuck". Emit a clean "{name} is stuck/working"
+  // — party + state, no leaf id (every surface shows the leaf separately). The
+  // existing scrub tests only assert no-UUID + the 'an agent' fallback, both held.
+  if (terminal.kind === 'AWAITING_AGENT_STUCK') {
+    return `${nameOf(terminal.agentId) ?? AGENT_FALLBACK} is stuck`;
+  }
+  if (terminal.kind === 'AWAITING_AGENT_WORKING') {
+    return `${nameOf(terminal.agentId) ?? AGENT_FALLBACK} is working`;
+  }
+
   // Step 3 — substitute every embedded UUID with a name or 'an agent' (covers
-  // AWAITING_AGENT_WORKING/STUCK agentId, AWAITING_HUMAN/EXTERNAL/CYCLE labels).
+  // AWAITING_HUMAN/EXTERNAL/CYCLE labels; the agent kinds returned above).
   let label = terminal.label.replace(UUID_RE_G, (uuid) => nameOf(uuid) ?? AGENT_FALLBACK);
 
   // Step 4 — viewer userId → "You" for an AWAITING_HUMAN action. Run AFTER step 3

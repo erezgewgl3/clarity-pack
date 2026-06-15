@@ -24,7 +24,7 @@ import {
   pickTopChains,
   classifyVerdict,
 } from '../../shared/blocker-chain.ts';
-import { scrubHumanAction } from '../../shared/scrub-human-action.ts';
+import { scrubHumanAction, scrubAwaitedParty } from '../../shared/scrub-human-action.ts';
 import type { ActionCard, BlockerChainResult, Terminal } from '../../shared/types.ts';
 import { polishTldr } from '../agents/compile-tldr.ts';
 import {
@@ -532,6 +532,12 @@ async function buildOneEmployeeRow(
         //      rendered awaitedPartyLabel; the verdict's own awaitedPartyLabel is
         //      the raw terminal.label, so the scrubbed string is the display value.
         const humanAction = scrubHumanAction(terminal, viewerUserId, nameByUuid);
+        // Fix (2026-06-15) — awaitedPartyLabel is the PARTY only (the SR composes
+        // "waiting on {party}" / "Open chat: {party}"); the full action sentence
+        // lives in humanAction. For the agent kinds the full sentence ("CEO stuck
+        // on {leaf}") read garbled when used as the party — scrubAwaitedParty
+        // returns just the agent name; byte-identical for every other kind.
+        const awaitedParty = scrubAwaitedParty(terminal, viewerUserId, nameByUuid);
         // i.4. B1 — ownerAgentId MUST be focusIssue.assigneeAgentId (AGENT uuid).
         //      terminal.userId is a USER uuid — different namespace; consumed only
         //      for needsYou viewer-match below.
@@ -615,7 +621,7 @@ async function buildOneEmployeeRow(
           tier: picked.tier,
           actionAffordance: picked.actionAffordance,
           // D-15 — rendered display = the scrubbed humanAction; UUIDs mutation-only.
-          awaitedPartyLabel: humanAction,
+          awaitedPartyLabel: awaitedParty,
           targetAgentUuid: picked.targetAgentUuid ?? null,
           targetIssueUuid: leafIssueUuid,
           // Plan 16-04 (T-16-03 / BLOCKER 2) — capture the AWAITING_HUMAN USER uuid

@@ -41,6 +41,7 @@ import type { BlockerChainResult, Terminal } from '../../shared/types.ts';
 // userId string-match.
 import {
   scrubHumanAction,
+  scrubAwaitedParty,
   UUID_RE_G,
 } from '../../shared/scrub-human-action.ts';
 // Plan 11-02 Task 2 (D-01) — the SINGLE worker-side liveness projection. The
@@ -688,10 +689,11 @@ export async function buildOrgBlockedBacklog(
       ownerAgentId: ownerUuid,
       age_ms: ageMsFrom(issue),
       // Plan 14-04 Task 2 — the <ReplyInPlace> fields. awaitedPartyLabel = the
-      // scrubbed display (= the same scrubbed humanAction, NO raw UUID);
-      // targetAgentUuid/leafIssueUuid are dispatch-only (NO_UUID_LEAK);
+      // PARTY only (a name/role), NOT the full action sentence (the 2026-06-15
+      // legibility fix — see scrubAwaitedParty); the full line is `humanAction`
+      // above. targetAgentUuid/leafIssueUuid are dispatch-only (NO_UUID_LEAK);
       // decisionOptions null (no action card on the org backlog this phase).
-      awaitedPartyLabel: scrubHumanAction(terminal, viewerUserId, nameByUuid),
+      awaitedPartyLabel: scrubAwaitedParty(terminal, viewerUserId, nameByUuid),
       targetAgentUuid: chain.targetAgentUuid ?? null,
       decisionOptions: null,
       leafIssueUuid: chain.targetIssueUuid ?? null,

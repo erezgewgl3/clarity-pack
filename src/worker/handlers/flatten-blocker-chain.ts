@@ -31,7 +31,7 @@ import {
 // the bridge into the Reader DOM. Mirrors org-blocked-backlog.ts:402-471 exactly:
 // resolve a nameByUuid map from ctx.agents, then overwrite awaitedPartyLabel with
 // scrubHumanAction(result.terminal, viewerUserId, nameByUuid).
-import { scrubHumanAction, UUID_RE_G } from '../../shared/scrub-human-action.ts';
+import { scrubHumanAction, scrubAwaitedParty, UUID_RE_G } from '../../shared/scrub-human-action.ts';
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 // Plan 11-02 Task 3 (D-01 / SC5) — the SINGLE worker-side liveness projection,
 // shared with buildEdges (org-blocked-backlog.ts). The engine reads no clock;
@@ -261,7 +261,12 @@ export async function scrubResultLabel(
     }
   }
 
-  return { ...result, awaitedPartyLabel: scrubHumanAction(terminal, viewerUserId, nameByUuid) };
+  // Fix (2026-06-15): awaitedPartyLabel is the PARTY, not the full action line.
+  // The Reader composes "{awaitedPartyLabel} is stuck/working"; for the two agent
+  // kinds scrubHumanAction returned the whole "{agent} stuck on {leaf}" sentence,
+  // which rendered the garbled "CEO stuck on an agent is stuck". scrubAwaitedParty
+  // returns just the agent name for those kinds; byte-identical for all others.
+  return { ...result, awaitedPartyLabel: scrubAwaitedParty(terminal, viewerUserId, nameByUuid) };
 }
 
 /**

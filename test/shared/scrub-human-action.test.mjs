@@ -17,9 +17,74 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
-import { scrubHumanAction } from '../../src/shared/scrub-human-action.ts';
+import { scrubHumanAction, scrubAwaitedParty } from '../../src/shared/scrub-human-action.ts';
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+// ---------------------------------------------------------------------------
+// 2026-06-15 legibility fix — the agent kinds must NOT produce the garbled
+// "CEO stuck on an agent is stuck" the operator saw on the live Reader.
+// ---------------------------------------------------------------------------
+
+test('scrubHumanAction — AWAITING_AGENT_STUCK → clean "{name} is stuck" (no leaf, no "stuck on")', () => {
+  const agent = '11111111-2222-3333-4444-555555555555';
+  const leaf = '99999999-8888-7777-6666-aaaaaaaaaaaa';
+  // The REAL engine label embeds the leaf id: "{agentId} stuck on {leaf}".
+  const out = scrubHumanAction(
+    { kind: 'AWAITING_AGENT_STUCK', agentId: agent, label: `${agent} stuck on ${leaf}` },
+    '',
+    new Map([[agent, 'CEO']]),
+  );
+  assert.equal(out, 'CEO is stuck');
+  assert.doesNotMatch(out, /stuck on/, 'must not embed the leaf via "stuck on"');
+  assert.doesNotMatch(out, /an agent/, 'the leaf id must not mis-scrub to "an agent"');
+  assert.ok(!UUID_RE.test(out));
+});
+
+test('scrubHumanAction — AWAITING_AGENT_WORKING → clean "{name} is working"', () => {
+  const agent = '11111111-2222-3333-4444-555555555555';
+  const out = scrubHumanAction(
+    { kind: 'AWAITING_AGENT_WORKING', agentId: agent, label: `${agent} working on ${agent}` },
+    '',
+    new Map([[agent, 'CEO']]),
+  );
+  assert.equal(out, 'CEO is working');
+});
+
+test('scrubAwaitedParty — agent kinds return the PARTY only (so "{party} is stuck" reads right)', () => {
+  const agent = '11111111-2222-3333-4444-555555555555';
+  const leaf = '99999999-8888-7777-6666-aaaaaaaaaaaa';
+  const party = scrubAwaitedParty(
+    { kind: 'AWAITING_AGENT_STUCK', agentId: agent, label: `${agent} stuck on ${leaf}` },
+    '',
+    new Map([[agent, 'CEO']]),
+  );
+  assert.equal(party, 'CEO');
+  // The Reader composes `${party} is stuck` — this must read "CEO is stuck",
+  // NEVER the garbled "CEO stuck on an agent is stuck".
+  assert.equal(`${party} is stuck`, 'CEO is stuck');
+});
+
+test('scrubAwaitedParty — unresolved agent → "an agent" (party); composes "an agent is stuck"', () => {
+  const agent = '11111111-2222-3333-4444-555555555555';
+  const party = scrubAwaitedParty(
+    { kind: 'AWAITING_AGENT_STUCK', agentId: agent, label: `${agent} stuck on ${agent}` },
+    '',
+    new Map(),
+  );
+  assert.equal(party, 'an agent');
+  assert.ok(!UUID_RE.test(party));
+});
+
+test('scrubAwaitedParty — non-agent kinds delegate to scrubHumanAction (byte-identical)', () => {
+  const u = 'dddddddd-3333-4444-5555-666666666666';
+  const terminal = { kind: 'EXTERNAL', label: `Blocked on external ${u}` };
+  const map = new Map([[u, 'Vendor']]);
+  assert.equal(
+    scrubAwaitedParty(terminal, '', map),
+    scrubHumanAction(terminal, '', map),
+  );
+});
 
 // Test 1 — genuine UNOWNED (Plan 11-01 D-11; was __unowned__ HUMAN_ACTION_ON)
 // whose embedded UUID does NOT resolve → "Owner unknown — assign an owner first".
