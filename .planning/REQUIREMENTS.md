@@ -45,8 +45,8 @@
 ### Action-cards async re-architecture — LAST, flag-gated (Phase 19)
 
 - [ ] **CARD-01**: Action-card compile runs OFF the request path (not in the snapshot RPC) and writes non-notifying op-issues (no "Someone updated" storm).
-- [ ] **CARD-02**: `ACTION_CARDS_ENABLED` is re-enabled behind the flag once proven; the Editor named-action prose (what unblocks this + who + ~when) goes live on needs-you rows, stale→degrade intact.
-- [ ] **CARD-03**: The flag is runtime-safe and slip-safe — OFF degrades to the deterministic floor (room still works); ON yields no snapshot 502 and no notification storm.
+- [x] **CARD-02**: `ACTION_CARDS_ENABLED` is re-enabled behind the flag once proven; the Editor named-action prose (what unblocks this + who + ~when) goes live on needs-you rows, stale→degrade intact.
+- [x] **CARD-03**: The flag is runtime-safe and slip-safe — OFF degrades to the deterministic floor (room still works); ON yields no snapshot 502 and no notification storm.
 
 ### Hygiene & honestly-green CI (Phase 20)
 
@@ -86,8 +86,8 @@
 | LEG-02 | Phase 18 | Complete |
 | LEG-03 | Phase 18 | Complete |
 | CARD-01 | Phase 19 | Pending |
-| CARD-02 | Phase 19 | Pending |
-| CARD-03 | Phase 19 | Pending |
+| CARD-02 | Phase 19 | Complete |
+| CARD-03 | Phase 19 | Complete |
 | HYG-01 | Phase 20 | Pending |
 | HYG-02 | Phase 20 | Pending |
 | HYG-03 | Phase 20 | Pending |
