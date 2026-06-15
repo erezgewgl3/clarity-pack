@@ -60,8 +60,8 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 - [x] **Phase 16.1: Editor-Agent loop elimination & wake governor (URGENT — make Clarity safe to run)** — INSERTED 2026-06-04 after a production incident: installing Clarity made the live BEAAA instance unusable (every issue/agent/task change drove CPU up + woke 4-5 agents). Root cause = a closed positive-feedback loop (event-reactive op-issue creation + `requestWakeup` whose own writes re-enter the instance-wide event subscription). Eliminate the loop by construction, add a durable throughput wake-governor + kill-switch, and gate ingress on opt-in/scope — while leaving the read-time "zero rabbit-holes" guarantee untouched. Hard prerequisite to reinstalling Clarity on BEAAA; blocks 17–20. (completed 2026-06-10)
 - [x] **Phase 17: Structured human-wait + truthful verdicts (CENTERPIECE)** — a machine-readable "blocked on a human decision X" signal so the deterministic engine classifies AWAITING_HUMAN instead of parking in Watch (the deep BEAAA-972 fix); every blocked-no-edge class classified truthfully; SC5 extended to a full surface × terminal-kind matrix. (completed 2026-06-11)
 - [x] **Phase 18: No rabbit-holes & plain-English** — "Open ↗" routes to the Clarity Reader (not the raw classic page); ZERO raw/partial agent/UUID ids in human-facing text everywhere; "Looks done — close it?" affordance when the AI TL;DR reads done but the engine still says blocked. (completed 2026-06-14)
-- [ ] **Phase 19: Action-cards async re-architecture (LAST, flag-gated)** — action-card compile off the request path writing non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; Editor named-action prose live on needs-you rows; runtime-safe + slip-safe to v1.6.
-- [ ] **Phase 20: Hygiene & honestly-green CI** — SC5 full-matrix in CI; fix the 7 CHAT/CTT traceability failures; stabilize the chat-watchdog timing flake; refresh the version label; confirm automated DO backups (the continuous-deploy bookend).
+- [x] **Phase 19: Action-cards async re-architecture (LAST, flag-gated)** — action-card compile off the request path writing non-notifying op-issues; re-enable `ACTION_CARDS_ENABLED` behind the flag once proven; Editor named-action prose live on needs-you rows; runtime-safe + slip-safe to v1.6. (completed 2026-06-15)
+- [x] **Phase 20: Hygiene & honestly-green CI** — SC5 full-matrix in CI; fix the 7 CHAT/CTT traceability failures; stabilize the chat-watchdog timing flake; refresh the version label; confirm automated DO backups (the continuous-deploy bookend). (completed 2026-06-15)
 
 ## Phase Details (v1.5.0)
 
@@ -148,7 +148,7 @@ Plans:
 - [x] 19-02-PLAN.md — Wave 2: CARD-01 — delete the on-request compile block + batch getActionCardsBySources read-cached attach + SWR serve-path flag strip + bounded-warm <=5 cap + no-on-request-compile static gate + non-notifying op-issue verification
 - [x] 19-03-PLAN.md — Wave 3: CARD-02 four-surface attach — Reader/Bulletin/Chat read-only card attach + named-action render with deterministic floor + NO_UUID_LEAK render-scan across all 3 new surfaces
 - [x] 19-04-PLAN.md — Wave 4: CARD-03 — set-action-cards-flag RPC (Step-2 enable + panic-OFF, no psql) + OFF-floor-at-every-gate test + ON-no-storm storm-safety burst
-- [ ] 19-05-PLAN.md — Wave 5 (autonomous:false): two-source bump to v1.8.0 + clean rebuild + bookended BEAAA reinstall (flag OFF) + Step-1 quiet verify + monitored Step-2 ON-flip drill (kill-switch armed) + panic-OFF rehearsal
+- [x] 19-05-PLAN.md — Wave 5 (autonomous:false): two-source bump to v1.8.0 + clean rebuild + bookended BEAAA reinstall (flag OFF) + Step-1 quiet verify + monitored Step-2 ON-flip drill (kill-switch armed) + panic-OFF rehearsal
 **UI hint**: yes
 
 ### Phase 20: Hygiene & honestly-green CI
@@ -163,7 +163,7 @@ Plans:
 **Plans**: 3 plans
 - [x] 20-01-PLAN.md — Wave 1: fix the test-debt (snapshot-prefetch count drift D-05, U7 chat-watchdog wall-clock flake HYG-03, the 7 env-dependent safety-CLI harness failures D-06) so the full sweep is honestly green
 - [x] 20-02-PLAN.md — Wave 2: wire the SC5 full surface×terminal-kind matrix into CI + widen the CI test glob to recurse (HYG-01 / D-03) so ~126 previously-silent nested tests + the safety-CLI suite actually run; full honest-green sweep verification
-- [ ] 20-03-PLAN.md — Wave 1 (autonomous:false): verify the two-source version label is 1.8.0 (no re-bump, D-02) + operator-confirm automated DO backups ON for AriClaw (HYG-04 deploy bookend, batched with the end-of-milestone operator window)
+- [x] 20-03-PLAN.md — Wave 1 (autonomous:false): verify the two-source version label is 1.8.0 (no re-bump, D-02) + operator-confirm automated DO backups ON for AriClaw (HYG-04 deploy bookend, batched with the end-of-milestone operator window)
 
 ## Phase Details (v1.4.0)
 
@@ -276,8 +276,8 @@ Plans:
 | 16.1 Editor-Agent loop elimination & wake governor (URGENT) | 7/7 | Complete   | 2026-06-10 |
 | 17. Structured human-wait + truthful verdicts | 6/6 | Complete   | 2026-06-11 |
 | 18. No rabbit-holes & plain-English | 4/4 | Complete    | 2026-06-14 |
-| 19. Action-cards async re-architecture | 4/5 | In Progress|  |
-| 20. Hygiene & honestly-green CI | 2/3 | In Progress|  |
+| 19. Action-cards async re-architecture | 5/5 | Complete   | 2026-06-15 |
+| 20. Hygiene & honestly-green CI | 3/3 | Complete   | 2026-06-15 |
 
 ### v1.4.0 phase tracking
 

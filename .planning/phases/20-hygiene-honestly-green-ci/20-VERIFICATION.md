@@ -1,8 +1,9 @@
 ---
 phase: 20-hygiene-honestly-green-ci
 verified: 2026-06-15T15:52:00Z
-status: human_needed
-score: 5/6 must-haves verified
+status: passed
+score: 6/6 must-haves verified
+human_resolution: "2026-06-15 — operator confirmed automated DO backups ON for AriClaw with recent snapshot. HYG-04 fully closed (version label 1.8.0 live + DO backup bookend confirmed)."
 overrides_applied: 0
 human_verification:
   - test: "Confirm automated DO backups are ON for the AriClaw droplet"

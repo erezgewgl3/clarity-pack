@@ -1,8 +1,9 @@
 ---
 phase: 19-action-cards-async-re-architecture-last-flag-gated
 verified: 2026-06-15T18:30:00Z
-status: human_needed
-score: 3/4 must-haves verified
+status: passed
+score: 4/4 must-haves verified
+human_resolution: "2026-06-15 — v1.8.0 deployed live to BEAAA (bookended by confirmed automated DO backups). CARD-01 quiet-verify PASS (ready, no EADDRINUSE, health+snapshot 200, no 502). CARD-03 ON-flip live-proven (flag ON 200, 2-min no-storm, snapshot 200 throughout). Flag steady-state ON = action-cards delivered live. Open rider: CARD-02 visible-prose live-positive deferred (heartbeat-governed, dormant on quiet queue — Phase-17 style; four-surface attach CI-proven 57/57)."
 overrides_applied: 0
 human_verification:
   - test: "Step-1 — bookended BEAAA reinstall (flag OFF) + quiet verify"
