@@ -57,6 +57,7 @@ function makeCtx({ issueRows = [], agentRows = [], relations = {}, optedIn = tru
     agentsList: 0, // agents.list call count
     stageLogs: [], // every snap.stage log payload
     waitSelectSql: [], // Plan 17-02 — every clarity_human_waits prefetch SELECT
+    actionCardsFlagSql: [], // Phase 19 (CARD-03) — every action_cards_flag enablement SELECT
   };
 
   const ctx = {
@@ -117,6 +118,24 @@ function makeCtx({ issueRows = [], agentRows = [], relations = {}, optedIn = tru
           spies.waitSelectSql.push(sql);
           return [];
         }
+        // Phase 19 Plan 19-01 (CARD-03) — the action-cards enablement read is
+        // the isActionCardsEnabled namespace SELECT
+        // (plugin_clarity_pack_cdd6bda4bd.action_cards_flag WHERE company_id = $1
+        // LIMIT 1, from src/worker/db/action-cards-flag-repo.ts). It fires from
+        // exactly ONE of two MUTUALLY-EXCLUSIVE snapshot paths — situation-room.ts
+        // line 603 (the synchronous-recompute path this cache-miss scenario takes)
+        // OR line 709 (the SWR serve-last-good path) — so it is a SINGLE read per
+        // snapshot, NOT a per-row N+1. It is excluded from the public.* prefetch
+        // round-trip contract for the SAME reason clarity_user_prefs /
+        // situation_snapshots / clarity_human_waits are: it is a plugin-NAMESPACE
+        // read, not one of the two public.* N+1-collapse SELECTs this suite
+        // measures. Track it on its own spy so a future per-row N+1 regression is
+        // still caught (assertion below). Return [] = no row = degrade-to-OFF
+        // (D-02 default), the safe deterministic floor.
+        if (/action_cards_flag/.test(sql)) {
+          spies.actionCardsFlagSql.push(sql);
+          return [];
+        }
         spies.dbQuerySql.push(sql);
         if (/FROM public\.issues/i.test(sql)) return issueRows;
         if (/FROM public\.agents/i.test(sql)) return agentRows;
@@ -170,6 +189,18 @@ test('prefetch — issues exactly TWO db.query calls (one public.issues, one pub
   // root-meta write sites (SC5).
   assert.equal(bag.spies.waitSelectSql.length, 1, 'exactly one clarity_human_waits SELECT');
   assert.match(bag.spies.waitSelectSql[0], /company_id = \$1/);
+  // Phase 19 (CARD-03 / T-19-01) — exactly ONE action_cards_flag enablement
+  // SELECT per snapshot. isActionCardsEnabled is served from exactly one of two
+  // mutually-exclusive snapshot paths (sync recompute OR SWR serve), so a count
+  // of 1 is correct and a count > 1 would be a per-row N+1 regression. Keeping
+  // this exact (not <=) preserves the N+1 trip-wire even though the flag read is
+  // excluded from the public.* prefetch round-trip contract above.
+  assert.equal(
+    bag.spies.actionCardsFlagSql.length,
+    1,
+    'exactly one action_cards_flag enablement SELECT per snapshot (no per-row N+1)',
+  );
+  assert.match(bag.spies.actionCardsFlagSql[0], /company_id = \$1/);
 });
 
 // ---------------------------------------------------------------------------
