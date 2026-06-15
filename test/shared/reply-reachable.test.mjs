@@ -2,13 +2,13 @@
 //
 // Plan 14-02 Task 1 (DO-05 / SC4) — the pure reply-reachable predicate.
 //
-// isReplyReachable(terminalKind) returns TRUE for AWAITING_HUMAN ONLY — the
-// spike-proven dominant BEAAA shape (the operator answers his own awaited-decision
-// issue; the answer-comment triggers the assigned agent's resume, Shape A/B). Every
-// other kind → FALSE. In particular AWAITING_AGENT_STUCK → FALSE (DEFERRED — it
-// stays actionAffordance:'assign' per Phase 12 D-05 LOCK; the OwnerPicker handles
-// it, never a Send). The dead `AWAITING_AGENT_STUCK = true` arm from the prior
-// draft is GONE — this suite asserts it.
+// isReplyReachable(terminalKind) returns TRUE for AWAITING_HUMAN and
+// AWAITING_AGENT_STUCK — both resume via the spike-proven answer-comment recipe
+// (the operator's reply triggers the assigned party's resume, Shape A/B). Every
+// other kind → FALSE. Phase 21 (21-CONTEXT D-2) ACTIVATED AWAITING_AGENT_STUCK →
+// TRUE (the Phase-12 D-05 LOCK that routed it to 'assign'/false is reversed); its
+// verdict is now actionAffordance:'nudge' (blocker-chain.ts D-1) and it mounts the
+// same <ReplyInPlace> Send. This suite pins the two-reachable set.
 //
 // Purity: the predicate reads ONLY the terminalKind string — no targetAgentUuid,
 // no awaitedPartyLabel/ownerName string match, no AI/LLM token, no I/O, no clock.
@@ -33,8 +33,8 @@ test('AWAITING_HUMAN → true (the ONLY reachable kind — the spike-proven shap
   assert.equal(isReplyReachable('AWAITING_HUMAN'), true);
 });
 
-test('AWAITING_AGENT_STUCK → false (DEFERRED — stays assign per Phase 12 D-05; the dead =true arm is gone)', () => {
-  assert.equal(isReplyReachable('AWAITING_AGENT_STUCK'), false);
+test('AWAITING_AGENT_STUCK → true (Phase 21 activation — reply-to-unstick via Shape B answer-comment; 21-CONTEXT D-2)', () => {
+  assert.equal(isReplyReachable('AWAITING_AGENT_STUCK'), true);
 });
 
 test('AWAITING_AGENT_WORKING → false (in motion, no action needed)', () => {
@@ -61,7 +61,7 @@ test('UNCLASSIFIED → false (honest degrade — open to investigate)', () => {
   assert.equal(isReplyReachable('UNCLASSIFIED'), false);
 });
 
-test('exactly ONE of the 8 kinds is reachable (AWAITING_HUMAN)', () => {
+test('exactly TWO of the 8 kinds are reachable (AWAITING_HUMAN + AWAITING_AGENT_STUCK)', () => {
   const KINDS = [
     'AWAITING_HUMAN',
     'AWAITING_AGENT_WORKING',
@@ -73,7 +73,7 @@ test('exactly ONE of the 8 kinds is reachable (AWAITING_HUMAN)', () => {
     'UNCLASSIFIED',
   ];
   const reachable = KINDS.filter((k) => isReplyReachable(k));
-  assert.deepEqual(reachable, ['AWAITING_HUMAN']);
+  assert.deepEqual(reachable, ['AWAITING_HUMAN', 'AWAITING_AGENT_STUCK']);
 });
 
 // ---------------------------------------------------------------------------

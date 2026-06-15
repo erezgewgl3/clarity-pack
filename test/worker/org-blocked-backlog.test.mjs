@@ -684,7 +684,7 @@ test('builder — UNOWNED row carries actionAffordance "assign" (NY-03/D-09)', a
   assert.equal(row.actionAffordance, 'assign');
 });
 
-test('builder — AWAITING_AGENT_STUCK row carries actionAffordance "assign" (post-12-01, NY-03/D-09)', async () => {
+test('builder — AWAITING_AGENT_STUCK row carries actionAffordance "nudge" (Phase 21 D-1, NY-03/D-09)', async () => {
   const agentUuid = 'eeeeeeee-5555-6666-7777-888888888888';
   const f = agentOwnedIssue('i-as', 'COU-11', agentUuid, { fresh: false });
   const ctx = makeCtx({
@@ -695,7 +695,7 @@ test('builder — AWAITING_AGENT_STUCK row carries actionAffordance "assign" (po
   const backlog = await buildOrgBlockedBacklog(ctx, 'co-1', 'u-viewer');
   const row = backlog.rows[0];
   assert.equal(row.terminalKind, 'AWAITING_AGENT_STUCK');
-  assert.equal(row.actionAffordance, 'assign');
+  assert.equal(row.actionAffordance, 'nudge');
 });
 
 test('builder — AWAITING_HUMAN row carries actionAffordance "reply" (NOT "assign")', async () => {

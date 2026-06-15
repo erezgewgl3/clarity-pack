@@ -251,10 +251,11 @@ test('needsYou (12-02 D-11): AWAITING_AGENT_WORKING + SELF_RESOLVING rows are EX
 });
 
 // ---------------------------------------------------------------------------
-// Test 7 (D-11 / 12-01) — AWAITING_AGENT_STUCK (affordance now 'assign') is STILL
-// excluded from Needs-you because needsYou is false (tier 'watch').
+// Test 7 (D-11 / Phase 21 D-1) — AWAITING_AGENT_STUCK (affordance now 'nudge') is
+// STILL excluded from Needs-you because needsYou is false (tier 'watch'). The Phase
+// 21 affordance flip to 'nudge' did NOT promote stuck to the loud tier.
 // ---------------------------------------------------------------------------
-test('needsYou (12-02 D-11): AWAITING_AGENT_STUCK is EXCLUDED from Needs-you even though its affordance is now "assign"', async () => {
+test('needsYou (Phase 21 D-1): AWAITING_AGENT_STUCK is EXCLUDED from Needs-you even though its affordance is now "nudge"', async () => {
   const stuck = agent({ id: 'ag-stuck', lastHeartbeatMs: NOW - 30 * MIN });
   const blocked = issueWith({ id: 'i-stuck', identifier: 'COU-ST1', assigneeAgentId: 'ag-stuck', lastActivityMs: NOW - 2 * HOUR });
   const blockerAgentUuid = 'bbbbbbbb-5555-6666-7777-888888888888';
@@ -269,7 +270,7 @@ test('needsYou (12-02 D-11): AWAITING_AGENT_STUCK is EXCLUDED from Needs-you eve
   });
   const out = await buildEmployeesRollup(ctx, 'co-1', 'u-viewer-not-owner');
   const row = out.employees.find((r) => r.agentId === 'ag-stuck');
-  assert.equal(row.blockerChain.actionAffordance, 'assign', '12-01: stuck affordance is now assign');
+  assert.equal(row.blockerChain.actionAffordance, 'nudge', 'Phase 21 D-1: stuck affordance is now nudge');
   assert.equal(row.blockerChain.needsYou, false, 'but the verdict is NOT needs-you (tier watch)');
   assert.equal(out.needsYou.count, 0, 'stuck is excluded from the loud Needs-you list (D-04/D-11)');
   assert.equal(out.needsYou.topAction, null);

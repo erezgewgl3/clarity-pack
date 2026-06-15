@@ -168,7 +168,9 @@ test('Reader — blocked + agent-owned + zero blockedBy → AWAITING_AGENT_STUCK
   assert.equal(result.terminal.kind, 'AWAITING_AGENT_STUCK');
   assert.equal(result.tier, 'watch');
   assert.equal(result.needsYou, false);
-  assert.equal(result.actionAffordance, 'assign');
+  // Phase 21 (21-CONTEXT D-1) — stuck now carries 'nudge' (was 'assign');
+  // tier 'watch' / needsYou false unchanged.
+  assert.equal(result.actionAffordance, 'nudge');
 });
 
 // ===========================================================================

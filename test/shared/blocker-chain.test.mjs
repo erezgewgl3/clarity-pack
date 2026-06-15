@@ -68,7 +68,7 @@ test('AWAITING_AGENT_WORKING — walks THROUGH agent to a live agent leaf; in-mo
   assert.equal(result.targetAgentUuid, 'agent-actuary');
 });
 
-test('AWAITING_AGENT_STUCK — agentState missing ⇒ conservative STUCK (D-04); watch tier + assign (D-05)', () => {
+test('AWAITING_AGENT_STUCK — agentState missing ⇒ conservative STUCK (D-04); watch tier + nudge (Phase 21 D-1)', () => {
   const result = flattenBlockerChain({
     startId: 'A',
     edges: [{ from: 'A', to: 'B', reason: 'blocks' }],
@@ -83,9 +83,11 @@ test('AWAITING_AGENT_STUCK — agentState missing ⇒ conservative STUCK (D-04);
   assert.equal(result.terminal.agentId, 'agent-cfo');
   assert.equal(result.needsYou, false);
   assert.equal(result.tier, 'watch');
-  // D-05 — a stuck agent's honest answer is re-owning the issue, so the row
-  // now offers 'assign' (was 'nudge'). tier stays 'watch'; needsYou stays false.
-  assert.equal(result.actionAffordance, 'assign');
+  // Phase 21 (21-CONTEXT D-1) — the reserved 'nudge' slot is ACTIVE: a stuck
+  // agent's honest first response is a quiet reply-to-unstick, so the row offers
+  // 'nudge' (was 'assign'; Phase-12 D-05 lock reversed). tier stays 'watch';
+  // needsYou stays false.
+  assert.equal(result.actionAffordance, 'nudge');
   assert.equal(result.targetAgentUuid, 'agent-cfo');
 });
 
@@ -118,7 +120,7 @@ test('classifyVerdict — encodes the design-seed Section 1 table for all 8 kind
   const table = {
     AWAITING_HUMAN: { tier: 'needs-you', actionAffordance: 'reply', needsYou: true },
     AWAITING_AGENT_WORKING: { tier: 'in-motion', actionAffordance: 'none', needsYou: false },
-    AWAITING_AGENT_STUCK: { tier: 'watch', actionAffordance: 'assign', needsYou: false },
+    AWAITING_AGENT_STUCK: { tier: 'watch', actionAffordance: 'nudge', needsYou: false },
     SELF_RESOLVING: { tier: 'watch', actionAffordance: 'none', needsYou: false },
     EXTERNAL: { tier: 'watch', actionAffordance: 'open', needsYou: false },
     CYCLE: { tier: 'watch', actionAffordance: 'open', needsYou: false },
