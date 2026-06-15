@@ -69,11 +69,11 @@ Make the Situation Room load instantly and tell the truth a non-builder can read
 
 </details>
 
-### ▶ v1.6.0 — Stuck-Agent Reply-In-Place (Phase 21) — ACTIVE
+### ✓ v1.6.0 — Stuck-Agent Reply-In-Place (Phase 21) — COMPLETE (live v1.8.2, verified-with-rider)
 
 Extend the Do-It-Here reply loop so the operator can reply-in-place to **resume a STUCK agent** (`AWAITING_AGENT_STUCK` / Phase-15 Watch-tier rows), not just human-wait (`AWAITING_HUMAN`) rows. WIRING, not invention: the `situation.replyAndResume` handler already exists (Plan 14-01), the Phase-10 spike proved a plain comment resumes an agent in both awaiting-answer and `status='blocked'` cases, and `blocker-chain.ts` already classifies `AWAITING_AGENT_STUCK` and stays AI-free/untouched. Likely NO new migration.
 
-- [ ] **Phase 21: Stuck-Agent Reply-In-Place** — surface the reply-in-place affordance on `AWAITING_AGENT_STUCK` rows (Situation Room employee row + Reader live-blocker panel); a plain operator reply resumes the stuck agent via `situation.replyAndResume`; no auto-resume on passive view; stuck-context copy; degrade-safe + NO_UUID_LEAK on every new path.
+- [x] **Phase 21: Stuck-Agent Reply-In-Place** — surface the reply-in-place affordance on `AWAITING_AGENT_STUCK` rows (Situation Room employee row + Reader live-blocker panel); a plain operator reply resumes the stuck agent via `situation.replyAndResume`; no auto-resume on passive view; stuck-context copy; degrade-safe + NO_UUID_LEAK on every new path. **Shipped live BEAAA v1.8.2; 21-VERIFICATION passed (5/5 must-haves). 5/6 STUCK live-positive verified read-only; STUCK-03 live Send reserved for operator (boundary-enforced) — mechanism Phase-14-live-proven. Reader nudge-overlap layout bug found in-drill and fixed (v1.8.2).**
 
 ## Phase Details (v1.6.0)
 

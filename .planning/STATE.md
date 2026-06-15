@@ -2,19 +2,31 @@
 gsd_state_version: 1.0
 milestone: v1.6.0
 milestone_name: Stuck-Agent Reply-In-Place
-status: executing
-stopped_at: Phases 19+20 code-complete & verified (passed-with-rider); one batched operator window remains to close v1.5.0
-last_updated: "2026-06-15T21:06:52.989Z"
-last_activity: 2026-06-15
+status: complete
+stopped_at: Phase 21 COMPLETE & verified (passed-with-rider); v1.8.2 live on BEAAA. Milestone v1.6.0 ready for /gsd:complete-milestone. Operator owes the live STUCK-03 Send.
+last_updated: "2026-06-16T00:00:00.000Z"
+last_activity: 2026-06-16 — Phase 21 complete; v1.8.2 shipped to BEAAA; verifier passed-with-rider
 progress:
   total_phases: 13
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 57
-  completed_plans: 54
-  percent: 77
+  completed_plans: 57
+  percent: 100
 ---
 
 # State: Clarity Pack
+
+## ✓ v1.6.0 Stuck-Agent Reply-In-Place — PHASE 21 COMPLETE 2026-06-16 (live BEAAA v1.8.2)
+
+**Phase 21 is complete and verified (21-VERIFICATION: passed, 5/5 must-haves).** All 5 plans shipped; v1.8.1 then v1.8.2 (Reader nudge-overlap layout fix) deployed live to BEAAA — `key=clarity-pack status=ready version=1.8.2 id=a763176a-…` (UUID preserved). Full suite 2957/2959 green; no new migration, no new capability; engine stayed pure.
+
+**Live drill (read-only, opted-in session): 5/6 STUCK requirements verified POSITIVE** — STUCK-01 (4 real stuck agents in the QUIET Watch tier, not promoted to Needs-you), STUCK-02 (Reader nudge affordance; old requestWakeup re-wired away), STUCK-04 (no auto-resume on view), STUCK-05 (stuck "Nudge to unstick" copy), STUCK-06 (zero UUIDs in Clarity-generated prose; the one page UUID is author-written task-body content the host also renders). Reader layout fix re-verified live (no overlap at 760px).
+
+**OPEN RIDER — operator owes the live STUCK-03 Send:** the live Send→resume on a real production agent was reserved for Eric ("You Send it") and the auto-mode classifier correctly blocked the agent from posting to a live agent. Mechanism is code-proven (2957 tests incl. nudge-dispatch + no-auto-resume + NO_UUID_LEAK) and live-proven for the IDENTICAL handler+primitive in Phase 14 (only the copy variant differs). Eric: open the SR Watch tier or any stuck issue's Reader, type a nudge, hit "Nudge to unstick" — expect a "Replied to … · BEAAA-NN" toast + the agent resuming on its next heartbeat + no storm.
+
+**Next action:** `/gsd:complete-milestone` to archive v1.6.0 (the sole phase is done + verified). The live STUCK-03 Send is a human-verification rider, not a code gap.
+
+---
 
 ## ▶ v1.6.0 Stuck-Agent Reply-In-Place — ROADMAP CREATED 2026-06-15 (Phase 21)
 
