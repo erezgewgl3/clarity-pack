@@ -75,6 +75,24 @@ function primaryActionLabel(
   }
 }
 
+/** Phase 19 Plan 19-03 (CARD-02 / D-09) — map the coarse estimate bucket to
+ *  human display words. Mirrors situation-room/employee-row.tsx:estBucketLabel
+ *  EXACTLY (same three mappings, same null default). Anything else (null / garbage
+ *  bucket) → null so the await line OMITS the estimate segment entirely — never a
+ *  fabricated number (ACT-02 anti-false-precision). */
+function estBucketLabel(bucket: string | null | undefined): string | null {
+  switch (bucket) {
+    case 'quick':
+      return 'quick decision';
+    case 'focused':
+      return '~30-min review';
+    case 'deep':
+      return 'deep work';
+    default:
+      return null;
+  }
+}
+
 /** The honest one-line blocker headline for each of the 8 kinds. Renders ONLY
  *  the SCRUBBED display strings — data.awaitedPartyLabel (the awaited-party
  *  string the worker handler flatten-blocker-chain.ts already scrubbed of every
@@ -351,9 +369,33 @@ function LiveBlockerPanelWithCompany({
       {/* Plan 14-03 (WARNING 2) — SUPPRESS the standalone blockerLine <p> for the
        *  reply branch: <ReplyInPlace> renders its own namedAction line, so showing
        *  blockerLine here too would duplicate the headline. Non-reply affordances
-       *  keep the blockerLine <p> exactly as before (no regression). */}
+       *  keep the blockerLine <p> exactly as before (no regression).
+       *
+       *  Phase 19 Plan 19-03 (CARD-02 / D-09) — when the runtime flag is ON and a
+       *  FRESH cached Editor action card is attached (data.actionCard, attached
+       *  read-only by flatten-blocker-chain), render the named-action prose +
+       *  "waiting on <party> · <estimate>" line IN PLACE OF the deterministic
+       *  blockerLine(data) floor. When the card is null (stale / absent / flag OFF)
+       *  fall through to blockerLine(data) exactly as today (degrade-safe). Every
+       *  display string is rescrubbed at render (rescrubPersisted) and is a plain
+       *  React text node; card.sourceIssueUuid is NOT on the mirror, so it can
+       *  never be rendered (NO_UUID_LEAK by construction, D-10). Mirrors
+       *  employee-row.tsx:374-404. */}
       {data.actionAffordance !== 'reply' ? (
-        <p className="clarity-blocker-label">{blockerLine(data)}</p>
+        (() => {
+          const card = data.actionCard;
+          const estWords = card ? estBucketLabel(card.estBucket) : null;
+          return card ? (
+            <div className="clarity-blocker-label clarity-blocker-action-card">
+              <p className="clarity-blocker-named-action">{rescrubPersisted(card.namedAction)}</p>
+              <p className="clarity-blocker-await">
+                {`waiting on ${rescrubPersisted(card.awaitedParty)}${estWords ? ` · ${estWords}` : ''}`}
+              </p>
+            </div>
+          ) : (
+            <p className="clarity-blocker-label">{blockerLine(data)}</p>
+          );
+        })()
       ) : null}
       {/* Plan 14-03 (SC3/SC4/DO-01) — the ONE shared <ReplyInPlace> on the reply
        *  branch. reachable computed off data.terminal.kind (native on this

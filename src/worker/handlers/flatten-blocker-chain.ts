@@ -17,6 +17,7 @@
 import type {
   PluginIssuesClient,
   PluginIssueRelationSummary,
+  PluginDatabaseClient,
 } from '@paperclipai/plugin-sdk';
 
 import type { BlockerChainResult, Terminal } from '../../shared/types.ts';
@@ -57,6 +58,16 @@ import {
   listClarityHumanWaitsForCompany,
   type ClarityHumanWaitRow,
 } from '../db/clarity-human-wait-repo.ts';
+// Phase 19 Plan 19-03 (CARD-02 / D-09) — the read-cached-only action-card attach
+// for the Reader. Flag-gated (isActionCardsEnabled, degrade-to-OFF), batch read
+// (getActionCardsBySources — the 19-02 primitive), liveness-armed
+// (isActionCardLive — age-only, the read path recomputes no content hash), mapped
+// via rowToCard. This handler NEVER compiles (no driveActionCardsStep) — the
+// 19-02 no-on-request-compile static gate covers it. When OFF/stale/absent the
+// card is null and the Reader panel renders the deterministic floor.
+import { isActionCardsEnabled } from '../db/action-cards-flag-repo.ts';
+import { getActionCardsBySources } from '../db/action-cards-repo.ts';
+import { rowToCard, isActionCardLive } from '../agents/action-cards.ts';
 
 const MAX_CHAIN_DEPTH = 6;
 
@@ -189,10 +200,63 @@ export function registerFlattenBlockerChain(ctx: FlattenBlockerChainCtx): void {
       result.actionAffordance === 'none' &&
       result.awaitedPartyLabel === 'No active blockers';
     if (isBlockerFreeLiteral) {
+      // A genuinely blocker-free row never needs you — no action card to attach.
       return result;
     }
-    return scrubResultLabel(ctx, companyId, viewerUserId, result);
+    const scrubbed = await scrubResultLabel(ctx, companyId, viewerUserId, result);
+    // Phase 19 Plan 19-03 (CARD-02 / D-09) — flag-gated, read-only cached-card
+    // attach for the Reader's needs-you row. Degrade-safe: OFF / stale / absent /
+    // any read throw → actionCard stays null → the panel renders blockerLine(data).
+    return attachReaderActionCard(ctx, companyId, scrubbed);
   });
+}
+
+/**
+ * Phase 19 Plan 19-03 (CARD-02 / D-09) — attach the cached Editor action card to
+ * a Reader blocker result, READ-ONLY and flag-gated. Mirrors the situation-room
+ * read-cached-only path (no compile): when isActionCardsEnabled is ON and the
+ * chain's leaf (result.targetIssueUuid) has a FRESH cached card (isActionCardLive
+ * age arm), map it via rowToCard and carry ONLY the display fields (NO_UUID_LEAK —
+ * sourceIssueUuid is dropped). When OFF / no leaf / stale / absent / any throw,
+ * the actionCard is null and the panel floors to blockerLine(data).
+ */
+export async function attachReaderActionCard(
+  ctx: { db?: { query: PluginDatabaseClient['query'] } } & ScrubCtx,
+  companyId: string,
+  result: BlockerChainResult,
+): Promise<BlockerChainResult> {
+  const leafUuid = result.targetIssueUuid ?? null;
+  if (!leafUuid || !ctx.db) return { ...result, actionCard: null };
+  try {
+    const dbCtx = { db: ctx.db } as { db: PluginDatabaseClient };
+    if (!(await isActionCardsEnabled(dbCtx, companyId))) {
+      return { ...result, actionCard: null };
+    }
+    const rowsBySource = await getActionCardsBySources(dbCtx, companyId, [leafUuid]);
+    const row = rowsBySource[leafUuid];
+    if (!row || !isActionCardLive(row, Date.now())) {
+      return { ...result, actionCard: null };
+    }
+    const card = rowToCard(row);
+    // DISPLAY fields ONLY — sourceIssueUuid (dispatch key) is intentionally NOT
+    // carried onto the Reader result (NO_UUID_LEAK by construction, D-10).
+    return {
+      ...result,
+      actionCard: {
+        namedAction: card.namedAction,
+        awaitedParty: card.awaitedParty,
+        estBucket: card.estBucket,
+        actionKind: card.actionKind,
+        decisionOptions: card.decisionOptions,
+      },
+    };
+  } catch (e) {
+    ctx.logger?.warn?.('flatten-blocker-chain: action-card cached read failed (floor)', {
+      companyId,
+      err: (e as Error).message,
+    });
+    return { ...result, actionCard: null };
+  }
 }
 
 /**

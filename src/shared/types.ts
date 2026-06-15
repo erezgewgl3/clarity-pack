@@ -79,6 +79,22 @@ export type BlockerChainResult = {
   /** Plan 11-01 (D-15) — the leaf issue's UUID for the open/assign mutation, carried
    *  ONLY as the dispatch target, NEVER rendered as visible text (NO_UUID_LEAK). */
   targetIssueUuid?: string | null;
+  // Phase 19 Plan 19-03 (CARD-02 / D-09) — the Editor-Agent named-action card for
+  // this chain's leaf, attached by flatten-blocker-chain ONLY when the runtime
+  // flag is ON and a FRESH cached card exists (read-cached-only, never compiled);
+  // null/absent when stale, not yet generated, or the flag is OFF → the Reader
+  // panel degrades to the deterministic blockerLine(data) line (D-09 floor).
+  //
+  // DISPLAY fields ONLY (mirrors the SR employee-row mirror). The worker
+  // ActionCard's mutation-only sourceIssueUuid is INTENTIONALLY OMITTED — it has
+  // no field here, so it cannot be threaded into a render (NO_UUID_LEAK, D-10).
+  actionCard?: {
+    namedAction: string;
+    awaitedParty: string;
+    estBucket: 'quick' | 'focused' | 'deep' | (string & {});
+    actionKind: 'answer' | 'decide' | 'assign' | 'none' | (string & {});
+    decisionOptions: string[] | null;
+  } | null;
 };
 
 export type TLDR = {
