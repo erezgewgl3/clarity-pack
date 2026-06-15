@@ -730,6 +730,17 @@ export async function driveActionCardsStep(
   // READY — parse + normalize + persist defensively. A bad entry → no card on
   // that row (degrade). Then mark the op done (best-effort) so a later recompute
   // starts fresh.
+  //
+  // Phase 19 Plan 19-02 (A1 / D-07) — this mark-done is NON-NOTIFYING BY
+  // CONSTRUCTION: the op-issue was created by startAgentTask with
+  // surfaceVisibility:'plugin_operation' (agent-task-delivery.ts), i.e. off the
+  // human board. A status-only ctx.issues.update on a plugin_operation op-issue is
+  // the SAME quiet-write the TL;DR compile uses and raises NO user "Someone
+  // updated" notification — the exact 16.1 mechanism, no second op-issue path. The
+  // status-only + plugin_operation properties are asserted in
+  // test/loop/storm-safety.test.mjs (CARD-01 burst). The live empirical confirm
+  // (no notification fires on BEAAA) is the Plan 19-05 Step-1 quiet window (A1 is
+  // partly empirical). No code change was needed here — the guard stands.
   const fresh = await finalizeBody(ctx, {
     companyId,
     rows: compileSlice,

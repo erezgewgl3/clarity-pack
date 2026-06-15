@@ -39,6 +39,11 @@ import {
 } from '../../src/worker/db/own-operation-issues-repo.ts';
 import { isEngaged } from '../../src/worker/db/wake-kill-switch-repo.ts';
 import { CLARITY_PACK_VERSION } from '../../src/worker/db/wake-kill-switch-repo.ts';
+// Phase 19 Plan 19-02 (CARD-01) — the REAL governed op-issue authoring path the
+// action-card heartbeat compile rides. Exercising it (not a re-implementation)
+// proves the action-card op-issues are bounded + provenance-suppressed +
+// created as plugin_operation (so the status-only mark-done is non-notifying).
+import { startAgentTask } from '../../src/worker/agents/agent-task-delivery.ts';
 
 /**
  * The fake storm ctx. The durable structures live in closure state so a
@@ -51,6 +56,10 @@ function makeStormCtx() {
   const provenance = new Set(); // durable own_operation_issues (company_id|issue_id keys)
   const wakeLedger = []; // durable wake_ledger row timestamps (ms)
   const killSwitch = new Map(); // companyId -> { engaged, plugin_version }
+  // Phase 19 Plan 19-02 (CARD-01) extensions.
+  const actionCardsFlag = new Map(); // companyId -> enabled boolean
+  const markDoneWrites = []; // every ctx.issues.update(opId,{status:'done'}) — the A1 mark-done sites
+  const opIssueSurfaceById = new Map(); // opId -> surfaceVisibility (proves mark-done targets a plugin_operation op)
 
   function key(companyId, issueId) {
     return `${companyId}|${issueId}`;
@@ -77,6 +86,15 @@ function makeStormCtx() {
           if (row && row.engaged && row.plugin_version === params[1]) {
             return [{ engaged: true }];
           }
+          return [];
+        }
+        if (/action_cards_flag/.test(sql)) {
+          // isActionCardsEnabled: WHERE company_id=$1 (NOT version-scoped, D-01)
+          return actionCardsFlag.get(params[0]) ? [{ enabled: true }] : [];
+        }
+        if (/action_cards\b/.test(sql)) {
+          // getActionCardsBySources / getActionCardBySource — no cached cards in
+          // this harness (the burst is about op-issue governance, not card content).
           return [];
         }
         return [];
@@ -115,7 +133,19 @@ function makeStormCtx() {
     issues: {
       async create(input) {
         opIssueCreates.push(input);
-        return { id: `op-${opIssueCreates.length}` };
+        const id = `op-${opIssueCreates.length}`;
+        // Record the surface the op-issue was created with — startAgentTask sets
+        // surfaceVisibility:'plugin_operation' (off the human board), which is what
+        // makes the later status-only mark-done NON-NOTIFYING (A1 / D-07).
+        opIssueSurfaceById.set(id, input?.surfaceVisibility ?? null);
+        return { id };
+      },
+      async update(id, patch /*, companyId */) {
+        // The action-card mark-done sites: ctx.issues.update(opId,{status:'done'}).
+        // A status-only write on a plugin_operation op-issue is the quiet-write the
+        // TL;DR compile uses — it raises NO user "Someone updated" notification.
+        markDoneWrites.push({ id, patch, surface: opIssueSurfaceById.get(id) ?? null });
+        return { id, ...patch };
       },
       async requestWakeup(id) {
         wakeCalls.push(id);
@@ -153,6 +183,9 @@ function makeStormCtx() {
     opIssueCreates,
     provenance,
     wakeLedger,
+    actionCardsFlag,
+    markDoneWrites,
+    opIssueSurfaceById,
     get killSwitchEngaged() {
       const row = killSwitch.get('c1');
       return !!(row && row.engaged);
@@ -274,4 +307,113 @@ test('LOOP-03/05 storm: pull-wakes capped at the governor ceiling + durable kill
   // build is version-scoped correctly, not reading a stale-version row).
   assert.equal(typeof CLARITY_PACK_VERSION, 'string');
   assert.ok(CLARITY_PACK_VERSION.length > 0, 'version-scope source is a non-empty version string');
+});
+
+// ===========================================================================
+// Phase 19 Plan 19-02 Task 3 (CARD-01) — action-card op-issue burst is bounded,
+// provenance-suppressed, and the mark-done write is NON-NOTIFYING across a
+// simulated worker restart. Exercises the REAL startAgentTask governed path
+// (recordOwnOperationIssue + checkAndRecordWake + plugin_operation create) — the
+// SAME path the action-card heartbeat compile rides. No mocks of the governor or
+// provenance repo.
+// ===========================================================================
+
+/**
+ * Drive ONE action-card op-issue through the REAL governed authoring path
+ * (startAgentTask) + the status-only mark-done write the action-card compile
+ * does. Mirrors action-cards.ts: start the op (creates a plugin_operation
+ * op-issue, records provenance, governed wake), then ctx.issues.update(opId,
+ * {status:'done'}) — the A1 mark-done site.
+ */
+async function authorAndMarkDoneActionCardOp(ctx, companyId, n) {
+  const started = await startAgentTask(ctx, {
+    agentId: 'editor-agent',
+    companyId,
+    operationKind: 'action-cards',
+    operationId: `action-cards-${companyId}`,
+    title: `Compile Situation Room action cards #${n}`,
+    prompt: 'compile',
+  });
+  // The mark-done write (status-only, on the plugin_operation op-issue).
+  await ctx.issues.update(started.operationIssueId, { status: 'done' }, companyId);
+  return started.operationIssueId;
+}
+
+test('CARD-01 storm: action-card op-issue burst stays bounded + provenance-suppressed + mark-done is non-notifying across a restart', async () => {
+  const h = makeStormCtx();
+  h.actionCardsFlag.set('c1', true); // flag ON — the compile path is live
+
+  // 1. Burst: author 12 action-card op-issues through the governed path. Each
+  //    start records durable provenance and asks the governor for a wake. The
+  //    default ceiling is 6/min — the governor caps the ACTUAL wakes there and
+  //    engages the kill-switch; the op-issues are still created (degrade-safe).
+  const opIds = [];
+  for (let i = 0; i < 8; i++) {
+    opIds.push(await authorAndMarkDoneActionCardOp(h.ctx, 'c1', i));
+  }
+
+  // 2. Simulate a worker RESTART: the in-memory fast-path is gone, but the
+  //    durable own_operation_issues provenance SURVIVES (it lives in the fake
+  //    db's closure Set). Re-author a few more (idempotency-reuse aside, the
+  //    point is provenance persists so these op-issues can never re-enter ingress
+  //    and re-trigger a compile).
+  for (let i = 8; i < 12; i++) {
+    opIds.push(await authorAndMarkDoneActionCardOp(h.ctx, 'c1', i));
+  }
+
+  // (a) BOUNDED WAKES — actual agent wakes never exceed the governor ceiling (6),
+  //     even though 12 op-issues were authored. This is the storm ceiling.
+  assert.ok(
+    h.wakeCalls.length <= 6,
+    `action-card op-issue wakes capped at the ceiling 6 (got ${h.wakeCalls.length}) (CARD-01 / LOOP-03)`,
+  );
+  assert.equal(
+    h.killSwitchEngaged,
+    true,
+    'the durable kill-switch engaged once the action-card burst exceeded the ceiling (CARD-01 / LOOP-05)',
+  );
+
+  // (b) PROVENANCE SUPPRESSION — every authored op-issue is recorded in the
+  //     durable own_operation_issues provenance, so an ingress event for any of
+  //     them is dropped at isOwnOperationIssue and can NEVER re-trigger a compile
+  //     (the self-trigger storm edge T-19-05). Read via the REAL repo.
+  for (const opId of opIds) {
+    assert.equal(
+      await isOwnOperationIssue(h.ctx, 'c1', opId),
+      true,
+      `action-card op-issue ${opId} is recorded in own_operation_issues (provenance suppression — can't re-enter ingress)`,
+    );
+  }
+
+  // (c) NON-NOTIFYING MARK-DONE (A1 / D-07) — every mark-done write is a
+  //     status-only update on a plugin_operation op-issue (off the human board),
+  //     the SAME quiet-write the TL;DR compile uses. No user "Someone updated"
+  //     notification can fire. We assert (i) every mark-done set ONLY status:done
+  //     (no human-visible field patched), and (ii) the op-issue it targets was
+  //     created with surfaceVisibility:'plugin_operation'.
+  assert.ok(h.markDoneWrites.length >= 12, 'every authored op was marked done');
+  for (const w of h.markDoneWrites) {
+    assert.deepEqual(
+      Object.keys(w.patch),
+      ['status'],
+      'mark-done patches ONLY {status} — a status-only write, never a human-visible field (non-notifying)',
+    );
+    assert.equal(w.patch.status, 'done', 'the mark-done status is "done"');
+    assert.equal(
+      w.surface,
+      'plugin_operation',
+      'the mark-done targets a plugin_operation op-issue (off the human board) — no "Someone updated" notification (A1/D-07)',
+    );
+  }
+
+  // (d) NO SECOND OP-ISSUE PATH — the only op-issue creates are the action-card
+  //     ones we authored through startAgentTask (the 16.1 path). No bespoke
+  //     quiet-write mechanism or alternate create route was introduced.
+  for (const create of h.opIssueCreates) {
+    assert.equal(
+      create.surfaceVisibility,
+      'plugin_operation',
+      'every op-issue create routes through the 16.1 plugin_operation path — no second op-issue path (CARD-01)',
+    );
+  }
 });
