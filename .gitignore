@@ -39,3 +39,5 @@ entities.json
 /*.png
 /snap.json
 /*chat-messages*.json
+.codex/
+/deploy-*.sh
