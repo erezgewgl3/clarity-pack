@@ -17,10 +17,31 @@
 //   - Opted-out caller → { error: 'OPT_IN_REQUIRED' } before any host call.
 
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { registerSituationReplyAndResume } from '../../../src/worker/handlers/situation-reply-and-resume.ts';
 import { wrapHostFaithfulDb } from '../../helpers/host-faithful-db.mjs';
+
+// Plan 21-04 Task 2 — source-grep helpers (no jsdom; mirrors the UI suites'
+// stripComments convention) so the kind-agnostic + no-auto-resume contracts are
+// pinned against the SOURCE, not a behavioral mock.
+function stripComments(s) {
+  return s
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, '..', '..', '..');
+const HANDLER_SRC = stripComments(
+  readFileSync(path.join(REPO_ROOT, 'src/worker/handlers/situation-reply-and-resume.ts'), 'utf8'),
+);
+const PRIMITIVE_SRC = stripComments(
+  readFileSync(path.join(REPO_ROOT, 'src/ui/surfaces/_shared/reply-in-place.tsx'), 'utf8'),
+);
 
 // Canonical UUID matcher — mirrors the host's id-shape rejection.
 function isUuid(id) {
@@ -435,3 +456,99 @@ test('Test 13: issues.get throws → NOT_FOUND, no comment/update, no dedup row 
   assert.equal(ctx._issueUpdateCalls.length, 0, 'no flip on a gate error');
   assert.equal(ctx._dedupStore.size, 0, 'no dedup row on a gate error (legit retry allowed)');
 });
+
+// ---- Plan 21-04 Task 2 — the handler is TERMINAL-KIND-AGNOSTIC (needs NO change)
+//
+// 21-CONTEXT D-8 + the SEED CORRECTION: the seed asserted the worker would need
+// to "loosen any terminal-kind gate" for the stuck path. Live-code grounding
+// proves the opposite — the handler NEVER inspects terminal.kind; it acts on the
+// caller-supplied needsDurabilityFlip boolean alone. A stuck (Shape-B
+// status='blocked') row resumes correctly through this UNCHANGED handler. These
+// source-grep tests pin that contract so a future edit that re-introduces a
+// terminal-kind branch is caught.
+
+test('Test 14: the handler source reads needsDurabilityFlip and NEVER inspects terminal.kind (kind-agnostic — needs NO change)', () => {
+  // It DOES key off the caller-supplied durable-flip boolean.
+  assert.match(HANDLER_SRC, /needsDurabilityFlip/, 'handler keys off needsDurabilityFlip');
+  // It NEVER inspects terminal.kind / terminalKind — no terminal-kind proxy. This
+  // is the seed-divergence pin (D-8): the stuck path required no handler edit.
+  assert.doesNotMatch(HANDLER_SRC, /terminal\.kind/, 'handler must NOT read terminal.kind');
+  assert.doesNotMatch(HANDLER_SRC, /terminalKind/, 'handler must NOT read terminalKind');
+});
+
+// ---- Plan 21-04 Task 2 — the stuck Shape-B resume path (needsDurabilityFlip=true)
+//
+// A stuck agent is the dominant Shape-B (status='blocked') case. Exercising the
+// existing behavioral handler with needsDurabilityFlip=true IS the stuck resume:
+// the operator's note posts a comment (the native resume trigger) AND the durable
+// {status:'in_progress'} flip applies, returning { ok:true, durable:true }. Reuses
+// the file's mock-ctx; the handler treats it identically to any other Shape-B row
+// (kind-agnostic). This duplicates Test 4's mechanism intentionally, framed as the
+// STUCK resume per D-8 (extend, don't rewrite).
+
+test('Test 15: STUCK Shape-B resume (needsDurabilityFlip=true) → comment posts + durable in_progress flip + { ok, durable:true }', async () => {
+  const ctx = makeReplyCtx();
+  const fn = getHandler(ctx);
+  const result = await fn(
+    replyParams({ needsDurabilityFlip: true, body: 'Try the staging credentials in the vault.' }),
+  );
+  await flush();
+
+  // The operator note posted (the native resume trigger for the stuck agent).
+  assert.equal(ctx._createCommentCalls.length, 1, 'the unstick reply posts one comment');
+  assert.equal(ctx._createCommentCalls[0].body, 'Try the staging credentials in the vault.');
+  // The durable Shape-B flip applied: exactly one update {status:'in_progress'}.
+  assert.equal(ctx._issueUpdateCalls.length, 1, 'one durable status flip');
+  assert.deepEqual(
+    ctx._issueUpdateCalls[0].patch,
+    { status: 'in_progress' },
+    'stuck row durably flips to in_progress',
+  );
+  // The result confirms the durable stuck resume.
+  assert.equal(result.ok, true);
+  assert.equal(result.durable, true);
+});
+
+// ---- Plan 21-04 Task 2 — STUCK-04 no-auto-resume on view
+//
+// The resume mutation (situation.replyAndResume) must fire ONLY on an explicit
+// operator Send / chip onClick — NEVER on mount/view. The shared <ReplyInPlace>
+// primitive is the single dispatch site for all three surfaces, so pinning it
+// here covers SR + Reader + backlog by construction. Source-grep over the
+// primitive: the reply() dispatch lives ONLY inside dispatchReply, and
+// dispatchReply is invoked ONLY from onClick / onKeyDown (Enter) — never from a
+// React.useEffect (no mount-driven dispatch).
+
+test('Test 16: the reply() dispatch lives ONLY inside dispatchReply (single dispatch site)', () => {
+  // The action hook is bound once.
+  assert.match(PRIMITIVE_SRC, /const reply = usePluginAction\('situation\.replyAndResume'\)/);
+  // `reply(` is invoked exactly once in the source — inside dispatchReply.
+  assert.equal(
+    (PRIMITIVE_SRC.match(/\breply\(\{/g) || []).length,
+    1,
+    'exactly one reply({...}) dispatch call (inside dispatchReply)',
+  );
+});
+
+test('Test 17: STUCK-04 — dispatchReply is invoked ONLY from Send/chip onClick + Enter, NEVER from a useEffect (no auto-resume on view)', () => {
+  // dispatchReply fires from the Send button, the chips, and Enter — all explicit
+  // operator gestures.
+  assert.match(PRIMITIVE_SRC, /onClick=\{\(\)\s*=>\s*void dispatchReply\(body\)\}/, 'Send onClick');
+  assert.match(
+    PRIMITIVE_SRC,
+    /onClick=\{\(\)\s*=>\s*void dispatchReply\(cannedSentence\(option\)\)\}/,
+    'chip onClick',
+  );
+  assert.match(PRIMITIVE_SRC, /if\s*\(e\.key === 'Enter'\)\s*void dispatchReply\(body\)/, 'Enter key');
+  // The primitive uses NO React.useEffect at all (so dispatchReply cannot be
+  // mount-driven) — and certainly no effect that calls dispatchReply.
+  assert.doesNotMatch(PRIMITIVE_SRC, /React\.useEffect/, 'no useEffect in the primitive');
+  assert.doesNotMatch(PRIMITIVE_SRC, /useEffect\([\s\S]*?dispatchReply/, 'no effect-driven dispatch');
+});
+
+// ---- Plan 21-04 Task 2 — CONFIRMATION: the handler source is UNCHANGED.
+//
+// This plan adds NO edit to situation-reply-and-resume.ts (D-8: the handler is
+// kind-agnostic and needs no change for the stuck path). The kind-agnostic
+// source-grep (Test 14) is the assertion; the git-diff-clean check is a manual
+// verification noted in the SUMMARY (no programmatic git call in a unit test).
