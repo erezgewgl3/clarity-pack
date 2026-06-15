@@ -245,6 +245,11 @@ export function actionKindFromAffordance(
   switch (affordance) {
     case 'reply':
       return 'answer';
+    case 'nudge':
+      // Plan 21-03 Task 3 (D-6) — a nudge (reply-to-unstick on a stuck agent) IS
+      // an answer-comment. Map to the existing 'answer' action_kind enumerated by
+      // the 0015 CHECK constraint {answer,assign,decide,none} — NO new migration.
+      return 'answer';
     case 'assign':
       return 'assign';
     default:
