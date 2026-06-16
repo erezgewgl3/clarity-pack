@@ -197,55 +197,22 @@ test('chat.send: sending to a done topic logs hint and does NOT call issues.upda
   assert.equal(ctx._updateCalls.length, 0, 'CTT-07: zero issues.update calls');
 });
 
-test('chat.send: ACTIVE WAKE — requestWakeup IS called for the topic with messageUuid as the idempotency key (2026-05-29 usability fix)', async () => {
-  // SUPERSEDES the prior "requestWakeup NEVER called" guard. The Phase 4.1
-  // PROBE-OQ3 "native wake suffices" conclusion did NOT hold on
-  // paperclipai@2026.525.0 — idle agents never ran, so the operator's chat
-  // message got no reply (the whole point of chat). chat.send now explicitly
-  // wakes the topic's assignee (requestWakeup works in this valid ACTION scope;
-  // it only fails in the dead scheduled-job scope). One wake per fresh send,
-  // keyed by messageUuid so a CHAT-06 resend never double-wakes.
+test('chat.send: v1.8.7 — requestWakeup is NOT called; the posted comment is the native wake', async () => {
+  // The detached `void Promise.then(() => ctx.issues.requestWakeup(...))` is REMOVED.
+  // The earlier "ACTIVE WAKE" comment claimed it "works in a valid action scope" —
+  // FALSE on host PR #6547: a detached microtask runs AFTER the handler returns, so
+  // the invocation scope is cleared and the call is denied. It never woke anything;
+  // the agent replies via the NATIVE trigger — the canonical comment posted on the
+  // topic issue, which its heartbeat picks up. So a fresh send posts exactly one
+  // comment, persists the message, and makes ZERO wakeup calls.
   const ctx = makeCtx();
   registerChatSend(ctx);
-  await ctx._handlers.get('chat.send')(sendParams());
+  const result = await ctx._handlers.get('chat.send')(sendParams());
   await new Promise((r) => setImmediate(r));
-  assert.equal(ctx._wakeupCalls.length, 1, 'chat.send must actively wake the assignee on a fresh send');
-  assert.equal(ctx._wakeupCalls[0].issueId, 'issue-topic-1');
-  assert.equal(
-    ctx._wakeupCalls[0].opts?.idempotencyKey,
-    'uuid-fresh-1',
-    'idempotencyKey must be the messageUuid so a resend never double-wakes',
-  );
-});
-
-test('chat.send: a requestWakeup failure is NON-FATAL — the send still succeeds (comment already persisted)', async () => {
-  const ctx = makeCtx({ wakeupFails: true });
-  registerChatSend(ctx);
-  const result = await ctx._handlers.get('chat.send')(sendParams());
-  assert.equal(result.ok, true, 'a wake failure must not fail the send');
+  assert.equal(result.ok, true, 'send succeeds');
   assert.equal(result.commentId, 'comment-1');
-  assert.equal(ctx._insertedMessages.length, 1, 'the message is still persisted on a wake failure');
-});
-
-test('chat.send: DE-BLOCK — a never-resolving requestWakeup must NOT stall the send (2026-05-29)', async () => {
-  // Decisive proof of the fire-and-forget transform. requestWakeup is unreliable
-  // on paperclipai@2026.525.0 (30s timeout / scope errors). With the prior
-  // `await ctx.issues.requestWakeup(...)`, a hung wake would block the send ACK
-  // for the full 30s. With fire-and-forget (void Promise.resolve().then(...)),
-  // the handler resolves immediately even though the wake never settles.
-  const ctx = makeCtx({ wakeupHangs: true });
-  registerChatSend(ctx);
-  const before = Date.now();
-  const result = await ctx._handlers.get('chat.send')(sendParams());
-  const elapsed = Date.now() - before;
-
-  assert.equal(result.ok, true, 'chat.send must resolve even when the wake never settles');
-  assert.equal(result.commentId, 'comment-1');
-  assert.equal(ctx._wakeupCalls.length, 1, 'requestWakeup is still invoked (kept, just not awaited)');
-  assert.ok(
-    elapsed < 40,
-    `chat.send must NOT await requestWakeup (elapsed=${elapsed}ms; threshold=40ms)`,
-  );
+  assert.equal(ctx._insertedMessages.length, 1, 'the message is persisted');
+  assert.equal(ctx._wakeupCalls.length, 0, 'NO requestWakeup (removed; scope-denied post-return)');
 });
 
 test('chat.send: a resend (replay) does NOT wake again — dedup returns before the wake (CHAT-06)', async () => {
@@ -268,43 +235,22 @@ test('chat.send: a resend (replay) does NOT wake again — dedup returns before 
   assert.equal(ctx._wakeupCalls.length, 0, 'an idempotent replay must not re-wake the agent');
 });
 
-test('chat.send: in_progress topic is NOT updated (no needless flip, but watchdog STILL fires — D-11 anti-regression)', async () => {
+test('chat.send: v1.8.7 — the topic watchdog is NOT invoked (no issues.get, no flip)', async () => {
+  // The per-send `void ensureTopicWakeable(...)` is REMOVED. Its scoped
+  // ctx.issues.get ran after the handler returned → scope-denied (PR #6547),
+  // logging a warn and doing nothing; the helper was vestigial anyway (the host's
+  // disposition-recovery owns status restoration). So chat.send now issues NO
+  // ctx.issues.get and NO ctx.issues.update — it posts the comment + persists the
+  // message and returns. (The host-stuck banner uses chat.messages' own in-handler
+  // fetch via isTopicStuck, not this removed per-send watchdog.)
   const ctx = makeCtx({ issueStatus: 'in_progress' });
   registerChatSend(ctx);
-  await ctx._handlers.get('chat.send')(sendParams());
+  const result = await ctx._handlers.get('chat.send')(sendParams());
   await new Promise((r) => setImmediate(r));
 
-  // No flip on a non-terminal status.
-  assert.equal(ctx._updateCalls.length, 0);
-  // ... but the watchdog DID run — issues.get was called on every send (D-11
-  // anti-regression of OQ-3 STATUS-FLIP-NOT-NEEDED: the conclusion was right
-  // about the requestWakeup nudge being unnecessary, NOT about skipping the
-  // status check on subsequent sends).
-  assert.ok(
-    ctx._getCalls.length >= 1,
-    'ensureTopicWakeable runs on every send (issues.get always called)',
-  );
-});
-
-test('chat.send: fire-and-forget — chat.send returns BEFORE a slow watchdog completes', async () => {
-  // 50ms is well above the single setImmediate tick chat.send needs to land
-  // the comment + the side-table insert.
-  const ctx = makeCtx({ issueStatus: 'done', getDelayMs: 50 });
-  registerChatSend(ctx);
-  const before = Date.now();
-  const result = await ctx._handlers.get('chat.send')(sendParams());
-  const elapsed = Date.now() - before;
-
-  assert.equal(result.ok, true);
-  assert.equal(result.commentId, 'comment-1');
-  // chat.send must NOT have awaited the 50ms-delayed get. Allow 25ms slack
-  // for slow CI; 50ms would mean we awaited the watchdog (regression).
-  assert.ok(
-    elapsed < 40,
-    `chat.send must not await the watchdog (elapsed=${elapsed}ms; threshold=40ms)`,
-  );
-  // Wait for the watchdog to actually finish before the next test.
-  await new Promise((r) => setTimeout(r, 70));
+  assert.equal(result.ok, true, 'send succeeds');
+  assert.equal(ctx._updateCalls.length, 0, 'no status flip');
+  assert.equal(ctx._getCalls.length, 0, 'watchdog removed — no per-send issues.get');
 });
 
 test('chat.send: createComment host failure → { error: SEND_FAILED }, no orphan chat_messages row, watchdog NOT invoked', async () => {

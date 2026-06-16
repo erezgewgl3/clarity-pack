@@ -68,7 +68,7 @@ import { classifyComment } from '../chat/comment-classify.ts';
 // jargon glossary). Operator-authored messages (meta.sender_kind === 'user')
 // bypass — operator's voice is sacred.
 import { polishTldr } from '../agents/compile-tldr.ts';
-import { ensureTopicWakeable, isTopicStuck } from '../chat/topic-watchdog.ts';
+import { isTopicStuck } from '../chat/topic-watchdog.ts';
 
 /**
  * Plan 05-11 (CHAT-07) -- one attachment as the chat thread UI consumes it.
@@ -208,12 +208,12 @@ export function registerChatMessages(ctx: ChatMessagesCtx): void {
     // Plan 04.1-04 — D-16 diagnostics opt-in. OFF by default.
     const includeDiagnostics = (params as { includeDiagnostics?: unknown })?.includeDiagnostics === true;
 
-    // Plan 04.1-04 — D-11 watchdog cadence. Fire-and-forget at the head of
-    // the handler. The helper handles its own try/catch internally and
-    // NEVER throws back to the caller (chat.messages must not fail because
-    // of a watchdog mishap). A `void` discards the returned promise so the
-    // handler does not await the slow path.
-    void ensureTopicWakeable(ctx, topicIssueId, companyId);
+    // (v1.8.7) The per-poll `void ensureTopicWakeable(...)` watchdog is REMOVED.
+    // Fired fire-and-forget at the head of the handler, its scoped `ctx.issues.get`
+    // ran after the dispatch returned → scope-denied (PR #6547), logging a warn per
+    // poll and doing nothing. The helper was vestigial anyway: the host's
+    // disposition-recovery owns status restoration, and the host-stuck banner uses
+    // isTopicStuck over the comments/issue this handler already fetches in-scope.
 
     let comments: CommentLike[];
     try {

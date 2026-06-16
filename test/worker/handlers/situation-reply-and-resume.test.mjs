@@ -402,20 +402,22 @@ test('Test 8: Shape-B flip throws → still { ok: true, durable: false } + dedup
   );
 });
 
-// ---- Test 9 — fire-and-forget wake carries idempotencyKey:messageUuid ------
+// ---- Test 9 — v1.8.7: NO requestWakeup (the canonical comment is the wake) ----
 
-test('Test 9: requestWakeup is fire-and-forget with idempotencyKey === messageUuid', async () => {
+test('Test 9: requestWakeup is NOT called — the posted comment is the native wake trigger', async () => {
+  // v1.8.7 removed the detached fire-and-forget requestWakeup. On host PR #6547 it
+  // ran as a post-return microtask in a CLEARED invocation scope → denied, never
+  // woke anything. The agent resumes via the NATIVE trigger: the canonical comment
+  // posted on the leaf issue, which its heartbeat picks up (proven live). So a
+  // successful reply makes ZERO wakeup calls and still posts exactly one comment.
   const ctx = makeReplyCtx();
   const fn = getHandler(ctx);
-  await fn(replyParams({ messageUuid: 'msg-wake-42' }));
+  const result = await fn(replyParams({ messageUuid: 'msg-wake-42' }));
   await flush();
 
-  assert.equal(ctx._wakeupCalls.length, 1, 'requestWakeup invoked once');
-  const w = ctx._wakeupCalls[0];
-  assert.ok(isUuid(w.issueId), 'wake targets the UUID');
-  assert.equal(w.issueId, LEAF_UUID);
-  assert.equal(w.companyId, 'co-1');
-  assert.equal(w.options.idempotencyKey, 'msg-wake-42', 'idempotencyKey IS the messageUuid');
+  assert.equal(result.ok, true, 'reply succeeds (comment posted)');
+  assert.equal(ctx._createCommentCalls.length, 1, 'exactly one comment — the native wake');
+  assert.equal(ctx._wakeupCalls.length, 0, 'NO requestWakeup (removed; scope-denied post-return)');
 });
 
 // ---- Test 10 — NO_UUID_LEAK: human key never reaches createComment/update --

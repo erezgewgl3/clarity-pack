@@ -42,7 +42,6 @@ import {
   insertChatMessage,
   type ChatTopicsRepoCtx,
 } from '../db/chat-topics-repo.ts';
-import { ensureTopicWakeable } from '../chat/topic-watchdog.ts';
 
 export type ChatSendCtx = OptInGuardActionCtx &
   ChatTopicsRepoCtx & {
@@ -96,49 +95,22 @@ export function registerChatSend(ctx: ChatSendCtx): void {
       sent_at: new Date().toISOString(),
     });
 
-    // 4. D-09 / D-11 — ensure the topic is in a WAKEABLE status (flip off
-    //    done / cancelled / blocked → in_progress) so a woken agent will
-    //    actually run. Single source of truth shared with the chat.messages
-    //    per-poll watchdog. Fire-and-forget — the helper internally catches
-    //    every step, so a slow / failing watchdog cannot delay or fail the send.
-    void ensureTopicWakeable(ctx, topicIssueId, companyId);
-
-    // 5. ACTIVE WAKE (2026-05-29 usability fix — the whole point of chat is to
-    //    get a reply). Posting a comment relies on the host's PASSIVE "native
-    //    wake"; on this org that leaves idle agents un-run, so the operator's
-    //    message gets NO response. We now explicitly requestWakeup the topic's
-    //    assignee so it runs a heartbeat and can reply.
-    //
-    //    The Phase 4.1 note that "requestWakeup 404s; native wake suffices" is
-    //    STALE for paperclipai@2026.525.0: requestWakeup works in a valid ACTION
-    //    scope — it's the same call agent-task-delivery uses successfully in its
-    //    (valid) view-driven scope; it only fails in the dead SCHEDULED-JOB
-    //    scope. chat.send IS an action handler (valid scope), so this fires.
-    //    idempotencyKey=messageUuid so a resend (CHAT-06 replay) never
-    //    double-wakes. Non-fatal: the comment is already persisted above, so a
-    //    wake failure (e.g., expired scope on an older host) must NEVER fail the
-    //    send — it degrades to the prior native-wake-only behaviour.
-    //
-    //    2026-05-29 — FIRE-AND-FORGET. requestWakeup is unreliable on this host
-    //    (paperclipai@2026.525.0): proven to time out after 30s and to scope-
-    //    error in worker→host calls. AWAITing it blocked the send ACK up to 30s
-    //    and congested the worker→host channel during compile bursts. Native
-    //    wake (the comment persisted above + ensureTopicWakeable) already
-    //    delivers the reply, so we keep the call (harmless when it works) but
-    //    NEVER await it — the send ACK returns immediately below.
-    void Promise.resolve()
-      .then(() =>
-        ctx.issues.requestWakeup(topicIssueId, companyId, {
-          reason: 'clarity-pack chat: operator message',
-          idempotencyKey: messageUuid,
-        }),
-      )
-      .catch((e) =>
-        ctx.logger?.info?.('chat.send: requestWakeup non-fatal (native wake applies)', {
-          topicIssueId,
-          reason: (e as Error).message,
-        }),
-      );
+    // 4. (v1.8.7) The two fire-and-forget post-return calls that used to live here
+    //    are REMOVED, because both ran AFTER this handler returned, where the host
+    //    has cleared the invocation scope (PR #6547) → both were DENIED and did
+    //    nothing:
+    //      - `void ensureTopicWakeable(...)` (its scoped `ctx.issues.get` was
+    //        scope-denied; the helper is vestigial anyway — the host's
+    //        disposition-recovery owns status restoration, and the host-stuck
+    //        banner uses chat.messages' own in-handler fetch via isTopicStuck).
+    //      - `void Promise.then(() => ctx.issues.requestWakeup(...))` (the prior
+    //        comment claimed it "fires in a valid action scope" — FALSE on this
+    //        host: a detached microtask runs post-settle, so it was scope-denied).
+    //    The operator's reply is delivered by the NATIVE trigger: the canonical
+    //    comment posted above, which the assignee's heartbeat picks up. Removing
+    //    the dead calls only drops log noise + tests that asserted a fiction. No
+    //    behavior change (they never ran in prod). A scoped RPC cannot run after
+    //    the dispatch returns on this host.
 
     return { ok: true, commentId: comment.id };
   });

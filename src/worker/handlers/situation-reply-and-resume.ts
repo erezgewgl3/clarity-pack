@@ -200,25 +200,15 @@ export function registerSituationReplyAndResume(ctx: SituationReplyAndResumeCtx)
       durable,
     });
 
-    // 5. FIRE-AND-FORGET wake — requestWakeup is unreliable on this host
-    //    (paperclipai@2026.525.0): it can time out / scope-error in worker→host
-    //    calls. Awaiting it would block the ACK and congest the channel; the
-    //    comment above is the real native trigger. So we keep the call (harmless
-    //    when it works) but NEVER await it and NEVER fail the action on it.
-    //    idempotencyKey IS messageUuid so a resend never double-wakes (T-14-07).
-    void Promise.resolve()
-      .then(() =>
-        ctx.issues.requestWakeup(leafIssueUuid, companyId, {
-          reason: 'clarity-pack reply: operator answer',
-          idempotencyKey: messageUuid,
-        }),
-      )
-      .catch((e) =>
-        ctx.logger?.info?.(
-          'situation.replyAndResume: requestWakeup non-fatal (native wake applies)',
-          { leafIssueId, reason: (e as Error).message },
-        ),
-      );
+    // 5. (v1.8.7) The detached fire-and-forget `ctx.issues.requestWakeup` that
+    //    used to live here is REMOVED. It ran as a `void Promise.then(...)` micro-
+    //    task AFTER this handler returned, so the host had already cleared the
+    //    invocation scope (PR #6547) → it was DENIED every time and never woke
+    //    anything (the agent resumes via the NATIVE trigger: the canonical comment
+    //    posted above, which its heartbeat picks up — proven live). Keeping the
+    //    dead call only logged noise and made the tests assert a fiction. A scoped
+    //    RPC cannot run after the dispatch returns on this host; if instant-wake is
+    //    ever wanted, do it in-scope (awaited) deliberately.
 
     // 6. await-confirmed success — the comment landed; durable reflects the
     //    actual Shape-B flip outcome. The human key is echoed for the UI toast.

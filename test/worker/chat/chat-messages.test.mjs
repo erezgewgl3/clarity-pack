@@ -425,10 +425,11 @@ test('U5 MARKER-COMMENT-NEVER-FILTERED (Pitfall 4 integration): Plan 04.1-02 mar
   assert.equal(result.messages[0].commentId, 'c-marker');
 });
 
-test('U6 WATCHDOG-HOOK-FIRED: every chat.messages call invokes ctx.issues.get for the topic', async () => {
-  // D-11 watchdog cadence — every poll re-checks the topic is wakeable.
-  // The watchdog reads via ctx.issues.get; the stuck-signal read may also
-  // hit ctx.issues.get. We assert ≥1 call hitting the topic id.
+test('U6 STUCK-READ-FIRED: every chat.messages call invokes ctx.issues.get for the topic (the in-scope stuck-signal read)', async () => {
+  // (v1.8.7) The per-poll fire-and-forget watchdog get is removed; the remaining
+  // ctx.issues.get is the AWAITED in-scope stuck-signal read (for topicStuck /
+  // recoveryOwner). It runs inside the dispatch, so it is NOT scope-denied. We
+  // assert ≥1 call hitting the topic id.
   const ctx = makeCtx({ comments: mixedThread() });
   registerChatMessages(ctx);
   await ctx._handlers.get('chat.messages')(msgParams());
@@ -444,12 +445,11 @@ test('U6 WATCHDOG-HOOK-FIRED: every chat.messages call invokes ctx.issues.get fo
   );
 });
 
-test('U6b WATCHDOG-LOGS-OFF-DONE: when the topic is parked at done, the watchdog logs info-hint and does NOT call issues.update (rc.8 CTT-07)', async () => {
-  // rc.8 hotfix 2026-05-26: the watchdog NO LONGER mutates host issue
-  // status. Per CTT-07 the manifest doesn't declare issues.update;
-  // calling it always failed on the live host (~4 log lines/minute of
-  // "missing capability" spam). The host's disposition-recovery is the
-  // rightful owner of restoration; the plugin only logs a hint.
+test('U6b NO-ISSUES-UPDATE: even when the topic is parked at done, chat.messages does NOT call issues.update (CTT-07)', async () => {
+  // CTT-07: the plugin never mutates public.issues status (the manifest does not
+  // declare a status-flip path). Status restoration is the host disposition-
+  // recovery's job. (The per-poll watchdog that used to log a terminal-status hint
+  // here was removed in v1.8.7 — it ran post-return → scope-denied anyway.)
   const ctx = makeCtx({
     comments: mixedThread(),
     topicIssue: { status: 'done' },
@@ -464,55 +464,12 @@ test('U6b WATCHDOG-LOGS-OFF-DONE: when the topic is parked at done, the watchdog
   assert.equal(ctx._updateCalls.length, 0, 'CTT-07: zero issues.update calls');
 });
 
-test('U7 WATCHDOG-FIRE-AND-FORGET: a slow watchdog does NOT delay the chat.messages response', async () => {
-  // HYG-03 / D-04 — CONDITION-BASED, not wall-clock. The fire-and-forget
-  // watchdog (handler line 216, `void ensureTopicWakeable(...)`) issues the
-  // FIRST ctx.issues.get; the awaited stuck-read for topicStuck/recoveryOwner
-  // (handler line 249) is the SECOND get. We gate ONLY the first get on a
-  // test-controlled barrier (a deferred promise) and prove fire-and-forget by
-  // OBSERVING that the handler RESOLVES while that barrier is still unresolved.
-  // If the handler awaited the watchdog get, it could not return until we
-  // released the barrier — so a resolved response with the barrier still
-  // pending is a positive proof of non-await. NO Date.now() elapsed math and NO
-  // wall-clock threshold anywhere: a slow CI runner cannot make this false-fail.
-  let releaseBarrier;
-  const barrier = new Promise((resolve) => {
-    releaseBarrier = resolve;
-  });
-  // Observe whether the barrier has settled, WITHOUT timing anything.
-  let barrierReleased = false;
-  barrier.then(() => {
-    barrierReleased = true;
-  });
-
-  const ctx = makeCtx({
-    comments: mixedThread(),
-    topicIssue: { status: 'in_progress' },
-    getBarrier: barrier,
-  });
-  registerChatMessages(ctx);
-
-  // The handler must resolve even though the watchdog get is still blocked on
-  // the (un-released) barrier. We never await/release the barrier before this.
-  const result = await ctx._handlers.get('chat.messages')(msgParams());
-
-  assert.equal(result.kind, 'messages');
-  // POSITIVE PROOF: the response resolved while the watchdog get is still
-  // pending on the barrier (we have NOT released it yet) → the handler did not
-  // await the watchdog get. A microtask drain confirms `.then` hasn't fired.
-  await new Promise((r) => setImmediate(r));
-  assert.equal(
-    barrierReleased,
-    false,
-    'chat.messages resolved while the watchdog get is still blocked on the barrier (fire-and-forget)',
-  );
-
-  // Now release the barrier and drain so the fire-and-forget watchdog settles
-  // and node --test sees no dangling promise (the U6/U6b tick-drain analog).
-  releaseBarrier();
-  await new Promise((r) => setImmediate(r));
-  await new Promise((r) => setImmediate(r));
-});
+// (v1.8.7) U7 "WATCHDOG-FIRE-AND-FORGET" REMOVED. It gated the per-poll
+// fire-and-forget watchdog get on a barrier to prove non-await. That detached
+// watchdog is removed (it ran post-return → scope-denied, PR #6547). The only
+// remaining ctx.issues.get is the AWAITED stuck-signal read below, which is
+// intentionally in-scope (it must be, to read topicStuck without a scope denial),
+// so the fire-and-forget premise no longer applies.
 
 test('U8 TOPIC-STUCK-FIELD-FALSE: a clean topic returns topicStuck=false, recoveryOwner=null', async () => {
   const ctx = makeCtx({
