@@ -227,7 +227,11 @@ const flush = () => new Promise((r) => setTimeout(r, 5));
 // ---- Test 1 — param validation throws --------------------------------------
 
 test('Test 1: missing required string params THROW canonical message', async () => {
-  for (const missing of ['companyId', 'leafIssueUuid', 'leafIssueId', 'body', 'messageUuid']) {
+  // Phase-21 gap-fix: leafIssueId is NO LONGER required (it is display/echo-only;
+  // the mutation id is leafIssueUuid). The live stuck/multi-hop nudge legitimately
+  // sends leafIssueId=null (ReplyInPlaceProps declares it `string | null`), which
+  // the old reqStr 502'd. See Test 1b for the positive null-leafIssueId path.
+  for (const missing of ['companyId', 'leafIssueUuid', 'body', 'messageUuid']) {
     const ctx = makeReplyCtx();
     const fn = getHandler(ctx);
     const params = replyParams();
@@ -255,6 +259,25 @@ test('Test 1: missing required string params THROW canonical message', async () 
     const result = await fn(params);
     assert.deepEqual(result, { error: 'OPT_IN_REQUIRED' });
     assert.equal(ctx._createCommentCalls.length, 0);
+  }
+});
+
+// ---- Test 1b — REGRESSION: null leafIssueId succeeds (the live v1.8.2 502) ---
+
+test('Test 1b: leafIssueId=null is accepted (stuck/multi-hop nudge) — comment posts via UUID, no throw', async () => {
+  // The exact live failure on BEAAA v1.8.2: a Reader multi-hop / stuck nudge
+  // dispatched leafIssueId:null and the handler threw "leafIssueId required" (502).
+  // Now it must succeed: mutate via leafIssueUuid, echo leafIssueId:null.
+  for (const leafIssueId of [null, undefined]) {
+    const ctx = makeReplyCtx();
+    const fn = getHandler(ctx);
+    const result = await fn(replyParams({ leafIssueId }));
+    await flush();
+    assert.equal(ctx._createCommentCalls.length, 1, 'exactly one createComment');
+    assert.equal(ctx._createCommentCalls[0].issueId, LEAF_UUID, 'mutation used the UUID');
+    assert.equal(result.ok, true, 'returns ok with null leafIssueId');
+    assert.equal(result.commentId, 'comment-1');
+    assert.equal(result.leafIssueId ?? null, null, 'echoes leafIssueId as null');
   }
 });
 

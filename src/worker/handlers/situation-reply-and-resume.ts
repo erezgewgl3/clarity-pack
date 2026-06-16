@@ -68,13 +68,27 @@ function reqStr(params: Record<string, unknown> | undefined, key: string): strin
   throw new Error(`situation.replyAndResume: ${key} required`);
 }
 
+// Phase 21 gap-fix — `leafIssueId` (the HUMAN display key, e.g. BEAAA-43) is
+// DISPLAY/ECHO-ONLY here; the mutation id is leafIssueUuid. ReplyInPlaceProps
+// declares leafIssueId as `string | null` BY DESIGN (a multi-hop Reader chain or
+// a stuck rollup row legitimately has no single leaf human key — live-blocker-
+// panel.tsx:414 passes null on purpose). The original reqStr made it REQUIRED,
+// which 502'd the live stuck/multi-hop nudge ("leafIssueId required"). It never
+// fired for AWAITING_HUMAN (those reply rows were single-hop). optStr accepts the
+// documented null; the mutation/gate/comment all use leafIssueUuid (still reqStr).
+function optStr(params: Record<string, unknown> | undefined, key: string): string | null {
+  const v = params?.[key];
+  return typeof v === 'string' && v ? v : null;
+}
+
 export function registerSituationReplyAndResume(ctx: SituationReplyAndResumeCtx): void {
   wrapActionHandler(ctx, 'situation.replyAndResume', async (params) => {
     const companyId = reqStr(params, 'companyId');
     // The issue UUID — the MUTATION id passed to createComment + update.
     const leafIssueUuid = reqStr(params, 'leafIssueUuid');
     // Human display key (e.g. BEAAA-43) — logged + echoed, NEVER the mutation id.
-    const leafIssueId = reqStr(params, 'leafIssueId');
+    // OPTIONAL (Phase-21 gap-fix): null on a multi-hop / no-leaf-key chain.
+    const leafIssueId = optStr(params, 'leafIssueId');
     const body = reqStr(params, 'body');
     const userId = reqStr(params, 'userId');
     const messageUuid = reqStr(params, 'messageUuid');
@@ -178,7 +192,10 @@ export function registerSituationReplyAndResume(ctx: SituationReplyAndResumeCtx)
     await insertReplyResume(ctx, {
       company_id: companyId,
       message_uuid: messageUuid,
-      leaf_issue_id: leafIssueId,
+      // leaf_issue_id is NOT NULL (migration 0016) but WRITE-ONLY — getReplyResumeByUuid
+      // reads back only comment_id + durable, never this column. '' when the chain has
+      // no human leaf key (keeps the NOT NULL constraint without storing a UUID).
+      leaf_issue_id: leafIssueId ?? '',
       comment_id: comment.id,
       durable,
     });
