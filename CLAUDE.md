@@ -43,7 +43,7 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 ## TL;DR — Locked Choices
 | What | Choice | FORCED / RECOMMENDED / OPTIONAL | Why (one-liner) |
 |---|---|---|---|
-| Plugin SDK | `@paperclipai/plugin-sdk@2026.512.0` | **FORCED** | Sole supported public API for Paperclip plugins. Provides `definePlugin`, `runWorker`, `usePluginData`, `usePluginAction`, etc. **Date-based versioning** (npm publish overrides workspace `1.0.0`). Pin EXACTLY; Renovate watches for bumps and posts to Telegram. |
+| Plugin SDK | `@paperclipai/plugin-sdk@2026.525.0` | **FORCED** | Sole supported public API. **CORRECTED 2026-06-16: doc said `2026.512.0` but the real `package.json` devDep + worker bundle is `2026.525.0`** — the first SDK with the `paperclipInvocationId` invocation-scope echo REQUIRED by host PR #6547 (an SDK `<2026.525.0` on host ≥2026.525.0 fails every scoped worker→host call). Do NOT downgrade. **Worker rule:** a scoped `ctx.issues.*` RPC must run INSIDE the originating dispatch and finish before it returns — never from a detached/fire-and-forget promise, cron, or setTimeout (scope-denied). See memory `invocation-scope-no-detached-rpc`. Date-based versioning; pin EXACTLY; Renovate watches. |
 | Plugin API version | `apiVersion: 1` in manifest | **FORCED** | Only currently supported value (`PaperclipPluginManifestV1`). |
 | Manifest type | `PaperclipPluginManifestV1` from SDK | **FORCED** | Host validates against this schema at install time. |
 | Language | TypeScript `^5.7.3` | **FORCED** | Matches host; SDK ships only `.d.ts` files at this tier. |
@@ -144,7 +144,7 @@ The fifth piece is the **Editor-Agent** — a heartbeat-driven Paperclip employe
 ### Core Technologies
 | Technology | Version | Status | Why |
 |---|---|---|---|
-| `@paperclipai/plugin-sdk` | `2026.512.0` | FORCED | Single supported public API. Date-based versioning. |
+| `@paperclipai/plugin-sdk` | `2026.525.0` | FORCED | Single supported public API. Date-based versioning. (Corrected 2026-06-16 from `2026.512.0`; 2026.525.0 carries the PR #6547 invocation-scope echo — see the Locked Choices table note.) |
 | TypeScript | `^5.7.3` | FORCED | Matches host pin. |
 | React | `^19.0.0` (peer `>=18`) | FORCED | Host UI runtime. Externalize, do not bundle. |
 | React DOM | `^19.0.0` | FORCED | Same. |
