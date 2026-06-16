@@ -16,15 +16,22 @@ progress:
 
 # State: Clarity Pack
 
-## ✓ v1.6.0 Stuck-Agent Reply-In-Place — PHASE 21 COMPLETE 2026-06-16 (live BEAAA v1.8.2)
+## ✓ v1.6.0 Stuck-Agent Reply-In-Place — PHASE 21 COMPLETE 2026-06-16 (live BEAAA v1.8.4)
 
 **Phase 21 is complete and verified (21-VERIFICATION: passed, 5/5 must-haves).** All 5 plans shipped; v1.8.1 then v1.8.2 (Reader nudge-overlap layout fix) deployed live to BEAAA — `key=clarity-pack status=ready version=1.8.2 id=a763176a-…` (UUID preserved). Full suite 2957/2959 green; no new migration, no new capability; engine stayed pure.
 
 **Live drill (read-only, opted-in session): 5/6 STUCK requirements verified POSITIVE** — STUCK-01 (4 real stuck agents in the QUIET Watch tier, not promoted to Needs-you), STUCK-02 (Reader nudge affordance; old requestWakeup re-wired away), STUCK-04 (no auto-resume on view), STUCK-05 (stuck "Nudge to unstick" copy), STUCK-06 (zero UUIDs in Clarity-generated prose; the one page UUID is author-written task-body content the host also renders). Reader layout fix re-verified live (no overlap at 760px).
 
-**OPEN RIDER — operator owes the live STUCK-03 Send:** the live Send→resume on a real production agent was reserved for Eric ("You Send it") and the auto-mode classifier correctly blocked the agent from posting to a live agent. Mechanism is code-proven (2957 tests incl. nudge-dispatch + no-auto-resume + NO_UUID_LEAK) and live-proven for the IDENTICAL handler+primitive in Phase 14 (only the copy variant differs). Eric: open the SR Watch tier or any stuck issue's Reader, type a nudge, hit "Nudge to unstick" — expect a "Replied to … · BEAAA-NN" toast + the agent resuming on its next heartbeat + no storm.
+**POST-CLOSE LIVE FIXES (the live drill + operator use found 3 real issues the verifier could not see — all fixed & redeployed):**
+- **v1.8.2** — Reader nudge button overlapped the input (`.clarity-reply-compose` had no layout CSS). Fixed: scoped flex + input `min-width:0`. Live-verified at 760px.
+- **v1.8.3** — Eric's live nudge 502'd (`situation.replyAndResume: leafIssueId required`). The handler `reqStr`'d a field the UI sends `null` by design (Reader multi-hop / stuck rows). Fix: `optStr` (nullable) + `''` fallback in the write-only NOT-NULL dedup column. Test 1 drops it from the required set; new Test 1b pins the null path. **Handler is NO LONGER byte-identical to Phase 14** (supersedes the verifier's "handler unchanged" note).
+- **v1.8.4** — operator UX: the Situation Room task title is now a click-through to the actual task (`row.focusLine` → link-styled `<button>` → `openIssue(focusIssueId)`; host Back returns to the SR). Live-verified: click → `/BEAAA/issues/<task>`, Back → `/BEAAA/situation-room`. Bundle ceiling 765→766 kB.
 
-**Next action:** `/gsd:complete-milestone` to archive v1.6.0 (the sole phase is done + verified). The live STUCK-03 Send is a human-verification rider, not a code gap.
+**Live BEAAA = v1.8.4.** Suite 2958/2960 green. Box hygiene: safe cache clear done (npm cache + pm2 logs + old tarballs, ~300 MB reclaimed); root `/` still tight at 93% — `~/.npm/_npx` (806 MB, holds the live server) + `/root` (2.5 GB) need a careful manual prune (NOT a blind sweep).
+
+**OPEN RIDER — operator owes the live STUCK-03 Send (re-try on v1.8.4):** the live nudge Send→resume on a real production agent is reserved for Eric (the auto-mode classifier blocks the agent from posting to a live agent). Eric's v1.8.2 attempt hit the leafIssueId 502 — now fixed. Re-try on v1.8.4: SR Watch tier or a stuck issue's Reader → type a nudge → "Nudge to unstick" → expect a "Replied to …" toast + the agent resuming next heartbeat + no storm.
+
+**Next action:** `/gsd:complete-milestone` to archive v1.6.0 (sole phase done + verified; live fixes folded in). The live STUCK-03 Send is a human-verification rider, not a code gap.
 
 ---
 
