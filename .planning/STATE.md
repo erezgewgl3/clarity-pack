@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6.0
 milestone_name: Stuck-Agent Reply-In-Place
-status: complete
-stopped_at: Phase 21 COMPLETE & verified (passed-with-rider); v1.8.2 live on BEAAA. Milestone v1.6.0 ready for /gsd:complete-milestone. Operator owes the live STUCK-03 Send.
-last_updated: "2026-06-16T00:00:00.000Z"
-last_activity: 2026-06-16 — Phase 21 complete; v1.8.2 shipped to BEAAA; verifier passed-with-rider
+status: completed
+stopped_at: Phases 19+20 code-complete & verified (passed-with-rider); one batched operator window remains to close v1.5.0
+last_updated: "2026-06-16T19:36:05.052Z"
+last_activity: 2026-06-16 — Milestone v1.6.0 completed and archived
 progress:
   total_phases: 13
   completed_phases: 11
   total_plans: 57
-  completed_plans: 57
-  percent: 100
+  completed_plans: 55
+  percent: 85
 ---
 
 # State: Clarity Pack
@@ -23,6 +23,7 @@ progress:
 **Live drill (read-only, opted-in session): 5/6 STUCK requirements verified POSITIVE** — STUCK-01 (4 real stuck agents in the QUIET Watch tier, not promoted to Needs-you), STUCK-02 (Reader nudge affordance; old requestWakeup re-wired away), STUCK-04 (no auto-resume on view), STUCK-05 (stuck "Nudge to unstick" copy), STUCK-06 (zero UUIDs in Clarity-generated prose; the one page UUID is author-written task-body content the host also renders). Reader layout fix re-verified live (no overlap at 760px).
 
 **POST-CLOSE LIVE FIXES (the live drill + operator use found 3 real issues the verifier could not see — all fixed & redeployed):**
+
 - **v1.8.2** — Reader nudge button overlapped the input (`.clarity-reply-compose` had no layout CSS). Fixed: scoped flex + input `min-width:0`. Live-verified at 760px.
 - **v1.8.3** — Eric's live nudge 502'd (`situation.replyAndResume: leafIssueId required`). The handler `reqStr`'d a field the UI sends `null` by design (Reader multi-hop / stuck rows). Fix: `optStr` (nullable) + `''` fallback in the write-only NOT-NULL dedup column. Test 1 drops it from the required set; new Test 1b pins the null path. **Handler is NO LONGER byte-identical to Phase 14** (supersedes the verifier's "handler unchanged" note).
 - **v1.8.4** — operator UX: the Situation Room task title is now a click-through to the actual task (`row.focusLine` → link-styled `<button>` → `openIssue(focusIssueId)`; host Back returns to the SR). Live-verified: click → `/BEAAA/issues/<task>`, Back → `/BEAAA/situation-room`. Bundle ceiling 765→766 kB.
@@ -763,10 +764,10 @@ Estimated execution: 1 full work session (~6-8 hours) via /gsd:plan-phase 6.1 + 
 
 ## Current Position
 
-Phase: 21 (stuck-agent-reply-in-place) — EXECUTING
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-06-15
+Phase: Milestone v1.6.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-16 — Milestone v1.6.0 completed and archived
 
 ## Plan 05-11 HOTFIX-2 record (preceded Phase 6.1)
 
@@ -1480,7 +1481,7 @@ Phase: 6.1 (Situation Room spec-complete) — EXECUTING
   - 02-09 APPROVED 2026-05-15 — DEV-15-STRUCTURAL closure via UI-side `useResolvedUserId` resolver (DEVIATION from plan text — worker get-viewer infeasible; SDK has no caller-identity accessor) + DEV-16 issue-reader degradation contract locked
   - 02-05 + 02-06 + 02-07 + 02-10 DEFERRED follow-ons (React keys / LiveBlockerPanel UX / ActivityTimeline date / Vite WS console noise) — non-blocking, can interleave with Phase 3
 
-**Status:** Ready to execute
+**Status:** v1.6.0 milestone complete
 **Progress:** [██████████] 95%
 
 ## Performance Metrics

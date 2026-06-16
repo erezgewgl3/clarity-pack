@@ -1,5 +1,56 @@
 # Milestones
 
+## v1.6.0 Stuck-Agent Reply-In-Place (Shipped: 2026-06-16)
+
+**Phases completed:** 13 phases, 57 plans, 44 tasks
+
+**Key accomplishments:**
+
+- A plain comment resumes a stuck agent on BEAAA — in BOTH the awaiting-answer and the
+
+`status='blocked'` cases — with no special transition required to trigger the resume.
+
+- 1. [Rule 1 - Bug] `walkBlockerChain` swallowed ROOT relations.get throws, defeating the D-10 degrade.
+- 1. [Test alignment] Deleted the two dedicated humanize test files alongside the source.
+- 1. [Rule 1 - Bug] Dead `data-terminal-kind='HUMAN_ACTION_ON'` CSS selector lost the ON YOU panel highlight.
+- 1. [Rule 1 - Bug] Corrected a wrong RED-test fixture for the WR-05 reached-via-external assertion
+- 1. [Rule 3 - Blocking] Widened ScrubCtx.logger meta type to stay assignable from the SDK PluginLogger
+- 1. [Rule 1 - stale test] build-employees-rollup split-identity assertion updated to 'assign'
+- [Rule 3 — Blocking] `build-employees-rollup.test.mjs` Test 10 rewritten to the NY-02 contract
+- 1. [Rule 3 - Blocking] Migration comment wording vs over-broad AC grep
+- 1. [Rule 3 - clarification] `finalizeTldr` import kept but card cache uses the typed repo.
+- 1. [Rule 3 - Blocking] Behavior test could not import the `.tsx` component
+- Situation Room employee row (`employee-row.tsx`):
+- 1. [Rule 3 - Blocking] UI bundle exceeded the 735 kB ceiling
+- 1. [Rule 3 - Blocking] UI bundle exceeded the size ceiling
+- Task 1 — Wave-0 verification (`16-SCHEMA-VERIFY.md`, commit `356bc00`).
+- Task 1+2 — shared prefetch + org-backlog consumption (`feat` commit `dc225c0`, RED test `3d0704b`).
+- Task 1 (`16a38b5`) — bound + deadline-floor the shared edge-graph build.
+- Task 1 — SWR snapshot cache + extracted pure `buildNeedsYou` + handler serve-last-good
+- 1. [Rule 1 - Bug] Flipped four `requestWakeup`-was-called assertions across three test suites
+- 1. [Rule 1 - Bug] chat-stream-bridge tests broke when the scope gate was added
+- 1. [Rule 1 - Bug] Governor placement: gate the START dispatch, not the whole per-company call
+- 1. [Rule 1 - Bug] Static gate handler-count assertion: `>= 2`, not `>= 3`
+- Task 1 — Governed creation-time wake
+- 1. [Rule 1 — Bug] Acceptance-grep substring false positive in founder-resolution.ts
+- 1. [Rule 1 — Bug] snapshot-prefetch round-trip-count test broke on the new wait SELECT
+- 1. [Rule 3 — Blocking] New `OperationKind` member + readback branch in agent-task-delivery.ts (outside `files_modified`)
+- 1. [Rule 3 - Blocking] `node --check` on `.tsx` unsupported in this environment
+- `node --check <ts>` → `node --test`
+- 1. [Rule 1 - Bug] Updated two reply-in-place surface tests that encoded the OLD inline Open↗ pattern
+- 1. [Rule 3 - Blocking] Adjusted two pre-existing source-grep tests to match the read-time re-scrub wrapping
+- Task 1 — `looksDone` + `getTldrBodiesByScopeIds`.
+- 1. [Rule 2 - Correctness] Added `isActionCardLive` (age-only liveness) instead of reusing `isActionCardFresh`
+- 1. [Rule 2 - Correctness] Added `rowToCardDisplay` (+ `ActionCardDisplay`) as the single DISPLAY-only projection
+- Task 1 — snapshot-prefetch count drift (D-05).
+- Task 1 — widen the CI test glob (HYG-01 / D-03).
+- Task 1 — engine verdict + reachable predicate (commit 5cbeb54).
+- 1. [Rule 1 - Bug] Pre-existing pending-posture test asserted the old literal 'Send'
+- Task 1 — Situation Room employee row (commit 890547a).
+- Task 1 — SR + Reader + primitive source-grep tests extended to the nudge path (commit fb6593c).
+
+---
+
 ## v1.5.0 Truthful & Legible Situation Room (Shipped: 2026-06-15)
 
 **Phases completed:** 12 phases, 52 plans, 43 tasks
