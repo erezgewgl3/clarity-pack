@@ -245,7 +245,13 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // real bloat guard stays clean), so the delta is legitimate feature code.
 // Recalibrated per the same empirical precedent:
 //   ceil((779,715 + 3,072) / 1024) = 765 kB (783,360 bytes), ~3.6 kB headroom.
-const UI_BUNDLE_BYTES_CEILING = 765 * 1024; // 765 kB = 783,360 bytes
+// v1.8.4 (operator UX) — making the Situation Room task title a click-through to
+// the actual task (a link-styled <button> + a small scoped CSS reset) added
+// legitimate feature code: built bundle 783,360 → 783,597 bytes (237 B over the
+// prior ceiling). Verified zero SheetJS sentinels (the real bloat guard stays
+// clean), so the delta is legitimate. Recalibrated to 766 kB:
+//   766 kB = 784,384 bytes, ~787 B headroom.
+const UI_BUNDLE_BYTES_CEILING = 766 * 1024; // 766 kB = 784,384 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 

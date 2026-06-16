@@ -1876,3 +1876,33 @@
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------------
+ * v1.8.4 (operator UX) — the Situation Room task title is a click-through
+ * to the actual task. Rendered as a <button> carrying .clarity-employee-focus
+ * (keeps the title typography) + this reset so it reads as a link, not a
+ * default button. Click → openIssue → the issue page; host Back returns to the
+ * Situation Room. Scoped under [data-clarity-surface] (SCAF-06 + COEXIST-01).
+ * ------------------------------------------------------------------- */
+[data-clarity-surface] button.clarity-employee-focus-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+[data-clarity-surface] button.clarity-employee-focus-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+[data-clarity-surface] button.clarity-employee-focus-link:focus-visible {
+  outline: 1px solid var(--clarity-line-bright, var(--clarity-border));
+  outline-offset: 2px;
+  border-radius: 3px;
+}

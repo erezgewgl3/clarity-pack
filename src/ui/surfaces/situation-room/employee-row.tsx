@@ -357,17 +357,26 @@ export function EmployeeRow({
       ) : null}
       <span className="clarity-employee-age">{formatAge(ageMs ?? -1)}</span>
 
-      {row.focusLine && (
-        <p className="clarity-employee-focus">
-          {/* Plan 18-02 (LEG-02e) — read-time re-scrub over the already-fetched
-              focusLine (it is derived from a title that may historically embed an
-              id). Pure regex over an in-memory string — zero new DB fetches. */}
-          {rescrubPersisted(row.focusLine)}
-          {row.focusIssueId && (
+      {row.focusLine &&
+        /* v1.8.4 (operator UX) — the task title is a click-through to the actual
+         * task. When focusIssueId is present, render the focus line as a link-styled
+         * button that navigates to the issue (openIssue → buildReaderHref); the host
+         * Back button returns to the Situation Room. When there is no focusIssueId
+         * (nothing to open), fall back to a plain <p> (no dead link). read-time
+         * re-scrub (LEG-02e) over the in-memory focusLine — zero new DB fetches. */
+        (row.focusIssueId ? (
+          <button
+            type="button"
+            className="clarity-employee-focus clarity-employee-focus-link"
+            onClick={() => openIssue(row.focusIssueId)}
+            title="Open the full task"
+          >
+            {rescrubPersisted(row.focusLine)}
             <span className="clarity-employee-focus-ref">{` (${row.focusIssueId})`}</span>
-          )}
-        </p>
-      )}
+          </button>
+        ) : (
+          <p className="clarity-employee-focus">{rescrubPersisted(row.focusLine)}</p>
+        ))}
 
       {/* needs_you — the blocked row's chain + per-ownership action cluster.
        *  Plan 11-04: the unowned-vs-owned split reads the engine verdict
