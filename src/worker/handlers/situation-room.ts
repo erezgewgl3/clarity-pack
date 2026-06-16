@@ -666,14 +666,16 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       typeof params?.snapshotBudgetMs === 'number' ? params.snapshotBudgetMs : null,
     );
 
-    // Plan 16-04 (Wave C) — STALE-WHILE-REVALIDATE. Read the most-recent cached
-    // VIEWER-INVARIANT slice for this company. If it is fresh (< FRESHNESS_MS old),
-    // serve it IMMEDIATELY and kick off a fresh recompute in the background
-    // (fire-and-forget, from inside THIS valid data-handler scope — NO cron, NO
-    // setInterval, Pitfall 4). If it is absent or stale, recompute synchronously,
-    // serve the fresh result, and write it back for the next caller. In BOTH paths
-    // the viewer-scoped needsYou + pulse are recomputed per call over the (cached
-    // or fresh) rows via buildNeedsYou — NEVER read from the cache (T-16-03).
+    // Plan 16-04 (Wave C), amended v1.8.6 — TTL CACHE (was stale-while-revalidate;
+    // the background revalidate is REMOVED — see the long note at the serve-fresh
+    // return below: a detached recompute runs the relations.get edge walk after the
+    // invocation scope is cleared and is denied under PR #6547). Read the most-recent
+    // cached VIEWER-INVARIANT slice for this company. If it is fresh (< FRESHNESS_MS
+    // old), serve it IMMEDIATELY (no recompute). If it is absent or stale, recompute
+    // SYNCHRONOUSLY (in valid invocation scope), serve the fresh result, and write it
+    // back for the next caller. In BOTH paths the viewer-scoped needsYou + pulse are
+    // recomputed per call over the (cached or fresh) rows via buildNeedsYou — NEVER
+    // read from the cache (T-16-03).
     const cacheCtx = ctx as unknown as SnapshotCacheCtx;
     let cached: Awaited<ReturnType<typeof readLatestSnapshot>> = null;
     try {
@@ -717,26 +719,22 @@ export function registerSituationRoomHandlers(ctx: SituationRoomCtx): void {
       const needsYou = buildNeedsYou(servedEmployees, viewerUserId);
       const pulse: PulseSummary = buildPulseSummary(servedEmployees, needsYou);
 
-      // Fire-and-forget revalidation INSIDE the valid handler scope (Pitfall 4 —
-      // no cron, no setInterval). Errors are swallowed so a failed recompute never
-      // affects the served response.
-      void (async () => {
-        try {
-          const fresh = await computeViewerInvariantSlice(
-            ctx,
-            companyId,
-            viewerUserId,
-            snapshotBudgetMs,
-          );
-          await writeSnapshot(cacheCtx, companyId, fresh, hashViewerInvariantSlice(fresh));
-        } catch (e) {
-          ctx.logger?.warn?.('situation.snapshot: SWR background revalidate failed', {
-            companyId,
-            err: (e as Error).message,
-          });
-        }
-      })();
-
+      // v1.8.6 ROOT-CAUSE FIX — the fire-and-forget background revalidate that used
+      // to live here is REMOVED. It ran computeViewerInvariantSlice (the
+      // ctx.issues.relations.get edge walk) AFTER this handler returned, so by then
+      // the host had CLEARED this request's invocation scope (PR #6547 invocation-
+      // scope hardening, live since paperclipai@2026.525.0 — upstream issues #7897 /
+      // #8036, race fix PR #8159). Every relations.get in that detached recompute
+      // was denied with "missing, expired, or unknown invocation scope" — the
+      // revalidate NEVER refreshed the cache; it only logged a storm of denials and
+      // (when it half-completed) demoted real Needs-you chains to UNCLASSIFIED. A
+      // worker→host scoped RPC MUST run inside the originating dispatch's async
+      // context AND complete before the handler returns; there is no scope-refresh
+      // API. So the cache now behaves as a plain TTL cache: serve the fresh row
+      // instantly (here), and refresh on the SYNCHRONOUS stale path below — that
+      // recompute runs in-scope (awaited inside the dispatch) and succeeds. No
+      // freshness regression: the dead revalidate never refreshed anything, and the
+      // stale path already kept the cache <= FRESHNESS_MS old.
       return {
         org_blocked_backlog: slice.org_blocked_backlog,
         situation_employees: servedEmployees,

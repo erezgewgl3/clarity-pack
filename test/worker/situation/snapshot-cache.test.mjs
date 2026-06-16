@@ -285,7 +285,7 @@ function makeHandlerCtx({ snapshotRow = null, optedIn = true } = {}) {
   return { ctx, dataRegistry, dbCalls };
 }
 
-test('SWR — FRESH cached row is served immediately AND a fire-and-forget recompute is triggered', async () => {
+test('TTL — FRESH cached row is served immediately and does NOT trigger a background revalidate (v1.8.6: out-of-scope edge walk removed)', async () => {
   const cachedSlice = {
     org_blocked_backlog: { rows: [], total: 0, blocked_count: 0, need_you_count: 0, overflow: false },
     situation_employees: [
@@ -309,13 +309,15 @@ test('SWR — FRESH cached row is served immediately AND a fire-and-forget recom
   // pulse.needYou is recomputed too (NOT the stale 99 in the cached payload).
   assert.equal(result.pulse.needYou, 2, 'pulse.needYou is recomputed, not the stale cached value');
 
-  // A fire-and-forget recompute was triggered: a write-back INSERT eventually
-  // fires. Drain the microtask/timer queue so the background promise settles.
+  // v1.8.6 — NO background revalidate. The fresh cache is served as-is (TTL cache);
+  // a detached recompute would run the relations.get edge walk AFTER the handler
+  // returns, where the host has cleared the invocation scope (PR #6547) → denied.
+  // Drain the microtask/timer queue and assert NO write-back fired on the fresh path.
   await new Promise((r) => setTimeout(r, 20));
   const swrWrite = bag.dbCalls.find(
     (c) => c.kind === 'execute' && /situation_snapshots/.test(c.sql ?? ''),
   );
-  assert.ok(swrWrite, 'a background recompute write-back fired (revalidate)');
+  assert.equal(swrWrite, undefined, 'NO background revalidate write-back on the fresh path (TTL cache)');
 });
 
 test('SWR — STALE cached row → synchronous recompute + write-back (cache not served)', async () => {

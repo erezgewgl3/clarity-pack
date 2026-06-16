@@ -333,40 +333,24 @@ export async function buildEdges(
     try {
       summary = await ctx.issues.relations.get(id, companyId);
     } catch (e) {
-      // v1.8.5 gap-fix — a TRANSIENT host relations.get throw on the ROOT
-      // previously demoted the whole chain to UNCLASSIFIED, silently dropping a
-      // real needs-you item out of the loud Needs-you tier (observed live on BEAAA
-      // as simultaneous bursts of "shared edge walk failed" that self-recover —
-      // an intermittent invocation-scope / DB hiccup under load, NOT a per-issue
-      // data bug). RETRY THE ROOT ONCE before giving up: a transient failure
-      // recovers its real verdict; a PERSISTENT throw still propagates and the row
-      // honestly floors to UNCLASSIFIED. Inner-node throws still skip-one (the rest
-      // of the graph survives), unchanged. The warn logs the real error so the
-      // transient-vs-persistent nature is observable in production.
+      // A thrown relations.get on the ROOT issue means we cannot build any chain
+      // for it — propagate so the caller floors it to UNCLASSIFIED. On an inner
+      // node, skip just that node (the rest of the graph survives).
+      //
+      // v1.8.6 instrumentation (kept; the retry tried in v1.8.5 was reverted — it
+      // was ineffective because the dominant failure was a CLEARED invocation scope
+      // from the detached SWR revalidate, fixed at the source in situation-room.ts).
+      // This warn logs the real error (name/msg) so a post-fix log confirms the
+      // relations.get denial storm has dropped to ~0.
       ctx.logger?.warn?.('buildEdges: relations.get threw', {
         companyId,
         id,
         root: wasRoot,
         name: (e as Error)?.name ?? null,
         msg: (e as Error)?.message ?? null,
-        raw: String(e).slice(0, 200),
       });
-      if (wasRoot) {
-        try {
-          summary = await ctx.issues.relations.get(id, companyId);
-        } catch (e2) {
-          ctx.logger?.warn?.('buildEdges: root relations.get threw TWICE (degrading)', {
-            companyId,
-            id,
-            name: (e2 as Error)?.name ?? null,
-            msg: (e2 as Error)?.message ?? null,
-            raw: String(e2).slice(0, 200),
-          });
-          throw e2;
-        }
-      } else {
-        continue;
-      }
+      if (wasRoot) throw e;
+      continue;
     } finally {
       isRoot = false;
     }

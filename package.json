@@ -1,6 +1,6 @@
 {
   "name": "clarity-pack",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "description": "Paperclip plugin — four Clarity surfaces + Editor-Agent (smoke spike).",
   "type": "module",
   "engines": {
