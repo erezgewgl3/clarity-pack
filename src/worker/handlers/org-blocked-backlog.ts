@@ -329,14 +329,44 @@ export async function buildEdges(
     if (visited.has(id) || depth > MAX_CHAIN_DEPTH) continue;
     visited.add(id);
     let summary;
+    const wasRoot = isRoot;
     try {
       summary = await ctx.issues.relations.get(id, companyId);
     } catch (e) {
-      // A thrown relations.get on the ROOT issue means we cannot build any
-      // chain for it — propagate so the caller skips this issue entirely.
-      // On an inner node, skip just that node (the rest of the graph survives).
-      if (isRoot) throw e;
-      continue;
+      // v1.8.5 gap-fix — a TRANSIENT host relations.get throw on the ROOT
+      // previously demoted the whole chain to UNCLASSIFIED, silently dropping a
+      // real needs-you item out of the loud Needs-you tier (observed live on BEAAA
+      // as simultaneous bursts of "shared edge walk failed" that self-recover —
+      // an intermittent invocation-scope / DB hiccup under load, NOT a per-issue
+      // data bug). RETRY THE ROOT ONCE before giving up: a transient failure
+      // recovers its real verdict; a PERSISTENT throw still propagates and the row
+      // honestly floors to UNCLASSIFIED. Inner-node throws still skip-one (the rest
+      // of the graph survives), unchanged. The warn logs the real error so the
+      // transient-vs-persistent nature is observable in production.
+      ctx.logger?.warn?.('buildEdges: relations.get threw', {
+        companyId,
+        id,
+        root: wasRoot,
+        name: (e as Error)?.name ?? null,
+        msg: (e as Error)?.message ?? null,
+        raw: String(e).slice(0, 200),
+      });
+      if (wasRoot) {
+        try {
+          summary = await ctx.issues.relations.get(id, companyId);
+        } catch (e2) {
+          ctx.logger?.warn?.('buildEdges: root relations.get threw TWICE (degrading)', {
+            companyId,
+            id,
+            name: (e2 as Error)?.name ?? null,
+            msg: (e2 as Error)?.message ?? null,
+            raw: String(e2).slice(0, 200),
+          });
+          throw e2;
+        }
+      } else {
+        continue;
+      }
     } finally {
       isRoot = false;
     }

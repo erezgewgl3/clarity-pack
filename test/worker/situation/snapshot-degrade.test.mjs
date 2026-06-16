@@ -181,6 +181,42 @@ test('degrade — a thrown relations.get floors that row to UNCLASSIFIED and the
 });
 
 // ---------------------------------------------------------------------------
+// Test 2b (v1.8.5 gap-fix) — a TRANSIENT root relations.get throw (throws once,
+// then succeeds) is RETRIED ONCE and recovers its real classification, instead of
+// silently demoting the row to UNCLASSIFIED (which drops it out of the loud
+// Needs-you tier). This is the live BEAAA defect: a burst of transient
+// relations.get throws during the concurrent edge-graph build demoted real
+// needs-you items to the quiet Watch tier — operator saw them "clear up" with no
+// action taken. A persistent throw (Test 2) still floors; only the transient case
+// recovers.
+// ---------------------------------------------------------------------------
+test('degrade — a root relations.get that throws ONCE then succeeds is RETRIED and classified, NOT demoted to UNCLASSIFIED', async () => {
+  const calls = {};
+  const bag = makeCtx({
+    issueRows: [
+      issueRow({ id: 'i-flaky', identifier: 'CO-1', status: 'blocked', assignee_user_id: 'u-1' }),
+    ],
+    agentRows: [agentRow({ id: 'u-1', name: 'You' })],
+    relationsGet: async (id) => {
+      calls[id] = (calls[id] || 0) + 1;
+      // First touch of the root throws (transient); the retry succeeds.
+      if (id === 'i-flaky' && calls[id] === 1) throw new Error('transient relations.get hiccup');
+      return { blockedBy: [], blocks: [] };
+    },
+  });
+
+  const result = await runSnapshot(bag, { userId: 'u-1', companyId: 'co-1' });
+  const row = result.org_blocked_backlog.rows.find((r) => r.issueId === 'i-flaky');
+  assert.ok(row, 'the flaky row is surfaced');
+  assert.notEqual(
+    row.terminalKind,
+    'UNCLASSIFIED',
+    'a single transient throw is retried and classified, NOT demoted to UNCLASSIFIED',
+  );
+  assert.ok((calls['i-flaky'] || 0) >= 2, 'the root relations.get was retried at least once');
+});
+
+// ---------------------------------------------------------------------------
 // Test 3 — a slow-but-eventually-resolving walk that finishes WITHIN the
 // per-walk deadline resolves normally (NOT floored).
 // ---------------------------------------------------------------------------
