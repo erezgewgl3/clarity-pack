@@ -22,10 +22,11 @@ const CID = 'co-1';
 const EDITOR_UUID = '618eec58-2a0d-422f-9fbd-672c0cdddf2c';
 const ISSUE = 'BEAAA-702';
 
-// A ctx with: in-memory tldr_cache, an issues surface (list discovers the agent
-// id from a seeded op issue, create/update/requestWakeup/documents/listComments),
-// and a controllable document readback.
-function makeCtx({ seedTldr = [], seedOps = [], ready = false, resultBody = 'crisp tldr', agentStatus = 'idle' } = {}) {
+// A ctx with: in-memory tldr_cache, an issues surface
+// (list/create/update/requestWakeup/documents/listComments), an agents surface
+// whose managed.reconcile resolves the editor id (the authoritative source), and a
+// controllable document readback.
+function makeCtx({ seedTldr = [], seedOps = [], ready = false, resultBody = 'crisp tldr', agentStatus = 'idle', reconcileEditorId = EDITOR_UUID } = {}) {
   const tldrCache = [...seedTldr];
   const operationIssues = [...seedOps]; // {id, originId, originKind, status, assigneeAgentId}
   const updates = [];
@@ -33,7 +34,15 @@ function makeCtx({ seedTldr = [], seedOps = [], ready = false, resultBody = 'cri
 
   const ctx = {
     logger: { info() {}, warn() {}, error() {} },
-    agents: { async get() { return { status: agentStatus, pausedAt: agentStatus === 'paused' ? new Date().toISOString() : null }; } },
+    // resolveEditorAgentId resolves the editor from the AUTHORITATIVE managed-agent
+    // registry (ctx.agents.managed.reconcile by stable key) — the same source
+    // compile-bulletin trusts — NOT from an op-issue assignee (debug
+    // tldr-compile-op-misassigned-agent, 2026-06-18). `get` is still used for the
+    // paused-status check.
+    agents: {
+      async get() { return { status: agentStatus, pausedAt: agentStatus === 'paused' ? new Date().toISOString() : null }; },
+      managed: { async reconcile() { return { agentId: reconcileEditorId }; } },
+    },
     db: {
       async query(sql, params) {
         if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {
@@ -89,7 +98,9 @@ function makeCtx({ seedTldr = [], seedOps = [], ready = false, resultBody = 'cri
 }
 
 const inputs = { body: 'a normal-length task body', comments: [], refs: ['BEAAA-1'] };
-// An op issue assigned to the Editor-Agent lets the driver discover the agent id.
+// A prior done op (consume-before-spawn read-back fodder). The editor id itself is
+// resolved from the managed registry (agents.managed.reconcile), not this op's
+// assignee — see makeCtx (debug tldr-compile-op-misassigned-agent).
 const seededAgentOp = { id: 'op-seed', originId: 'cycle-1', originKind: operationOriginKind('bulletin-compile'), status: 'done', assigneeAgentId: EDITOR_UUID };
 
 test('driveTldrCompileStep — cache HIT returns instantly, no op created (no recompile)', async () => {
@@ -129,9 +140,10 @@ test('driveTldrCompileStep — cache MISS, agent answered → consumes, caches, 
   assert.ok(updates.some((u) => u.patch.status === 'done'), 'the consumed op issue is marked done (so a task edit recompiles)');
 });
 
-test('driveTldrCompileStep — no resolvable Editor-Agent (no op issues, no agents client) → unavailable, no compile', async () => {
+test('driveTldrCompileStep — no resolvable Editor-Agent (registry returns null) → unavailable, no compile', async () => {
   resetCircuitBreakerState();
-  const { ctx, operationIssues } = makeCtx({ seedOps: [], ready: false }); // no seeded op → no agent id discoverable
+  // The managed registry resolves no editor (e.g. not yet registered) → null.
+  const { ctx, operationIssues } = makeCtx({ seedOps: [], ready: false, reconcileEditorId: null });
   const res = await driveTldrCompileStep(ctx, { issueId: ISSUE, companyId: CID, inputs });
   assert.equal(res.status, 'unavailable', `no agent resolvable → unavailable; got ${res.status}`);
   assert.equal(operationIssues.length, 0, 'no compile started when the agent cannot be resolved');

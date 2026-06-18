@@ -234,8 +234,9 @@ export async function driveBulletinGlossStep(
     ctx.logger?.warn?.(`bulletin-gloss: cache read failed: ${(e as Error).message}`, { companyId });
   }
 
-  // CACHE MISS — resolve the Editor-Agent (op-issue discovery, NO dead reconcile
-  // loop — same helper the TL;DR view driver uses in its valid request scope).
+  // CACHE MISS — resolve the Editor-Agent from the authoritative managed registry
+  // (same helper the TL;DR view driver uses, in this valid request scope; debug
+  // tldr-compile-op-misassigned-agent — never read it back off an op assignee).
   const editorAgentId = await resolveEditorAgentId(ctx, companyId);
   if (!editorAgentId) {
     ctx.logger?.info?.('bulletin-gloss: no Editor-Agent resolvable — no gloss', { companyId, cycleNumber });

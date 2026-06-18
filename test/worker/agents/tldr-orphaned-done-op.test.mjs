@@ -50,7 +50,13 @@ function makeCtx({ seedTldr = [], seedOps = [], docsByOpId = {} } = {}) {
 
   const ctx = {
     logger: { info() {}, warn() {}, error() {} },
-    agents: { async get() { return { status: 'idle', pausedAt: null }; } },
+    // The editor id is resolved from the managed registry (the authoritative,
+    // non-poisonable source — debug tldr-compile-op-misassigned-agent, 2026-06-18),
+    // NOT from an op-issue assignee. `get` is used only for the paused check.
+    agents: {
+      async get() { return { status: 'idle', pausedAt: null }; },
+      managed: { async reconcile() { return { agentId: EDITOR_UUID }; } },
+    },
     db: {
       async query(sql, params) {
         if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.tldr_cache/i.test(sql)) {

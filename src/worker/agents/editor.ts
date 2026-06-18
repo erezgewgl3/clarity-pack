@@ -706,38 +706,40 @@ export type TldrViewDriverCtx = Parameters<typeof prepareTldrCompile>[0] &
   };
 
 /**
- * Resolve the Editor-Agent UUID for a company WITHOUT a scheduled-job reconcile
- * (whose invocation scope is dead on paperclipai@2026.525.0 — PR #6547). Every
- * clarity-pack operation issue is assigned to the Editor-Agent, so the newest
- * one's `assigneeAgentId` is the id — discovered with the same `ctx.issues.list`
- * the data handler already uses in its valid request scope. Falls back to
- * `ctx.agents.managed.reconcile` (best-effort) only when no operation issue
- * exists yet (a brand-new company).
+ * Resolve the Editor-Agent UUID for a company from the AUTHORITATIVE managed-agent
+ * registry (`ctx.agents.managed.reconcile(EDITOR_AGENT_KEY, companyId)`), the SAME
+ * source `compile-bulletin.ts` already trusts (compile-bulletin.ts:854).
+ * `reconcile` resolves by the stable agent KEY (`resourceKey` →
+ * `PluginManagedAgentResolution.agentId`) and is idempotent — it returns the
+ * dedicated Editor-Agent regardless of which agent any operation issue happens to
+ * be assigned to. It runs INSIDE the caller's valid HTTP-request invocation scope
+ * (NOT a detached/scheduled-job scope — PR #6547 only kills detached scopes;
+ * compile-bulletin's job-scope reconcile and this request-scope reconcile are both
+ * valid). Returns null (NOT an arbitrary op assignee) when the editor cannot be
+ * resolved, so the caller honestly reports `unavailable` rather than spawning a
+ * misassigned compile.
+ *
+ * Debug tldr-compile-op-misassigned-agent (2026-06-18) — ROOT CAUSE (b). The
+ * PRIOR implementation discovered the editor id from the newest plugin operation
+ * issue's `assigneeAgentId` (an assignee-UNFILTERED `ctx.issues.list`). Once a
+ * host-side terminal-run-recovery reassignment landed a NON-editor assignee
+ * (CTO/CEO) on ANY clarity op, that read-back returned the wrong id and every new
+ * op inherited it (`startAgentTask` → `create assigneeAgentId`) — a permanent,
+ * self-propagating misassignment that wedged the Reader on "Compiling…" forever.
+ * The op-issue read-back is removed entirely; op assignees are NEVER the editor
+ * source of truth.
  */
 export async function resolveEditorAgentId(
   ctx: TldrViewDriverCtx,
   companyId: string,
 ): Promise<string | null> {
   try {
-    const ops = await ctx.issues.list({
-      companyId,
-      originKindPrefix: OPERATION_ORIGIN_KIND_PREFIX,
-      includePluginOperations: true,
-      limit: 5,
-    });
-    for (const op of ops ?? []) {
-      const id = (op as { assigneeAgentId?: string | null }).assigneeAgentId;
-      if (id) return id;
-    }
-  } catch (e) {
-    ctx.logger?.warn?.(`tldr-view: op-issue agent discovery failed: ${(e as Error).message}`, {
-      companyId,
-    });
-  }
-  try {
     const res = await ctx.agents?.managed?.reconcile(EDITOR_AGENT_KEY, companyId);
     return res?.agentId ?? null;
-  } catch {
+  } catch (e) {
+    ctx.logger?.warn?.(`tldr-view: editor-agent reconcile failed: ${(e as Error).message}`, {
+      companyId,
+    });
     return null;
   }
 }

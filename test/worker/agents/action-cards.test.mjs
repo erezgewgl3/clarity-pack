@@ -182,8 +182,9 @@ test('driveActionCardsStep — a paused Editor-Agent → status paused, no new c
     },
     issues: {
       async list(input = {}) {
-        // resolveEditorAgentId discovers the agent from an op issue; the
-        // consume-before-spawn read-back lists ops by originId → none ready.
+        // The consume-before-spawn read-back lists ops by originId → none ready
+        // here. (The editor id itself comes from agents.managed.reconcile, not
+        // this op's assignee — debug tldr-compile-op-misassigned-agent.)
         if (input.originKindPrefix && input.originId === undefined) {
           return [{ id: 'op-seed', assigneeAgentId: EDITOR_UUID }];
         }
@@ -211,6 +212,10 @@ test('driveActionCardsStep — a paused Editor-Agent → status paused, no new c
       async get() {
         return { status: 'paused', pausedAt: new Date().toISOString() };
       },
+      // Editor resolves from the managed registry (authoritative source — debug
+      // tldr-compile-op-misassigned-agent, 2026-06-18); the paused status then
+      // comes from the get() above.
+      managed: { async reconcile() { return { agentId: EDITOR_UUID }; } },
     },
   };
   const res = await driveActionCardsStep(ctx, { companyId: CID, needsYouRows: sampleRows() });
@@ -368,6 +373,9 @@ test('driveActionCardsStep — a single-row change leaves OTHER rows cards fresh
         async get() {
           return { status: 'active' };
         },
+        // Editor id resolves from the managed registry (authoritative, not an
+        // op-issue assignee — debug tldr-compile-op-misassigned-agent, 2026-06-18).
+        managed: { async reconcile() { return { agentId: EDITOR_UUID }; } },
       },
     };
   }
@@ -462,6 +470,8 @@ test('driveActionCardsStep — UUID-only awaited party degrades to NO card (WR-0
     },
     issues: {
       async list(input = {}) {
+        // Read-back fodder only; the editor id comes from agents.managed.reconcile
+        // (debug tldr-compile-op-misassigned-agent), not this op's assignee.
         if (input.originKindPrefix && input.originId === undefined) {
           return [{ id: 'op-seed', assigneeAgentId: EDITOR_UUID }];
         }
@@ -497,6 +507,7 @@ test('driveActionCardsStep — UUID-only awaited party degrades to NO card (WR-0
       async get() {
         return { status: 'active' };
       },
+      managed: { async reconcile() { return { agentId: EDITOR_UUID }; } },
     },
   };
   const res = await driveActionCardsStep(ctx, { companyId: CID, needsYouRows: rows });

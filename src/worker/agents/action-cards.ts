@@ -693,7 +693,8 @@ export async function driveActionCardsStep(
       ? compileRows.slice(0, ACTION_CARDS_WARM_MAX_ROWS)
       : compileRows;
 
-  // CACHE MISS — resolve the Editor-Agent (op-issue discovery, NO dead reconcile).
+  // CACHE MISS — resolve the Editor-Agent from the authoritative managed registry
+  // (debug tldr-compile-op-misassigned-agent — never read it back off an op assignee).
   const editorAgentId = await resolveEditorAgentId(ctx, companyId);
   if (!editorAgentId) {
     ctx.logger?.info?.('action-cards: no Editor-Agent resolvable — no cards', { companyId });
