@@ -699,7 +699,7 @@ const manifest: PaperclipPluginManifestV1 = {
   // like set-opt-in. The handler's only write rides the already-declared
   // `database.namespace.*` capabilities. The version bump (1.7.5 -> v1.8.0) is
   // Plan 19-05, NOT here — at default OFF this phase is behaviorally inert.
-  version: '1.8.9',
+  version: '1.8.10',
   displayName: 'Clarity Pack',
   description:
     'Four user-facing surfaces (Reader view, Situation Room, Daily Bulletin, Employee Chat) and one Editor-Agent on top of unmodified Paperclip — plain-English clarity on what every employee is doing.',

@@ -866,19 +866,29 @@ test('Chat thread (Plan 04.1-09): title falls back to pendingTaskCard then null 
   );
 });
 
-test('Chat thread (Plan 04.1-09): identifier + status threaded from matchedTask (not null when resolved)', () => {
+test('Chat thread: identifier + status threaded with live-card precedence over matchedTask', () => {
   const c = readChatCode('message-thread.tsx');
-  // identifier and status fields on InlineTaskCard now read from matchedTask.
+  // quick-260619-r4v Piece 3 — identifier/status now prefer the fresh
+  // per-topic live card (chat.topicTaskUpdates) then fall back to the
+  // company-wide rail's matchedTask then null.
   assert.match(
     c,
-    /identifier=\{matchedTask\?\.identifier\s*\?\?\s*null\}/,
-    'identifier passes matchedTask.identifier when present',
+    /identifier=\{liveCard\?\.identifier\s*\?\?\s*matchedTask\?\.identifier\s*\?\?\s*null\}/,
+    'identifier prefers liveCard then matchedTask',
   );
   assert.match(
     c,
-    /status=\{matchedTask\?\.status\s*\?\?\s*null\}/,
-    'status passes matchedTask.status when present',
+    /status=\{liveCard\?\.status\s*\?\?\s*matchedTask\?\.status\s*\?\?\s*null\}/,
+    'status prefers liveCard then matchedTask',
   );
+});
+
+test('Chat thread (quick-260619-r4v): polls chat.topicTaskUpdates per-topic + feeds live card by issueId', () => {
+  const c = readChatCode('message-thread.tsx');
+  assert.match(c, /chat\.topicTaskUpdates/, 'per-topic live-card poll wired');
+  assert.match(c, /taskUpdateCards\.get\(parsedIssueId\)/, 'card looked up by issueId');
+  assert.match(c, /latestComment=\{liveCard\?\.latestComment/, 'latest comment fed to card');
+  assert.match(c, /blocked=\{liveCard\?\.blocked/, 'blocked state fed to card');
 });
 
 // ---------------------------------------------------------------------------

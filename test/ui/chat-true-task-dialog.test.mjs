@@ -49,28 +49,36 @@ test('true-task-dialog.tsx: title input is autoFocused', () => {
   assert.match(SRC, /autoFocus/, 'title field must autofocus on open');
 });
 
-test('true-task-dialog.tsx: topic dropdown defaults to Standalone for cold mode', () => {
-  // The Standalone (null) option is the first <option> in the topic select.
-  assert.match(SRC, /Standalone \(not linked to any topic\)/);
+// quick-260619-r4v Piece 1 — the Standalone option is REMOVED; topic is
+// REQUIRED. The dropdown defaults to the open/source topic; a "+ New topic"
+// affordance reveals the new-topic name input.
+test('true-task-dialog.tsx: Standalone option is GONE (topic required)', () => {
+  assert.doesNotMatch(SRC, /Standalone \(not linked to any topic\)/);
 });
 
-test('true-task-dialog.tsx: cold topic value is null (not a stringified id)', () => {
+test('true-task-dialog.tsx: TOPIC label is required (no "(OPTIONAL)" suffix)', () => {
+  assert.doesNotMatch(SRC, /TOPIC \(OPTIONAL\)/);
+  assert.match(SRC, /<label htmlFor="true-task-dialog-topic">TOPIC<\/label>/);
+});
+
+test('true-task-dialog.tsx: inline "+ New topic" affordance + new-topic name input', () => {
+  assert.match(SRC, /\+ New topic/);
+  assert.match(SRC, /true-task-dialog-new-topic/);
+});
+
+test('true-task-dialog.tsx: defaults the topic to the currently-open topic (currentTopic)', () => {
   const c = code(SRC);
-  // The select state holds string | null; the Standalone option's value is
-  // empty string and the onChange falls back to null.
-  assert.match(c, /setTopicIssueId\(e\.target\.value\s*\|\|\s*null\)/);
+  assert.match(c, /currentTopic/);
 });
 
-test('true-task-dialog.tsx: COLD topic helper copy', () => {
-  assert.match(
-    SRC,
-    /Standalone tasks won&apos;t appear in any topic|Standalone tasks won['’]t appear in any topic/,
-    'helper hint visible in COLD mode',
-  );
+test('true-task-dialog.tsx: Create is gated on a topic OR a new-topic name (hasTopic)', () => {
+  const c = code(SRC);
+  assert.match(c, /canSubmit\s*=\s*[\s\S]*hasTopic/);
 });
 
-test('true-task-dialog.tsx: PROMOTE topic helper copy', () => {
-  assert.match(SRC, /will appear in the source topic/i);
+test('true-task-dialog.tsx: passes newTopicTitle to createTrueTask', () => {
+  const c = code(SRC);
+  assert.match(c, /newTopicTitle:/);
 });
 
 test('true-task-dialog.tsx: ⌘+Enter / Ctrl+Enter submits the dialog', () => {
@@ -95,10 +103,11 @@ test('true-task-dialog.tsx: PROMOTE mode is gated on `mode === "promote"`', () =
   assert.match(c, /mode\s*===?\s*['"]promote['"]/);
 });
 
-test('true-task-dialog.tsx: submit passes topicIssueId (null for cold) + sourceCommentId', () => {
+test('true-task-dialog.tsx: submit passes topicIssueId + sourceCommentId', () => {
   const c = code(SRC);
-  // The createTrueTask call references both fields.
-  assert.match(c, /topicIssueId,/);
+  // The createTrueTask call references both fields (topicIssueId is now
+  // null when creating a new topic; non-null when an existing one is chosen).
+  assert.match(c, /topicIssueId:/);
   assert.match(c, /sourceCommentId,/);
 });
 

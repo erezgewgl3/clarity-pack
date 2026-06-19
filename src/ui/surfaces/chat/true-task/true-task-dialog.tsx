@@ -1,14 +1,18 @@
 // src/ui/surfaces/chat/true-task/true-task-dialog.tsx
 //
-// Plan 04.1-08 — RESHAPED dual-mode dialog. The Plan 04.1-06 single-mode
-// confirm-dialog (UI-SPEC §"Confirm dialog (D-02)") is replaced by a
-// COLD + PROMOTE shared shell:
+// Plan 04.1-08 — RESHAPED dual-mode dialog (COLD + PROMOTE shared shell).
 //
-//   COLD mode    — heading "Create a task". Title is autofocused + empty.
-//                  Topic dropdown defaults to "Standalone (not linked to any
-//                  topic)" (value `null`). NO FROM-MESSAGE block. Submit
-//                  invokes chat.createTrueTask with topicIssueId: null →
-//                  worker takes the cold-task originId path (Task 4).
+// quick-260619-r4v Piece 1 — TOPIC-REQUIRED redesign. The Standalone option is
+// REMOVED; every operator-created task is topic-linked. Behaviour now:
+//
+//   COLD ("create") — heading "Create a task". Title autofocused + empty.
+//                  Topic dropdown defaults to the currently-open topic
+//                  (currentTopic); "+ New topic" reveals a name input. Submit
+//                  invokes chat.createTrueTask with EITHER the selected
+//                  existing topicIssueId OR newTopicTitle (topicIssueId:null)
+//                  → worker links to the topic / atomically creates a new one.
+//                  Create is disabled until an existing topic is selected OR a
+//                  new-topic name is non-empty.
 //
 //   PROMOTE mode — heading "Promote message to task". Title is pre-filled
 //                  with titleFromBody(sourceMessage.body). Topic dropdown

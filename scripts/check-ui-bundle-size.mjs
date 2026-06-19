@@ -251,7 +251,20 @@ const UI_BUNDLE = path.join(REPO_ROOT, 'dist', 'ui', 'index.js');
 // prior ceiling). Verified zero SheetJS sentinels (the real bloat guard stays
 // clean), so the delta is legitimate. Recalibrated to 766 kB:
 //   766 kB = 784,384 bytes, ~787 B headroom.
-const UI_BUNDLE_BYTES_CEILING = 766 * 1024; // 766 kB = 784,384 bytes
+// Bumped 2026-06-19 from 766 → 777 kB (quick 260619-r4v: chat create-task loop
+// closure, +~8.8 kB, no SheetJS): the new UI-bundle code is Piece 1 (TrueTaskDialog
+// topic-required redesign + inline "+ New topic" input), Piece 2 (company-wide
+// grouped-by-assignee ActiveTasksOwned rail + scope/cap/skipped lines + ContextRail
+// prop threading + scoped CSS), and Piece 3 (InlineTaskCard live task-update card:
+// latest-agent-comment line + amber blocked-needs-you state + relative time, plus
+// message-thread's per-topic chat.topicTaskUpdates poll + keyed-by-issueId lookup,
+// plus the scoped CSS). The built bundle went 783,597 → 792,377 bytes. Verified
+// zero SheetJS sentinels (XLSX/SheetJS/!ref all 0 in the UI bundle — the real
+// bloat guard stays clean), so the delta is legitimate feature code. Recalibrated
+// per the long-standing empirical precedent (Plan 05-04 / 05-11 / 07-* / 08-02 /
+// 15-* / 21-*; actual + 3 kB headroom rounded UP to the next kB):
+//   ceil((792,377 + 3,072) / 1024) = 777 kB (795,648 bytes), ~3.3 kB headroom.
+const UI_BUNDLE_BYTES_CEILING = 777 * 1024; // 777 kB = 795,648 bytes
 
 const SHEETJS_SENTINELS = ['XLSX', 'SheetJS', '!ref'];
 
