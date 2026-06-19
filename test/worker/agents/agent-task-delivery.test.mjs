@@ -404,6 +404,48 @@ test('deliverAgentTask: idempotency — an existing operation issue with the sam
   );
 });
 
+// ---- Test 2b — STORM-SOURCE FIX (2026-06-19): no wake on a reuse-poll ------
+
+test('startAgentTask: storm-source fix — a REUSE-poll of an in-flight op-issue fires ZERO requestWakeup', async () => {
+  // 2026-06-19 storm diagnosis: the Reader polls a "Compiling…" TL;DR ~every 5s.
+  // Each poll calls startAgentTask, which (pre-fix) fired the creation-time wake
+  // on BOTH the create AND the reuse branch — ~12 wakes/min for ONE stuck compile.
+  // wake-governor's ceiling is 6/min; over it, the durable kill-switch auto-engages
+  // (never auto-clears), every editor wake is suppressed, and the op falls to
+  // Paperclip's recovery sweep (status_only / write-blocked) so the wrong agent
+  // (CTO/CEO) runs the TL;DR. Gating the wake on !reused makes one distinct compile
+  // = exactly one wake. The observable contract here is "no wake on a reuse-poll".
+  const existingIssue = {
+    id: 'op-existing',
+    title: 'Compile Daily Bulletin — cycle 1',
+    status: 'in_progress',
+    assigneeAgentId: AGENT_ID,
+    originKind: operationOriginKind('bulletin-compile'),
+    originId: 'cycle-1',
+    surfaceVisibility: 'plugin_operation',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  const { ctx, calls } = makeFakeCtx({ existing: [existingIssue] });
+
+  const result = await startAgentTask(ctx, BASE_OPTS);
+
+  assert.equal(result.reused, true, 'the in-flight op-issue is reused');
+  assert.equal(calls.create.length, 0, 'no duplicate op-issue is created on a reuse-poll');
+  assert.equal(
+    calls.requestWakeup.length,
+    0,
+    'ZERO requestWakeup on the reuse branch — the Reader ~5s repolls no longer each fire a wake (storm source severed)',
+  );
+  // The durable provenance write MUST still fire on reuse (TTL refresh + restart-
+  // safe own-write guard) — gating the WAKE must not gate the provenance write.
+  assert.equal(
+    calls.provenanceWrites.length,
+    1,
+    'recordOwnOperationIssue still writes durable provenance on the reuse branch',
+  );
+});
+
 // ---- Test 3 — timeout -----------------------------------------------------
 
 test('deliverAgentTask: timeout — no document or comment ever appears → rejects with a timeout-tagged error', async () => {

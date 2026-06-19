@@ -526,26 +526,43 @@ export async function startAgentTask(
   // recovery sweep covers it (status_only), i.e. no worse than today. A thrown
   // requestWakeup (host rejection) is caught + logged and NOT rethrown (the next
   // heartbeat / recovery sweep is the backstop).
-  const allowed = await checkAndRecordWake(ctx, opts.companyId);
-  if (allowed) {
-    try {
-      await ctx.issues.requestWakeup(issue.id, opts.companyId, {
-        reason: 'clarity-pack:operation:' + opts.operationKind,
-        idempotencyKey: opts.operationId,
-      });
-    } catch (e) {
-      // Non-fatal — the next heartbeat / recovery sweep is the backstop.
-      ctx.logger?.warn?.(
-        `agent-task-delivery: governed requestWakeup failed for op-issue ${issue.id} ` +
-          `(${opts.operationKind}/${opts.operationId}): ${(e as Error).message} — ` +
-          `left for next heartbeat / recovery sweep (non-fatal)`,
+  //
+  // STORM-SOURCE FIX (2026-06-19) — the wake is gated on `!reused`. The Reader
+  // polls a "Compiling…" TL;DR ~every 5s; each poll calls startAgentTask, which
+  // (pre-fix) fired this wake on the REUSE branch too — ~12 wakes/min for ONE
+  // stuck compile. wake-governor's ceiling is 6/min; over it the durable
+  // kill-switch auto-engages (never auto-clears), every editor wake is
+  // suppressed, the op falls to Paperclip's recovery sweep (status_only /
+  // write-blocked), and the WRONG agent (CTO/CEO) runs the TL;DR — the editor
+  // never runs (zero tokens). Gating on `!reused` makes one distinct compile =
+  // exactly ONE wake: the agent was already woken when the op was created, so a
+  // reuse-poll needs no second wake (the recovery sweep stays the documented
+  // degrade-safe backstop). The 6/min ceiling now caps DISTINCT issues and is no
+  // longer self-tripped by the Reader's poll cadence. The provenance write ABOVE
+  // stays UNCONDITIONAL — it must still fire on reuse (TTL refresh + restart-safe
+  // own-write guard).
+  if (!reused) {
+    const allowed = await checkAndRecordWake(ctx, opts.companyId);
+    if (allowed) {
+      try {
+        await ctx.issues.requestWakeup(issue.id, opts.companyId, {
+          reason: 'clarity-pack:operation:' + opts.operationKind,
+          idempotencyKey: opts.operationId,
+        });
+      } catch (e) {
+        // Non-fatal — the next heartbeat / recovery sweep is the backstop.
+        ctx.logger?.warn?.(
+          `agent-task-delivery: governed requestWakeup failed for op-issue ${issue.id} ` +
+            `(${opts.operationKind}/${opts.operationId}): ${(e as Error).message} — ` +
+            `left for next heartbeat / recovery sweep (non-fatal)`,
+        );
+      }
+    } else {
+      ctx.logger?.info?.(
+        `agent-task-delivery: wake suppressed by governor — op-issue ${issue.id} ` +
+          `left for recovery sweep (degrade-safe, kill-switch or ceiling)`,
       );
     }
-  } else {
-    ctx.logger?.info?.(
-      `agent-task-delivery: wake suppressed by governor — op-issue ${issue.id} ` +
-        `left for recovery sweep (degrade-safe, kill-switch or ceiling)`,
-    );
   }
 
   return { operationIssueId: issue.id, reused };
