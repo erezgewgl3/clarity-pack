@@ -141,6 +141,32 @@ type MessagesResult =
   | { error: string }
   | null;
 
+/** quick-260619-r4v Piece 3 — a live task-update card as chat.topicTaskUpdates
+ *  returns it (keyed by issueId, fed into InlineTaskCard at its existing
+ *  chronological spot). */
+type TopicTaskUpdateCard = {
+  issueId: string;
+  identifier: string;
+  status: string;
+  assignee: string;
+  latestComment: { text: string; createdAt: string } | null;
+  blocked: boolean;
+  blockedAction: string | null;
+};
+
+type TopicTaskUpdatesResult =
+  | {
+      kind: 'topicTaskUpdates';
+      topicIssueId: string;
+      cards: TopicTaskUpdateCard[];
+      total?: number;
+      shown?: number;
+      capped?: boolean;
+      skipped?: number;
+    }
+  | { error: string }
+  | null;
+
 /** A stream event as the 04-03 chat-stream-bridge emits it. */
 type ChatStreamEvent = {
   type?: string;
@@ -300,6 +326,42 @@ export function MessageThread({
     pauseOnHidden: true,
   });
   const pollDisabled = poll.error?.kind === 'PLUGIN_DISABLED';
+
+  // quick-260619-r4v Piece 3 — per-topic live task-update cards (loop closure).
+  // A SEPARATE bounded read from the company-wide rail: chat.topicTaskUpdates
+  // enriches each marker's linked task with live status + the agent's latest
+  // comment + blocked-needs-you. Polled at the same 15s cadence with
+  // pause-on-hidden (mirrors useChatActiveTasks). dedupeBy 'off' so the
+  // refresh always re-fetches. Read-only / anti-storm (worker-side invariant).
+  const { data: taskUpdatesData, refresh: refreshTaskUpdates } =
+    usePluginData<TopicTaskUpdatesResult>('chat.topicTaskUpdates', {
+      companyId,
+      userId,
+      topicIssueId,
+    });
+  usePoll({
+    key: `chat.topicTaskUpdates.refresh:${topicIssueId}`,
+    fetcher: async () => {
+      void refreshTaskUpdates?.();
+      return null;
+    },
+    intervalMs: REFRESH_INTERVAL_MS,
+    dedupeBy: 'off',
+    pauseOnHidden: true,
+  });
+  // Keyed-by-issueId lookup for the marker-interception branch below.
+  const taskUpdateCards = React.useMemo(() => {
+    const map = new Map<string, TopicTaskUpdateCard>();
+    if (
+      taskUpdatesData &&
+      typeof taskUpdatesData === 'object' &&
+      'kind' in taskUpdatesData &&
+      taskUpdatesData.kind === 'topicTaskUpdates'
+    ) {
+      for (const c of taskUpdatesData.cards) map.set(c.issueId, c);
+    }
+    return map;
+  }, [taskUpdatesData]);
 
   // GAP 8 (0.7.7 rework) — the live indicator is now PULSING, STICKY, and
   // TRUTHFUL. Three earlier-flagged problems with the static "Live" label:
@@ -533,6 +595,11 @@ export function MessageThread({
             (pendingTaskCard?.issueId === parsedIssueId
               ? pendingTaskCard.title
               : null);
+          // quick-260619-r4v Piece 3 — the live task-update card for this
+          // marker's issueId (live status + latest agent comment + blocked).
+          // The card status/identifier (per-topic, fresh) takes precedence over
+          // the company-wide rail's activeTasks copy when present.
+          const liveCard = parsedIssueId ? taskUpdateCards.get(parsedIssueId) : undefined;
           return (
             <React.Fragment key={msg.commentId}>
               {showDivider ? (
@@ -541,17 +608,20 @@ export function MessageThread({
                 </div>
               ) : null}
               <InlineTaskCard
-                identifier={matchedTask?.identifier ?? null}
+                identifier={liveCard?.identifier ?? matchedTask?.identifier ?? null}
                 issueId={parsedIssueId}
                 title={resolvedTitle}
                 employeeName={parsedAssignee}
                 role={employeeRole}
-                status={matchedTask?.status ?? null}
+                status={liveCard?.status ?? matchedTask?.status ?? null}
                 createdAt={
                   typeof msg.createdAt === 'string'
                     ? msg.createdAt
                     : new Date(ms).toISOString()
                 }
+                latestComment={liveCard?.latestComment ?? null}
+                blocked={liveCard?.blocked ?? false}
+                blockedAction={liveCard?.blockedAction ?? null}
               />
             </React.Fragment>
           );

@@ -41,6 +41,22 @@ function clock(iso: string | null | undefined): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/** quick-260619-r4v Piece 3 — coarse relative-time suffix for the latest
+ *  agent comment ("just now" / "5m ago" / "3h ago" / "2d ago"). */
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const diffMs = Date.now() - t;
+  if (diffMs < 60_000) return 'just now';
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 /**
  * Plan 05-06 item (g) — optimistic Todo render. The Plan 04.1-09 build mapped
  * null/undefined status through `ChatTaskStatusPill`'s null branch which renders
@@ -62,6 +78,9 @@ export function InlineTaskCard({
   role,
   status,
   createdAt,
+  latestComment = null,
+  blocked = false,
+  blockedAction = null,
 }: {
   /** BEAAA-NNN identifier when known; null while the optimistic card waits for chat.taskOwned to catch up. */
   identifier: string | null;
@@ -80,6 +99,14 @@ export function InlineTaskCard({
    *  status arrives via chat.taskOwned on the next 15s poll. */
   status: string | null | undefined;
   createdAt: string | null;
+  /** quick-260619-r4v Piece 3 — the agent's latest comment (already polished +
+   *  scrubbed worker-side by chat.topicTaskUpdates). Null → "Working…". */
+  latestComment?: { text: string; createdAt: string } | null;
+  /** quick-260619-r4v Piece 3 — true when the task is stuck (isTopicStuck);
+   *  the status pill is replaced by an amber "Blocked — needs you" element. */
+  blocked?: boolean;
+  /** The named human action for a blocked task. */
+  blockedAction?: string | null;
 }): React.ReactElement {
   // Plan 05-06 item (g) — optimistic Todo coercion. Default for the a11y
   // label is now 'todo' (was 'pending'); the a11y text matches the visible
@@ -146,9 +173,48 @@ export function InlineTaskCard({
           ) : (
             <span className="clarity-ref-chip clarity-ref-chip--loading">…</span>
           )}
-          <ChatTaskStatusPill status={statusForPill} />
+          {/* quick-260619-r4v Piece 3 — a blocked task replaces the status pill
+              with an amber "Blocked — needs you: <action>" element so the
+              operator sees the single named human action, not a status. */}
+          {blocked ? (
+            <span className="inline-task-card-blocked" role="status">
+              Blocked — needs you{blockedAction ? `: ${blockedAction}` : ''}
+            </span>
+          ) : (
+            <ChatTaskStatusPill status={statusForPill} />
+          )}
           <span className="ts">{clock(createdAt)}</span>
         </div>
+        {/* quick-260619-r4v Piece 3 — latest agent comment line (loop closure):
+            the agent's newest reply, polished worker-side, with a relative-time
+            suffix + an expand → open-issue link. "Working…" when no comment
+            yet. Operator text is never shown here. Suppressed when blocked
+            (the named action is the message). */}
+        {!blocked ? (
+          <div className="inline-task-card-latest">
+            {latestComment ? (
+              <>
+                <span className="inline-task-card-latest-text" title={latestComment.text}>
+                  {latestComment.text}
+                </span>
+                <span className="inline-task-card-latest-time">
+                  {relativeTime(latestComment.createdAt)}
+                </span>
+                {hasTitleLink ? (
+                  <a
+                    {...nav.linkProps(`/${companyPrefix}/issues/${identifier}`)}
+                    className="inline-task-card-latest-expand"
+                    data-clarity-action="open-inline-task-comment"
+                  >
+                    open
+                  </a>
+                ) : null}
+              </>
+            ) : (
+              <span className="inline-task-card-working">Working…</span>
+            )}
+          </div>
+        ) : null}
       </div>
     </article>
   );
