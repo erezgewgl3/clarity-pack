@@ -54,6 +54,10 @@ function makeCtx({
   // anti-regression. Spy on it; assert zero invocations.
   const issueListCalls = [];
   const issueGetCalls = [];
+  // quick-260619-r4v anti-storm spies — the read path must NEVER wake an
+  // agent or subscribe to events.
+  const wakeCalls = [];
+  const eventSubs = [];
 
   const ctx = {
     logger: {
@@ -83,6 +87,17 @@ function makeCtx({
         if (issueDeleted.has(issueId)) return null;
         return issueRows[issueId] ?? null;
       },
+      async requestWakeup(...args) {
+        wakeCalls.push(args);
+      },
+    },
+    events: {
+      on(...args) {
+        eventSubs.push(args);
+      },
+      subscribe(...args) {
+        eventSubs.push(args);
+      },
     },
     db: {
       async query(sql, params) {
@@ -92,13 +107,14 @@ function makeCtx({
         }
         if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_topic_tasks/i.test(sql)) {
           if (selectThrows) throw new Error('host db.query 503');
-          const [companyId, topicIssueId] = params;
+          // quick-260619-r4v Piece 2: company-wide SELECT (no topic filter).
           // Test seed is already pre-filtered; emit { task_issue_id } rows.
           return chatTopicTasks.map((r) => ({ task_issue_id: r.taskIssueId }));
         }
         return [];
       },
-      async execute() {
+      async execute(sql, params) {
+        calls.push({ kind: 'execute', sql, params });
         return { rowCount: 0 };
       },
     },
@@ -107,6 +123,8 @@ function makeCtx({
     _warnLogs: warnLogs,
     _issueListCalls: issueListCalls,
     _issueGetCalls: issueGetCalls,
+    _wakeCalls: wakeCalls,
+    _eventSubs: eventSubs,
   };
   ctx.db = wrapHostFaithfulDb(ctx.db);
   return ctx;
@@ -179,13 +197,17 @@ test('chat.taskOwned: missing userId -> { error: OPT_IN_REQUIRED } (opt-in-guard
   assert.equal(result.error, 'OPT_IN_REQUIRED');
 });
 
-test('chat.taskOwned: missing topicIssueId -> { error: TOPIC_ISSUE_ID_REQUIRED }', async () => {
-  const ctx = makeCtx();
+// quick-260619-r4v Piece 2 — the rail is now COMPANY-WIDE. topicIssueId is no
+// longer required (it is accepted-and-ignored for back-compat). A request
+// without it succeeds (company-wide enumerate).
+test('chat.taskOwned: missing topicIssueId -> OK (company-wide; topic no longer required)', async () => {
+  const ctx = makeCtx({ chatTopicTasks: [] });
   registerChatActiveTasks(ctx);
   const p = activeTasksParams();
   delete p.topicIssueId;
   const result = await ctx._handlers.get('chat.taskOwned')(p);
-  assert.equal(result.error, 'TOPIC_ISSUE_ID_REQUIRED');
+  assert.equal(result.kind, 'taskOwned');
+  assert.deepEqual(result.tasks, []);
 });
 
 // ---- Test 4 — HAPPY-PATH-MATCH: side-table SELECT + per-row issues.get ----
@@ -401,4 +423,136 @@ test('chat.taskOwned: defensive defaults when identifier/title/status are missin
 test('registerChatActiveTasks is exported as a function', async () => {
   const mod = await import('../../../src/worker/handlers/chat-active-tasks.ts');
   assert.equal(typeof mod.registerChatActiveTasks, 'function');
+});
+
+// ===========================================================================
+// quick-260619-r4v Piece 2 — company-wide, grouped-by-live-assignee rail
+// ===========================================================================
+
+// ---- Group by LIVE assignee; reassignment follows owner ------------------
+
+test('chat.taskOwned: groups by LIVE assignee (issues.get assignee), reassignment follows owner', async () => {
+  const ctx = makeCtx({
+    chatTopicTasks: [
+      { taskIssueId: 'T1', createdAt: '2026-01-03Z' },
+      { taskIssueId: 'T2', createdAt: '2026-01-02Z' },
+      { taskIssueId: 'T3', createdAt: '2026-01-01Z' },
+    ],
+    issueRows: {
+      // T1 + T3 live-assigned to CFO; T2 reassigned out-of-band to CMO.
+      T1: issueRow({ id: 'T1', identifier: 'B-1', title: 'A', status: 'todo', assignee: { id: 'agent-cfo', name: 'CFO' } }),
+      T2: issueRow({ id: 'T2', identifier: 'B-2', title: 'B', status: 'in_progress', assignee: { id: 'agent-cmo', name: 'CMO' } }),
+      T3: issueRow({ id: 'T3', identifier: 'B-3', title: 'C', status: 'done', assignee: { id: 'agent-cfo', name: 'CFO' } }),
+    },
+  });
+  registerChatActiveTasks(ctx);
+  const result = await ctx._handlers.get('chat.taskOwned')(activeTasksParams());
+  assert.equal(result.kind, 'taskOwned');
+  assert.ok(Array.isArray(result.groups), 'groups array present');
+  const byAssignee = Object.fromEntries(result.groups.map((g) => [g.assignee, g.tasks.map((t) => t.issueId)]));
+  assert.deepEqual(byAssignee['CFO'].sort(), ['T1', 'T3'], 'CFO group has T1 + T3');
+  assert.deepEqual(byAssignee['CMO'], ['T2'], 'CMO group has the reassigned T2 (follows live owner)');
+});
+
+// ---- NO_UUID_LEAK: raw-UUID assignee degrades to "Unassigned" ------------
+
+test('chat.taskOwned: a raw-UUID assignee never leaks; degrades to Unassigned bucket', async () => {
+  const ctx = makeCtx({
+    chatTopicTasks: [{ taskIssueId: 'T1', createdAt: '2026-01-01Z' }],
+    issueRows: {
+      T1: issueRow({
+        id: 'T1',
+        identifier: 'B-1',
+        title: 'A',
+        status: 'todo',
+        // assignee name is a bare UUID (host degraded) — must NOT render raw.
+        assignee: { id: '11111111-2222-3333-4444-555555555555', name: '11111111-2222-3333-4444-555555555555' },
+      }),
+    },
+  });
+  registerChatActiveTasks(ctx);
+  const result = await ctx._handlers.get('chat.taskOwned')(activeTasksParams());
+  for (const g of result.groups) {
+    assert.ok(
+      !/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(g.assignee),
+      `group assignee label must not be a raw UUID (got ${g.assignee})`,
+    );
+  }
+});
+
+// ---- Cap M=100 + shown/total/capped --------------------------------------
+
+test('chat.taskOwned: caps at M=100 with capped:true + total/shown when the side table returns the cap', async () => {
+  const seed = [];
+  const rows = {};
+  for (let i = 0; i < 100; i += 1) {
+    const id = `K${i}`;
+    seed.push({ taskIssueId: id, createdAt: `2026-01-01Z` });
+    rows[id] = issueRow({ id, identifier: `B-${i}`, title: `t${i}`, status: 'todo', assignee: { id: 'agent-cfo', name: 'CFO' } });
+  }
+  const ctx = makeCtx({ chatTopicTasks: seed, issueRows: rows });
+  registerChatActiveTasks(ctx);
+  const result = await ctx._handlers.get('chat.taskOwned')(activeTasksParams());
+  assert.equal(result.capped, true, 'capped flips true at the M=100 boundary');
+  assert.equal(result.shown, 100);
+  assert.equal(result.total, 100);
+});
+
+test('chat.taskOwned: under the cap, capped:false', async () => {
+  const ctx = makeCtx({
+    chatTopicTasks: [{ taskIssueId: 'T1', createdAt: '2026-01-01Z' }],
+    issueRows: { T1: issueRow({ id: 'T1', identifier: 'B-1', title: 'A', status: 'todo', assignee: { id: 'agent-cfo', name: 'CFO' } }) },
+  });
+  registerChatActiveTasks(ctx);
+  const result = await ctx._handlers.get('chat.taskOwned')(activeTasksParams());
+  assert.equal(result.capped, false);
+  assert.equal(result.shown, 1);
+  assert.equal(result.total, 1);
+});
+
+// ---- Per-row enrich failure COUNTED (skipped), never silently dropped -----
+
+test('chat.taskOwned: a failed enrich is COUNTED in skipped (not silently dropped)', async () => {
+  const ctx = makeCtx({
+    chatTopicTasks: [
+      { taskIssueId: 'T-GOOD', createdAt: '2026-01-02Z' },
+      { taskIssueId: 'T-BAD', createdAt: '2026-01-01Z' },
+    ],
+    issueRows: {
+      'T-GOOD': issueRow({ id: 'T-GOOD', identifier: 'B-1', title: 'G', status: 'todo', assignee: { id: 'agent-cfo', name: 'CFO' } }),
+    },
+    issueGetFailsFor: new Set(['T-BAD']),
+  });
+  registerChatActiveTasks(ctx);
+  const result = await ctx._handlers.get('chat.taskOwned')(activeTasksParams());
+  assert.equal(result.skipped, 1, 'the failed row is counted, not dropped silently');
+  assert.equal(result.total, 2, 'total reflects the side-table rows');
+  // The good row still surfaces in a group.
+  const ids = result.groups.flatMap((g) => g.tasks.map((t) => t.issueId));
+  assert.deepEqual(ids, ['T-GOOD']);
+});
+
+// ---- ANTI-STORM (company-wide): zero list / db.execute / wake / events ----
+// (also see the cross-cutting Task-5 guard; this pins it at the handler.)
+
+test('chat.taskOwned (company-wide): ZERO issues.list / db.execute / requestWakeup / events — populated AND empty', async () => {
+  // Populated.
+  const ctxP = makeCtx({
+    chatTopicTasks: [{ taskIssueId: 'T1', createdAt: '2026-01-01Z' }],
+    issueRows: { T1: issueRow({ id: 'T1', identifier: 'B-1', title: 'A', status: 'todo', assignee: { id: 'agent-cfo', name: 'CFO' } }) },
+  });
+  registerChatActiveTasks(ctxP);
+  await ctxP._handlers.get('chat.taskOwned')(activeTasksParams());
+  // Empty.
+  const ctxE = makeCtx({ chatTopicTasks: [] });
+  registerChatActiveTasks(ctxE);
+  await ctxE._handlers.get('chat.taskOwned')(activeTasksParams());
+
+  for (const ctx of [ctxP, ctxE]) {
+    assert.equal(ctx._issueListCalls.length, 0, 'zero ctx.issues.list');
+    const executes = ctx._calls.filter((c) => c.kind === 'execute');
+    assert.equal(executes.length, 0, 'zero ctx.db.execute (read path)');
+    assert.equal((ctx._wakeCalls ?? []).length, 0, 'zero requestWakeup');
+    assert.equal((ctx._eventSubs ?? []).length, 0, 'zero event subscriptions');
+  }
 });

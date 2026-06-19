@@ -47,8 +47,26 @@ export type ChatActiveTask = {
   } | null;
 };
 
+/** quick-260619-r4v Piece 2 — a live-assignee group as the company-wide rail
+ *  consumes it. The handler groups by the issues.get LIVE assignee so a
+ *  reassigned task follows its owner. */
+export type ChatActiveTaskGroup = {
+  assignee: string;
+  tasks: ChatActiveTask[];
+};
+
 type Result =
-  | { kind: 'taskOwned'; topicIssueId: string; tasks: ChatActiveTask[] }
+  | {
+      kind: 'taskOwned';
+      topicIssueId: string | null;
+      tasks: ChatActiveTask[];
+      // quick-260619-r4v Piece 2 — grouped + bounded-completeness metadata.
+      groups?: ChatActiveTaskGroup[];
+      total?: number;
+      shown?: number;
+      capped?: boolean;
+      skipped?: number;
+    }
   | { error: string }
   | null;
 
@@ -59,6 +77,18 @@ type Result =
  * title lookup). The 15s poll cadence + visibility-pause match the
  * MessageThread poll (UI-SPEC §"Active tasks owned, live status").
  */
+/** quick-260619-r4v Piece 2 — the hook's full result. `tasks` stays flat
+ *  (index.tsx + MessageThread inline-card title lookup consume it unchanged);
+ *  `groups` + the bounded-completeness fields drive the company-wide rail. */
+export type ChatActiveTasksResult = {
+  tasks: ChatActiveTask[];
+  groups: ChatActiveTaskGroup[];
+  total: number;
+  shown: number;
+  capped: boolean;
+  skipped: number;
+};
+
 export function useChatActiveTasks({
   companyId,
   userId,
@@ -67,14 +97,20 @@ export function useChatActiveTasks({
   companyId: string;
   userId: string;
   topicIssueId: string | null;
-}): { tasks: ChatActiveTask[] } {
+}): ChatActiveTasksResult {
+  // quick-260619-r4v Piece 2 — the rail is COMPANY-WIDE now: fetch whenever
+  // companyId + userId are present. topicIssueId is still threaded (the
+  // handler accepts-and-ignores it) so the response echo + poll key stay
+  // stable across topic switches, but it no longer gates the fetch.
   const { data, refresh } = usePluginData<Result>(
     'chat.taskOwned',
-    topicIssueId ? { companyId, userId, topicIssueId } : {},
+    companyId && userId
+      ? { companyId, userId, ...(topicIssueId ? { topicIssueId } : {}) }
+      : {},
   );
 
   usePoll({
-    key: `chat.taskOwned.refresh:${topicIssueId ?? 'none'}`,
+    key: `chat.taskOwned.refresh:${topicIssueId ?? 'company'}`,
     fetcher: async () => {
       void refresh?.();
       return null;
@@ -84,18 +120,42 @@ export function useChatActiveTasks({
     pauseOnHidden: true,
   });
 
-  const tasks: ChatActiveTask[] =
+  const ok =
     data && typeof data === 'object' && 'kind' in data && data.kind === 'taskOwned'
-      ? data.tasks
-      : [];
+      ? data
+      : null;
+  const tasks: ChatActiveTask[] = ok ? ok.tasks : [];
+  const groups: ChatActiveTaskGroup[] = ok?.groups ?? [];
 
-  return { tasks };
+  return {
+    tasks,
+    groups,
+    total: ok?.total ?? tasks.length,
+    shown: ok?.shown ?? tasks.length,
+    capped: ok?.capped ?? false,
+    skipped: ok?.skipped ?? 0,
+  };
 }
 
 export function ActiveTasksOwned({
   tasks,
+  groups = [],
+  total,
+  shown,
+  capped = false,
+  skipped = 0,
+  employeeName,
 }: {
   tasks: ChatActiveTask[];
+  /** quick-260619-r4v Piece 2 — live-assignee groups (company-wide). When
+   *  absent (legacy callers), fall back to a single flat list. */
+  groups?: ChatActiveTaskGroup[];
+  total?: number;
+  shown?: number;
+  capped?: boolean;
+  skipped?: number;
+  /** The selected employee's display name for the scope label. */
+  employeeName?: string | null;
 }): React.ReactElement {
   // Plan 04.2-05 D3 — the rail row title is wrapped in a host-routed anchor
   // so clicking it lands on the issue's canonical Reader at
@@ -109,46 +169,78 @@ export function ActiveTasksOwned({
   const { pathname } = useHostLocation();
   const companyPrefix = extractCompanyPrefixFromPathname(pathname) ?? '';
 
-  if (tasks.length === 0) {
+  // quick-260619-r4v Piece 2 — render grouped-by-assignee when groups are
+  // present; degrade to a single flat group for legacy callers.
+  const renderGroups: ChatActiveTaskGroup[] =
+    groups.length > 0
+      ? groups
+      : tasks.length > 0
+        ? [{ assignee: employeeName ?? '', tasks }]
+        : [];
+
+  const scopeLabel = employeeName
+    ? `Tasks owned by ${employeeName}, company-wide`
+    : 'Tasks owned company-wide';
+
+  // A single host-routed row (reused per task in every group).
+  const renderRow = (t: ChatActiveTask): React.ReactElement => (
+    <div key={t.issueId} className="task-row">
+      <span className="id">
+        <RefChip refId={t.identifier} />
+      </span>
+      {companyPrefix && t.identifier ? (
+        <a
+          {...nav.linkProps(`/${companyPrefix}/issues/${t.identifier}`)}
+          className="ttl"
+          title={t.title}
+          data-clarity-action="open-active-task"
+        >
+          {t.title}
+        </a>
+      ) : (
+        <span className="ttl" title={t.title}>
+          {t.title}
+        </span>
+      )}
+      <ChatTaskStatusPill status={t.status} />
+    </div>
+  );
+
+  if (renderGroups.length === 0) {
     return (
-      <p className="active-tasks-owned-empty">
-        No spun-off tasks yet. Tasks created from this chat appear here.
-      </p>
+      <>
+        <p className="active-tasks-owned-scope">{scopeLabel}</p>
+        <p className="active-tasks-owned-empty">
+          No spun-off tasks yet. Tasks created from chat appear here.
+        </p>
+      </>
     );
   }
 
   return (
     <>
-      {tasks.map((t) => (
-        <div key={t.issueId} className="task-row">
-          {/* The RefChip primitive runs its own resolve-refs round-trip; pass
-              the BEAAA-NNN identifier as the refId so it surfaces as a
-              clickable chip into classic Paperclip. Plan 04.2-05 D3 — the
-              chip itself is now a host-routed anchor to /<prefix>/issues/<id>. */}
-          <span className="id">
-            <RefChip refId={t.identifier} />
-          </span>
-          {/* Plan 04.1-09 — `title={t.title}` so hover tooltip shows the full
-              text when the 3-line clamp truncates a long title.
-              Plan 04.2-05 D3 — wrapped in a host-routed anchor when
-              companyPrefix is available; otherwise plain text. */}
-          {companyPrefix && t.identifier ? (
-            <a
-              {...nav.linkProps(`/${companyPrefix}/issues/${t.identifier}`)}
-              className="ttl"
-              title={t.title}
-              data-clarity-action="open-active-task"
-            >
-              {t.title}
-            </a>
-          ) : (
-            <span className="ttl" title={t.title}>
-              {t.title}
-            </span>
-          )}
-          <ChatTaskStatusPill status={t.status} />
+      {/* Scope label — the rail is company-wide, never silently topic-scoped. */}
+      <p className="active-tasks-owned-scope">{scopeLabel}</p>
+      {renderGroups.map((g) => (
+        <div key={g.assignee || '__ungrouped__'} className="active-tasks-owned-group">
+          {/* One header per LIVE assignee so a reassigned task is visibly
+              grouped under its new owner. Omitted for the legacy single
+              flat group (empty assignee). */}
+          {g.assignee ? (
+            <div className="active-tasks-owned-group-head">{g.assignee}</div>
+          ) : null}
+          {g.tasks.map(renderRow)}
         </div>
       ))}
+      {/* Bounded + never silently incomplete (Eric's no-rabbit-holes rule). */}
+      {capped ? (
+        <p className="active-tasks-owned-cap">
+          showing {shown ?? tasks.length} of {total ?? tasks.length}
+        </p>
+      ) : null}
+      {skipped > 0 ? (
+        <p className="active-tasks-owned-skipped">({skipped} could not be loaded)</p>
+      ) : null}
     </>
   );
 }

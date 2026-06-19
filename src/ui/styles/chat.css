@@ -1569,6 +1569,35 @@
   margin: 0 0 12px;
 }
 
+/* quick-260619-r4v Piece 2 — company-wide, grouped-by-assignee rail.
+ * Scope label + per-assignee header + bounded-completeness lines. */
+[data-clarity-surface="chat"] .active-tasks-owned-scope {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  margin: 0 0 8px;
+}
+[data-clarity-surface="chat"] .active-tasks-owned-group {
+  margin: 0 0 10px;
+}
+[data-clarity-surface="chat"] .active-tasks-owned-group-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  margin: 0 0 4px;
+}
+[data-clarity-surface="chat"] .active-tasks-owned-cap,
+[data-clarity-surface="chat"] .active-tasks-owned-skipped {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin: 4px 0 0;
+}
+[data-clarity-surface="chat"] .active-tasks-owned-skipped {
+  color: var(--amber, #b45309);
+}
+
 /* Pattern E — archive topic affordance (UI-SPEC §"Archive topic affordance").
  * .archive-topic-button uses .qa base (chat.css:1158-1172); the in-row
  * confirm pill is its own block when armed. */

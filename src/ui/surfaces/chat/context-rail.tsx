@@ -74,7 +74,11 @@ function estBucketLabel(bucket: string | null | undefined): string | null {
 
 import type { RosterEmployee } from './roster-rail.tsx';
 import type { ChatTopic } from './topic-strip.tsx';
-import { ActiveTasksOwned, type ChatActiveTask } from './active-tasks-owned.tsx';
+import {
+  ActiveTasksOwned,
+  type ChatActiveTask,
+  type ChatActiveTaskGroup,
+} from './active-tasks-owned.tsx';
 import { ArchiveTopicButton } from './archive-topic-button.tsx';
 import type { ChatMessage } from './message-thread.tsx';
 // Plan 05-11 (CHAT-07 gap closure) — live Recent Attachments panel
@@ -133,6 +137,11 @@ export function ContextRail({
   companyId,
   userId,
   activeTasks,
+  activeTaskGroups = [],
+  activeTasksTotal,
+  activeTasksShown,
+  activeTasksCapped = false,
+  activeTasksSkipped = 0,
   onArchived,
   onPinChanged,
 }: {
@@ -148,6 +157,13 @@ export function ContextRail({
   /** Plan 04.1-09 — chat.taskOwned data is fetched at index.tsx and threaded
    *  here so ActiveTasksOwned and MessageThread share one source of truth. */
   activeTasks: ChatActiveTask[];
+  /** quick-260619-r4v Piece 2 — company-wide grouped-by-assignee data +
+   *  bounded-completeness metadata for the "Active tasks owned" rail. */
+  activeTaskGroups?: ChatActiveTaskGroup[];
+  activeTasksTotal?: number;
+  activeTasksShown?: number;
+  activeTasksCapped?: boolean;
+  activeTasksSkipped?: number;
   onArchived: () => void;
   /** Plan 05-08 (D-20) — fired after a successful chat.topic.pin flip so
    *  the parent can bump refreshKey and chat.topics refetches the new
@@ -328,10 +344,21 @@ export function ContextRail({
       )}
 
       <h3>Active tasks owned</h3>
-      {topic ? (
-        <ActiveTasksOwned tasks={activeTasks} />
+      {/* quick-260619-r4v Piece 2 — the rail is COMPANY-WIDE now: it shows the
+          selected employee's chat-created tasks grouped by LIVE assignee, no
+          longer gated on an open topic. */}
+      {employee ? (
+        <ActiveTasksOwned
+          tasks={activeTasks}
+          groups={activeTaskGroups}
+          total={activeTasksTotal}
+          shown={activeTasksShown}
+          capped={activeTasksCapped}
+          skipped={activeTasksSkipped}
+          employeeName={employee.name}
+        />
       ) : (
-        <p className="ctx-empty">Select a topic to see its spun-off tasks.</p>
+        <p className="ctx-empty">Select an employee to see their owned tasks.</p>
       )}
 
       {/* Phase 19 Plan 19-03 (CARD-02 / D-09) — the needs-you "You owe" slot. When

@@ -253,11 +253,15 @@ function ChatPageBody({
   // ContextRail (right rail's "Active tasks owned") AND MessageThread
   // (inline-task-card title lookup, Plan 04.1-08 drill fix #2b) share one
   // source of truth. 15s poll cadence matches the message thread.
-  const { tasks: activeTasks } = useChatActiveTasks({
+  const activeTasksResult = useChatActiveTasks({
     companyId,
     userId,
     topicIssueId: topic?.issueId ?? null,
   });
+  // `activeTasks` stays the flat list (MessageThread inline-card title lookup
+  // consumes it unchanged); the grouped + bounded-completeness fields ride
+  // through to ContextRail for the company-wide rail render.
+  const activeTasks = activeTasksResult.tasks;
 
   const handleSelectEmployee = React.useCallback((next: RosterEmployee) => {
     setEmployee(next);
@@ -970,6 +974,11 @@ function ChatPageBody({
         companyId={companyId}
         userId={userId}
         activeTasks={activeTasks}
+        activeTaskGroups={activeTasksResult.groups}
+        activeTasksTotal={activeTasksResult.total}
+        activeTasksShown={activeTasksResult.shown}
+        activeTasksCapped={activeTasksResult.capped}
+        activeTasksSkipped={activeTasksResult.skipped}
         onArchived={() => {
           // Plan 04.1-06 Pattern E — after a successful archive, drop the
           // archived topic from the active view and force the strip to

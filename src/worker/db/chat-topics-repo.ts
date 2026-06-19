@@ -795,6 +795,56 @@ export async function listChatTopicTasksForTopic(
   return rows.map((r) => r.task_issue_id);
 }
 
+/**
+ * quick-260619-r4v Piece 2 — list DISTINCT task issue ids spawned from ANY
+ * chat topic in the company, newest-first, bounded by `limit` (M=100 at the
+ * call site). Drops the topic filter so the "Active tasks owned" rail can show
+ * a selected employee's tasks company-wide (grouped by LIVE assignee in the
+ * handler), so a reassigned task follows its owner instead of vanishing.
+ *
+ * SELECT-only, plugin-namespace. DISTINCT collapses a task linked from more
+ * than one topic (rare). The MAX(created_at) sort keeps newest-first while
+ * remaining compatible with DISTINCT (an aggregate the ORDER BY can reference).
+ */
+export async function listChatTopicTasksForCompany(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  limit: number,
+): Promise<string[]> {
+  const rows = await ctx.db.query<{ task_issue_id: string }>(
+    `SELECT task_issue_id
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_topic_tasks
+     WHERE company_id = $1
+     GROUP BY task_issue_id
+     ORDER BY MAX(created_at) DESC
+     LIMIT $2`,
+    [companyId, limit],
+  );
+  return rows.map((r) => r.task_issue_id);
+}
+
+/**
+ * quick-260619-r4v Piece 3 — same as listChatTopicTasksForTopic but with a
+ * caller-supplied limit (default 20) so the per-topic live-task-update cards
+ * read is independently bounded from the rail's 50.
+ */
+export async function listChatTopicTasksForTopicAll(
+  ctx: ChatTopicsRepoCtx,
+  companyId: string,
+  topicIssueId: string,
+  limit = 20,
+): Promise<string[]> {
+  const rows = await ctx.db.query<{ task_issue_id: string }>(
+    `SELECT task_issue_id
+     FROM plugin_clarity_pack_cdd6bda4bd.chat_topic_tasks
+     WHERE company_id = $1 AND topic_issue_id = $2
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [companyId, topicIssueId, limit],
+  );
+  return rows.map((r) => r.task_issue_id);
+}
+
 // ---------------------------------------------------------------------------
 // chat_message_attachments -- Plan 05-11 (CHAT-07 gap closure)
 // ---------------------------------------------------------------------------

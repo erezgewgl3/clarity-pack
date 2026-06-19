@@ -33,9 +33,10 @@
 import { wrapDataHandler, type OptInGuardDataCtx } from '../opt-in-guard.ts';
 import type { PluginIssuesClient, PluginLogger } from '@paperclipai/plugin-sdk';
 import {
-  listChatTopicTasksForTopic,
+  listChatTopicTasksForCompany,
   type ChatTopicsRepoCtx,
 } from '../db/chat-topics-repo.ts';
+import { UUID_RE } from '../../shared/scrub-human-action.ts';
 // Phase 19 Plan 19-03 (CARD-02 / D-09) — read-cached-only action-card attach for
 // the Chat needs-you rail. Flag-gated (degrade-to-OFF), batch read, liveness-
 // armed, projected to DISPLAY-only fields (rowToCardDisplay drops sourceIssueUuid
@@ -79,6 +80,35 @@ function coerceCreatedAt(v: unknown): string | null {
   return null;
 }
 
+/** quick-260619-r4v Piece 2 — company-wide enumerate cap (SPEC M=100). */
+const COMPANY_TASK_CAP = 100;
+
+/** quick-260619-r4v Piece 2 — the "Unassigned" bucket label. NO_UUID_LEAK:
+ *  an assignee whose name strips to empty or is a bare UUID falls here. */
+const UNASSIGNED_LABEL = 'Unassigned';
+
+/**
+ * quick-260619-r4v Piece 2 — resolve a LIVE assignee display label from an
+ * issues.get row, NO_UUID_LEAK-safe. Prefers a human name; never returns a
+ * raw UUID (falls back to "Unassigned"). Reads whatever assignee shape the
+ * host returns (assignee.name / assigneeName), degrading defensively.
+ */
+function resolveAssigneeLabel(row: Record<string, unknown> | null): string {
+  if (!row) return UNASSIGNED_LABEL;
+  const assignee = row.assignee as { name?: unknown; id?: unknown } | null | undefined;
+  const candidates: unknown[] = [
+    assignee?.name,
+    (row as { assigneeName?: unknown }).assigneeName,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string') {
+      const trimmed = c.trim();
+      if (trimmed.length > 0 && !UUID_RE.test(trimmed)) return trimmed;
+    }
+  }
+  return UNASSIGNED_LABEL;
+}
+
 export function registerChatActiveTasks(ctx: ChatActiveTasksCtx): void {
   wrapDataHandler(ctx, 'chat.taskOwned', async (params) => {
     const companyId =
@@ -87,6 +117,10 @@ export function registerChatActiveTasks(ctx: ChatActiveTasksCtx): void {
         : null;
     const userId =
       typeof params?.userId === 'string' && params.userId ? params.userId : null;
+    // quick-260619-r4v Piece 2 — topicIssueId is accepted-and-ignored for
+    // back-compat. The rail is now COMPANY-WIDE: it enumerates every chat-
+    // created task and groups by LIVE assignee so a reassigned task follows
+    // its owner. companyId + userId stay required.
     const topicIssueId =
       typeof params?.topicIssueId === 'string' && params.topicIssueId
         ? params.topicIssueId
@@ -94,66 +128,88 @@ export function registerChatActiveTasks(ctx: ChatActiveTasksCtx): void {
 
     if (!companyId) return { error: 'COMPANY_ID_REQUIRED' as const };
     if (!userId) return { error: 'USER_ID_REQUIRED' as const };
-    if (!topicIssueId) return { error: 'TOPIC_ISSUE_ID_REQUIRED' as const };
 
-    // Side-table SELECT -- the steady-state D-08 path (Wave 1 lock per
-    // 04.1-01-SPIKE-FINDINGS PROBE-OQ2-FILTER).
+    // Company-wide side-table SELECT -- the steady-state path (Wave 1 lock per
+    // 04.1-01-SPIKE-FINDINGS PROBE-OQ2-FILTER; NEVER ctx.issues.list). Bounded
+    // at M=100 so a busy company cannot blow up the rail or the RPC budget.
     let taskIssueIds: string[];
     try {
-      taskIssueIds = await listChatTopicTasksForTopic(ctx, companyId, topicIssueId);
+      taskIssueIds = await listChatTopicTasksForCompany(ctx, companyId, COMPANY_TASK_CAP);
     } catch (e) {
-      ctx.logger?.warn?.('chat.taskOwned: side-table SELECT failed', {
+      ctx.logger?.warn?.('chat.taskOwned: company-wide side-table SELECT failed', {
         companyId,
-        topicIssueId,
         err: (e as Error).message,
       });
       return { error: 'TASKS_FAILED' as const };
     }
 
-    if (taskIssueIds.length === 0) {
-      return { kind: 'taskOwned' as const, topicIssueId, tasks: [] };
+    const total = taskIssueIds.length;
+    const capped = total >= COMPANY_TASK_CAP;
+
+    if (total === 0) {
+      return {
+        kind: 'taskOwned' as const,
+        topicIssueId,
+        tasks: [],
+        groups: [],
+        total: 0,
+        shown: 0,
+        capped: false,
+        skipped: 0,
+      };
     }
 
-    // Per-row enrich via ctx.issues.get. Failures + null returns are
-    // silently skipped so a deleted-out-of-band task does NOT fail the
-    // whole response (the rail still renders the surviving tasks).
+    // Bounded-PARALLEL enrich via ctx.issues.get (NOT sequential for…await).
+    // Each row is wrapped so a single failure/null degrades to a counted skip
+    // rather than failing the whole response or silently disappearing.
+    type EnrichResult =
+      | { ok: true; entry: ActiveTaskEntry; assignee: string }
+      | { ok: false };
+    const enriched = await Promise.all(
+      taskIssueIds.map(async (taskIssueId): Promise<EnrichResult> => {
+        let row: Record<string, unknown> | null;
+        try {
+          row = (await ctx.issues.get(taskIssueId, companyId)) as Record<string, unknown> | null;
+        } catch (e) {
+          ctx.logger?.warn?.('chat.taskOwned: per-row issues.get failed -- counted as skipped', {
+            taskIssueId,
+            err: (e as Error).message,
+          });
+          return { ok: false };
+        }
+        if (!row) {
+          ctx.logger?.warn?.('chat.taskOwned: per-row issues.get returned null -- counted as skipped', {
+            taskIssueId,
+          });
+          return { ok: false };
+        }
+        return {
+          ok: true,
+          entry: {
+            issueId: (row.id as string) ?? taskIssueId,
+            identifier: (row.identifier as string) ?? taskIssueId,
+            title: (row.title as string) ?? '(untitled task)',
+            status: (row.status as string) ?? 'todo',
+            createdAt: coerceCreatedAt(row.createdAt),
+          },
+          assignee: resolveAssigneeLabel(row),
+        };
+      }),
+    );
+
     const tasks: ActiveTaskEntry[] = [];
-    for (const taskIssueId of taskIssueIds) {
-      let row: {
-        id?: string;
-        identifier?: string;
-        title?: string;
-        status?: string;
-        createdAt?: Date | string | null;
-      } | null;
-      try {
-        row = (await ctx.issues.get(taskIssueId, companyId)) as {
-          id?: string;
-          identifier?: string;
-          title?: string;
-          status?: string;
-          createdAt?: Date | string | null;
-        } | null;
-      } catch (e) {
-        ctx.logger?.warn?.('chat.taskOwned: per-row issues.get failed -- skipping', {
-          taskIssueId,
-          err: (e as Error).message,
-        });
+    // Preserve enumerate order (newest-first) inside each assignee group.
+    const groupMap = new Map<string, ActiveTaskEntry[]>();
+    let skipped = 0;
+    for (const r of enriched) {
+      if (!r.ok) {
+        skipped += 1;
         continue;
       }
-      if (!row) {
-        ctx.logger?.warn?.('chat.taskOwned: per-row issues.get returned null -- skipping', {
-          taskIssueId,
-        });
-        continue;
-      }
-      tasks.push({
-        issueId: row.id ?? taskIssueId,
-        identifier: row.identifier ?? taskIssueId,
-        title: row.title ?? '(untitled task)',
-        status: row.status ?? 'todo',
-        createdAt: coerceCreatedAt(row.createdAt),
-      });
+      tasks.push(r.entry);
+      const bucket = groupMap.get(r.assignee) ?? [];
+      bucket.push(r.entry);
+      groupMap.set(r.assignee, bucket);
     }
 
     // Phase 19 Plan 19-03 (CARD-02 / D-09) — flag-gated, READ-ONLY cached-card
@@ -181,6 +237,24 @@ export function registerChatActiveTasks(ctx: ChatActiveTasksCtx): void {
       });
     }
 
-    return { kind: 'taskOwned' as const, topicIssueId, tasks };
+    // quick-260619-r4v Piece 2 — grouped-by-live-assignee response. `tasks`
+    // stays flat (the action-card attach above + the inline-card title lookup
+    // in message-thread.tsx both consume it; the grouped entries share the
+    // same object references so the actionCard attach is reflected in both).
+    const groups = Array.from(groupMap.entries()).map(([assignee, groupTasks]) => ({
+      assignee,
+      tasks: groupTasks,
+    }));
+
+    return {
+      kind: 'taskOwned' as const,
+      topicIssueId,
+      tasks,
+      groups,
+      total,
+      shown: tasks.length,
+      capped,
+      skipped,
+    };
   });
 }
