@@ -33,6 +33,8 @@ function makeCtx({
   const createdIssues = [];
   const createCommentCalls = [];
   const warnLogs = [];
+  const topicInserts = [];
+  const parentInserts = [];
 
   const ctx = {
     logger: {
@@ -49,7 +51,17 @@ function makeCtx({
     issues: {
       async create(input) {
         if (createIssueThrows) throw new Error('host issues.create 503');
-        const row = { id: createdIssueId, ...input };
+        // quick-260619-r4v Piece 1 — the atomic new-topic path issues up to
+        // three creates (parent, topic, task). Hand back distinct ids keyed
+        // off the originId prefix so the chain links correctly; the task
+        // (chat-task: / chat-parent fallback) keeps the configured id.
+        let id = createdIssueId;
+        if (typeof input.originId === 'string' && input.originId.startsWith('chat-parent-')) {
+          id = `PARENT-${createdIssues.length + 1}`;
+        } else if (typeof input.originId === 'string' && input.originId.startsWith('chat-topic-')) {
+          id = `TOPIC-${createdIssues.length + 1}`;
+        }
+        const row = { id, ...input };
         createdIssues.push(row);
         return row;
       },
@@ -60,13 +72,50 @@ function makeCtx({
       },
     },
     db: {
-      async query(sql) {
+      async query(sql, params) {
         if (/clarity_user_prefs/i.test(sql)) {
           return optedIn ? [{ opted_in_at: '2026-01-01T00:00:00.000Z' }] : [];
         }
+        // quick-260619-r4v Piece 1 — atomic new-topic create primitives.
+        if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_employee_parents/i.test(sql)) {
+          if (parentInserts.length > 0) {
+            return [{ parent_issue_id: parentInserts[parentInserts.length - 1].params[2] }];
+          }
+          return [];
+        }
+        if (/MAX\(CAST\(substring\(topic_id/i.test(sql)) {
+          return [{ max_n: null }];
+        }
+        if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics\b/i.test(sql)) {
+          if (topicInserts.length > 0) {
+            const p = topicInserts[topicInserts.length - 1].params;
+            return [
+              {
+                topic_id: p[0],
+                company_id: p[1],
+                issue_id: p[2],
+                parent_issue_id: p[3],
+                employee_agent_id: p[4],
+                title: p[5],
+                last_activity_at: p[6],
+                archived: p[7],
+                created_at: p[8],
+              },
+            ];
+          }
+          return [];
+        }
         return [];
       },
-      async execute() {
+      async execute(sql, params) {
+        if (/INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics\b/i.test(sql)) {
+          topicInserts.push({ sql, params });
+          return { rowCount: 1 };
+        }
+        if (/INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_employee_parents/i.test(sql)) {
+          parentInserts.push({ sql, params });
+          return { rowCount: 1 };
+        }
         return { rowCount: 0 };
       },
     },
@@ -122,14 +171,11 @@ test('chat.createTrueTask: opted-out caller → OPT_IN_REQUIRED, no host calls',
 // is defensive/structural — see Test 3b which pins the OPT_IN_REQUIRED path
 // for a missing userId. This matches existing chat.send / chat.promote tests.
 
-for (const key of [
-  'companyId',
-  'topicIssueId',
-  'title',
-  'body',
-  'assigneeAgentId',
-  'employeeName',
-]) {
+// NOTE (quick-260619-r4v Piece 1): topicIssueId is NO LONGER an unconditional
+// required string — a non-empty newTopicTitle is an accepted alternative
+// (atomic new-topic create). topicIssueId-missing is exercised separately
+// below (TOPIC_REQUIRED when newTopicTitle is also absent).
+for (const key of ['companyId', 'title', 'body', 'assigneeAgentId', 'employeeName']) {
   test(`chat.createTrueTask: missing ${key} → throws (action-handler convention)`, async () => {
     const ctx = makeCtx();
     registerChatTrueTask(ctx);
@@ -141,6 +187,51 @@ for (const key of [
     );
   });
 }
+
+// ---- quick-260619-r4v Piece 1 — TOPIC_REQUIRED + newTopicTitle alternative -
+
+test('chat.createTrueTask: no topicIssueId AND no newTopicTitle → { error: TOPIC_REQUIRED }', async () => {
+  const ctx = makeCtx();
+  registerChatTrueTask(ctx);
+  const p = params();
+  delete p.topicIssueId;
+  const result = await ctx._handlers.get('chat.createTrueTask')(p);
+  assert.equal(result.error, 'TOPIC_REQUIRED');
+  assert.equal(ctx._createdIssues.length, 0, 'no host create when neither topic nor newTopicTitle present');
+});
+
+test('chat.createTrueTask: topicIssueId null AND no newTopicTitle → { error: TOPIC_REQUIRED } (cold path removed)', async () => {
+  const ctx = makeCtx();
+  registerChatTrueTask(ctx);
+  const result = await ctx._handlers.get('chat.createTrueTask')(params({ topicIssueId: null }));
+  assert.equal(result.error, 'TOPIC_REQUIRED');
+  assert.equal(ctx._createdIssues.length, 0);
+});
+
+test('chat.createTrueTask: newTopicTitle (no topicIssueId) → atomic new-topic create, never a cold task', async () => {
+  const ctx = makeCtx({ createdIssueId: 'BEAAA-NEW' });
+  registerChatTrueTask(ctx);
+  const result = await ctx._handlers.get('chat.createTrueTask')(
+    params({ topicIssueId: null, newTopicTitle: 'Brand new topic' }),
+  );
+  assert.equal(result.ok, true);
+  // No create payload carries a cold-task: originId.
+  for (const issue of ctx._createdIssues) {
+    assert.ok(
+      typeof issue.originId !== 'string' || !issue.originId.startsWith('cold-task:'),
+      'no cold-task: originId is ever emitted',
+    );
+  }
+  // At least a topic + task were created (the parent may be reused).
+  assert.ok(
+    ctx._createdIssues.some((i) => String(i.originId).startsWith('chat-topic-')),
+    'a chat-topic issue was created',
+  );
+  assert.ok(
+    ctx._createdIssues.some((i) => String(i.originId).startsWith('chat-task:')),
+    'a chat-task issue was created',
+  );
+});
 
 // ---- Test 3b — missing userId is gated by opt-in-guard, not reqStr --------
 

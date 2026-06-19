@@ -24,11 +24,19 @@ function makeCtx({
   // Plan 04.1-05 retrofit -- side-table INSERT modeling. If sideTableThrows
   // is true, ctx.db.execute throws when called against chat_topic_tasks.
   sideTableThrows = false,
+  // quick-260619-r4v Piece 1 -- atomic new-topic path modeling.
+  // existingParentId: the chat_employee_parents lookup result (null = first-ever).
+  existingParentId = null,
+  // chtMaxN: the allocateChtNumber MAX(...) seed (null = first ever -> CHT-1).
+  chtMaxN = null,
 } = {}) {
   const createCalls = [];
   const createCommentCalls = [];
   const warnLogs = [];
   const sideTableInserts = [];
+  const topicInserts = [];
+  const parentInserts = [];
+  let createdSeq = 0;
   const ctx = {
     logger: {
       warn(msg, fields) {
@@ -39,6 +47,17 @@ function makeCtx({
       async create(input) {
         createCalls.push(input);
         if (createIssueThrows) throw new Error('host issues.create 503');
+        // The atomic new-topic path calls create up to 3x (parent, topic,
+        // task). Hand back deterministic ids so the test can assert the chain.
+        createdSeq += 1;
+        // The FIRST create in a single-create (existing-topic) flow keeps the
+        // configured createdIssueId; the multi-create flow keys off originKind.
+        if (typeof input.originId === 'string' && input.originId.startsWith('chat-parent-')) {
+          return { id: `PARENT-${createdSeq}`, ...input };
+        }
+        if (typeof input.originId === 'string' && input.originId.startsWith('chat-topic-')) {
+          return { id: `TOPIC-${createdSeq}`, ...input };
+        }
         return { id: createdIssueId, ...input };
       },
       async createComment(issueId, body, companyId) {
@@ -60,9 +79,51 @@ function makeCtx({
           sideTableInserts.push({ sql, params });
           return { rowCount: 1 };
         }
+        if (/INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics\b/i.test(sql)) {
+          topicInserts.push({ sql, params });
+          return { rowCount: 1 };
+        }
+        if (
+          /INSERT\s+INTO\s+plugin_clarity_pack_cdd6bda4bd\.chat_employee_parents/i.test(sql)
+        ) {
+          parentInserts.push({ sql, params });
+          return { rowCount: 1 };
+        }
         return { rowCount: 0 };
       },
-      async query() {
+      async query(sql, params) {
+        if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_employee_parents/i.test(sql)) {
+          // getEmployeeParentIssueId pre-insert lookup + insertEmployeeParent
+          // read-back. After a parent insert, return the inserted id.
+          if (parentInserts.length > 0) {
+            return [{ parent_issue_id: parentInserts[parentInserts.length - 1].params[2] }];
+          }
+          return existingParentId ? [{ parent_issue_id: existingParentId }] : [];
+        }
+        if (/MAX\(CAST\(substring\(topic_id/i.test(sql)) {
+          return [{ max_n: chtMaxN }];
+        }
+        if (/FROM\s+plugin_clarity_pack_cdd6bda4bd\.chat_topics\b/i.test(sql)) {
+          // getChatTopicByIssueId read-back inside insertChatTopic. Return the
+          // row keyed on (company_id, issue_id) from the last topic insert.
+          if (topicInserts.length > 0) {
+            const p = topicInserts[topicInserts.length - 1].params;
+            return [
+              {
+                topic_id: p[0],
+                company_id: p[1],
+                issue_id: p[2],
+                parent_issue_id: p[3],
+                employee_agent_id: p[4],
+                title: p[5],
+                last_activity_at: p[6],
+                archived: p[7],
+                created_at: p[8],
+              },
+            ];
+          }
+          return [];
+        }
         return [];
       },
     },
@@ -70,6 +131,8 @@ function makeCtx({
     _createCommentCalls: createCommentCalls,
     _warnLogs: warnLogs,
     _sideTableInserts: sideTableInserts,
+    _topicInserts: topicInserts,
+    _parentInserts: parentInserts,
   };
   return ctx;
 }
@@ -295,4 +358,109 @@ test('createTrueTask retrofit: side-table write happens even if marker createCom
   // (the side table is the AUTHORITATIVE back-link per Wave 1 lock).
   assert.equal(ctx._sideTableInserts.length, 1);
   assert.equal(ctx._sideTableInserts[0].params[2], 'BEAAA-RETRO-3');
+});
+
+// ===========================================================================
+// quick-260619-r4v Piece 1 -- cold-path REMOVED + atomic new-topic create
+// ===========================================================================
+//
+// SPEC Piece 1: every operator-created task is topic-linked. The cold-task
+// branch (topicIssueId === null, no newTopicTitle, originId `cold-task:...`)
+// is DELETED. A new `newTopicTitle` input atomically creates the topic
+// (parent + CHT-N + chat_topics row) and then the topic-linked task.
+
+test('createTrueTask: NEVER emits a cold-task: originId (cold path removed)', async () => {
+  const ctx = makeCtx();
+  await createTrueTask(ctx, input());
+  for (const call of ctx._createCalls) {
+    assert.ok(
+      typeof call.originId !== 'string' || !call.originId.startsWith('cold-task:'),
+      `no create payload may carry a cold-task: originId (got ${call.originId})`,
+    );
+  }
+});
+
+test('createTrueTask: topicIssueId null AND no newTopicTitle -> THROWS (no cold task)', async () => {
+  const ctx = makeCtx();
+  await assert.rejects(
+    () => createTrueTask(ctx, input({ topicIssueId: null, newTopicTitle: undefined })),
+    /topic/i,
+  );
+  assert.equal(ctx._createCalls.length, 0, 'no issue created when neither topic nor newTopicTitle present');
+});
+
+test('createTrueTask newTopicTitle (first-ever topic): creates parent + topic + task + marker + back-link atomically', async () => {
+  const ctx = makeCtx({ existingParentId: null, chtMaxN: null });
+  const result = await createTrueTask(
+    ctx,
+    input({
+      topicIssueId: null,
+      newTopicTitle: 'Q3 pricing rework',
+      assigneeAgentId: 'agent-cfo',
+      employeeName: 'CFO',
+    }),
+  );
+
+  // 3 ctx.issues.create calls: parent, topic, task.
+  assert.equal(ctx._createCalls.length, 3, 'parent + topic + task created');
+  const parent = ctx._createCalls.find((c) => String(c.originId).startsWith('chat-parent-'));
+  const topic = ctx._createCalls.find((c) => String(c.originId).startsWith('chat-topic-'));
+  const task = ctx._createCalls.find((c) => String(c.originId).startsWith('chat-task:'));
+  assert.ok(parent, 'a chat-parent issue was created (first-ever topic)');
+  assert.ok(topic, 'a chat-topic issue was created');
+  assert.ok(task, 'a chat-task issue was created');
+
+  // The topic is created at the non-terminal conversation status, assigned.
+  assert.equal(topic.status, 'in_progress');
+  assert.equal(topic.assigneeAgentId, 'agent-cfo');
+  assert.equal(topic.title, 'Q3 pricing rework');
+
+  // chat_topics row inserted; chat_employee_parents row inserted (first-ever).
+  assert.equal(ctx._topicInserts.length, 1, 'one chat_topics row inserted');
+  assert.equal(ctx._parentInserts.length, 1, 'one chat_employee_parents row inserted (bootstrap)');
+
+  // The task is the locked top-level create with a chat-task: originId keyed
+  // on the NEW topic issue id.
+  assert.equal(task.status, 'todo');
+  assert.equal(task.assigneeAgentId, 'agent-cfo');
+  assert.ok(String(task.originId).startsWith(`chat-task:${topic.id ?? 'TOPIC'}`) || String(task.originId).startsWith('chat-task:TOPIC-'));
+
+  // Marker comment posted on the NEW topic issue.
+  assert.equal(ctx._createCommentCalls.length, 1, 'marker comment posted on the new topic');
+  assert.match(ctx._createCommentCalls[0].body, /^Task created — .+, assigned to CFO\.$/);
+
+  // Side-table back-link written for the new topic.
+  assert.equal(ctx._sideTableInserts.length, 1, 'one chat_topic_tasks back-link written');
+
+  // Returns the created task issueId.
+  assert.equal(result.issueId, 'BEAAA-202');
+});
+
+test('createTrueTask newTopicTitle (existing parent): reuses parent, does NOT bootstrap a new one', async () => {
+  const ctx = makeCtx({ existingParentId: 'PARENT-EXISTING', chtMaxN: 4 });
+  await createTrueTask(
+    ctx,
+    input({
+      topicIssueId: null,
+      newTopicTitle: 'Another conversation',
+      assigneeAgentId: 'agent-cfo',
+      employeeName: 'CFO',
+    }),
+  );
+  // No parent create (reused), no parent insert (already mapped). 2 creates:
+  // topic + task.
+  assert.equal(ctx._parentInserts.length, 0, 'existing parent reused -- no bootstrap insert');
+  const parent = ctx._createCalls.find((c) => String(c.originId).startsWith('chat-parent-'));
+  assert.ok(!parent, 'no new parent issue created when one already exists');
+  assert.equal(ctx._createCalls.length, 2, 'topic + task created (no parent bootstrap)');
+});
+
+test('createTrueTask: existing topicIssueId path is unchanged (single create + marker + back-link)', async () => {
+  const ctx = makeCtx({ createdIssueId: 'BEAAA-EXIST' });
+  const result = await createTrueTask(ctx, input());
+  assert.equal(ctx._createCalls.length, 1, 'single create on the existing-topic path');
+  assert.equal(ctx._createCalls[0].originId, 'chat-task:issue-topic-1:c-source-1');
+  assert.equal(ctx._createCommentCalls.length, 1);
+  assert.equal(ctx._sideTableInserts.length, 1);
+  assert.equal(result.issueId, 'BEAAA-EXIST');
 });

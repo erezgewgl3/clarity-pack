@@ -47,27 +47,28 @@ function reqStr(params: Record<string, unknown> | undefined, key: string): strin
 export function registerChatTrueTask(ctx: ChatTrueTaskCtx): void {
   wrapActionHandler(ctx, 'chat.createTrueTask', async (params) => {
     const companyId = reqStr(params, 'companyId');
-    // Plan 04.1-08 — topicIssueId is REQUIRED but accepts null for COLD
-    // tasks. We accept three shapes:
-    //   - string: chat-anchored task (the existing 04.1-02 path).
-    //   - null:   COLD task — originId path cold-task:<userId>:<unix-ms>.
-    //   - undefined / wrong type: throw with the required-param convention.
-    let topicIssueId: string | null;
+    // quick-260619-r4v Piece 1 — topicIssueId is no longer COLD-accepting.
+    // Every operator task is topic-linked. We accept:
+    //   - topicIssueId string: link to that existing topic.
+    //   - newTopicTitle non-empty (topicIssueId null/absent): atomic new-topic.
+    //   - NEITHER: return { error: 'TOPIC_REQUIRED' } (cold path removed).
     const rawTopicIssueId = params?.topicIssueId;
-    if (rawTopicIssueId === null) {
-      topicIssueId = null;
-    } else if (typeof rawTopicIssueId === 'string' && rawTopicIssueId) {
-      topicIssueId = rawTopicIssueId;
-    } else {
-      throw new Error('chat.createTrueTask: topicIssueId required');
+    const topicIssueId: string | null =
+      typeof rawTopicIssueId === 'string' && rawTopicIssueId ? rawTopicIssueId : null;
+    const newTopicTitle =
+      typeof params?.newTopicTitle === 'string' && params.newTopicTitle.trim()
+        ? params.newTopicTitle.trim()
+        : null;
+
+    if (!topicIssueId && !newTopicTitle) {
+      return { error: 'TOPIC_REQUIRED' };
     }
 
     const title = reqStr(params, 'title');
     const body = reqStr(params, 'body');
     const assigneeAgentId = reqStr(params, 'assigneeAgentId');
     const employeeName = reqStr(params, 'employeeName');
-    // userId is enforced by the opt-in-guard wrapper; re-read for the
-    // cold-task originId composition (cold-task:<userId>:<unix-ms>).
+    // userId is enforced by the opt-in-guard wrapper; re-read defensively.
     const userId = reqStr(params, 'userId');
 
     // sourceCommentId is OPTIONAL — null when the operator composes a task
@@ -77,12 +78,7 @@ export function registerChatTrueTask(ctx: ChatTrueTaskCtx): void {
         ? params.sourceCommentId
         : null;
 
-    const isCold = topicIssueId === null;
-    const description = isCold
-      ? 'Created from the chat surface (cold task — not linked to a topic).\n\n' +
-        'Details:\n' +
-        body
-      : 'Created from a chat composer message.\n\n' + 'Message body:\n' + body;
+    const description = 'Created from a chat composer message.\n\n' + 'Message body:\n' + body;
 
     try {
       const result = await createTrueTask(ctx, {
@@ -91,6 +87,7 @@ export function registerChatTrueTask(ctx: ChatTrueTaskCtx): void {
         description,
         assigneeAgentId,
         topicIssueId,
+        newTopicTitle,
         sourceCommentId,
         employeeName,
         userId,

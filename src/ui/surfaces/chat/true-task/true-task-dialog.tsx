@@ -114,6 +114,7 @@ export function TrueTaskDialog({
   onSuccess,
   sourceMessage = null,
   sourceTopic = null,
+  currentTopic = null,
   defaultAssigneeAgentId,
   defaultEmployeeName,
   companyId,
@@ -128,6 +129,10 @@ export function TrueTaskDialog({
   sourceMessage?: PromoteSourceMessage | null;
   /** Required for PROMOTE mode (the source topic). Ignored in COLD. */
   sourceTopic?: ChatTopic | null;
+  /** quick-260619-r4v Piece 1 — the currently-open topic. In create ("cold")
+   *  mode the Topic dropdown defaults to this topic instead of the removed
+   *  Standalone option. Null when no topic is open (zero-topics fallback). */
+  currentTopic?: ChatTopic | null;
   /** Default assignee (the currently-chatted employee). */
   defaultAssigneeAgentId: string;
   defaultEmployeeName: string;
@@ -155,13 +160,27 @@ export function TrueTaskDialog({
   // Compute defaults from mode.
   const initialTitle =
     mode === 'promote' && sourceMessage ? titleFromBody(sourceMessage.body) : '';
+  // quick-260619-r4v Piece 1 — the Standalone (null) default is REMOVED. The
+  // dialog defaults the Topic dropdown to the source topic (promote) or the
+  // currently-open topic (create). Null only when no topic is open at all
+  // (zero-topics fallback → the operator MUST name a new topic).
   const initialTopicIssueId: string | null =
-    mode === 'promote' && sourceTopic ? sourceTopic.issueId : null;
+    mode === 'promote' && sourceTopic
+      ? sourceTopic.issueId
+      : currentTopic
+        ? currentTopic.issueId
+        : null;
 
   const [title, setTitle] = React.useState(initialTitle);
   const [assigneeAgentId, setAssigneeAgentId] = React.useState(defaultAssigneeAgentId);
-  /** `null` = Standalone (cold tasks default). String = host issue id of the topic. */
+  /** Selected EXISTING topic's host issue id, or null when creating a NEW
+   *  topic (the new-topic name input is then the source of truth). */
   const [topicIssueId, setTopicIssueId] = React.useState<string | null>(initialTopicIssueId);
+  /** quick-260619-r4v Piece 1 — when the operator picks "+ New topic" the
+   *  dropdown value becomes the __new__ sentinel and this controlled input
+   *  carries the new topic's title. Non-empty ⇒ atomic new-topic create. */
+  const [newTopicName, setNewTopicName] = React.useState('');
+  const [creatingNewTopic, setCreatingNewTopic] = React.useState(false);
   const [details, setDetails] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [feedback, setFeedback] = React.useState<{ kind: 'ok' | 'error'; text: string } | null>(
@@ -174,6 +193,10 @@ export function TrueTaskDialog({
       setTitle(initialTitle);
       setAssigneeAgentId(defaultAssigneeAgentId);
       setTopicIssueId(initialTopicIssueId);
+      setNewTopicName('');
+      // When no topic is open at all (zero topics), default straight into the
+      // new-topic input — there is nothing to select.
+      setCreatingNewTopic(initialTopicIssueId === null);
       setDetails('');
       setFeedback(null);
     }
@@ -203,18 +226,23 @@ export function TrueTaskDialog({
   }, [roster, assigneeAgentId, defaultEmployeeName]);
 
   const trimmedTitle = title.trim();
-  const canSubmit = trimmedTitle.length > 0 && !!assigneeAgentId && !busy;
+  // quick-260619-r4v Piece 1 — Create is gated on a topic being chosen: an
+  // existing topic selected, OR a non-empty new-topic name. (Standalone is
+  // gone — there is no "no topic" path.)
+  const trimmedNewTopic = newTopicName.trim();
+  const hasTopic = creatingNewTopic ? trimmedNewTopic.length > 0 : !!topicIssueId;
+  const canSubmit = trimmedTitle.length > 0 && !!assigneeAgentId && hasTopic && !busy;
 
   const onCreate = React.useCallback(async () => {
     if (!canSubmit) return;
     setBusy(true);
     setFeedback(null);
     try {
-      // Plan 04.1-08 — topicIssueId is `null` for cold tasks. The worker
-      // takes the cold-task originId path (cold-task:<userId>:<unix-ms>) and
-      // skips the marker-comment + chat_topic_tasks side-table writes (Task 4).
-      // For promote we pass the source topic id + comment id so the existing
-      // chat-task originId path runs unchanged.
+      // quick-260619-r4v Piece 1 — every task is topic-linked. When the
+      // operator chose "+ New topic" we pass newTopicTitle + topicIssueId:null
+      // so the worker atomically creates the topic then links the task; when
+      // an existing topic is selected we pass its issueId. Promote passes the
+      // source topic id + comment id so the existing chat-task path runs.
       const sourceCommentId =
         mode === 'promote' && sourceMessage ? sourceMessage.commentId : null;
       const body =
@@ -222,7 +250,8 @@ export function TrueTaskDialog({
           ? sourceMessage.body
           : details.trim() || trimmedTitle;
       const result = await createTrueTask({
-        topicIssueId,
+        topicIssueId: creatingNewTopic ? null : topicIssueId,
+        newTopicTitle: creatingNewTopic ? trimmedNewTopic : undefined,
         sourceCommentId,
         title: trimmedTitle,
         body,
@@ -255,6 +284,8 @@ export function TrueTaskDialog({
     mode,
     sourceMessage,
     topicIssueId,
+    creatingNewTopic,
+    trimmedNewTopic,
     trimmedTitle,
     details,
     assigneeAgentId,
@@ -277,10 +308,12 @@ export function TrueTaskDialog({
   );
 
   const heading = mode === 'promote' ? 'Promote message to task' : 'Create a task';
-  const topicHelper =
-    mode === 'promote'
-      ? "This task will appear in the source topic's Active tasks owned rail."
-      : "Standalone tasks won't appear in any topic's Active tasks owned rail.";
+  // quick-260619-r4v Piece 1 — every task is topic-linked, so the helper no
+  // longer mentions Standalone. It explains the new-topic affordance instead.
+  const topicHelper = creatingNewTopic
+    ? 'A new topic will be created and the task linked to it.'
+    : 'This task will be linked to the selected topic and appear in its thread.';
+  const NEW_TOPIC_SENTINEL = '__new__';
 
   // Plan 04.1-09 — when closed, render nothing. The Plan 04.1-08 build kept
   // the <dialog> element mounted and toggled via showModal/close; the new
@@ -345,23 +378,50 @@ export function TrueTaskDialog({
       </div>
 
       <div className="true-task-dialog-field">
-        <label htmlFor="true-task-dialog-topic">TOPIC (OPTIONAL)</label>
+        {/* quick-260619-r4v Piece 1 — TOPIC is REQUIRED (label no longer reads
+            "(OPTIONAL)"). The Standalone option is GONE. Order: current/source
+            topic first, then the employee's other topics, then "+ New topic".
+            Picking "+ New topic" reveals the name input below. */}
+        <label htmlFor="true-task-dialog-topic">TOPIC</label>
         <select
           id="true-task-dialog-topic"
-          value={topicIssueId ?? ''}
-          onChange={(e) => setTopicIssueId(e.target.value || null)}
+          value={creatingNewTopic ? NEW_TOPIC_SENTINEL : topicIssueId ?? ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === NEW_TOPIC_SENTINEL) {
+              setCreatingNewTopic(true);
+              setTopicIssueId(null);
+            } else {
+              setCreatingNewTopic(false);
+              setTopicIssueId(v || null);
+            }
+          }}
           aria-label="Linked topic"
         >
-          {/* Cold default — Standalone always first. */}
-          <option value="">Standalone (not linked to any topic)</option>
           {topics.map((t) => (
             <option key={t.issueId} value={t.issueId}>
               {t.title}
               {t.topicId ? ` · ${t.topicId}` : ''}
               {sourceTopic && t.issueId === sourceTopic.issueId ? ' (from message)' : ''}
+              {currentTopic && t.issueId === currentTopic.issueId && !sourceTopic
+                ? ' (current)'
+                : ''}
             </option>
           ))}
+          <option value={NEW_TOPIC_SENTINEL}>+ New topic…</option>
         </select>
+        {creatingNewTopic ? (
+          <input
+            id="true-task-dialog-new-topic"
+            type="text"
+            value={newTopicName}
+            maxLength={120}
+            placeholder="New topic name"
+            onChange={(e) => setNewTopicName(e.target.value)}
+            aria-label="New topic name"
+            className="true-task-dialog-new-topic-input"
+          />
+        ) : null}
         <p className="true-task-dialog-helper">{topicHelper}</p>
       </div>
 

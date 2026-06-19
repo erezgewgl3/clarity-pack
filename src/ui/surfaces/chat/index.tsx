@@ -995,6 +995,7 @@ function ChatPageBody({
           onSuccess={onDialogSuccess}
           sourceMessage={dialogState.sourceMessage}
           sourceTopic={dialogState.sourceTopic}
+          currentTopic={topic ?? null}
           defaultAssigneeAgentId={employee.id}
           defaultEmployeeName={employee.name}
           companyId={companyId}
