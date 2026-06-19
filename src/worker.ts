@@ -154,6 +154,13 @@ import {
   registerChatActiveTasks,
   type ChatActiveTasksCtx,
 } from './worker/handlers/chat-active-tasks.ts';
+// quick-260619-r4v Piece 3 — chat.topicTaskUpdates: per-topic read-time-
+// reflection cards (live status + latest agent comment + blocked-needs-you).
+// SEPARATE bounded read from the company-wide rail; read-only, anti-storm.
+import {
+  registerChatTopicTaskUpdates,
+  type ChatTopicTaskUpdatesCtx,
+} from './worker/handlers/chat-topic-task-updates.ts';
 // Plan 04.1-08 — chat.archivedTopics: data handler powering the archive panel
 // (dropdown anchored to the +N archived pill). ORDER BY archived_at DESC.
 import {
@@ -392,6 +399,11 @@ const plugin = definePlugin({
     // calls ctx.issues.list (Wave 1 lock: REST originId filters do not
     // work; the side table is the steady-state lookup path).
     registerChatActiveTasks(ctx as unknown as ChatActiveTasksCtx);
+    // quick-260619-r4v Piece 3 — per-topic live task-update cards. Reads the
+    // chat_topic_tasks side table (cap 20) + issues.get + listComments per
+    // task, all in-dispatch. NEVER ctx.issues.list / writes / requestWakeup /
+    // event subs (anti-storm; pinned by the dedicated guard test).
+    registerChatTopicTaskUpdates(ctx as unknown as ChatTopicTaskUpdatesCtx);
     // Plan 04.1-08 — chat.archivedTopics: lists every archived topic for an
     // employee+company, newest-archived-first. Reads via
     // listArchivedChatTopicsForEmployee which uses the archived_at column
