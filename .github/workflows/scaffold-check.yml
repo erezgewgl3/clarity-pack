@@ -84,8 +84,16 @@ jobs:
       # and the now-fixed watchdog + snapshot-prefetch tests in the nested dirs.
       # test/visual/sketch-regression.test.mjs is matched by test/** and runs
       # for real here (Chromium was installed above; CI must NOT set SKIP_VISUAL).
+      #
+      # The `**` is expanded by bash globstar (NOT node --test's own glob, which
+      # only exists on Node >=21 — this CI runs Node 20, the project's target).
+      # globstar makes the unquoted pattern expand to explicit file paths, which
+      # `node --test` accepts on every Node version.
       - name: full recursive suite (shared + worker/** + ui/** incl. SC5 matrix + visual)
-        run: node --test "test/**/*.test.mjs"
+        shell: bash
+        run: |
+          shopt -s globstar
+          node --test test/**/*.test.mjs
 
       # The safety-CLI harness suite lives OUTSIDE test/ (scripts/safety/test/**)
       # so it needs its own glob segment. It MUST run SERIALLY
@@ -95,7 +103,10 @@ jobs:
       # finding). Per-file and serial execution are deterministically green;
       # parallel is the only failing mode, so we pin concurrency to 1 here.
       - name: safety-CLI suite (serial — PGlite/WASM contention; Plan 20-01 finding)
-        run: node --test --test-concurrency=1 "scripts/safety/test/**/*.test.mjs"
+        shell: bash
+        run: |
+          shopt -s globstar
+          node --test --test-concurrency=1 scripts/safety/test/**/*.test.mjs
 
       - name: build (worker + ui + manifest)
         run: pnpm build
