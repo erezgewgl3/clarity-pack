@@ -95,7 +95,6 @@ export class ClaritySurfaceBoundary extends React.Component<
 // host passes, unchanged, into a boundary. Typing the bridge boundary as
 // ComponentType<any> mirrors that dynamic mount contract (the inner surface
 // keeps its own precise prop types).
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export function withClarityBoundary(
   Component: React.ComponentType<any>,
   label: string,
@@ -110,4 +109,3 @@ export function withClarityBoundary(
   ClarityBoundaryWrapper.displayName = `withClarityBoundary(${label})`;
   return ClarityBoundaryWrapper;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
