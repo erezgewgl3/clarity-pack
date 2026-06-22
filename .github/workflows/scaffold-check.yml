@@ -32,14 +32,15 @@ jobs:
         with:
           version: 9
 
-      # Node 20 LTS — the project's actual target (engines ">=20", worker bundle
-      # node20, CLAUDE.md "Node 20 LTS for dev and CI"). CI previously ran Node
-      # 24, on which Playwright 1.55.1 hangs indefinitely at "extracting archive"
-      # (browser downloads fine, then unzip never returns). Pinning to 20 both
-      # fixes that hang and aligns CI with the runtime the plugin ships against.
+      # Node 24 — the runtime the test suite actually requires. The .test.mjs
+      # files import .ts source directly and rely on Node's native TypeScript
+      # execution, which is default-on only on Node >=23.6; on Node 20 every
+      # such import throws ERR_UNKNOWN_FILE_EXTENSION (174 files). This matches
+      # local dev (node v24.x). The Playwright extraction hang that Node 24
+      # exposed in playwright 1.55.1 is fixed by the bump to 1.61.0 (package.json).
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'pnpm'
 
       - name: install (frozen lockfile, scripts disabled via .npmrc)
@@ -63,15 +64,14 @@ jobs:
       # NOT set) — but the browser was never installed here, so it failed every
       # run. Install Chromium + its OS deps so the test runs as designed.
       # DEBIAN_FRONTEND=noninteractive keeps the `--with-deps` apt install from
-      # blocking on a debconf prompt. The browser download + extraction hang was
-      # root-caused to Node 24 (fixed by the Node 20 pin above); DEBUG=pw:install
-      # stays on to confirm extraction now completes. timeout-minutes bounds any
-      # future regression to 10 min instead of the 6h job ceiling.
+      # blocking on a debconf prompt (it otherwise hangs the step). Playwright
+      # 1.55.1 also hung extracting the browser archive on Node 24; the bump to
+      # 1.61.0 resolves that. timeout-minutes bounds any future regression to
+      # 10 min instead of the 6h job ceiling.
       - name: Install Playwright Chromium (chat-live-sticky convergence test needs a real browser)
         timeout-minutes: 10
         env:
           DEBIAN_FRONTEND: noninteractive
-          DEBUG: pw:install
         run: pnpm exec playwright install --with-deps chromium
 
       # HYG-01 / D-03 — RECURSIVE glob is REQUIRED here. The old single-level
