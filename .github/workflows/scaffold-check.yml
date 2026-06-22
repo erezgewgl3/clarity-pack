@@ -57,7 +57,16 @@ jobs:
       # run it for real (it only self-skips when SKIP_VISUAL=1, which CI must
       # NOT set) — but the browser was never installed here, so it failed every
       # run. Install Chromium + its OS deps so the test runs as designed.
+      # `--with-deps` runs `sudo apt-get install` for Chromium's OS libraries
+      # AFTER the browser download. On the hosted runner that apt step hangs
+      # indefinitely (download completes in ~1s, then dead silence) — the
+      # signature of apt/dpkg blocked on a debconf stdin prompt. Force
+      # noninteractive so apt never waits for input, and bound the step so a
+      # future stall fails fast (≤10 min) instead of burning the 6h job ceiling.
       - name: Install Playwright Chromium (chat-live-sticky convergence test needs a real browser)
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: pnpm exec playwright install --with-deps chromium
 
       # HYG-01 / D-03 — RECURSIVE glob is REQUIRED here. The old single-level
