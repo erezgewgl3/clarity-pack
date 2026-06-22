@@ -145,7 +145,6 @@ export function sanitizeHref(href: string | null | undefined): string | null {
   if (raw.startsWith('/') && !raw.startsWith('//')) return raw;
   // Strip ASCII control chars + whitespace before the scheme check so
   // `java\tscript:` / `java\nscript:` cannot smuggle a dangerous scheme past us.
-  // eslint-disable-next-line no-control-regex
   const collapsed = raw.replace(/[ - ]+/g, '').toLowerCase();
   if (
     collapsed.startsWith('javascript:') ||

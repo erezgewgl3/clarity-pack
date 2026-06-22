@@ -32,6 +32,12 @@ jobs:
         with:
           version: 9
 
+      # Node 24 — the runtime the test suite actually requires. The .test.mjs
+      # files import .ts source directly and rely on Node's native TypeScript
+      # execution, which is default-on only on Node >=23.6; on Node 20 every
+      # such import throws ERR_UNKNOWN_FILE_EXTENSION (174 files). This matches
+      # local dev (node v24.x). The Playwright extraction hang that Node 24
+      # exposed in playwright 1.55.1 is fixed by the bump to 1.61.0 (package.json).
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -57,7 +63,15 @@ jobs:
       # run it for real (it only self-skips when SKIP_VISUAL=1, which CI must
       # NOT set) — but the browser was never installed here, so it failed every
       # run. Install Chromium + its OS deps so the test runs as designed.
+      # DEBIAN_FRONTEND=noninteractive keeps the `--with-deps` apt install from
+      # blocking on a debconf prompt (it otherwise hangs the step). Playwright
+      # 1.55.1 also hung extracting the browser archive on Node 24; the bump to
+      # 1.61.0 resolves that. timeout-minutes bounds any future regression to
+      # 10 min instead of the 6h job ceiling.
       - name: Install Playwright Chromium (chat-live-sticky convergence test needs a real browser)
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: pnpm exec playwright install --with-deps chromium
 
       # HYG-01 / D-03 — RECURSIVE glob is REQUIRED here. The old single-level
@@ -70,8 +84,16 @@ jobs:
       # and the now-fixed watchdog + snapshot-prefetch tests in the nested dirs.
       # test/visual/sketch-regression.test.mjs is matched by test/** and runs
       # for real here (Chromium was installed above; CI must NOT set SKIP_VISUAL).
+      #
+      # The `**` is expanded by bash globstar (NOT node --test's own glob, which
+      # only exists on Node >=21 — this CI runs Node 20, the project's target).
+      # globstar makes the unquoted pattern expand to explicit file paths, which
+      # `node --test` accepts on every Node version.
       - name: full recursive suite (shared + worker/** + ui/** incl. SC5 matrix + visual)
-        run: node --test "test/**/*.test.mjs"
+        shell: bash
+        run: |
+          shopt -s globstar
+          node --test test/**/*.test.mjs
 
       # The safety-CLI harness suite lives OUTSIDE test/ (scripts/safety/test/**)
       # so it needs its own glob segment. It MUST run SERIALLY
@@ -81,7 +103,10 @@ jobs:
       # finding). Per-file and serial execution are deterministically green;
       # parallel is the only failing mode, so we pin concurrency to 1 here.
       - name: safety-CLI suite (serial — PGlite/WASM contention; Plan 20-01 finding)
-        run: node --test --test-concurrency=1 "scripts/safety/test/**/*.test.mjs"
+        shell: bash
+        run: |
+          shopt -s globstar
+          node --test --test-concurrency=1 scripts/safety/test/**/*.test.mjs
 
       - name: build (worker + ui + manifest)
         run: pnpm build
