@@ -338,6 +338,41 @@ export async function resolveBulletinTz(ctx: CompileBulletinCtx): Promise<string
   }
 }
 
+/**
+ * COU-2798 — bulletin timezone cache for the SCHEDULED tick.
+ *
+ * The host dispatches scheduled jobs (`runJob`) with no company invocation
+ * scope, so `ctx.config.get()` from the cron tick is always rejected by the
+ * host gate ("company context is required") — once per minute, forever. That
+ * denial is correct and must stay. Instead, the scheduled tick reads the
+ * timezone from this cache, which `onConfigChanged` (worker.ts) fills from the
+ * config the host pushes at worker startup and on every operator config save.
+ *
+ * Empty cache → undefined → computeNextDueAt's BULLETIN_TZ default
+ * (Asia/Jerusalem), i.e. identical to today's behaviour on a host with no
+ * stored config. The SDK's onConfigChanged receives only the config object (no
+ * companyId), so if several companies store different timezones the last push
+ * wins — acceptable for this single-tenant install; scoped handlers
+ * (compileNow / byCycle) still read their own company's config directly.
+ */
+let cachedBulletinTz: string | undefined;
+
+/** Called from the plugin's onConfigChanged hook with the host-pushed config. */
+export function setCachedBulletinConfig(config: Record<string, unknown> | null | undefined): void {
+  const tz = config?.bulletinTimezone;
+  cachedBulletinTz = typeof tz === 'string' && tz.trim() ? tz.trim() : undefined;
+}
+
+/** The timezone the scheduled tick should use (undefined → default). */
+export function getCachedBulletinTz(): string | undefined {
+  return cachedBulletinTz;
+}
+
+/** Test-only: clear the cached timezone between cases. */
+export function __resetCachedBulletinTz(): void {
+  cachedBulletinTz = undefined;
+}
+
 /** Quick task 260528-nns — options for a single-company compile. */
 export type CompileForCompanyOptions = {
   /** The compile instant (one per cron tick / one per on-demand click). */
@@ -1233,7 +1268,10 @@ export function registerCompileBulletinJob(ctx: CompileBulletinCtx): void {
     // tick (default Asia/Jerusalem via computeNextDueAt's BULLETIN_TZ fallback
     // when this is undefined). Passed to compileBulletinForCompany so the daily
     // 06:30 target is in the configured zone.
-    const bulletinTz = await resolveBulletinTz(ctx);
+    // COU-2798 — read from the onConfigChanged cache, NOT ctx.config.get():
+    // the scheduled tick has no company scope, so config.get is always denied
+    // by the host gate (the per-minute "company context is required" error).
+    const bulletinTz = getCachedBulletinTz();
 
     let companies: Company[] = [];
     try {
