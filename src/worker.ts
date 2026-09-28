@@ -74,6 +74,7 @@ import {
 // Plan 03-01 — Daily Bulletin compile job (Wave 1 skeleton).
 import {
   registerCompileBulletinJob,
+  setCachedBulletinConfig,
   type CompileBulletinCtx,
 } from './worker/jobs/compile-bulletin.ts';
 // Plan 03-03 — Bulletin UI data + action handlers.
@@ -668,6 +669,15 @@ const plugin = definePlugin({
     ctx.logger?.info?.(
       `clarity-pack worker started — Editor-Agent ${EDITOR_AGENT_KEY} reconciled, resolve-refs + flatten-blocker-chain + issue.reader + ac-toggle + editor.pause-status + chat.send/chat.edit + chat-stream-bridge + chat.roster/topics/messages/search/promote/pin + reader.ac.autostatus + deliverable.preview registered`,
     );
+  },
+
+  // COU-2798 — cache the host-pushed config (sent at worker startup for each
+  // configured company and on every operator config save) so the SCHEDULED
+  // compile-bulletin tick can honour bulletinTimezone without calling
+  // ctx.config.get() from an unscoped runJob, which the host always denies.
+  // Pure in-memory update; never throws.
+  async onConfigChanged(newConfig) {
+    setCachedBulletinConfig(newConfig);
   },
 });
 
